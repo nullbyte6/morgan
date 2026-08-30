@@ -1,5 +1,5 @@
+import threading
 from ollama import chat
-
 from config import MODEL, SYSTEM_PROMPT
 
 
@@ -13,40 +13,60 @@ class Assistant:
         self.system_prompt = system_prompt
         self.messages = []
 
+        self._generation_lock = threading.Lock()
+
     def stream(self, prompt: str):
-        self.messages.append({
-            "role": "user",
-            "content": prompt
-        })
+        if not self._generation_lock.acquire(blocking=False):
+            raise RuntimeError("Assistant is already generating a response.")
 
-        response = chat(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": self.system_prompt
-                },
-                *self.messages
-            ],
-            stream=True
-        )
+        try:
+            self.messages.append({
+                "role": "user",
+                "content": prompt
+            })
 
-        reply = ""
+            response = chat(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": self.system_prompt
+                    },
+                    *self.messages
+                ],
+                stream=True
+            )
 
-        for chunk in response:
-            content = chunk["message"]["content"]
-            reply += content
+            reply = ""
 
-            for character in content:
-                yield character
+            for chunk in response:
+                content = chunk["message"]["content"]
+                reply += content
 
-        self.messages.append({
-            "role": "assistant",
-            "content": reply
-        })
+                for character in content:
+                    yield character
+
+            self.messages.append({
+                "role": "assistant",
+                "content": reply
+            })
+
+        except Exception:
+            if (
+                self.messages
+                and self.messages[-1]["role"] == "user"
+                and self.messages[-1]["content"] == prompt
+            ):
+                self.messages.pop()
+
+            raise
+
+        finally:
+            self._generation_lock.release()
 
     def ask(self, prompt: str) -> str:
         return "".join(self.stream(prompt))
 
     def clear(self):
-        self.messages.clear()
+        with self._generation_lock:
+            self.messages.clear()
