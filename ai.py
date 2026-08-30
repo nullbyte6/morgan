@@ -1,5 +1,7 @@
 from ollama import chat
+
 from config import MODEL, SYSTEM_PROMPT
+
 
 class Assistant:
     def __init__(
@@ -11,7 +13,7 @@ class Assistant:
         self.system_prompt = system_prompt
         self.messages = []
 
-    def ask(self, prompt: str) -> str:
+    def stream(self, prompt: str):
         self.messages.append({
             "role": "user",
             "content": prompt
@@ -30,17 +32,21 @@ class Assistant:
         )
 
         reply = ""
+
         for chunk in response:
             content = chunk["message"]["content"]
-
-            print(content, end="", flush=True)
             reply += content
+
+            for character in content:
+                yield character
 
         self.messages.append({
             "role": "assistant",
             "content": reply
         })
-        return reply
+
+    def ask(self, prompt: str) -> str:
+        return "".join(self.stream(prompt))
 
     def clear(self):
         self.messages.clear()
