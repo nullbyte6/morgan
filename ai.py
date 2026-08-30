@@ -1,7 +1,7 @@
 import threading
 from ollama import chat
 from config import MODEL, SYSTEM_PROMPT
-
+from chat import Conversation
 
 class Assistant:
     def __init__(
@@ -10,30 +10,23 @@ class Assistant:
         system_prompt: str = SYSTEM_PROMPT
     ):
         self.model = model
-        self.system_prompt = system_prompt
-        self.messages = []
+        self.conversation = Conversation(system_prompt)
 
         self._generation_lock = threading.Lock()
 
     def stream(self, prompt: str):
+
         if not self._generation_lock.acquire(blocking=False):
-            raise RuntimeError("Assistant is already generating a response.")
+            raise RuntimeError(
+                "Assistant is already generating a response."
+            )
 
         try:
-            self.messages.append({
-                "role": "user",
-                "content": prompt
-            })
+            self.conversation.add_user_message(prompt)
 
             response = chat(
                 model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": self.system_prompt
-                    },
-                    *self.messages
-                ],
+                messages=self.conversation.get_messages(),
                 stream=True
             )
 
@@ -46,18 +39,15 @@ class Assistant:
                 for character in content:
                     yield character
 
-            self.messages.append({
-                "role": "assistant",
-                "content": reply
-            })
+            self.conversation.add_assistant_message(reply)
 
         except Exception:
             if (
-                self.messages
-                and self.messages[-1]["role"] == "user"
-                and self.messages[-1]["content"] == prompt
+                self.conversation.messages
+                and self.conversation.messages[-1]["role"] == "user"
+                and self.conversation.messages[-1]["content"] == prompt
             ):
-                self.messages.pop()
+                self.conversation.messages.pop()
 
             raise
 
@@ -69,4 +59,4 @@ class Assistant:
 
     def clear(self):
         with self._generation_lock:
-            self.messages.clear()
+            self.conversation.clear()
