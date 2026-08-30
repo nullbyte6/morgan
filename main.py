@@ -1,23 +1,15 @@
-from ollama import chat
+from ai import Assistant
 
-MODEL = "qwen3-coder"
-def ask(prompt: str) -> str:
-    response = chat(
-        model=MODEL,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
-    )
+def main():
+    assistant = Assistant()
 
-    return response["message"]["content"]
+    while True:
+        prompt = input(">> ")
+        if prompt.lower() == "exit":
+            break
 
+        reply = assistant.ask(prompt)
+        print(f"ATLAS: {reply}")
 
-while True:
-    prompt = input(">> ")
-    if prompt.lower() in ("salir", "quit"):
-        break
-
-    print(f"ATLAS > {ask(prompt)}")
+if __name__ == "__main__":
+    main()
