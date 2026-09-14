@@ -81,6 +81,52 @@ def resolve_safe_path(path: str) -> Path:
     return Path(path).expanduser().resolve()
 
 
+def resolve_entry_path(path: str) -> Path:
+    """Resolve a directory entry without following its final symbolic link."""
+    return Path(os.path.abspath(Path(path).expanduser()))
+
+
+def decode_text(data: bytes) -> tuple[str, str]:
+    """Decode common Windows text formats and return text plus its encoding."""
+    if data.startswith(codecs.BOM_UTF8):
+        candidates = ("utf-8-sig",)
+    elif data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        candidates = ("utf-16",)
+    else:
+        candidates = ("utf-8", "cp1252")
+
+    for encoding in candidates:
+        try:
+            text = data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        control_characters = sum(
+            ord(character) < 32 and character not in "\n\r\t\f\b"
+            for character in text
+        )
+        if control_characters <= max(1, len(text) // 100):
+            return text, encoding
+    raise UnicodeError(
+        "File is binary or uses an unsupported text encoding; use the binary tools"
+    )
+
+
+def atomic_write_bytes(path: Path, content: bytes) -> None:
+    """Replace a file atomically so a failed write does not leave it truncated."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+                mode="wb", dir=path.parent, delete=False) as temporary_file:
+            temporary_file.write(content)
+            temporary_path = Path(temporary_file.name)
+        os.replace(temporary_path, path)
+    except Exception:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+        raise
+
+
 def get_current_time() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
