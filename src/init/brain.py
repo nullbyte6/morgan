@@ -623,6 +623,24 @@ def open_file(path: str) -> str:
         return f"Error: {error}"
 
 
+def open_directory(path: str = ".") -> str:
+    """Open a folder in the file manager, without changing working directory.
+
+    Accepts paths, ~ or home, Documentos/Documents, Escritorio/Desktop,
+    Descargas/Downloads. Default '.' opens the current working directory.
+    Uses Windows' configured folder locations, including redirected folders.
+    """
+    try:
+        from src.init.folders import resolve_directory
+
+        target = resolve_directory(path)
+        if not target.is_dir():
+            return f"Error: directory does not exist or is not a folder: {target}"
+        return open_file(str(target))
+    except Exception as error:
+        return f"Error opening directory: {error}"
+
+
 def open_browser(url: str) -> str:
     try:
         if "://" not in url:
@@ -1111,6 +1129,10 @@ def list_open_applications() -> str:
 
 
 def open_application(application: str) -> str:
+    from src.init.folders import FOLDER_ALIASES
+
+    if application.strip().casefold() in FOLDER_ALIASES:
+        return open_directory(application)
     query = application.strip().casefold()
     normalized_query = normalize_application_name(query)
     if not normalized_query:

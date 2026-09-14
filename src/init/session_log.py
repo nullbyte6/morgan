@@ -20,8 +20,8 @@ class SessionLog:
             self.path = self.directory / f"{started:%Y-%m-%d_%H-%M-%S_%f}.md"
             try:
                 with self.path.open("x", encoding="utf-8") as log:
-                    log.write(f"{SESSION_HEADER}\n# Nora Session\n\n"
-                              f"Start: {started.isoformat()}\n\n")
+                    log.write(f"{SESSION_HEADER}\n# Nora Session"
+                              f"Start: {started.isoformat()}")
                 break
             except FileExistsError:
                 continue
@@ -46,5 +46,5 @@ class SessionLog:
         if not text:
             return
         with self.path.open("a", encoding="utf-8") as log:
-            log.write(f"## {role} — {datetime.now().astimezone():%H:%M:%S %z}\n\n"
-                      f"{text.rstrip()}\n\n")
+            log.write(f"## {role} — {datetime.now().astimezone():%H:%M:%S %z}"
+                      f"{text.rstrip()}")
