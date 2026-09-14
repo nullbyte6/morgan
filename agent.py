@@ -10,7 +10,10 @@ from pydantic_ai import Agent
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
-model=OllamaModel("qwen3:14b",provider=OllamaProvider(base_url="http://localhost:11434/v1"))
+model=OllamaModel(
+    "qwen3:14b",
+    provider=OllamaProvider(
+    base_url="http://localhost:11434/v1"))
 
 NOTES_FILE=Path("notes.txt")
 ALLOWED_ROOT=Path.home().resolve()
@@ -101,7 +104,8 @@ def replace_in_file(path:str,old_text:str,new_text:str)->str:
         if old_text not in content:
             return "Text to replace was not found"
         occurrences=content.count(old_text)
-        file_path.write_text(content.replace(old_text,new_text),encoding="utf-8")
+        file_path.write_text(content.replace(old_text,new_text),
+                             encoding="utf-8")
         return f"Replaced {occurrences} occurrence(s) in {file_path}"
     except Exception as error:
         return f"Error: {error}"
@@ -152,7 +156,8 @@ def open_application(application:str)->str:
     application=application.strip().lower()
     command=APPLICATIONS.get(application)
     if command is None:
-        return f"Unknown application '{application}'. Available applications: {', '.join(APPLICATIONS)}"
+        return (f"Unknown application '{application}'. "
+                f"Available applications: {', '.join(APPLICATIONS)}")
     try:
         subprocess.Popen(command,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         return f"Opened application: {application}"
@@ -179,14 +184,18 @@ agent=Agent(
         open_application
     ],
     instructions=(
-        "You are a helpful personal desktop assistant developed by me, running 100% locally. "
-        "Use tools whenever useful. You may call multiple tools sequentially to complete a task. "
+        "You are a helpful personal desktop assistant developed by me, "
+        "running 100% locally."
+        "Use tools whenever useful. You may call multiple tools sequentially "
+        "to complete a task."
         "Do not stop after the first tool if additional tools are required. "
         "Inspect files before modifying them when necessary. "
         "Prefer replace_in_file for precise edits instead of rewriting entire files. "
         "Use list_files when inspecting directories. "
-        "When asked to open a file, application, website or search, actually use the corresponding tool. "
+        "When asked to open a file, application, website or search, actually "
+        "use the corresponding tool."
         "Never claim an action succeeded unless the tool reported success. "
-        "Keep answers short and friendly. Adapt your language to the user's language."
+        "Keep answers short and friendly. Adapt your language to the user's "
+        "language."
     )
 )
