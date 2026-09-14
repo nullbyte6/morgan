@@ -128,7 +128,7 @@ cleanup_installers() {
 
 python_works() {
     "$@" -c \
-        'import sys; raise SystemExit(0 if sys.platform == "win32" and (3, 10) <= sys.version_info < (3, 14) else 1)' \
+        'import sys, struct; raise SystemExit(0 if sys.platform == "win32" and (3, 12) <= sys.version_info < (3, 13) and struct.calcsize("P") == 8 else 1)' \
         >/dev/null 2>&1
 }
 
@@ -249,6 +249,7 @@ info "Creating or updating the virtual environment..."
 info "Installing dependencies from requirements.txt..."
 "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
 "$VENV_PYTHON" -m pip install --requirement "$REQUIREMENTS_WINDOWS"
+"$VENV_PYTHON" -m pip check
 
 info "Checking for Ollama..."
 OLLAMA_BIN=""

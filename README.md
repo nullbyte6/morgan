@@ -3,9 +3,18 @@ local PC and meant to be running alongside your software. It is **100% open sour
 
 ## Installation
 
+Use 64-bit Python 3.12 (also selected by `install.sh`). From the project folder:
+
 ```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip check
 ```
+
+Windows media support uses the modular PyWinRT packages; do not install the
+legacy `winrt` package. ShazamIO 0.8.1 or later is required for compatibility
+with Pydantic AI.
 
 ## Voice Input
 Run Nora and speak to it through `voice`. Speak after `[MIC]` shortly appears.

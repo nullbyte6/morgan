@@ -3,4 +3,12 @@ colorama>=0.4,<1
 ddgs>=9,<10
 faster-whisper>=1.1,<2
 sounddevice>=0.5,<1
-shazamio>=1.0,<2
+winrt-runtime>=3.2.1,<4; sys_platform == "win32"
+winrt-Windows.Media.Control>=3.2.1,<4; sys_platform == "win32"
+winrt-Windows.Foundation>=3.2.1,<4; sys_platform == "win32"
+winrt-Windows.Foundation.Collections>=3.2.1,<4; sys_platform == "win32"
+winrt-Windows.Media>=3.2.1,<4; sys_platform == "win32"
+winrt-Windows.Storage.Streams>=3.2.1,<4; sys_platform == "win32"
+shazamio>=0.8.1,<0.9
+soundcard>=0.2.2,<0.4.6
+numpy>=1.26.4,<2.5.3
