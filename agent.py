@@ -1,4 +1,5 @@
 import os
+import random
 import re
 import subprocess
 import sys
@@ -39,6 +40,15 @@ model = OllamaModel(
 
 TYPEWRITER_DELAY_SECONDS = float(
     os.environ.get("NORA_TYPEWRITER_DELAY", "0.002"))
+
+STARTUP_GREETINGS = (
+    "Hola, Diego. Nora lista para empezar.",
+    "Ya estoy aquí, Diego. Vamos a ello.",
+    "Todo listo. Dime qué necesitas y me pongo a ello.",
+    "Hola de nuevo. Lista para echarte una mano.",
+    "Nora al habla. Cuando quieras, empezamos.",
+    "¡Buenas, Diego! Manos a la obra.",
+)
 
 
 def stream(chunks) -> None:
@@ -130,7 +140,7 @@ def working_directory_instructions() -> str:
 
 def main():
     refresh_model_keep_alive()
-    print("""
+    stream("""
      /$$   /$$                             
     | $$$ | $$                             
     | $$$$| $$  /$$$$$$   /$$$$$$  /$$$$$$ 
@@ -140,8 +150,8 @@ def main():
     | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
     |__/  \\__/ \\______/ |__/      \\_______/
     """)
-    print(brain.get_version())
-    print("¡Hola! Me llamo Nora, ¿con qué te puedo ayudar?")
+    stream(brain.get_version())
+    stream([random.choice(STARTUP_GREETINGS)])
     history = []
     while True:
         user_input = read_user_input()
