@@ -4,11 +4,6 @@ import subprocess
 import sys
 import time
 
-from init.brain import VERSION
-
-os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-
 from colorama import just_fix_windows_console
 from pydantic_ai import Agent, Tool
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
@@ -17,12 +12,16 @@ from pydantic_ai.providers.ollama import OllamaProvider
 
 from src.init import brain
 from src.init.brain import (
-    MODEL_NAME, change_directory, get_working_directory, refresh_model_keep_alive,
-)
+    MODEL_NAME, VERSION, change_directory, get_working_directory,
+    refresh_model_keep_alive, refresh)
+
 from src.init.rules import INSTRUCTIONS
 from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
 from src.init.tools import TOOLS
 from src.init.voice import VOICE_COMMANDS, capture_voice_input
+
+os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 just_fix_windows_console()
 MODEL_SETTINGS = {
@@ -147,7 +146,6 @@ def main():
         if user_input.strip().lower() in ("quit", "exit"):
             break
 
-        from src.init.brain import refresh
         if user_input.strip().lower() in ("ref", "reload"):
             refresh()
 
