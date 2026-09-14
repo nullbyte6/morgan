@@ -168,6 +168,69 @@ def list_files(path: str = ".") -> str:
         return f"Error: {error}"
 
 
+def create_directory(path: str, parents: bool = True) -> str:
+    """Create a directory; optionally create all missing parent directories."""
+    try:
+        directory_path = resolve_safe_path(path)
+        if directory_path.exists():
+            if directory_path.is_dir():
+                return f"Directory already exists: {directory_path}"
+            return f"A file already exists at: {directory_path}"
+        directory_path.mkdir(parents=parents, exist_ok=False)
+        return f"Directory created: {directory_path}"
+    except Exception as error:
+        return f"Error: {error}"
+
+
+def rename_directory(path: str, new_name: str) -> str:
+    """Rename a directory in place; new_name must be a name, not another path."""
+    try:
+        directory_path = resolve_entry_path(path)
+        if not directory_path.exists():
+            return f"Directory does not exist: {directory_path}"
+        if not directory_path.is_dir():
+            return f"Not a directory: {directory_path}"
+        if (not new_name.strip() or new_name in (".", "..")
+                or Path(new_name).name != new_name):
+            return f"Invalid directory name: {new_name}"
+        destination = directory_path.with_name(new_name)
+        if destination.exists() or destination.is_symlink():
+            return f"Destination already exists: {destination}"
+        directory_path.rename(destination)
+        return f"Directory renamed: {directory_path} -> {destination}"
+    except Exception as error:
+        return f"Error: {error}"
+
+
+def delete_directory(path: str, recursive: bool = False) -> str:
+    """Delete a directory; recursive must be true to remove any contents."""
+    try:
+        directory_path = resolve_entry_path(path)
+        if not directory_path.exists() and not directory_path.is_symlink():
+            return f"Directory does not exist: {directory_path}"
+        if not directory_path.is_dir():
+            return f"Not a directory: {directory_path}"
+        if directory_path == Path(directory_path.anchor):
+            return f"Refusing to delete a filesystem root: {directory_path}"
+
+        is_junction = (hasattr(directory_path, "is_junction")
+                       and directory_path.is_junction())
+        if directory_path.is_symlink():
+            directory_path.unlink()
+        elif is_junction:
+            directory_path.rmdir()
+        elif recursive:
+            shutil.rmtree(directory_path)
+        elif any(directory_path.iterdir()):
+            return (f"Directory is not empty: {directory_path}. "
+                    "Recursive deletion was not requested")
+        else:
+            directory_path.rmdir()
+        return f"Directory deleted: {directory_path}"
+    except Exception as error:
+        return f"Error: {error}"
+
+
 def read_file(path: str) -> str:
     try:
         file_path = resolve_safe_path(path)
