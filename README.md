@@ -17,7 +17,8 @@ command in the given language.
 Use `cd D:\projects\my-app`, `cd ..`, or `cd /d "C:\My Projects"` directly
 at the prompt, or ask Nora to change directory in natural language. `cd` alone
 shows the current directory. Changes persist for the session: relative file and
-Git operations use that directory. The prompt shows the current path and active
+Git operations use that directory. Initially the prompt is just `>>`; after a
+successful `cd` (including `cd` alone), it shows the current path and active
 Git branch (including from repository subdirectories), for example:
 
 ```text

@@ -69,6 +69,7 @@ TYPEWRITER_DELAY_SECONDS = float(
 APPLICATION_SUFFIXES = (".exe", ".com", ".bat", ".cmd", ".lnk", ".appref-ms")
 _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 VOICE_COMMANDS = {"/voice", "voice"}
+_SHOW_WORKING_DIRECTORY = False
 VOICE_MODEL_NAME = os.environ.get("NORA_WHISPER_MODEL", "small")
 VOICE_BLOCK_SECONDS = 0.1
 VOICE_MAX_SECONDS = 30
@@ -135,9 +136,11 @@ def change_directory(path: str = "") -> str:
     Accepts relative or absolute paths, Windows drive paths, quotes, ~ and
     environment variables. Subsequent tools resolve relative paths here.
     """
+    global _SHOW_WORKING_DIRECTORY
     try:
         path = path.strip()
         if not path:
+            _SHOW_WORKING_DIRECTORY = True
             return get_working_directory()
         if len(path) >= 2 and path[0] == path[-1] and path[0] in "\"'":
             path = path[1:-1]
@@ -145,6 +148,7 @@ def change_directory(path: str = "") -> str:
             return "Error: directory path is empty"
         destination = resolve_safe_path(os.path.expandvars(path))
         os.chdir(destination)
+        _SHOW_WORKING_DIRECTORY = True
         return f"Current directory: {get_working_directory()}"
     except (OSError, ValueError) as error:
         return f"Error: {error}"
@@ -163,6 +167,8 @@ def directory_cmd(command: str) -> str | None:
 
 def build_user_prompt() -> str:
     """Show the current location and live Git branch, including unborn branches."""
+    if not _SHOW_WORKING_DIRECTORY:
+        return ">> "
     directory = get_working_directory()
     branch = ""
     try:
