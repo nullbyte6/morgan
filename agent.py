@@ -245,7 +245,7 @@ agent = Agent(
 
 
 def main():
-    print("¡Hola! Me llamo Nora, ¿con qué te puedo ayudar??")
+    print("¡Hola! Me llamo Nora, ¿con qué te puedo ayudar?")
     history = []
     while True:
         user_input = input("> ")
