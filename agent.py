@@ -9,6 +9,7 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 from colorama import just_fix_windows_console
 from pydantic_ai import Agent, Tool
+from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
@@ -60,6 +61,18 @@ def directory_cmd(command: str) -> str | None:
     path = match.group(1)
     path = re.sub(r"^/d(?:\s+|$)", "", path, count=1, flags=re.IGNORECASE)
     return change_directory(path)
+
+
+def git_cmd(command: str) -> str | None:
+    """Execute exact supported Git commands through the existing tools."""
+    commands = {
+        "git push": brain.git_push,
+        "git status": brain.git_status,
+        "git diff": brain.git_diff,
+        "git log": brain.git_log,
+    }
+    function = commands.get(command.strip())
+    return function() if function is not None else None
 
 
 def build_user_prompt() -> str:
@@ -134,6 +147,16 @@ def main():
         if directory_result is not None:
             print(directory_result)
             continue
+        git_result = git_cmd(user_input)
+        if git_result is not None:
+            print(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
+            history.extend([
+                ModelRequest(parts=[UserPromptPart(user_input)]),
+                ModelResponse(parts=[TextPart(
+                    f"Direct Git command result in {get_working_directory()}:\n"
+                    f"{git_result}")]),
+            ])
+            continue
         if user_input.strip().casefold() in VOICE_COMMANDS:
             try:
                 user_input = capture_voice_input()
@@ -155,6 +178,9 @@ def main():
         except Exception as error:
             spinner.stop()
             print(f"ERROR: {error}")
+            cause = error.__cause__
+            if cause is not None:
+                print(f"Detalle: {cause}")
 
 
 if __name__ == "__main__":
