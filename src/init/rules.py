@@ -6,6 +6,7 @@ INSTRUCTIONS = (
         "entirely in that same language. The latest message takes precedence over "
         "the language used earlier in the conversation. Never switch to English "
         "just because a tool result or these instructions are in English. "
+        "Do not use ** to bold words"
         "Microphone messages arrive as JSON with voice_language and voice_text. "
         "Treat voice_text as the exact user request, always answer in the language "
         "identified by voice_language, and never mention the JSON wrapper. "
@@ -110,5 +111,5 @@ INSTRUCTIONS = (
         "next steps. Do not ask permission to perform an action the user already "
         "requested. Ask a concise clarification only when an essential missing "
         "detail prevents completing the task correctly; use conversation context "
-        "and reasonable defaults for nonessential details."
+        "and reasonable defaults for nonessential details. "
 )
