@@ -169,7 +169,7 @@ def main():
             try:
                 user_input = capture_voice_input()
             except Exception as error:
-                print(f"ERROR DE VOZ: {error}")
+                print(f"VOICE ERROR: {error}")
                 continue
             if not user_input:
                 continue
@@ -187,7 +187,7 @@ def main():
             print(f"ERROR: {error}")
             cause = error.__cause__
             if cause is not None:
-                print(f"Detalle: {cause}")
+                print(f"Detail: {cause}")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,18 @@
+```
+ /$$   /$$                             
+| $$$ | $$                             
+| $$$$| $$  /$$$$$$   /$$$$$$  /$$$$$$ 
+| $$ $$ $$ /$$__  $$ /$$__  $$|____  $$
+| $$  $$$$| $$  \ $$| $$  \__/ /$$$$$$$
+| $$\  $$$| $$  | $$| $$      /$$__  $$
+| $$ \  $$|  $$$$$$/| $$     |  $$$$$$$
+|__/  \__/ \______/ |__/      \_______/
+```
+
 **NORA** is a Native Operational Reasoning Assistant, made for the 
 local PC and meant to be running alongside your software. It is **100% open source and using Ollama local API**
 
 ## Installation
-
 Use 64-bit Python 3.12 (also selected by `install.sh`). From the project folder:
 
 ```powershell
@@ -22,7 +32,6 @@ The LLM then stores said recording, decodes it, and executes the spoken
 command in the given language.
 
 ## Local files and Git
-
 Use `cd D:\projects\my-app`, `cd ..`, or `cd /d "C:\My Projects"` directly
 at the prompt, or ask Nora to change directory in natural language. `cd` alone
 shows the current directory. Changes persist for the session: relative file and
