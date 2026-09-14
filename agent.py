@@ -193,7 +193,7 @@ agent=Agent(
 
 def main():
     print("Type 'quit' to exit")
-    print("What can I help you with?")
+    print("Hi! I'm Nora, what can I help you with?")
 
     history=[]
     while True:
@@ -203,9 +203,9 @@ def main():
         try:
             result=agent.run_sync(user_input,message_history=history)
             history=result.all_messages()
-            print(f"{result.output}\n")
+            print(f"{result.output}")
         except Exception as error:
-            print(f"Error: {error}\n")
+            print(f"ERROR: {error}")
 
 if __name__=="__main__":
     main()
