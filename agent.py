@@ -599,10 +599,192 @@ def open_browser(url: str) -> str:
         return f"Error: {error}"
 
 
-def search_web(query: str) -> str:
-    url = f"https://www.google.com/search?q={quote_plus(query)}"
-    webbrowser.open(url)
-    return f"Opened web search for: {query}"
+def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
+    """Search the web internally, prioritizing Google, without opening a browser."""
+    query = query.strip()
+    if not query:
+        return "Error: search query is empty"
+    try:
+        from ddgs import DDGS
+
+        result_limit = max(1, min(int(max_results), 10))
+        results = DDGS(timeout=10).text(
+            query,
+            region=region,
+            safesearch="moderate",
+            max_results=result_limit,
+            backend="google,brave,duckduckgo",
+        )
+        if not results:
+            return f"No web results found for: {query}"
+        formatted_results = []
+        for index, result in enumerate(results, start=1):
+            formatted_results.append(
+                f"[{index}] {result.get('title', 'Untitled')}\n"
+                f"URL: {result.get('href', '')}\n"
+                f"Snippet: {result.get('body', '')}"
+            )
+        return "\n\n".join(formatted_results)
+    except Exception as error:
+        return f"Error searching the web: {error}"
+
+
+def read_web_page(url: str, max_characters: int = 12_000) -> str:
+    """Fetch readable page text internally without launching a browser."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return "Error: a valid HTTP or HTTPS URL is required"
+    if not 1_000 <= max_characters <= 30_000:
+        return "Error: max_characters must be between 1000 and 30000"
+    try:
+        from ddgs import DDGS
+
+        result = DDGS(timeout=15).extract(url, fmt="text_plain")
+        content = result.get("content", "")
+        if isinstance(content, bytes):
+            content = content.decode("utf-8", errors="replace")
+        content = str(content).strip()
+        if not content:
+            return f"No readable content found at: {url}"
+        if len(content) > max_characters:
+            content = content[:max_characters] + "\n[Content truncated]"
+        return f"Source URL: {url}\n\n{content}"
+    except Exception as error:
+        return f"Error reading web page: {error}"
+
+
+def request_json(url: str, timeout: int = 15):
+    """Request JSON from a public data API with Nora's identifying user agent."""
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": WEB_USER_AGENT,
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.load(response)
+
+
+def geocode_city(city: str) -> dict[str, object] | None:
+    """Resolve a place while respecting Nominatim's rate and cache policy."""
+    global _LAST_GEOCODE_REQUEST_AT
+
+    clean_city = city.strip()
+    if not clean_city:
+        return None
+    cache_key = clean_city.casefold()
+
+    # Serializing the lookup prevents concurrent Nora calls from exceeding the
+    # public service's limit of one request per second.
+    with _GEOCODE_LOCK:
+        if cache_key in _GEOCODE_CACHE:
+            return _GEOCODE_CACHE[cache_key]
+
+        elapsed = time.monotonic() - _LAST_GEOCODE_REQUEST_AT
+        remaining = NOMINATIM_MIN_INTERVAL_SECONDS - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
+
+        parameters = urlencode({
+            "q": clean_city,
+            "format": "jsonv2",
+            "limit": 1,
+        })
+        try:
+            results = request_json(f"{NOMINATIM_BASE_URL}/search?{parameters}")
+        finally:
+            _LAST_GEOCODE_REQUEST_AT = time.monotonic()
+
+        if not results:
+            _GEOCODE_CACHE[cache_key] = None
+            return None
+
+        result = results[0]
+        place = {
+            "name": result["display_name"],
+            "latitude": float(result["lat"]),
+            "longitude": float(result["lon"]),
+        }
+        _GEOCODE_CACHE[cache_key] = place
+        return place
+
+
+def haversine_km(first: dict, second: dict) -> float:
+    """Calculate great-circle distance between two geocoded points."""
+    first_latitude = radians(first["latitude"])
+    second_latitude = radians(second["latitude"])
+    latitude_delta = second_latitude - first_latitude
+    longitude_delta = radians(second["longitude"] - first["longitude"])
+    haversine = (
+        sin(latitude_delta / 2) ** 2
+        + cos(first_latitude) * cos(second_latitude)
+        * sin(longitude_delta / 2) ** 2
+    )
+    haversine = max(0.0, min(1.0, haversine))
+    return 2 * 6371.0088 * asin(sqrt(haversine))
+
+
+def get_city_distance(origin: str, destination: str) -> str:
+    """Return verified straight-line and driving distances between two places."""
+    try:
+        origin_place = geocode_city(origin)
+        destination_place = geocode_city(destination)
+        if origin_place is None:
+            return f"Error: location not found: {origin}"
+        if destination_place is None:
+            return f"Error: location not found: {destination}"
+
+        straight_line_km = haversine_km(origin_place, destination_place)
+        coordinates = (
+            f"{origin_place['longitude']},{origin_place['latitude']};"
+            f"{destination_place['longitude']},{destination_place['latitude']}"
+        )
+        route_url = (
+            f"{OSRM_BASE_URL}/route/v1/driving/"
+            f"{coordinates}?overview=false&alternatives=false&steps=false"
+        )
+        route = None
+        route_error = None
+        try:
+            route_data = request_json(route_url)
+            if route_data.get("code") == "Ok" and route_data.get("routes"):
+                route = route_data["routes"][0]
+            else:
+                route_error = (
+                    "OSRM returned status "
+                    f"{route_data.get('code', 'unknown')}"
+                )
+        except Exception as error:
+            route_error = f"Driving route could not be verified: {error}"
+
+        result = {
+            "origin_resolved": origin_place["name"],
+            "destination_resolved": destination_place["name"],
+            "straight_line_km": round(straight_line_km, 1),
+            "driving_route_km": (
+                round(route["distance"] / 1000, 1) if route else None
+            ),
+            "driving_duration_hours": (
+                round(route["duration"] / 3600, 2) if route else None
+            ),
+            "route_error": route_error,
+            "distance_notes": {
+                "straight_line": (
+                    "Approximate geodesic distance between the resolved coordinates."
+                ),
+                "driving_route": (
+                    "Calculated road-route length; it can vary by route and conditions."
+                ),
+            },
+            "sources": [
+                f"{NOMINATIM_BASE_URL}/ — © OpenStreetMap contributors (ODbL)",
+                f"{OSRM_BASE_URL}/ — data © OpenStreetMap contributors",
+            ],
+        }
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    except Exception as error:
+        return f"Error calculating city distance: {error}"
 
 
 def kill_process(process: str, force: bool = False,
