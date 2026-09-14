@@ -15,19 +15,10 @@ model=OllamaModel(
     provider=OllamaProvider(
     base_url="http://localhost:11434/v1"))
 
-NOTES_FILE=Path("notes.txt")
-ALLOWED_ROOT=Path.home().resolve()
+NOTES_FILE=Path(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.txt")
 
 def resolve_safe_path(path:str)->Path:
-    target=Path(path).expanduser()
-    if not target.is_absolute():
-        target=ALLOWED_ROOT/target
-    target=target.resolve()
-    try:
-        target.relative_to(ALLOWED_ROOT)
-    except ValueError:
-        raise ValueError(f"Access denied: path must be inside {ALLOWED_ROOT}")
-    return target
+    return Path(path).expanduser().resolve()
 
 def get_current_time()->str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -199,3 +190,20 @@ agent=Agent(
         "language."
     )
 )
+
+def main():
+    print("Type 'quit' to exit.\n")
+    history=[]
+    while True:
+        user_input=input("> ")
+        if user_input.strip().lower() in ("quit","exit"):
+            break
+        try:
+            result=agent.run_sync(user_input,message_history=history)
+            history=result.all_messages()
+            print(f"{result.output}\n")
+        except Exception as error:
+            print(f"Error: {error}\n")
+
+if __name__=="__main__":
+    main()
