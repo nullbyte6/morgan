@@ -29,18 +29,9 @@ try:
 except ImportError:
     winreg = None
 
-CONFIG_FILE = Path(__file__).resolve().parents[2] / "config.json"
-VERSION = "v1.0.1-alpha"
+from .config import CONFIG_FILE, HOME_PATH, ensure_storage, load_config
 
-def load_config() -> dict:
-    """Read Nora's application configuration, independent of the working directory."""
-    try:
-        config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {"version": VERSION}
-    if not isinstance(config, dict):
-        raise ValueError("config.json must contain a JSON object")
-    return config
+VERSION = "v1.0.1-alpha"
 
 MODEL_NAME = os.environ.get("NORA_MODEL", load_config().get("model_name"))
 OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", load_config().get("keep_alive"))
@@ -53,8 +44,7 @@ OSRM_BASE_URL = os.environ.get(
 NOMINATIM_MIN_INTERVAL_SECONDS = 1.05
 _GEOCODE_CACHE: dict[str, dict[str, object] | None] = {}
 _GEOCODE_LOCK = threading.Lock()
-HOME_PATH = Path.home().resolve() / ".nora"
-NOTES_FILE = HOME_PATH / Path(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.txt")
+NOTES_FILE = HOME_PATH / "note" / f"{datetime.now():%Y-%m-%d_%H-%M-%S_%f}.txt"
 APPLICATION_SUFFIXES = (".exe", ".com", ".bat", ".cmd", ".lnk", ".appref-ms")
 _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 
@@ -215,15 +205,16 @@ def calculate(expression: str) -> str:
 
 
 def save_note(note: str) -> str:
+    ensure_storage()
     with NOTES_FILE.open("a", encoding="utf-8") as file:
         file.write(f"{note}\n")
     return "Note saved"
 
 
 def read_notes() -> str:
-    if not NOTES_FILE.exists():
-        return "No notes saved yet"
-    return NOTES_FILE.read_text(encoding="utf-8")
+    ensure_storage()
+    notes = sorted((HOME_PATH / "note").glob("*.txt"))
+    return "\n\n".join(f"{path.name}\n{path.read_text(encoding='utf-8')}" for path in notes) if notes else "No notes saved yet"
 
 
 def list_files(path: str = ".") -> str:

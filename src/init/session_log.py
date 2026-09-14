@@ -5,6 +5,9 @@ from datetime import datetime
 from pathlib import Path
 
 
+from .config import HOME_PATH, ensure_storage
+
+
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_\d{6}\.md")
 SESSION_HEADER = "<!-- New Log -->"
 MAX_SESSIONS = 24
@@ -12,8 +15,10 @@ MAX_SESSIONS = 24
 
 class SessionLog:
     def __init__(self, directory=None):
+        if directory is None:
+            ensure_storage()
         self.directory = (Path(directory) if directory is not None
-                          else Path.home() / ".nora").resolve()
+                          else HOME_PATH / ".log").resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
         while True:
             started = datetime.now().astimezone()
@@ -33,7 +38,7 @@ class SessionLog:
             if (SESSION_NAME.fullmatch(path.name) and not path.is_symlink()
                     and path.is_file()):
                 with path.open(encoding="utf-8") as log:
-                    if log.readline().strip() == SESSION_HEADER:
+                    if log.read(256).lstrip().startswith(SESSION_HEADER):
                         logs.append(path)
         oldest = sorted((path for path in logs if path != self.path),
                         key=lambda path: path.name)

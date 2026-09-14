@@ -142,7 +142,7 @@ agent = Agent(model=model,
 
 @agent.instructions
 def current_instructions() -> str:
-    return rules.INSTRUCTIONS
+    return rules.current_instructions()
 
 
 @agent.instructions
@@ -209,7 +209,8 @@ def main():
         spinner.start()
         try:
             with agent.run_stream_sync(
-                    user_input, message_history=history) as result:
+                    user_input, message_history=history,
+                    model_settings={"temperature": brain.load_config()["temperature"]}) as result:
                 spinner.stop()
                 stream(result.stream_text(delta=True, debounce_by=None), session=session)
                 history = result.all_messages()

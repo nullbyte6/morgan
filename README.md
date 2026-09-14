@@ -26,8 +26,42 @@ Windows media support uses the modular PyWinRT packages; do not install the
 legacy `winrt` package. ShazamIO 0.8.1 or later is required for compatibility
 with Pydantic AI.
 
+## Configuration and personality
+
+Nora uses `~/.nora/json/config.json`, independently of the current directory.
+On first launch it creates this file with defaults, or imports a legacy repository
+config if one exists. Existing user settings take precedence. Nora classifies
+files directly inside `~/.nora` by extension: `.txt` into `note/`, `.md` into
+`log/`, and `.json` into `json/`. Name collisions are left in place without
+overwriting either file. Project files outside this folder are unaffected.
+
+Edit the following settings in the user config while Nora is running:
+
+```json
+{
+  "temperature": 0.2,
+  "personality": {
+    "tone": "cercano y directo",
+    "verbosity": "breve",
+    "humor": "sutil, cuando encaje",
+    "formality": "informal",
+    "instructions": "Usa ejemplos prácticos cuando expliques conceptos."
+  }
+}
+```
+
+These are fields to adjust in the full config; preserve the other settings.
+Personality values are free text, in any language. Temperature accepts numbers
+from 0 to 2. Changes apply automatically to the next response, without `reload`
+or restarting; they do not modify a response already streaming. If an edit is
+invalid, Nora warns and keeps the last valid configuration until the file is
+corrected. Model name and keep-alive settings require restarting Nora;
+`NORA_MODEL` and `NORA_KEEP_ALIVE` environment variables take precedence.
+
+Notes are saved in `~/.nora/note/`; reading notes includes previous sessions.
+
 ## Session logs
-Each launch saves a Markdown conversation in `~/.nora/`, named
+Each launch saves a Markdown conversation in `~/.nora/.log/`, named
 `YYYY-MM-DD_HH-MM-SS_microseconds.md` using the session's local start time.
 It records the greeting, messages, voice transcripts, direct command results and
 errors. Responses are saved as displayed, including partial responses if a stream
