@@ -6,13 +6,14 @@ import time
 
 from colorama import just_fix_windows_console
 from pydantic_ai import Agent, Tool
-from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, \
+    UserPromptPart
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
 from src.init import brain
 from src.init.brain import (
-    MODEL_NAME, VERSION, change_directory, get_working_directory,
+    MODEL_NAME, change_directory, get_working_directory,
     refresh_model_keep_alive, refresh)
 
 from src.init.rules import INSTRUCTIONS
