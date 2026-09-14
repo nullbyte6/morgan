@@ -192,7 +192,9 @@ agent=Agent(
 )
 
 def main():
-    print("Type 'quit' to exit.\n")
+    print("Type 'quit' to exit")
+    print("What can I help you with?")
+
     history=[]
     while True:
         user_input=input("> ")
