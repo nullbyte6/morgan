@@ -1,3 +1,5 @@
+import base64
+import codecs
 import ctypes
 import json
 import os
@@ -5,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import unicodedata
@@ -76,6 +79,7 @@ def print_stream_by_character(chunks) -> None:
                 time.sleep(TYPEWRITER_DELAY_SECONDS)
     sys.stdout.write("\n")
     sys.stdout.flush()
+
 
 def resolve_safe_path(path: str) -> Path:
     return Path(path).expanduser().resolve()
@@ -232,32 +236,69 @@ def delete_directory(path: str, recursive: bool = False) -> str:
 
 
 def read_file(path: str) -> str:
+    """Read a text file while detecting UTF-8, UTF-16 or Windows-1252."""
     try:
         file_path = resolve_safe_path(path)
         if not file_path.exists():
             return f"File does not exist: {file_path}"
         if not file_path.is_file():
             return f"Not a file: {file_path}"
-        return file_path.read_text(encoding="utf-8")
+        content, _ = decode_text(file_path.read_bytes())
+        return content
     except Exception as error:
         return f"Error: {error}"
 
 
-def write_file(path: str, content: str) -> str:
+def create_file(path: str, content: str = "", encoding: str = "utf-8") -> str:
+    """Create a new text file and fail rather than overwrite an existing file."""
     try:
         file_path = resolve_safe_path(path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(content, encoding="utf-8")
+        with file_path.open("x", encoding=encoding) as file:
+            file.write(content)
+        return f"File created: {file_path}"
+    except FileExistsError:
+        return f"File already exists: {resolve_safe_path(path)}"
+    except (LookupError, OSError) as error:
+        return f"Error: {error}"
+
+
+def write_file(path: str, content: str) -> str:
+    """Create or completely overwrite a UTF-8 text file."""
+    try:
+        file_path = resolve_safe_path(path)
+        atomic_write_bytes(file_path, content.encode("utf-8"))
         return f"File written: {file_path}"
     except Exception as error:
         return f"Error: {error}"
 
 
+def edit_file(path: str, content: str) -> str:
+    """Replace all text in an existing file while preserving its encoding."""
+    try:
+        file_path = resolve_safe_path(path)
+        if not file_path.exists():
+            return f"File does not exist: {file_path}"
+        if not file_path.is_file():
+            return f"Not a file: {file_path}"
+        _, encoding = decode_text(file_path.read_bytes())
+        atomic_write_bytes(file_path, content.encode(encoding))
+        return f"File edited: {file_path}"
+    except Exception as error:
+        return f"Error: {error}"
+
+
 def append_file(path: str, content: str) -> str:
+    """Append text to a file, preserving its existing text encoding."""
     try:
         file_path = resolve_safe_path(path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        with file_path.open("a", encoding="utf-8") as file:
+        encoding = "utf-8"
+        if file_path.exists():
+            if not file_path.is_file():
+                return f"Not a file: {file_path}"
+            _, encoding = decode_text(file_path.read_bytes())
+        with file_path.open("a", encoding=encoding) as file:
             file.write(content)
         return f"Content appended to: {file_path}"
     except Exception as error:
@@ -265,17 +306,64 @@ def append_file(path: str, content: str) -> str:
 
 
 def replace_in_file(path: str, old_text: str, new_text: str) -> str:
+    """Replace matching text in an existing file without changing its encoding."""
     try:
         file_path = resolve_safe_path(path)
         if not file_path.exists():
             return f"File does not exist: {file_path}"
-        content = file_path.read_text(encoding="utf-8")
+        if not file_path.is_file():
+            return f"Not a file: {file_path}"
+        content, encoding = decode_text(file_path.read_bytes())
         if old_text not in content:
             return "Text to replace was not found"
         occurrences = content.count(old_text)
-        file_path.write_text(content.replace(old_text, new_text),
-                             encoding="utf-8")
+        updated_content = content.replace(old_text, new_text)
+        atomic_write_bytes(file_path, updated_content.encode(encoding))
         return f"Replaced {occurrences} occurrence(s) in {file_path}"
+    except Exception as error:
+        return f"Error: {error}"
+
+
+def read_binary_file(path: str) -> str:
+    """Read any binary file and return its bytes encoded as Base64."""
+    try:
+        file_path = resolve_safe_path(path)
+        if not file_path.exists():
+            return f"File does not exist: {file_path}"
+        if not file_path.is_file():
+            return f"Not a file: {file_path}"
+        encoded = base64.b64encode(file_path.read_bytes()).decode("ascii")
+        return encoded
+    except Exception as error:
+        return f"Error: {error}"
+
+
+def write_binary_file(path: str, base64_content: str,
+                      overwrite: bool = False) -> str:
+    """Create a binary file from Base64; set overwrite only for an existing file."""
+    try:
+        file_path = resolve_safe_path(path)
+        already_exists = file_path.exists()
+        if already_exists and not overwrite:
+            return f"File already exists: {file_path}"
+        content = base64.b64decode(base64_content, validate=True)
+        atomic_write_bytes(file_path, content)
+        action = "edited" if already_exists else "created"
+        return f"Binary file {action}: {file_path}"
+    except (ValueError, OSError) as error:
+        return f"Error: {error}"
+
+
+def delete_file(path: str) -> str:
+    """Permanently delete one file or symbolic link, never a directory."""
+    try:
+        file_path = resolve_entry_path(path)
+        if not file_path.exists() and not file_path.is_symlink():
+            return f"File does not exist: {file_path}"
+        if file_path.is_dir() and not file_path.is_symlink():
+            return f"Refusing to delete a directory: {file_path}"
+        file_path.unlink()
+        return f"File deleted: {file_path}"
     except Exception as error:
         return f"Error: {error}"
 
@@ -507,10 +595,17 @@ agent = Agent(
         save_note,
         read_notes,
         list_files,
+        create_directory,
+        rename_directory,
+        delete_directory,
         read_file,
-        write_file,
+        create_file,
+        edit_file,
         append_file,
         replace_in_file,
+        read_binary_file,
+        write_binary_file,
+        delete_file,
         open_file,
         open_browser,
         search_web,
@@ -528,7 +623,17 @@ agent = Agent(
         "to complete a task. "
         "Do not stop after the first tool if additional tools are required. "
         "Inspect files before modifying them when necessary. "
-        "Prefer replace_in_file for precise edits instead of rewriting entire files. "
+        "Use create_file for a new text file, edit_file to replace an existing "
+        "text file, append_file to add text, and replace_in_file for precise edits. "
+        "Use read_binary_file and write_binary_file for non-text formats. "
+        "Only call delete_file when the latest user message explicitly asks to "
+        "delete that specific file. Never infer permission to delete a file from "
+        "a request to edit, replace, clean up, or recreate it. "
+        "Use create_directory to make folders and rename_directory to rename them. "
+        "Only call delete_directory when the latest user message explicitly asks "
+        "to delete that specific folder. Set recursive to true only when the user "
+        "explicitly asks to delete its contents as well, delete it recursively, or "
+        "delete the whole folder. Never delete a broader parent folder. "
         "Use list_files when inspecting directories. "
         "When asked to open a file, application, website or search, actually "
         "use the corresponding tool. "
