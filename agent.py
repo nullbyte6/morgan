@@ -57,7 +57,7 @@ STARTUP_GREETINGS = (
 
 def stream(chunks, session=None) -> None:
     """Print streamed text one character at a time."""
-    sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}")
+    sys.stdout.write(f"{ASSISTANT_COLOR}")
     displayed = []
     try:
         for chunk in chunks_group(chunks):
@@ -153,7 +153,8 @@ def working_directory_instructions() -> str:
 def main():
     session = SessionLog()
     refresh_model_keep_alive()
-    stream("""
+    sys.stdout.write(f"{RESET_COLOR}\n")
+    print("""
      /$$   /$$                             
     | $$$ | $$                             
     | $$$$| $$  /$$$$$$   /$$$$$$  /$$$$$$ 
@@ -163,7 +164,7 @@ def main():
     | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
     |__/  \\__/ \\______/ |__/      \\_______/
     """)
-    stream(brain.get_version())
+    print(brain.get_version())
     stream([random.choice(STARTUP_GREETINGS)], session=session)
     history = []
     while True:
