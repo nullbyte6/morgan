@@ -25,16 +25,16 @@ try:
 except ImportError:
     winreg = None
 
+VERSION = "1.0.0"
+
 MODEL_NAME = os.environ.get("NORA_MODEL", "qwen3:14b")
 OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", "30m")
 GIT_TIMEOUT_SECONDS = int(os.environ.get("NORA_GIT_TIMEOUT", "120"))
 WEB_USER_AGENT = "NoraLocalAssistant/1.0 (personal desktop assistant)"
 NOMINATIM_BASE_URL = os.environ.get(
-    "NORA_GEOCODER_URL", "https://nominatim.openstreetmap.org"
-).rstrip("/")
+    "NORA_GEOCODER_URL", "https://nominatim.openstreetmap.org").rstrip("/")
 OSRM_BASE_URL = os.environ.get(
-    "NORA_ROUTER_URL", "https://router.project-osrm.org"
-).rstrip("/")
+    "NORA_ROUTER_URL", "https://router.project-osrm.org").rstrip("/")
 NOMINATIM_MIN_INTERVAL_SECONDS = 1.05
 _GEOCODE_CACHE: dict[str, dict[str, object] | None] = {}
 _GEOCODE_LOCK = threading.Lock()
@@ -45,6 +45,10 @@ _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 
 _SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
+
+
+def get_version():
+    return VERSION
 
 
 def refresh(self):

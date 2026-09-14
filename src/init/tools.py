@@ -1,4 +1,5 @@
 from .brain import (
+    get_version,
     refresh,
     get_working_directory,
     change_directory,
@@ -44,6 +45,7 @@ from .brain import (
 )
 
 TOOLS = [
+    get_version,
     refresh,
     get_working_directory,
     change_directory,
