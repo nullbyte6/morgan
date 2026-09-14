@@ -204,7 +204,7 @@ def main():
                                         "was impossible to obtain.")
                 continue
             session.write("User (voice)", json.loads(user_input)[
-                "\nvoice_text"])
+                "voice_text"])
         spinner = Spinner()
         spinner.start()
         try:
