@@ -148,16 +148,6 @@ def search_web(query: str) -> str:
     return f"Opened web search for: {query}"
 
 
-APPLICATIONS = {
-    "notepad": ["notepad.exe"],
-    "calculator": ["calc.exe"],
-    "explorer": ["explorer.exe"],
-    "terminal": ["cmd.exe"],
-    "powershell": ["pwsh.exe"],
-    "vscode": ["code"]
-}
-
-
 def get_applications() -> list[dict]:
     try:
         result = subprocess.run(
@@ -221,6 +211,7 @@ agent = Agent(
         open_file,
         open_browser,
         search_web,
+        list_applications,
         open_application
     ],
     instructions=(
@@ -234,6 +225,9 @@ agent = Agent(
         "Use list_files when inspecting directories. "
         "When asked to open a file, application, website or search, actually "
         "use the corresponding tool."
+        "When asked to open an application, use open_application directly. "
+        "If you do not know the application's exact registered name, "
+        "use list_applications first to find it. "
         "Never claim an action succeeded unless the tool reported success. "
         "Keep answers short and friendly. Adapt your language to the user's "
         "language."
