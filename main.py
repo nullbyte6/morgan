@@ -30,13 +30,11 @@ def main():
         thread = threading.Thread(
             target=generate_response,
             args=(assistant, prompt, output_queue),
-            daemon=True
-        )
+            daemon=True)
 
         thread.start()
 
         print("/> Pensando...", end="", flush=True)
-
         generating = True
         thinking = True
 
