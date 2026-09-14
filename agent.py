@@ -143,6 +143,11 @@ def main():
         user_input = read_user_input()
         if user_input.strip().lower() in ("quit", "exit"):
             break
+
+        from src.init.brain import refresh
+        if user_input.strip().lower() in ("ref", "reload"):
+            refresh()
+
         directory_result = directory_cmd(user_input)
         if directory_result is not None:
             print(directory_result)

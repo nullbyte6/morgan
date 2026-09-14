@@ -1,6 +1,7 @@
 import base64
 import codecs
 import ctypes
+import importlib
 import json
 import os
 import re
@@ -10,7 +11,6 @@ import sys
 import tempfile
 import threading
 import time
-import unicodedata
 import urllib.request
 import wave
 import webbrowser
@@ -19,6 +19,8 @@ from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
+
+import unicodedata
 
 try:
     import winreg
@@ -51,15 +53,22 @@ def get_version():
     return VERSION
 
 
-def refresh(self):
-    """Refresh the agent's state without restarting."""
-    self._reset()
-    self._initialize()
-    self._load_plugins()
-    self._setup()
-    self._start()
-    self._update()
-    self._notify("Refresh completed successfully.")
+def refresh() -> str:
+    """Reload application modules in memory without restarting the process."""
+    try:
+        modules_to_reload = [
+            "src.init.brain",
+            "src.init.tools",
+            "src.init.rules",
+        ]
+
+        for mod_name in modules_to_reload:
+            if mod_name in sys.modules:
+                importlib.reload(sys.modules[mod_name])
+
+        return "Modules are reloaded"
+    except Exception as error:
+        return f"Error at refresh attempt: {error}"
 
 def keep_model_loaded() -> None:
     """Extend Ollama's model lifetime without delaying the next prompt."""
