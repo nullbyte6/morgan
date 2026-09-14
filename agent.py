@@ -1,7 +1,15 @@
+import ctypes
+import json
 import os
+import re
 import shutil
 import subprocess
+import sys
+import threading
+import time
+import unicodedata
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote_plus, urlparse
@@ -9,6 +17,11 @@ from urllib.parse import quote_plus, urlparse
 from pydantic_ai import Agent
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
+
+try:
+    import winreg
+except ImportError:
+    winreg = None
 
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 model = OllamaModel(
@@ -268,12 +281,80 @@ def get_applications() -> list[dict[str, str]]:
                                                          "Select-Object Name,AppID | "
                                                          "ConvertTo-Json -Compress"],
             capture_output=True, text=True, encoding="utf-8")
-        if result.returncode != 0:
-            return []
-        data = json.loads(result.stdout)
-        return data if isinstance(data, list) else [data]
-    except Exception as error:
+        if result.returncode == 0:
+            data = json.loads(result.stdout or "[]")
+            start_apps = data if isinstance(data, list) else [data]
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    apps = [app for app in start_apps
+            if app.get("Name") and app.get("AppID")]
+    apps.extend(get_app_paths())
+    return sorted(apps, key=lambda app: (
+        normalize_application_name(app["Name"]),
+        app.get("AppID", app.get("Path", "")).casefold()))
+
+
+def find_applications_on_drive(root: Path, query: str) -> list[dict[str, str]]:
+    """Find matching launchable files below one drive root."""
+    matches = []
+    for folder, folders, filenames in os.walk(
+            root, onerror=lambda _: None, followlinks=False):
+        # Windows junctions can point back into an already visited directory.
+        folders[:] = [name for name in folders
+                      if not Path(folder, name).is_junction()]
+        for filename in filenames:
+            path = Path(folder, filename)
+            if not filename.casefold().endswith(APPLICATION_SUFFIXES):
+                continue
+            if query in normalize_application_name(filename):
+                matches.append({
+                    "Name": path.stem,
+                    "Path": str(path),
+                    "Source": "file",
+                })
+    return matches
+
+
+def find_applications_on_all_drives(application: str) -> list[dict[str, str]]:
+    """Find launchable files on every fixed disk, caching each normalized query."""
+    query = normalize_application_name(application)
+    if not query:
         return []
+    if query in _APPLICATION_SEARCH_CACHE:
+        return _APPLICATION_SEARCH_CACHE[query]
+
+    roots = get_fixed_drive_roots()
+    matches = []
+    if roots:
+        with ThreadPoolExecutor(max_workers=len(roots)) as executor:
+            for drive_matches in executor.map(
+                    lambda root: find_applications_on_drive(root, query), roots):
+                matches.extend(drive_matches)
+
+    matches.sort(key=lambda app: (normalize_application_name(app["Name"]),
+                                  app["Path"].casefold()))
+    _APPLICATION_SEARCH_CACHE[query] = matches
+    return matches
+
+
+def application_rank(app: dict[str, str], query: str) -> tuple:
+    """Return a deterministic relevance order for an application candidate."""
+    name = normalize_application_name(app["Name"])
+    if name == query:
+        match_rank = 0
+    elif name.startswith(query):
+        match_rank = 1
+    elif all(word in name.split() for word in query.split()):
+        match_rank = 2
+    else:
+        match_rank = 3
+
+    helper_words = {"crash", "helper", "installer", "setup", "uninstall", "update"}
+    helper_rank = int(bool(helper_words.intersection(name.split())))
+    source_rank = 0 if app["Source"] == "registered" else 1
+    target = app.get("AppID", app.get("Path", ""))
+    return match_rank, helper_rank, source_rank, name, target.casefold()
 
 
 def list_applications() -> str:
@@ -285,28 +366,30 @@ def list_applications() -> str:
 
 def open_application(application: str) -> str:
     query = application.strip().casefold()
-    apps = get_applications()
-    exact = [app for app in apps if app["Name"].casefold() == query]
-    matches = exact or [app for app in apps if query in app["Name"].casefold()]
-    if len(matches) == 1:
-        app = matches[0]
-        try:
+    normalized_query = normalize_application_name(query)
+    if not normalized_query:
+        return "Application name is empty"
+
+    registered = [
+        {**app, "Source": "registered" if app.get("AppID") else "file"}
+        for app in get_applications()
+        if normalized_query in normalize_application_name(app["Name"])
+    ]
+    matches = registered + find_applications_on_all_drives(application)
+    if not matches:
+        return f"Application not found: {application}"
+
+    app = min(matches, key=lambda candidate:
+              application_rank(candidate, normalized_query))
+    try:
+        if app["Source"] == "registered":
             subprocess.Popen(
                 ["explorer.exe", f"shell:AppsFolder\\{app['AppID']}"])
-            return f"Opened application: {app['Name']}"
-        except Exception as error:
-            return f"Error: {error}"
-    if len(matches) > 1:
-        return ("Multiple applications found:"
-                "\n") + "\n".join(app["Name"] for app in matches[:20])
-    executable = shutil.which(application)
-    if executable:
-        try:
-            subprocess.Popen([executable])
-            return f"Opened application: {application}"
-        except Exception as error:
-            return f"Error: {error}"
-    return f"Application not found: {application}"
+        else:
+            os.startfile(app["Path"])
+        return f"Opened application: {app['Name']}"
+    except Exception as error:
+        return f"Error: {error}"
 
 
 agent = Agent(
@@ -329,18 +412,20 @@ agent = Agent(
     ],
     instructions=(
         "You are a helpful personal desktop assistant developed by me, "
-        "running 100% locally."
+        "running 100% locally. "
+        "On every turn, detect the language of the latest user message and answer "
+        "entirely in that same language. The latest message takes precedence over "
+        "the language used earlier in the conversation. Never switch to English "
+        "just because a tool result or these instructions are in English. "
         "Use tools whenever useful. You may call multiple tools sequentially "
-        "to complete a task."
+        "to complete a task. "
         "Do not stop after the first tool if additional tools are required. "
         "Inspect files before modifying them when necessary. "
         "Prefer replace_in_file for precise edits instead of rewriting entire files. "
         "Use list_files when inspecting directories. "
         "When asked to open a file, application, website or search, actually "
-        "use the corresponding tool."
+        "use the corresponding tool. "
         "When asked to open an application, use open_application directly. "
-        "If you do not know the application's exact registered name, "
-        "use list_applications first to find it. "
         "When the user says to open X without mentioning a website, URL, "
         "browser or web page, always try open_application first. "
         "Do not open a website for an application name unless the user explicitly "
@@ -351,8 +436,7 @@ agent = Agent(
         "URL, domain, browser or web page. "
         "Use search_web only when the user explicitly asks to search the web. "
         "Never claim an action succeeded unless the tool reported success. "
-        "Keep answers short and friendly. Adapt your language to the user's "
-        "language."
+        "Keep answers short and friendly."
     )
 )
 
@@ -364,11 +448,17 @@ def main():
         user_input = input("> ")
         if user_input.strip().lower() in ("quit", "exit"):
             break
+        spinner = Spinner()
+        spinner.start()
         try:
-            result = agent.run_sync(user_input, message_history=history)
-            history = result.all_messages()
-            print(f"{result.output}")
+            with agent.run_stream_sync(
+                    user_input, message_history=history) as result:
+                spinner.stop()
+                print_stream_by_character(
+                    result.stream_text(delta=True, debounce_by=None))
+                history = result.all_messages()
         except Exception as error:
+            spinner.stop()
             print(f"ERROR: {error}")
 
 
