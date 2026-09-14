@@ -12,6 +12,7 @@ import tempfile
 import threading
 import time
 import unicodedata
+import urllib.request
 import wave
 import webbrowser
 from array import array
@@ -21,6 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote_plus, urlparse
 
+from colorama import Fore, Style, just_fix_windows_console
 from pydantic_ai import Agent
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
@@ -32,13 +34,25 @@ except ImportError:
 
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+just_fix_windows_console()
+MODEL_NAME = os.environ.get("NORA_MODEL", "qwen3:14b")
+MODEL_SETTINGS = {
+    "openai_reasoning_effort": "none",
+    "temperature": 0.2,
+}
+OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", "30m")
+USER_COLOR = Fore.GREEN
+ASSISTANT_COLOR = Fore.CYAN
+RESET_COLOR = Style.RESET_ALL
 model = OllamaModel(
-    "qwen3:14b",
-         provider=OllamaProvider(
-        base_url="http://localhost:11434/v1"))
+    MODEL_NAME,
+    provider=OllamaProvider(base_url="http://localhost:11434/v1"),
+    settings=MODEL_SETTINGS,
+)
 
 NOTES_FILE = Path(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.txt")
-TYPEWRITER_DELAY_SECONDS = 0.01
+TYPEWRITER_DELAY_SECONDS = float(
+    os.environ.get("NORA_TYPEWRITER_DELAY", "0.002"))
 APPLICATION_SUFFIXES = (".exe", ".com", ".bat", ".cmd", ".lnk", ".appref-ms")
 _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 VOICE_COMMANDS = {"/voice", "voice"}
@@ -84,14 +98,54 @@ class Spinner:
 
 def print_stream_by_character(chunks) -> None:
     """Print streamed text one character at a time."""
-    for chunk in chunks:
-        for character in chunk:
-            sys.stdout.write(character)
-            sys.stdout.flush()
-            if TYPEWRITER_DELAY_SECONDS:
-                time.sleep(TYPEWRITER_DELAY_SECONDS)
-    sys.stdout.write("\n")
+    sys.stdout.write(ASSISTANT_COLOR)
+    try:
+        for chunk in chunks:
+            for character in chunk:
+                sys.stdout.write(character)
+                sys.stdout.flush()
+                if TYPEWRITER_DELAY_SECONDS:
+                    time.sleep(TYPEWRITER_DELAY_SECONDS)
+    finally:
+        sys.stdout.write(f"{RESET_COLOR}\n")
+        sys.stdout.flush()
+
+
+def read_user_input(prompt: str = ">> ") -> str:
+    """Read terminal input while displaying the prompt and typed text in green."""
+    sys.stdout.write(f"{USER_COLOR}{prompt}")
     sys.stdout.flush()
+    try:
+        return input()
+    finally:
+        sys.stdout.write(RESET_COLOR)
+        sys.stdout.flush()
+
+
+def keep_model_loaded() -> None:
+    """Extend Ollama's model lifetime without delaying the next prompt."""
+    payload = json.dumps({
+        "model": MODEL_NAME,
+        "prompt": "",
+        "keep_alive": OLLAMA_KEEP_ALIVE,
+        "stream": False,
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        "http://localhost:11434/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5):
+            pass
+    except (OSError, TimeoutError):
+        pass
+
+
+def refresh_model_keep_alive() -> None:
+    """Refresh Ollama's keep-alive timer in the background."""
+    threading.Thread(target=keep_model_loaded, daemon=True).start()
 
 
 def pcm_rms(pcm_data: bytes) -> float:
@@ -221,7 +275,7 @@ def capture_voice_input() -> str | None:
     if not transcript:
         print("No se pudo transcribir la voz.")
         return None
-    print(f"[VOICE:{language}] {transcript}")
+    print(f"{USER_COLOR}[VOICE:{language}] {transcript}{RESET_COLOR}")
     return json.dumps({
         "voice_language": language,
         "voice_text": transcript,
@@ -804,6 +858,7 @@ agent = Agent(
 
 
 def main():
+    refresh_model_keep_alive()
     print("""
      /$$   /$$                             
     | $$$ | $$                             
@@ -817,7 +872,7 @@ def main():
     print("¡Hola! Me llamo Nora, ¿con qué te puedo ayudar?")
     history = []
     while True:
-        user_input = input(">> ")
+        user_input = read_user_input()
         if user_input.strip().lower() in ("quit", "exit"):
             break
         if user_input.strip().casefold() in VOICE_COMMANDS:
@@ -837,6 +892,7 @@ def main():
                 print_stream_by_character(
                     result.stream_text(delta=True, debounce_by=None))
                 history = result.all_messages()
+                refresh_model_keep_alive()
         except Exception as error:
             spinner.stop()
             print(f"ERROR: {error}")
