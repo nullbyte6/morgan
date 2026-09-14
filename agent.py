@@ -138,7 +138,7 @@ def main():
     | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
     |__/  \\__/ \\______/ |__/      \\_______/
     """)
-    print(f"v{VERSION}")
+    print(f"{VERSION}")
     print("¡Hola! Me llamo Nora, ¿con qué te puedo ayudar?")
     history = []
     while True:

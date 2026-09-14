@@ -27,7 +27,7 @@ try:
 except ImportError:
     winreg = None
 
-VERSION = "1.0.1"
+VERSION = "v1.0.1-alpha"
 
 MODEL_NAME = os.environ.get("NORA_MODEL", "qwen3:14b")
 OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", "30m")
@@ -49,7 +49,8 @@ _SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
 
 
-def get_version():
+def get_version() -> str:
+    """Return the current application version (e.g., '1.0.1-alpha')."""
     return VERSION
 
 
