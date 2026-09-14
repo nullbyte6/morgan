@@ -11,6 +11,16 @@ from .config import HOME_PATH, ensure_storage
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_\d{6}\.md")
 SESSION_HEADER = "<!-- New Log -->"
 MAX_SESSIONS = 24
+_current_session_path: Path | None = None
+
+
+def open_current_session_log() -> str:
+    """Open this Nora process's current session log in the default application."""
+    from .brain import open_file
+
+    if _current_session_path is None:
+        return "Error: no session log is active"
+    return open_file(str(_current_session_path))
 
 
 class SessionLog:
@@ -31,6 +41,8 @@ class SessionLog:
             except FileExistsError:
                 continue
         self._prune()
+        global _current_session_path
+        _current_session_path = self.path
 
     def _prune(self):
         logs = []

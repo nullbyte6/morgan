@@ -66,6 +66,7 @@ INSTRUCTIONS = (
         "explicitly asks to delete its contents as well, delete it recursively, or "
         "delete the whole folder. Never delete a broader parent folder. "
         "Use list_files when inspecting directories. "
+        "When asked to open this conversation's log, call open_current_session_log. "
         "When asked to open a file, application, website or search, actually "
         "use the corresponding tool. "
         "When asked to open an application, use open_application directly. "
