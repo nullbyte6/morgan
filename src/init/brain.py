@@ -47,6 +47,16 @@ _SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
 
 
+def refresh(self):
+    """Refresh the agent's state without restarting."""
+    self._reset()
+    self._initialize()
+    self._load_plugins()
+    self._setup()
+    self._start()
+    self._update()
+    self._notify("Refresh completed successfully.")
+
 def keep_model_loaded() -> None:
     """Extend Ollama's model lifetime without delaying the next prompt."""
     payload = json.dumps({

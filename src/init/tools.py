@@ -1,4 +1,5 @@
 from .brain import (
+    refresh,
     get_working_directory,
     change_directory,
     get_current_time,
@@ -39,10 +40,11 @@ from .brain import (
     list_applications,
     list_media_sessions,
     identify_playing_song,
-    get_current_media,
+    get_current_media
 )
 
 TOOLS = [
+    refresh,
     get_working_directory,
     change_directory,
     get_current_time,
