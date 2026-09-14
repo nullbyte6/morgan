@@ -42,3 +42,17 @@ agent = Agent(
                   "the question"
     ),
 )
+
+def main():
+    print("Type 'quit' to exit. \n")
+    history = []
+    while True:
+        user_input = input("> ")
+        if user_input.strip().lower() in ("quit", "exit"):
+            break
+        result = agent.run_sync(user_input, message_history=history)
+        history = result.all_messages()
+        print(f"{result.output}\n")
+
+if __name__ == "__main__":
+    main()
