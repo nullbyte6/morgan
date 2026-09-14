@@ -57,7 +57,7 @@ STARTUP_GREETINGS = (
 
 def stream(chunks, session=None) -> None:
     """Print streamed text one character at a time."""
-    sys.stdout.write(ASSISTANT_COLOR)
+    sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}")
     displayed = []
     try:
         for chunk in chunks_group(chunks):
@@ -218,7 +218,7 @@ def main():
                     if isinstance(message, ModelResponse):
                         for part in message.parts:
                             if isinstance(part, TextPart):
-                                part.content = "".join(chunks([part.content]))
+                                part.content = "".join(chunks_group([part.content]))
                 refresh_model_keep_alive()
         except Exception as error:
             spinner.stop()

@@ -48,7 +48,16 @@ from .brain import (
     get_current_media
 )
 
+from .notifications import (
+    send_notification, schedule_notification, start_timer, list_timers, cancel_timer,
+)
+
 TOOLS = [
+    send_notification,
+    schedule_notification,
+    start_timer,
+    list_timers,
+    cancel_timer,
     load_config,
     get_version,
     update_version,

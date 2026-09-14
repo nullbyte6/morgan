@@ -68,6 +68,19 @@ errors. Responses are saved as displayed, including partial responses if a strea
 fails. At the next launch after 24 session logs, the oldest is removed to keep
 24 logs including the new session. Other files are left alone.
 
+## Notifications and timers (Windows)
+
+Ask Nora to "notify me to take a break in 10 minutes", "start a 5-minute tea
+timer", "show my timers", or "cancel the tea timer". It can also send an
+immediate notification. Each scheduled item has an ID, remaining time and status;
+failed deliveries include an error. Multiple timers can run alongside conversation.
+
+Timers run inside Nora: keep the process open until they finish. `reload` preserves
+them, but exiting or restarting discards them. They do not wake a sleeping PC.
+Windows notification settings determine whether the alert is displayed; a
+successful submission does not confirm it was seen. Notifications use Windows
+PowerShell and the built-in Windows Forms NotifyIcon, with no extra dependencies.
+
 ## Voice Input
 
 Run Nora and speak to it through `voice`. Speak after `[MIC]` shortly appears.

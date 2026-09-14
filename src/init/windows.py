@@ -7,8 +7,8 @@ from ctypes import wintypes as wt
 def is_taskbar_window(visible, cloaked, style, owner, shell):
     """Apply standard Shell taskbar eligibility rules, including minimized apps."""
     return bool(visible and not cloaked and not shell
-                and not style & 0x80  # WS_EX_TOOLWINDOW
-                and (style & 0x40000 or not owner))  # WS_EX_APPWINDOW
+                and not style & 0x80
+                and (style & 0x40000 or not owner))
 
 
 def get_open_windows():
