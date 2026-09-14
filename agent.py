@@ -194,7 +194,74 @@ def search_web(query: str) -> str:
     return f"Opened web search for: {query}"
 
 
-def get_applications() -> list[dict]:
+def normalize_application_name(value: str) -> str:
+    """Normalize an application name so matching is stable and accent-insensitive."""
+    name = Path(value.strip()).stem
+    name = unicodedata.normalize("NFKD", name.casefold())
+    name = "".join(character for character in name
+                   if not unicodedata.combining(character))
+    return " ".join(re.findall(r"[a-z0-9]+", name))
+
+
+def get_fixed_drive_roots() -> list[Path]:
+    """Return every fixed local drive in deterministic order."""
+    if os.name != "nt":
+        return [Path("/")]
+
+    roots = []
+    drive_mask = ctypes.windll.kernel32.GetLogicalDrives()
+    for index in range(26):
+        if drive_mask & (1 << index):
+            root = f"{chr(ord('A') + index)}:\\"
+            # DRIVE_FIXED = 3. This excludes optical, removable and network drives.
+            if ctypes.windll.kernel32.GetDriveTypeW(root) == 3:
+                roots.append(Path(root))
+    return sorted(roots, key=lambda path: str(path).casefold())
+
+
+def get_app_paths() -> list[dict[str, str]]:
+    """Read executable paths registered by desktop applications."""
+    if winreg is None:
+        return []
+
+    registry_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"
+    locations = (
+        (winreg.HKEY_CURRENT_USER, winreg.KEY_READ),
+        (winreg.HKEY_LOCAL_MACHINE,
+         winreg.KEY_READ | winreg.KEY_WOW64_64KEY),
+        (winreg.HKEY_LOCAL_MACHINE,
+         winreg.KEY_READ | winreg.KEY_WOW64_32KEY),
+    )
+    apps = {}
+    for hive, access in locations:
+        try:
+            with winreg.OpenKey(hive, registry_path, 0, access) as parent:
+                subkey_count = winreg.QueryInfoKey(parent)[0]
+                for index in range(subkey_count):
+                    subkey_name = winreg.EnumKey(parent, index)
+                    try:
+                        with winreg.OpenKey(parent, subkey_name) as subkey:
+                            executable = winreg.QueryValueEx(subkey, None)[0]
+                    except OSError:
+                        continue
+                    executable = os.path.expandvars(str(executable)).strip('"')
+                    if Path(executable).is_file():
+                        key = executable.casefold()
+                        apps[key] = {
+                            "Name": Path(subkey_name).stem,
+                            "Path": executable,
+                        }
+        except OSError:
+            continue
+    return sorted(apps.values(), key=lambda app: (
+        normalize_application_name(app["Name"]), app["Path"].casefold()))
+
+
+def get_applications() -> list[dict[str, str]]:
+    """Read applications registered with Windows."""
+    if os.name != "nt":
+        return []
+    start_apps = []
     try:
         result = subprocess.run(
             ["powershell.exe", "-NoProfile", "-Command", "Get-StartApps | "
