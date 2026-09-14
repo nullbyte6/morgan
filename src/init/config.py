@@ -29,7 +29,7 @@ _last_error = None
 
 def ensure_storage():
     """Classify legacy user files, preserving both files on name collisions."""
-    folders = {".txt": "note", ".md": "log", ".json": "json"}
+    folders = {".txt": "note", ".md": ".log", ".json": "json"}
     for folder in folders.values():
         (HOME_PATH / folder).mkdir(parents=True, exist_ok=True)
     for source in HOME_PATH.iterdir():
