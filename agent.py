@@ -50,7 +50,7 @@ class Spinner:
         self._thread.start()
 
     def _animate(self) -> None:
-        frames = ("/", "--", "\\", "|")
+        frames = ("/", "-", "\\", "|")
         frame_index = 0
         while not self._stop_event.wait(0.1):
             sys.stdout.write(f"\r{frames[frame_index]}")
@@ -226,7 +226,6 @@ def get_fixed_drive_roots() -> list[Path]:
     for index in range(26):
         if drive_mask & (1 << index):
             root = f"{chr(ord('A') + index)}:\\"
-            # DRIVE_FIXED = 3. This excludes optical, removable and network drives.
             if ctypes.windll.kernel32.GetDriveTypeW(root) == 3:
                 roots.append(Path(root))
     return sorted(roots, key=lambda path: str(path).casefold())
@@ -300,7 +299,6 @@ def find_applications_on_drive(root: Path, query: str) -> list[dict[str, str]]:
     matches = []
     for folder, folders, filenames in os.walk(
             root, onerror=lambda _: None, followlinks=False):
-        # Windows junctions can point back into an already visited directory.
         folders[:] = [name for name in folders
                       if not Path(folder, name).is_junction()]
         for filename in filenames:
@@ -445,7 +443,7 @@ def main():
     print("¡Hola! Me llamo Nora, ¿con qué te puedo ayudar?")
     history = []
     while True:
-        user_input = input("> ")
+        user_input = input(">> ")
         if user_input.strip().lower() in ("quit", "exit"):
             break
         spinner = Spinner()
