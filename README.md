@@ -68,6 +68,20 @@ errors. Responses are saved as displayed, including partial responses if a strea
 fails. At the next launch after 24 session logs, the oldest is removed to keep
 24 logs including the new session. Other files are left alone.
 
+## Weather
+
+Ask "what will the weather be tomorrow morning in Madrid, Spain?" or choose a
+default with "save Madrid, Spain as my weather location". After that, "what will
+the weather be tomorrow morning?" uses the saved city. You can also edit
+`weather_location` in `~/.nora/json/config.json`; an empty value means Nora asks
+for a city when none is established in the conversation.
+
+The Python tool calls [Open-Meteo](https://open-meteo.com/) over the Internet,
+without an API key or extra dependencies. It supports up to 16 forecast days,
+uses the destination's timezone and returns temperatures in °C. Morning means
+06:00–12:00; period temperatures and daily minimum/maximum are reported separately.
+This is a forecast service, not an offline weather model.
+
 ## Notifications and timers (Windows)
 
 Ask Nora to "notify me to take a break in 10 minutes", "start a 5-minute tea
