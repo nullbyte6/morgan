@@ -14,3 +14,4 @@ soundcard>=0.2.2,<0.4.6
 numpy>=1.26.4,<2.5.3
 tzdata
 timezonefinder>=6,<9
+rich>=10.8.13,<15.0.0
