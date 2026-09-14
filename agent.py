@@ -112,8 +112,8 @@ def print_stream_by_character(chunks) -> None:
 
 
 def read_user_input(prompt: str = ">> ") -> str:
-    """Read terminal input while displaying the prompt and typed text in green."""
-    sys.stdout.write(f"{USER_COLOR}{prompt}")
+    """Read input with a normal prompt and the user's typed text in green."""
+    sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
     sys.stdout.flush()
     try:
         return input()
