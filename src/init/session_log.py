@@ -21,7 +21,7 @@ class SessionLog:
             try:
                 with self.path.open("x", encoding="utf-8") as log:
                     log.write(f"\n{SESSION_HEADER}\n# Nora Session"
-                              f"Start: {started.isoformat()}")
+                              f"\nStart: {started.isoformat()}")
                 break
             except FileExistsError:
                 continue
@@ -46,5 +46,5 @@ class SessionLog:
         if not text:
             return
         with self.path.open("a", encoding="utf-8") as log:
-            log.write(f"\n## {role} — {datetime.now().astimezone():%H:%M:%S %z}"
-                      f"{text.rstrip()}")
+            log.write(f"\n## {role} — {datetime.now()
+                      .astimezone():%H:%M:%S %z} \n{text.rstrip()}")

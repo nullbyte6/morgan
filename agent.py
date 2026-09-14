@@ -168,7 +168,7 @@ def main():
     history = []
     while True:
         user_input = read_user_input()
-        session.write("\nUser", f"\n{user_input}")
+        session.write("User", f"{user_input}")
         if user_input.strip().lower() in ("quit", "exit"):
             break
 
@@ -179,12 +179,12 @@ def main():
         directory_result = directory_cmd(user_input)
         if directory_result is not None:
             print(directory_result)
-            session.write("\nNora", f"\n{directory_result}")
+            session.write("Nora", f"\n{directory_result}")
             continue
         git_result = git_cmd(user_input)
         if git_result is not None:
             print(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
-            session.write("\nNora", f"\n{git_result}")
+            session.write("Nora", f"\n{git_result}")
             history.extend([
                 ModelRequest(parts=[UserPromptPart(user_input)]),
                 ModelResponse(parts=[TextPart(
@@ -197,13 +197,13 @@ def main():
                 user_input = capture_voice_input()
             except Exception as error:
                 print(f"VOICE ERROR: {error}")
-                session.write("\nSystem", str(f"\n{error}"))
+                session.write("System", str(f"\n{error}"))
                 continue
             if not user_input:
-                session.write("\nSystem", "\nA voice transcription "
+                session.write("System", "\nA voice transcription "
                                         "was impossible to obtain.")
                 continue
-            session.write("\nUser (voice)", json.loads(user_input)[
+            session.write("User (voice)", json.loads(user_input)[
                 "\nvoice_text"])
         spinner = Spinner()
         spinner.start()
