@@ -17,6 +17,7 @@ from src.init.brain import (
     refresh_model_keep_alive, refresh)
 
 from src.init.rules import INSTRUCTIONS
+from src.init.output import plain_text_chunks
 from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
 from src.init.tools import TOOLS
 from src.init.voice import VOICE_COMMANDS, capture_voice_input
@@ -44,7 +45,7 @@ def stream(chunks) -> None:
     """Print streamed text one character at a time."""
     sys.stdout.write(ASSISTANT_COLOR)
     try:
-        for chunk in chunks:
+        for chunk in plain_text_chunks(chunks):
             for character in chunk:
                 sys.stdout.write(character)
                 sys.stdout.flush()

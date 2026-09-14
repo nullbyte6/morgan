@@ -32,8 +32,18 @@ except ImportError:
 CONFIG_FILE = Path(__file__).resolve().parents[2] / "config.json"
 VERSION = "v1.0.1-alpha"
 
-MODEL_NAME = os.environ.get("NORA_MODEL", "qwen3:14b")
-OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", "30m")
+def load_config() -> dict:
+    """Read Nora's application configuration, independent of the working directory."""
+    try:
+        config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"version": VERSION}
+    if not isinstance(config, dict):
+        raise ValueError("config.json must contain a JSON object")
+    return config
+
+MODEL_NAME = os.environ.get("NORA_MODEL", load_config().get("model_name"))
+OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", load_config().get("keep_alive"))
 GIT_TIMEOUT_SECONDS = int(os.environ.get("NORA_GIT_TIMEOUT", "120"))
 WEB_USER_AGENT = "NoraLocalAssistant/1.0 (personal desktop assistant)"
 NOMINATIM_BASE_URL = os.environ.get(
@@ -49,17 +59,6 @@ _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 
 _SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
-
-
-def load_config() -> dict:
-    """Read Nora's application configuration, independent of the working directory."""
-    try:
-        config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {"version": VERSION}
-    if not isinstance(config, dict):
-        raise ValueError("config.json must contain a JSON object")
-    return config
 
 
 def get_version() -> str:
