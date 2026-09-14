@@ -1,1 +1,2 @@
-python -m \agent.py
+python "%~dp0agent.py"
+pause
