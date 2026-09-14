@@ -18,7 +18,7 @@ from src.init import brain
 from src.init.brain import (
     MODEL_NAME, change_directory, get_working_directory,
     refresh_model_keep_alive, refresh)
-from src.init.output import plain_text_chunks
+from src.init.output import chunks
 from src.init.session_log import SessionLog
 from src.init import rules
 from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
@@ -60,7 +60,7 @@ def stream(chunks, session=None) -> None:
     sys.stdout.write(ASSISTANT_COLOR)
     displayed = []
     try:
-        for chunk in plain_text_chunks(chunks):
+        for chunk in chunks(chunks):
             displayed.append(chunk)
             for character in chunk:
                 sys.stdout.write(character)
@@ -218,7 +218,7 @@ def main():
                     if isinstance(message, ModelResponse):
                         for part in message.parts:
                             if isinstance(part, TextPart):
-                                part.content = "".join(plain_text_chunks([part.content]))
+                                part.content = "".join(chunks([part.content]))
                 refresh_model_keep_alive()
         except Exception as error:
             spinner.stop()
