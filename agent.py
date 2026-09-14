@@ -10,13 +10,13 @@ from pydantic_ai import Agent
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
+os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 model = OllamaModel(
     "qwen3:14b",
-    provider=OllamaProvider(
+         provider=OllamaProvider(
         base_url="http://localhost:11434/v1"))
 
 NOTES_FILE = Path(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.txt")
-
 
 def resolve_safe_path(path: str) -> Path:
     return Path(path).expanduser().resolve()
@@ -228,7 +228,7 @@ agent = Agent(
         "When asked to open an application, use open_application directly. "
         "If you do not know the application's exact registered name, "
         "use list_applications first to find it. "
-        "When the user says 'open X' or 'abre X' without mentioning a website, URL, "
+        "When the user says to open X without mentioning a website, URL, "
         "browser or web page, always try open_application first. "
         "Do not open a website for an application name unless the user explicitly "
         "asks for the website, web version, browser or URL. "
