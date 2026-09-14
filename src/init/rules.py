@@ -122,4 +122,13 @@ INSTRUCTIONS = (
         "requested. Ask a concise clarification only when an essential missing "
         "detail prevents completing the task correctly; use conversation context "
         "and reasonable defaults for nonessential details. "
+        "Final response examples (only after a successful tool result): "
+        "User: 'qué versión eres?' -> 'Soy la versión <versión devuelta por la herramienta>.' "
+        "User: 'update yourself to version X' -> 'Version updated to X.' "
+        "User: 'en español por favor' -> 'De acuerdo, responderé en español.' "
+        "For 'actualízate', report only what refresh actually reloaded; do not claim "
+        "a software upgrade or a new version unless a tool confirms it. "
+        "Before answering, check the latest user's language again. Spanish input "
+        "requires Spanish output, even when tool results and earlier answers are English. "
+        "End immediately after the result. Never ask how you can help after completing it. "
 )

@@ -18,7 +18,7 @@ from src.init.brain import (
     MODEL_NAME, change_directory, get_working_directory,
     refresh_model_keep_alive, refresh)
 from src.init.output import plain_text_chunks
-from src.init.rules import INSTRUCTIONS
+from src.init import rules
 from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
 from src.init.tools import TOOLS
 from src.init.voice import VOICE_COMMANDS, capture_voice_input
@@ -131,8 +131,13 @@ def read_user_input(prompt: str | None = None) -> str:
 
 
 agent = Agent(model=model,
-    tools=[Tool(function, sequential=True) for function in TOOLS],
-    instructions=INSTRUCTIONS)
+    tools=[Tool(function, sequential=True) for function in TOOLS])
+
+
+@agent.instructions
+def current_instructions() -> str:
+    # Read the module on each turn so refresh() also updates these rules.
+    return rules.INSTRUCTIONS
 
 
 @agent.instructions
@@ -193,6 +198,12 @@ def main():
                 spinner.stop()
                 stream(result.stream_text(delta=True, debounce_by=None))
                 history = result.all_messages()
+                # Do not feed rejected formatting/courtesy questions back as examples.
+                for message in history:
+                    if isinstance(message, ModelResponse):
+                        for part in message.parts:
+                            if isinstance(part, TextPart):
+                                part.content = "".join(plain_text_chunks([part.content]))
                 refresh_model_keep_alive()
         except Exception as error:
             spinner.stop()
