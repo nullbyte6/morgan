@@ -1084,10 +1084,30 @@ def application_rank(app: dict[str, str], query: str) -> tuple:
 
 
 def list_applications() -> str:
+    """List INSTALLED applications available to launch, NOT currently open apps."""
     apps = get_applications()
     if not apps:
         return "No applications found"
     return "\n".join(sorted(app["Name"] for app in apps))
+
+
+def list_open_applications() -> str:
+    """List current taskbar-style windows, including minimized applications.
+
+    Use for 'what apps are open' or taskbar requests. Excludes background-only
+    processes, tray-only apps and installed/pinned apps without an open window.
+    Enumerates standard visible windows on the current desktop; custom Shell
+    taskbar registration or virtual-desktop settings may differ.
+    """
+    if os.name != "nt":
+        return "Error: listing open applications is only supported on Windows"
+    try:
+        from src.init.windows import get_open_windows
+
+        return json.dumps({"open_windows": get_open_windows()},
+                          ensure_ascii=False, indent=2)
+    except Exception as error:
+        return f"Error listing open applications: {error}"
 
 
 def open_application(application: str) -> str:

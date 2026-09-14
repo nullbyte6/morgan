@@ -41,6 +41,7 @@ from .brain import (
     cancel_shutdown,
     open_application,
     list_applications,
+    list_open_applications,
     list_media_sessions,
     identify_playing_song,
     get_current_media
@@ -89,6 +90,7 @@ TOOLS = [
     cancel_shutdown,
     open_application,
     list_applications,
+    list_open_applications,
     list_media_sessions,
     identify_playing_song,
     get_current_media
