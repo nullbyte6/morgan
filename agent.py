@@ -40,7 +40,7 @@ TYPEWRITER_DELAY_SECONDS = float(
     os.environ.get("NORA_TYPEWRITER_DELAY", "0.002"))
 
 
-def print_stream_by_character(chunks) -> None:
+def stream(chunks) -> None:
     """Print streamed text one character at a time."""
     sys.stdout.write(ASSISTANT_COLOR)
     try:
@@ -178,8 +178,7 @@ def main():
             with agent.run_stream_sync(
                     user_input, message_history=history) as result:
                 spinner.stop()
-                print_stream_by_character(
-                    result.stream_text(delta=True, debounce_by=None))
+                stream(result.stream_text(delta=True, debounce_by=None))
                 history = result.all_messages()
                 refresh_model_keep_alive()
         except Exception as error:

@@ -19,6 +19,8 @@ from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from functools import lru_cache
 
 import unicodedata
 
@@ -140,7 +142,6 @@ def get_working_directory() -> str:
 
 def change_directory(path: str = "") -> str:
     """Persistently change Nora's working directory; empty path reports it.
-
     Accepts relative or absolute paths, Windows drive paths, quotes, ~ and
     environment variables. Subsequent tools resolve relative paths here.
     """
@@ -162,8 +163,46 @@ def change_directory(path: str = "") -> str:
         return f"Error: {error}"
 
 
-def get_current_time() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+@lru_cache(maxsize=1)
+def _timezone_finder():
+    from timezonefinder import TimezoneFinder
+
+    return TimezoneFinder()
+
+
+def get_current_time(region: str = "") -> str:
+    """Return current time for a place name or IANA zone (e.g. Europe/Madrid).
+    Pass the user's city/region as stated, including country when known.
+    Empty region returns the computer's local time. Place names require geocoding;
+    IANA zones work offline. The result includes the resolved place and UTC offset.
+    """
+    if not isinstance(region, str):
+        return "Error: region must be a string"
+    region = region.strip()
+    if not region:
+        return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z (UTC%z)")
+    try:
+        place_name = region
+        try:
+            zone = ZoneInfo(region)
+        except ZoneInfoNotFoundError:
+            if "/" in region or region.upper() == "UTC":
+                return f"Error: unknown timezone or missing tzdata: {region}"
+            place = geocode_city(region)
+            if place is None:
+                return f"Error: location not found: {region}"
+            zone_name = _timezone_finder().timezone_at(
+                lat=place["latitude"], lng=place["longitude"])
+            if zone_name is None:
+                return f"Error: timezone not found for: {region}"
+            zone = ZoneInfo(zone_name)
+            place_name = place["name"]
+        current = datetime.now(zone)
+        return f"{place_name}: {current:%Y-%m-%d %H:%M:%S} ({zone.key}, UTC{current:%z})"
+    except ImportError:
+        return "Error: timezone dependencies missing; run pip install -r requirements.txt"
+    except Exception as error:
+        return f"Error getting current time for {region}: {error}"
 
 
 def calculate(expression: str) -> str:
