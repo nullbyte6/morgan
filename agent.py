@@ -24,6 +24,9 @@ from src.init import rules
 from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
 from src.init.tools import TOOLS
 from src.init.voice import VOICE_COMMANDS, capture_voice_input
+from src.init.terminal import TerminalUI, interactive_terminal
+
+terminal_ui = None
 
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -42,7 +45,7 @@ model = OllamaModel(
 
 
 TYPEWRITER_DELAY_SECONDS = float(
-    os.environ.get("NORA_TYPEWRITER_DELAY", "0.002"))
+    os.environ.get("NORA_TYPEWRITER_DELAY", "0"))
 
 USERNAME = getuser().capitalize()
 STARTUP_GREETINGS = (
@@ -56,22 +59,29 @@ STARTUP_GREETINGS = (
 
 
 def stream(chunks, session=None) -> None:
-    """Print streamed text one character at a time."""
+    """Display incoming chunks immediately; animation delay is opt-in."""
     sys.stdout.write(f"{ASSISTANT_COLOR}")
     displayed = []
+    response_prefix = terminal_ui.output_snapshot() if terminal_ui is not None else None
     try:
-        for chunk in chunks_group(chunks):
+        source = ([chunks] if isinstance(chunks, str) else chunks)
+        for chunk in (source if terminal_ui is not None else chunks_group(source)):
             displayed.append(chunk)
-            for character in chunk:
-                sys.stdout.write(character)
-                sys.stdout.flush()
-                if TYPEWRITER_DELAY_SECONDS:
+            if terminal_ui is not None:
+                terminal_ui.update_response(response_prefix, "".join(chunks_group(["".join(displayed)])))
+            elif TYPEWRITER_DELAY_SECONDS:
+                for character in chunk:
+                    sys.stdout.write(character)
+                    sys.stdout.flush()
                     time.sleep(TYPEWRITER_DELAY_SECONDS)
+            else:
+                sys.stdout.write(chunk)
+                sys.stdout.flush()
     finally:
         sys.stdout.write(f"{RESET_COLOR}\n")
         sys.stdout.flush()
         if session is not None:
-            session.write("Nora", "".join(displayed))
+            session.write("Nora", "".join(chunks_group(["".join(displayed)])))
 
 def directory_cmd(command: str) -> str | None:
     """Handle standalone cd/chdir commands without a model or shell call."""
@@ -127,6 +137,8 @@ def read_user_input(prompt: str | None = None) -> str:
     """Read input with a normal prompt and the user's typed text in green."""
     if prompt is None:
         prompt = build_user_prompt()
+    if terminal_ui is not None:
+        return terminal_ui.read_input(prompt)
     sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
     sys.stdout.flush()
     try:
@@ -150,10 +162,10 @@ def working_directory_instructions() -> str:
     return f"Current working directory for this turn: {get_working_directory()}"
 
 
-def main():
+def run_session():
     session = SessionLog()
     refresh_model_keep_alive()
-    sys.stdout.write(f"{RESET_COLOR}\n")
+    sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}\n")
     print("""
      /$$   /$$                             
     | $$$ | $$                             
@@ -229,6 +241,22 @@ def main():
             if cause is not None:
                 print(f"Detail: {cause}")
                 session.write("Detail: ", str(f"\n{error}"))
+
+
+def main():
+    global terminal_ui
+    try:
+        if interactive_terminal():
+            with TerminalUI() as ui:
+                terminal_ui = ui
+                try:
+                    run_session()
+                finally:
+                    terminal_ui = None
+        else:
+            run_session()
+    except (EOFError, KeyboardInterrupt):
+        pass
 
 
 if __name__ == "__main__":
