@@ -1,0 +1,50 @@
+"""Markdown conversation logs with retention applied at session startup."""
+
+import re
+from datetime import datetime
+from pathlib import Path
+
+
+SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_\d{6}\.md")
+SESSION_HEADER = "<!-- New Log -->"
+MAX_SESSIONS = 24
+
+
+class SessionLog:
+    def __init__(self, directory=None):
+        self.directory = (Path(directory) if directory is not None
+                          else Path.home() / ".nora").resolve()
+        self.directory.mkdir(parents=True, exist_ok=True)
+        while True:
+            started = datetime.now().astimezone()
+            self.path = self.directory / f"{started:%Y-%m-%d_%H-%M-%S_%f}.md"
+            try:
+                with self.path.open("x", encoding="utf-8") as log:
+                    log.write(f"{SESSION_HEADER}\n# Nora Session\n\n"
+                              f"Start: {started.isoformat()}\n\n")
+                break
+            except FileExistsError:
+                continue
+        self._prune()
+
+    def _prune(self):
+        logs = []
+        for path in self.directory.iterdir():
+            if (SESSION_NAME.fullmatch(path.name) and not path.is_symlink()
+                    and path.is_file()):
+                with path.open(encoding="utf-8") as log:
+                    if log.readline().strip() == SESSION_HEADER:
+                        logs.append(path)
+        oldest = sorted((path for path in logs if path != self.path),
+                        key=lambda path: path.name)
+        for path in oldest[:max(0, len(logs) - MAX_SESSIONS)]:
+            if path.resolve().parent != self.directory:
+                raise OSError("Session log resolved outside the log directory")
+            path.unlink()
+
+    def write(self, role, text):
+        if not text:
+            return
+        with self.path.open("a", encoding="utf-8") as log:
+            log.write(f"## {role} — {datetime.now().astimezone():%H:%M:%S %z}\n\n"
+                      f"{text.rstrip()}\n\n")
