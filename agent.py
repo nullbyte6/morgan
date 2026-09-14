@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import time
+from getpass import getuser
 
 from colorama import just_fix_windows_console
 from pydantic_ai import Agent, Tool
@@ -16,9 +17,8 @@ from src.init import brain
 from src.init.brain import (
     MODEL_NAME, change_directory, get_working_directory,
     refresh_model_keep_alive, refresh)
-
-from src.init.rules import INSTRUCTIONS
 from src.init.output import plain_text_chunks
+from src.init.rules import INSTRUCTIONS
 from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
 from src.init.tools import TOOLS
 from src.init.voice import VOICE_COMMANDS, capture_voice_input
@@ -38,16 +38,18 @@ model = OllamaModel(
     settings=MODEL_SETTINGS,
 )
 
+
 TYPEWRITER_DELAY_SECONDS = float(
     os.environ.get("NORA_TYPEWRITER_DELAY", "0.002"))
 
+USERNAME = getuser().capitalize()
 STARTUP_GREETINGS = (
-    "Hola, Diego. Nora lista para empezar.",
-    "Ya estoy aquí, Diego. Vamos a ello.",
+    f"Hola, {USERNAME}. Nora lista para empezar.",
+    f"Ya estoy aquí, {USERNAME}. Vamos a ello.",
     "Todo listo. Dime qué necesitas y me pongo a ello.",
     "Hola de nuevo. Lista para echarte una mano.",
     "Nora al habla. Cuando quieras, empezamos.",
-    "¡Buenas, Diego! Manos a la obra.",
+    f"¡Buenas, {USERNAME}! Manos a la obra.",
 )
 
 
