@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
 from colorama import Fore, Style, just_fix_windows_console
-from pydantic_ai import Agent
+from pydantic_ai import Agent, Tool
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
@@ -124,8 +124,71 @@ def print_stream_by_character(chunks) -> None:
         sys.stdout.flush()
 
 
-def read_user_input(prompt: str = ">> ") -> str:
+def get_working_directory() -> str:
+    """Return the current directory used by relative file and Git operations."""
+    return str(Path.cwd())
+
+
+def change_directory(path: str = "") -> str:
+    """Persistently change Nora's working directory; empty path reports it.
+
+    Accepts relative or absolute paths, Windows drive paths, quotes, ~ and
+    environment variables. Subsequent tools resolve relative paths here.
+    """
+    try:
+        path = path.strip()
+        if not path:
+            return get_working_directory()
+        if len(path) >= 2 and path[0] == path[-1] and path[0] in "\"'":
+            path = path[1:-1]
+        if not path:
+            return "Error: directory path is empty"
+        destination = resolve_safe_path(os.path.expandvars(path))
+        os.chdir(destination)
+        return f"Current directory: {get_working_directory()}"
+    except (OSError, ValueError) as error:
+        return f"Error: {error}"
+
+
+def directory_cmd(command: str) -> str | None:
+    """Handle standalone cd/chdir commands without a model or shell call."""
+    match = re.fullmatch(r"(?:cd|chdir)(?=\s|\.|\\|$)\s*(.*)",
+                         command.strip(), flags=re.IGNORECASE)
+    if match is None:
+        return None
+    path = match.group(1)
+    path = re.sub(r"^/d(?:\s+|$)", "", path, count=1, flags=re.IGNORECASE)
+    return change_directory(path)
+
+
+def build_user_prompt() -> str:
+    """Show the current location and live Git branch, including unborn branches."""
+    directory = get_working_directory()
+    branch = ""
+    try:
+        result = subprocess.run(
+            ["git", "-C", directory, "symbolic-ref", "--quiet", "--short", "HEAD"],
+            capture_output=True, text=True, errors="replace", timeout=2,
+        )
+        if result.returncode == 0:
+            branch = result.stdout.strip()
+        elif result.returncode == 1:
+            result = subprocess.run(
+                ["git", "-C", directory, "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, errors="replace", timeout=2,
+            )
+            if result.returncode == 0:
+                branch = f"detached:{result.stdout.strip()}"
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    suffix = f" ({branch})" if branch else ""
+    return f">> {directory}{suffix} > "
+
+
+def read_user_input(prompt: str | None = None) -> str:
     """Read input with a normal prompt and the user's typed text in green."""
+    if prompt is None:
+        prompt = build_user_prompt()
     sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
     sys.stdout.flush()
     try:
@@ -855,8 +918,6 @@ def geocode_city(city: str) -> dict[str, object] | None:
         return None
     cache_key = clean_city.casefold()
 
-    # Serializing the lookup prevents concurrent Nora calls from exceeding the
-    # public service's limit of one request per second.
     with _GEOCODE_LOCK:
         if cache_key in _GEOCODE_CACHE:
             return _GEOCODE_CACHE[cache_key]
@@ -1261,7 +1322,9 @@ def open_application(application: str) -> str:
 
 agent = Agent(
     model=model,
-    tools=[
+    tools=[Tool(function, sequential=True) for function in [
+        get_working_directory,
+        change_directory,
         get_current_time,
         calculate,
         save_note,
@@ -1298,7 +1361,7 @@ agent = Agent(
         cancel_shutdown,
         list_applications,
         open_application
-    ],
+    ]],
     instructions=(
         "You are a helpful personal desktop assistant developed by me, "
         "running 100% locally. "
@@ -1312,6 +1375,11 @@ agent = Agent(
         "Use tools whenever useful. You may call multiple tools sequentially "
         "to complete a task. "
         "Do not stop after the first tool if additional tools are required. "
+        "Use change_directory to enter a directory and keep working there for the "
+        "rest of the session. Call it before requesting tools that depend on the new "
+        "directory, and wait for its result. All relative file and repository paths "
+        "resolve from the current working directory. Use get_working_directory "
+        "when you need to check the current location. "
         "Inspect files before modifying them when necessary. "
         "Use create_file for a new text file, edit_file to replace an existing "
         "text file, append_file to add text, and replace_in_file for precise edits. "
@@ -1373,6 +1441,11 @@ agent = Agent(
 )
 
 
+@agent.instructions
+def working_directory_instructions() -> str:
+    return f"Current working directory for this turn: {get_working_directory()}"
+
+
 def main():
     refresh_model_keep_alive()
     print("""
@@ -1391,6 +1464,10 @@ def main():
         user_input = read_user_input()
         if user_input.strip().lower() in ("quit", "exit"):
             break
+        directory_result = directory_cmd(user_input)
+        if directory_result is not None:
+            print(directory_result)
+            continue
         if user_input.strip().casefold() in VOICE_COMMANDS:
             try:
                 user_input = capture_voice_input()

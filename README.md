@@ -14,6 +14,19 @@ command in the given language.
 
 ## Local files and Git
 
+Use `cd D:\projects\my-app`, `cd ..`, or `cd /d "C:\My Projects"` directly
+at the prompt, or ask Nora to change directory in natural language. `cd` alone
+shows the current directory. Changes persist for the session: relative file and
+Git operations use that directory. The prompt shows the current path and active
+Git branch (including from repository subdirectories), for example:
+
+```text
+>> D:\projects\my-app (main) >
+```
+
+The branch updates after switching branches; detached HEAD shows its short commit
+ID. Outside Git repositories, only the path appears.
+
 Nora can inspect, create, and edit local project files. It can also inspect Git
 status and diffs, stage and commit changes, fetch or pull updates, push commits,
 and work with repository history and branches. Tell Nora which repository to use
