@@ -1,6 +1,6 @@
 {
-  "version": "1.0.6-alpha",
+  "version": "1.0.7-alpha",
   "model_name": "qwen3:14b",
   "keep_alive": "30m",
-  "updated_at": "2026-09-14 19:30:50"
+  "updated_at": "2026-09-14 21:39:05"
 }
