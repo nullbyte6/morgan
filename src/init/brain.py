@@ -53,7 +53,8 @@ OSRM_BASE_URL = os.environ.get(
 NOMINATIM_MIN_INTERVAL_SECONDS = 1.05
 _GEOCODE_CACHE: dict[str, dict[str, object] | None] = {}
 _GEOCODE_LOCK = threading.Lock()
-NOTES_FILE = Path(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.txt")
+HOME_PATH = Path.home().resolve() / ".nora"
+NOTES_FILE = HOME_PATH / Path(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.txt")
 APPLICATION_SUFFIXES = (".exe", ".com", ".bat", ".cmd", ".lnk", ".appref-ms")
 _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 
@@ -215,7 +216,7 @@ def calculate(expression: str) -> str:
 
 def save_note(note: str) -> str:
     with NOTES_FILE.open("a", encoding="utf-8") as file:
-        file.write(f"- {note}\n")
+        file.write(f"{note}\n")
     return "Note saved"
 
 
