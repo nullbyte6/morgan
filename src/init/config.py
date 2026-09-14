@@ -15,6 +15,7 @@ DEFAULTS = {
     "model_name": "qwen3:14b",
     "keep_alive": "30m",
     "temperature": 0.2,
+    "weather_location": "",
     "personality": {
         "tone": "friendly",
         "verbosity": "short",
@@ -45,6 +46,8 @@ def validate_config(config):
         raise ValueError("config.json must contain a JSON object")
     result = deepcopy(DEFAULTS)
     result.update(config)
+    if not isinstance(result["weather_location"], str):
+        raise ValueError("weather_location must be text")
     for key in ("version", "model_name", "keep_alive"):
         if not isinstance(result[key], str) or not result[key].strip():
             raise ValueError(f"{key} must be a non-empty string")

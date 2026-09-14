@@ -52,8 +52,11 @@ from .notifications import (
     send_notification, schedule_notification, start_timer, list_timers, cancel_timer,
 )
 from .session_log import open_current_session_log
+from .weather import get_weather, set_weather_location
 
 TOOLS = [
+    get_weather,
+    set_weather_location,
     open_current_session_log,
     send_notification,
     schedule_notification,
