@@ -11,3 +11,11 @@ local PC and meant to be running alongside your software. It is **100% open sour
 Run Nora and speak to it through `voice`. Speak after `[MIC]` shortly appears.
 The LLM then stores said recording, decodes it, and executes the spoken 
 command in the given language.
+
+## Local files and Git
+
+Nora can inspect, create, and edit local project files. It can also inspect Git
+status and diffs, stage and commit changes, fetch or pull updates, push commits,
+and work with repository history and branches. Tell Nora which repository to use
+when it is not the current directory, and explicitly ask before you want changes
+committed or published to a remote.

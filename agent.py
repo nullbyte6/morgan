@@ -42,6 +42,7 @@ MODEL_SETTINGS = {
     "temperature": 0.2,
 }
 OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", "30m")
+GIT_TIMEOUT_SECONDS = int(os.environ.get("NORA_GIT_TIMEOUT", "120"))
 WEB_USER_AGENT = "NoraLocalAssistant/1.0 (personal desktop assistant)"
 NOMINATIM_BASE_URL = os.environ.get(
     "NORA_GEOCODER_URL", "https://nominatim.openstreetmap.org"
@@ -535,6 +536,173 @@ def replace_in_file(path: str, old_text: str, new_text: str) -> str:
         return f"Replaced {occurrences} occurrence(s) in {file_path}"
     except Exception as error:
         return f"Error: {error}"
+
+
+def run_git(repository: str, arguments: list[str]) -> str:
+    """Run one internally selected Git operation without invoking a shell."""
+    try:
+        repository_path = resolve_safe_path(repository)
+        if not repository_path.exists():
+            return f"Error: repository path does not exist: {repository_path}"
+        if not repository_path.is_dir():
+            return f"Error: repository path is not a directory: {repository_path}"
+        if shutil.which("git") is None:
+            return "Error: Git is not installed or is not available on PATH"
+
+        environment = os.environ.copy()
+        environment["GIT_TERMINAL_PROMPT"] = "0"
+        result = subprocess.run(
+            ["git", "-C", str(repository_path), "--no-pager", *arguments],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=GIT_TIMEOUT_SECONDS,
+            env=environment,
+        )
+        output = "\n".join(
+            part.strip() for part in (result.stdout, result.stderr) if part.strip()
+        )
+        if result.returncode != 0:
+            detail = output or "Git did not provide an error message"
+            return f"Error: git exited with code {result.returncode}: {detail}"
+        return output or "Git command completed successfully"
+    except subprocess.TimeoutExpired:
+        return f"Error: Git command timed out after {GIT_TIMEOUT_SECONDS} seconds"
+    except OSError as error:
+        return f"Error: {error}"
+
+
+def valid_git_name(value: str, label: str) -> str | None:
+    """Reject empty or option-like Git names before passing them to Git."""
+    if not value or value.startswith("-") or "\x00" in value:
+        return f"Error: invalid Git {label}: {value!r}"
+    if label == "branch":
+        forbidden_characters = set(" ~^:?*[\\")
+        invalid_structure = (
+            value.startswith(".")
+            or value.endswith(("/", "."))
+            or ".." in value
+            or "//" in value
+            or "@{" in value
+            or value.endswith(".lock")
+        )
+        if forbidden_characters.intersection(value) or invalid_structure:
+            return f"Error: invalid Git branch: {value!r}"
+    return None
+
+
+def git_status(repository: str = ".") -> str:
+    """Show the current branch and concise working-tree status for a repository."""
+    return run_git(repository, ["status", "--short", "--branch"])
+
+
+def git_diff(repository: str = ".", staged: bool = False,
+             path: str = "") -> str:
+    """Show unstaged changes, or staged changes when staged is true."""
+    arguments = ["diff", "--no-ext-diff"]
+    if staged:
+        arguments.append("--staged")
+    if path:
+        arguments.extend(["--", path])
+    result = run_git(repository, arguments)
+    if result == "Git command completed successfully":
+        return "No differences found"
+    return result
+
+
+def git_add(paths: list[str], repository: str = ".") -> str:
+    """Stage the exact files or pathspecs supplied in paths for a later commit."""
+    if not paths or any(not path or "\x00" in path for path in paths):
+        return "Error: provide at least one valid path to stage"
+    return run_git(repository, ["add", "--", *paths])
+
+
+def git_commit(message: str, repository: str = ".") -> str:
+    """Create a commit from staged changes with the supplied commit message."""
+    if not message.strip() or "\x00" in message:
+        return "Error: commit message cannot be empty"
+    return run_git(repository, ["commit", "-m", message])
+
+
+def git_fetch(repository: str = ".", remote: str = "",
+              prune: bool = False) -> str:
+    """Download remote refs without changing local files or the current branch."""
+    arguments = ["fetch"]
+    if prune:
+        arguments.append("--prune")
+    if remote:
+        error = valid_git_name(remote, "remote")
+        if error:
+            return error
+        arguments.append(remote)
+    return run_git(repository, arguments)
+
+
+def git_pull(repository: str = ".", remote: str = "", branch: str = "",
+             rebase: bool = False) -> str:
+    """Fetch and integrate a remote branch into the checked-out local branch."""
+    if branch and not remote:
+        return "Error: a remote is required when a branch is supplied"
+    arguments = ["pull"]
+    if rebase:
+        arguments.append("--rebase")
+    for value, label in ((remote, "remote"), (branch, "branch")):
+        if value:
+            error = valid_git_name(value, label)
+            if error:
+                return error
+            arguments.append(value)
+    return run_git(repository, arguments)
+
+
+def git_push(repository: str = ".", remote: str = "", branch: str = "",
+             set_upstream: bool = False) -> str:
+    """Publish commits to a configured remote, optionally setting the upstream."""
+    if branch and not remote:
+        return "Error: a remote is required when a branch is supplied"
+    if set_upstream and not remote:
+        return "Error: a remote is required when setting the upstream"
+    arguments = ["push"]
+    if set_upstream:
+        arguments.append("--set-upstream")
+    for value, label in ((remote, "remote"), (branch, "branch")):
+        if value:
+            error = valid_git_name(value, label)
+            if error:
+                return error
+            arguments.append(value)
+    return run_git(repository, arguments)
+
+
+def git_log(repository: str = ".", max_count: int = 10) -> str:
+    """Show a concise recent commit history."""
+    if isinstance(max_count, bool) or not 1 <= max_count <= 100:
+        return "Error: max_count must be between 1 and 100"
+    return run_git(
+        repository,
+        ["log", f"--max-count={max_count}", "--oneline", "--decorate"],
+    )
+
+
+def git_list_branches(repository: str = ".", include_remote: bool = False) -> str:
+    """List local branches and, when requested, remote-tracking branches."""
+    arguments = ["branch"]
+    if include_remote:
+        arguments.append("--all")
+    return run_git(repository, arguments)
+
+
+def git_switch(branch: str, repository: str = ".",
+               create: bool = False) -> str:
+    """Switch branches, optionally creating the named branch first."""
+    error = valid_git_name(branch, "branch")
+    if error:
+        return error
+    arguments = ["switch"]
+    if create:
+        arguments.append("--create")
+    arguments.append(branch)
+    return run_git(repository, arguments)
 
 
 def read_binary_file(path: str) -> str:
@@ -1107,6 +1275,16 @@ agent = Agent(
         edit_file,
         append_file,
         replace_in_file,
+        git_status,
+        git_diff,
+        git_add,
+        git_commit,
+        git_fetch,
+        git_pull,
+        git_push,
+        git_log,
+        git_list_branches,
+        git_switch,
         read_binary_file,
         write_binary_file,
         delete_file,
@@ -1138,6 +1316,17 @@ agent = Agent(
         "Use create_file for a new text file, edit_file to replace an existing "
         "text file, append_file to add text, and replace_in_file for precise edits. "
         "Use read_binary_file and write_binary_file for non-text formats. "
+        "You can inspect and modify local project files and complete multi-step coding "
+        "tasks. When working in a Git repository, use git_status and git_diff to inspect "
+        "changes, git_add and git_commit to record them, git_fetch or git_pull to update "
+        "remote information, and git_push to publish commits. Use git_log, "
+        "git_list_branches and git_switch when repository history or branches matter. "
+        "A request to commit includes permission to stage the relevant files first. "
+        "Only create a commit or push when the user explicitly requests it or clearly "
+        "asks for an end-to-end workflow that includes recording or publishing changes. "
+        "Never use git_pull when uncommitted work could be overwritten or conflicted; "
+        "inspect git_status first and explain the issue. Never claim files were committed "
+        "or pushed until the corresponding Git tool reports success. "
         "Only call delete_file when the latest user message explicitly asks to "
         "delete that specific file. Never infer permission to delete a file from "
         "a request to edit, replace, clean up, or recreate it. "
