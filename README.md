@@ -26,7 +26,16 @@ Windows media support uses the modular PyWinRT packages; do not install the
 legacy `winrt` package. ShazamIO 0.8.1 or later is required for compatibility
 with Pydantic AI.
 
+## Session logs
+Each launch saves a Markdown conversation in `~/.nora/`, named
+`YYYY-MM-DD_HH-MM-SS_microseconds.md` using the session's local start time.
+It records the greeting, messages, voice transcripts, direct command results and
+errors. Responses are saved as displayed, including partial responses if a stream
+fails. At the next launch after 24 session logs, the oldest is removed to keep
+24 logs including the new session. Other files are left alone.
+
 ## Voice Input
+
 Run Nora and speak to it through `voice`. Speak after `[MIC]` shortly appears.
 The LLM then stores said recording, decodes it, and executes the spoken 
 command in the given language.

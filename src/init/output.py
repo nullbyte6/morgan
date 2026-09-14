@@ -48,7 +48,6 @@ def plain_text_chunks(chunks):
             return line
         if fence is not None:
             return line
-        # Keep inline code (including Python's ** operator) verbatim.
         parts = re.split(r"(`+[^`]*`+)", line)
         for index in range(0, len(parts), 2):
             parts[index] = re.sub(r"\*\*(?=\S)(.+?)(?<=\S)\*\*", r"\1", parts[index])

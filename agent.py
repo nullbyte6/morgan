@@ -1,4 +1,5 @@
 import os
+import json
 import random
 import re
 import subprocess
@@ -18,6 +19,7 @@ from src.init.brain import (
     MODEL_NAME, change_directory, get_working_directory,
     refresh_model_keep_alive, refresh)
 from src.init.output import plain_text_chunks
+from src.init.session_log import SessionLog
 from src.init import rules
 from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
 from src.init.tools import TOOLS
@@ -53,11 +55,13 @@ STARTUP_GREETINGS = (
 )
 
 
-def stream(chunks) -> None:
+def stream(chunks, session=None) -> None:
     """Print streamed text one character at a time."""
     sys.stdout.write(ASSISTANT_COLOR)
+    displayed = []
     try:
         for chunk in plain_text_chunks(chunks):
+            displayed.append(chunk)
             for character in chunk:
                 sys.stdout.write(character)
                 sys.stdout.flush()
@@ -66,6 +70,8 @@ def stream(chunks) -> None:
     finally:
         sys.stdout.write(f"{RESET_COLOR}\n")
         sys.stdout.flush()
+        if session is not None:
+            session.write("Nora", "".join(displayed))
 
 def directory_cmd(command: str) -> str | None:
     """Handle standalone cd/chdir commands without a model or shell call."""
@@ -136,7 +142,6 @@ agent = Agent(model=model,
 
 @agent.instructions
 def current_instructions() -> str:
-    # Read the module on each turn so refresh() also updates these rules.
     return rules.INSTRUCTIONS
 
 
@@ -146,6 +151,7 @@ def working_directory_instructions() -> str:
 
 
 def main():
+    session = SessionLog()
     refresh_model_keep_alive()
     stream("""
      /$$   /$$                             
@@ -158,23 +164,27 @@ def main():
     |__/  \\__/ \\______/ |__/      \\_______/
     """)
     stream(brain.get_version())
-    stream([random.choice(STARTUP_GREETINGS)])
+    stream([random.choice(STARTUP_GREETINGS)], session=session)
     history = []
     while True:
         user_input = read_user_input()
+        session.write("User", user_input)
         if user_input.strip().lower() in ("quit", "exit"):
             break
 
         if user_input.strip().lower() in ("ref", "reload"):
-            refresh()
+            stream([refresh()], session=session)
+            continue
 
         directory_result = directory_cmd(user_input)
         if directory_result is not None:
             print(directory_result)
+            session.write("Nora", directory_result)
             continue
         git_result = git_cmd(user_input)
         if git_result is not None:
             print(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
+            session.write("Nora", git_result)
             history.extend([
                 ModelRequest(parts=[UserPromptPart(user_input)]),
                 ModelResponse(parts=[TextPart(
@@ -187,18 +197,21 @@ def main():
                 user_input = capture_voice_input()
             except Exception as error:
                 print(f"VOICE ERROR: {error}")
+                session.write("Error de voz", str(error))
                 continue
             if not user_input:
+                session.write("System", "A voice transcription "
+                                        "was impossible to obtain.")
                 continue
+            session.write("User (voice)", json.loads(user_input)["voice_text"])
         spinner = Spinner()
         spinner.start()
         try:
             with agent.run_stream_sync(
                     user_input, message_history=history) as result:
                 spinner.stop()
-                stream(result.stream_text(delta=True, debounce_by=None))
+                stream(result.stream_text(delta=True, debounce_by=None), session=session)
                 history = result.all_messages()
-                # Do not feed rejected formatting/courtesy questions back as examples.
                 for message in history:
                     if isinstance(message, ModelResponse):
                         for part in message.parts:
@@ -208,9 +221,11 @@ def main():
         except Exception as error:
             spinner.stop()
             print(f"ERROR: {error}")
+            session.write("Error", str(error))
             cause = error.__cause__
             if cause is not None:
                 print(f"Detail: {cause}")
+                session.write("Detalle del error", str(cause))
 
 
 if __name__ == "__main__":
