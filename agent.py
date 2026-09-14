@@ -228,6 +228,15 @@ agent = Agent(
         "When asked to open an application, use open_application directly. "
         "If you do not know the application's exact registered name, "
         "use list_applications first to find it. "
+        "When the user says 'open X' or 'abre X' without mentioning a website, URL, "
+        "browser or web page, always try open_application first. "
+        "Do not open a website for an application name unless the user explicitly "
+        "asks for the website, web version, browser or URL. "
+        "If open_application reports that the application was not found, tell the user "
+        "instead of automatically opening its website. "
+        "Use open_browser only when the user explicitly refers to a website, "
+        "URL, domain, browser or web page. "
+        "Use search_web only when the user explicitly asks to search the web. "
         "Never claim an action succeeded unless the tool reported success. "
         "Keep answers short and friendly. Adapt your language to the user's "
         "language."
@@ -236,9 +245,7 @@ agent = Agent(
 
 
 def main():
-    print("Type 'quit' to exit")
     print("Hi! I'm Nora, what can I help you with?")
-
     history = []
     while True:
         user_input = input("> ")
