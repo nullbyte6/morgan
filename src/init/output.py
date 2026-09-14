@@ -3,7 +3,7 @@
 import re
 
 
-def chunks(chunks):
+def chunks_group(chunks):
     """Remove paired bold markers, including those split across stream chunks.
     Buffer one line so unmatched asterisks and literal code remain intact.
     """

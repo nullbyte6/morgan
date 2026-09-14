@@ -18,7 +18,7 @@ from src.init import brain
 from src.init.brain import (
     MODEL_NAME, change_directory, get_working_directory,
     refresh_model_keep_alive, refresh)
-from src.init.output import chunks
+from src.init.output import chunks_group
 from src.init.session_log import SessionLog
 from src.init import rules
 from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
@@ -60,7 +60,7 @@ def stream(chunks, session=None) -> None:
     sys.stdout.write(ASSISTANT_COLOR)
     displayed = []
     try:
-        for chunk in chunks(chunks):
+        for chunk in chunks_group(chunks):
             displayed.append(chunk)
             for character in chunk:
                 sys.stdout.write(character)
