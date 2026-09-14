@@ -1,5 +1,7 @@
 from .brain import (
+    load_config,
     get_version,
+    update_version,
     refresh,
     get_working_directory,
     change_directory,
@@ -45,7 +47,9 @@ from .brain import (
 )
 
 TOOLS = [
+    load_config,
     get_version,
+    update_version,
     refresh,
     get_working_directory,
     change_directory,

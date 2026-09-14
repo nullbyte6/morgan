@@ -138,7 +138,7 @@ def main():
     | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
     |__/  \\__/ \\______/ |__/      \\_______/
     """)
-    print(f"{VERSION}")
+    print(brain.get_version())
     print("¡Hola! Me llamo Nora, ¿con qué te puedo ayudar?")
     history = []
     while True:

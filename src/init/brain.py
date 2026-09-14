@@ -27,6 +27,7 @@ try:
 except ImportError:
     winreg = None
 
+CONFIG_FILE = Path(__file__).resolve().parents[2] / "config.json"
 VERSION = "v1.0.1-alpha"
 
 MODEL_NAME = os.environ.get("NORA_MODEL", "qwen3:14b")
@@ -44,14 +45,48 @@ NOTES_FILE = Path(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}.txt")
 APPLICATION_SUFFIXES = (".exe", ".com", ".bat", ".cmd", ".lnk", ".appref-ms")
 _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 
-
 _SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
 
 
+def load_config() -> dict:
+    """Read Nora's application configuration, independent of the working directory."""
+    try:
+        config = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"version": VERSION}
+    if not isinstance(config, dict):
+        raise ValueError("config.json must contain a JSON object")
+    return config
+
+
 def get_version() -> str:
-    """Return the current application version (e.g., '1.0.1-alpha')."""
-    return VERSION
+    """Return Nora's current version from its application configuration."""
+    try:
+        config = load_config()
+        return config.get("version", VERSION)
+    except (OSError, ValueError):
+        return VERSION
+
+
+def update_version(new_version: str) -> str:
+    """Update Nora's version live, preserving all other configuration settings."""
+    if not isinstance(new_version, str) or not new_version.strip():
+        return "Error updating version: new_version must be a non-empty string"
+    new_version = new_version.strip()
+    try:
+        config = load_config()
+        config["version"] = new_version
+        config["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        atomic_write_bytes(
+            CONFIG_FILE,
+            json.dumps(config, indent=2, ensure_ascii=False).encode("utf-8"),
+        )
+        global VERSION
+        VERSION = new_version
+        return f"Version updated to {new_version} in config.json"
+    except Exception as error:
+        return f"Error updating version: {error}"
 
 
 def refresh() -> str:
@@ -70,6 +105,7 @@ def refresh() -> str:
         return "Modules are reloaded"
     except Exception as error:
         return f"Error at refresh attempt: {error}"
+
 
 def keep_model_loaded() -> None:
     """Extend Ollama's model lifetime without delaying the next prompt."""
