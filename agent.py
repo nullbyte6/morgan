@@ -4,6 +4,8 @@ import subprocess
 import sys
 import time
 
+from init.brain import VERSION
+
 os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
@@ -137,6 +139,7 @@ def main():
     | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
     |__/  \\__/ \\______/ |__/      \\_______/
     """)
+    print(f"v{VERSION}")
     print("¡Hola! Me llamo Nora, ¿con qué te puedo ayudar?")
     history = []
     while True:

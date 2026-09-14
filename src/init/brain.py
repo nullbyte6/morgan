@@ -27,7 +27,7 @@ try:
 except ImportError:
     winreg = None
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 MODEL_NAME = os.environ.get("NORA_MODEL", "qwen3:14b")
 OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", "30m")
