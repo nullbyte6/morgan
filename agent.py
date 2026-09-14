@@ -605,6 +605,116 @@ def search_web(query: str) -> str:
     return f"Opened web search for: {query}"
 
 
+def kill_process(process: str, force: bool = False,
+                 include_children: bool = False) -> str:
+    """End a Windows process by exact PID or image name."""
+    if os.name != "nt":
+        return "Error: kill_process is only supported on Windows"
+
+    target = process.strip()
+    if not target:
+        return "Error: process PID or image name is required"
+
+    command = ["taskkill.exe"]
+    if target.isdecimal():
+        process_id = int(target)
+        if process_id <= 4:
+            return f"Refusing to terminate a critical system PID: {process_id}"
+        if process_id == os.getpid():
+            return f"Refusing to terminate Nora's own PID: {process_id}"
+        command.extend(["/PID", str(process_id)])
+        description = f"PID {process_id}"
+    else:
+        forbidden_characters = set('<>:"/\\|?*')
+        if forbidden_characters.intersection(target):
+            return f"Error: invalid process image name: {target}"
+        image_name = target if target.casefold().endswith(".exe") else f"{target}.exe"
+        protected_images = {
+            "registry",
+            "registry.exe",
+            "system",
+            "system.exe",
+            "system idle process",
+            "system idle process.exe",
+            "csrss.exe",
+            "lsass.exe",
+            "services.exe",
+            "smss.exe",
+            "wininit.exe",
+            "winlogon.exe",
+            Path(sys.executable).name.casefold(),
+        }
+        if image_name.casefold() in protected_images:
+            return f"Refusing to terminate a critical or current process: {image_name}"
+        command.extend(["/IM", image_name])
+        description = image_name
+
+    if force:
+        command.append("/F")
+    if include_children:
+        command.append("/T")
+
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, errors="replace")
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            return f"Error terminating {description}: {detail or 'taskkill failed'}"
+        return f"Process terminated: {description}"
+    except OSError as error:
+        return f"Error: {error}"
+
+
+def shutdown_computer(delay_seconds: int) -> str:
+    """Schedule a Windows shutdown after an exact number of seconds."""
+    if os.name != "nt":
+        return "Error: shutdown_computer is only supported on Windows"
+    if isinstance(delay_seconds, bool) or not isinstance(delay_seconds, int):
+        return "Error: delay_seconds must be an integer"
+    if not 0 <= delay_seconds <= 315_360_000:
+        return "Error: delay_seconds must be between 0 and 315360000"
+
+    try:
+        result = subprocess.run(
+            [
+                "shutdown.exe",
+                "/s",
+                "/t",
+                str(delay_seconds),
+                "/c",
+                "Shutdown scheduled by Nora",
+            ],
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            return f"Error scheduling shutdown: {detail or 'shutdown failed'}"
+        return f"Computer shutdown scheduled in {delay_seconds} second(s)"
+    except OSError as error:
+        return f"Error: {error}"
+
+
+def cancel_shutdown() -> str:
+    """Cancel a shutdown that is currently pending on Windows."""
+    if os.name != "nt":
+        return "Error: cancel_shutdown is only supported on Windows"
+    try:
+        result = subprocess.run(
+            ["shutdown.exe", "/a"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            return f"Error cancelling shutdown: {detail or 'no shutdown is pending'}"
+        return "Pending computer shutdown cancelled"
+    except OSError as error:
+        return f"Error: {error}"
+
+
 def normalize_application_name(value: str) -> str:
     """Normalize an application name so matching is stable and accent-insensitive."""
     name = Path(value.strip()).stem
@@ -787,7 +897,6 @@ def open_application(application: str) -> str:
     except Exception as error:
         return f"Error: {error}"
 
-
 agent = Agent(
     model=model,
     tools=[
@@ -810,6 +919,9 @@ agent = Agent(
         open_file,
         open_browser,
         search_web,
+        kill_process,
+        shutdown_computer,
+        cancel_shutdown,
         list_applications,
         open_application
     ],
@@ -851,6 +963,14 @@ agent = Agent(
         "Use open_browser only when the user explicitly refers to a website, "
         "URL, domain, browser or web page. "
         "Use search_web only when the user explicitly asks to search the web. "
+        "Only call kill_process when the latest user message explicitly asks to "
+        "kill or terminate that exact PID or executable name. Never guess a process, "
+        "and set include_children or force only as requested. "
+        "Only call shutdown_computer when the latest user message explicitly asks "
+        "to shut down the computer and gives an exact delay in seconds. If no delay "
+        "is given, ask for it instead of choosing one. Warn that unsaved work may be "
+        "lost, but follow an explicit shutdown request. Use cancel_shutdown when the "
+        "user explicitly asks to cancel a pending shutdown. "
         "Never claim an action succeeded unless the tool reported success. "
         "Keep answers short and friendly."
     )
