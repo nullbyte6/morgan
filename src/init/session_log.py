@@ -35,8 +35,7 @@ class SessionLog:
             self.path = self.directory / f"{started:%Y-%m-%d_%H-%M-%S_%f}.md"
             try:
                 with self.path.open("x", encoding="utf-8") as log:
-                    log.write(f"\n{SESSION_HEADER}\n# Nora Session"
-                              f"\nStart: {started.isoformat()}")
+                    log.write(f"{SESSION_HEADER} Nora Session — {started.isoformat()}\n")
                 break
             except FileExistsError:
                 continue
@@ -60,8 +59,10 @@ class SessionLog:
             path.unlink()
 
     def write(self, role, text):
+        """Write one physical line per message, without embedded line breaks."""
+        text = " ".join(str(text).splitlines()).strip() if text else ""
         if not text:
             return
+        role = " ".join(str(role).splitlines()).strip()
         with self.path.open("a", encoding="utf-8") as log:
-            log.write(f"\n## {role} — {datetime.now()
-                      .astimezone():%H:%M:%S %z} \n{text.rstrip()}")
+            log.write(f"[{datetime.now().astimezone():%H:%M:%S %z}] {role}: {text}\n")

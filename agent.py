@@ -181,7 +181,8 @@ def run_session():
     history = []
     while True:
         user_input = read_user_input()
-        session.write("User", f"{user_input}")
+        if user_input.strip().casefold() not in VOICE_COMMANDS:
+            session.write(USERNAME, user_input)
         if user_input.strip().lower() in ("quit", "exit"):
             break
 
@@ -192,12 +193,12 @@ def run_session():
         directory_result = directory_cmd(user_input)
         if directory_result is not None:
             print(directory_result)
-            session.write("Nora", f"\n{directory_result}")
+            session.write("Nora", directory_result)
             continue
         git_result = git_cmd(user_input)
         if git_result is not None:
             print(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
-            session.write("Nora", f"\n{git_result}")
+            session.write("Nora", git_result)
             history.extend([
                 ModelRequest(parts=[UserPromptPart(user_input)]),
                 ModelResponse(parts=[TextPart(
@@ -210,13 +211,13 @@ def run_session():
                 user_input = capture_voice_input()
             except Exception as error:
                 print(f"VOICE ERROR: {error}")
-                session.write("System", str(f"\n{error}"))
+                session.write("System", str(error))
                 continue
             if not user_input:
-                session.write("System", "\nA voice transcription "
+                session.write("System", "A voice transcription "
                                         "was impossible to obtain.")
                 continue
-            session.write("User (voice)", json.loads(user_input)[
+            session.write(USERNAME, json.loads(user_input)[
                 "voice_text"])
         spinner = Spinner()
         spinner.start()
@@ -236,11 +237,10 @@ def run_session():
         except Exception as error:
             spinner.stop()
             print(f"ERROR: {error}")
-            session.write("Error", str(f"\n{error}"))
             cause = error.__cause__
             if cause is not None:
                 print(f"Detail: {cause}")
-                session.write("Detail: ", str(f"\n{error}"))
+            session.write("Error", f"{error}; Detail: {cause}" if cause is not None else str(error))
 
 
 def main():
