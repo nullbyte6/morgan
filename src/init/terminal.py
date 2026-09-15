@@ -20,7 +20,6 @@ from rich.text import Text
 class TerminalPanel(Panel):
     @property
     def _subtitle(self):
-        # Panel normally inserts spaces around subtitles, breaking the border.
         return self.subtitle
 
 
@@ -155,7 +154,7 @@ class TerminalUI(io.TextIOBase):
         visible = lines[max(0, end - available):end] if available else []
         visible += [Text("")] * max(0, available - len(visible))
         title = Text(
-            datetime.now().astimezone().strftime("%a %d/%m/%Y  %H:%M:%S"),
+            datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S"),
             style="bright_white")
         # The meter stands immediately above the baseline, inside the frame.
         # Keep the bottom border continuous all the way to the right corner.
