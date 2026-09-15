@@ -68,6 +68,25 @@ errors. Responses are saved as displayed, including partial responses if a strea
 fails. At the next launch after 24 session logs, the oldest is removed to keep
 24 logs including the new session. Other files are left alone.
 
+## Playback and YouTube
+
+Ask Nora to pause, resume, go to the next track or return to the previous one.
+`control_media` uses the active Windows media session, or an application's exact
+source ID from `list_media_sessions`. Controls depend on what that application
+supports; Nora reports rejected or unsupported actions.
+
+For a named song, Nora searches YouTube with the local `yt-dlp` Python package.
+Ambiguous requests produce a numbered list of titles and channels so you can
+choose. The selected video opens in your default browser with autoplay requested.
+Browser autoplay restrictions may require a click; opening the page alone does
+not confirm playback. Next/previous on YouTube depends on the browser's exposed
+media controls and available queue.
+
+No paid APIs, API keys or downloads of audio/video are used. YouTube search and
+playback need Internet. Install the updated `requirements.txt` and restart Nora
+to load the new tools. If YouTube changes its search interface, updating `yt-dlp`
+may be necessary.
+
 ## Weather
 
 Ask "what will the weather be tomorrow morning in Madrid, Spain?" or choose a
