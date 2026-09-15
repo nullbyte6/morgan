@@ -183,7 +183,14 @@ def run_session():
     stream([random.choice(STARTUP_GREETINGS)], session=session)
     history = []
     while True:
-        user_input = read_user_input()
+        prompt = build_user_prompt()
+        if session.private:
+            prompt = "[PRIVATE] " + prompt
+        user_input = read_user_input(prompt)
+        privacy_result = session.handle_command(user_input)
+        if privacy_result is not None:
+            stream(privacy_result)
+            continue
         if user_input.strip().casefold() not in VOICE_COMMANDS:
             session.write(USERNAME, user_input)
         if user_input.strip().lower() in ("quit", "exit"):

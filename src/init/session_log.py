@@ -25,12 +25,29 @@ def open_current_session_log() -> str:
 
 class SessionLog:
     def __init__(self, directory=None):
+        self.private = False
         if directory is None:
             ensure_storage()
         self.directory = (Path(directory) if directory is not None
                           else HOME_PATH / ".log").resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
         self._start_day(datetime.now().astimezone())
+
+    def handle_command(self, command):
+        """Handle local privacy controls before recording or sending input."""
+        parts = command.strip().casefold().split()
+        if not parts or parts[0] not in ("/private", "/private"):
+            return None
+        action = parts[1] if len(parts) == 2 else "toggle" if len(parts) == 1 else ""
+        if action == "toggle":
+            self.private = not self.private
+        elif action in ("on", "off"):
+            self.private = action == "on"
+        elif action not in "status":
+            return "Uso: /private [on|off|status]"
+        return ("Private Mode, on"
+                if self.private else
+                "Private Mode, off")
 
     def _start_day(self, started):
         self.path = self.directory / f"{started:%Y-%m-%d}.md"
@@ -57,6 +74,8 @@ class SessionLog:
 
     def write(self, role, text):
         """Write one physical line per message, without embedded line breaks."""
+        if self.private:
+            return
         text = " ".join(str(text).splitlines()).strip() if text else ""
         if not text:
             return

@@ -69,6 +69,17 @@ errors. Responses are saved as displayed, including partial responses if a strea
 fails. When opening a daily log, the oldest daily logs are removed to keep
 24 daily files. Older logs named by session and other files are left alone.
 
+### Private mode
+Type `/private on` to pause Markdown logging and `/private off` to resume it.
+`/private` toggles the mode; `/private status` shows its current state.
+The alias `/private` also works. These commands run locally and are not logged.
+While active, the prompt shows `[PRIVATE]` and no messages, voice transcripts,
+command results, partial responses or errors are written to the conversation log.
+Resuming only saves new messages; skipped messages are never appended later.
+Private mode lasts until disabled or Nora exits; a new launch starts with logging on.
+This mode only pauses the Markdown log: conversation remains visible and in the
+model's session context, so subsequent responses can still refer to it.
+
 ## Conversation scrolling (Windows)
 Use the mouse wheel or ↑/↓ to scroll through the current conversation, including
 while Nora responds. Page Up/Page Down move by a page. The input stays visible;

@@ -43,7 +43,6 @@ class ConsoleInput:
         mode = wt.DWORD()
         self._check(self.kernel.GetConsoleMode(self.handle, ctypes.byref(mode)))
         self.mode = mode.value
-        # Mouse/window events; disable Quick Edit, line/echo and VT input.
         self._check(self.kernel.SetConsoleMode(
             self.handle, (self.mode | 0x98) & ~(0x40 | 0x2 | 0x4 | 0x200)))
 
