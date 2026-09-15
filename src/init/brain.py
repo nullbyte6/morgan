@@ -33,6 +33,7 @@ except ImportError:
 
 from .config import CONFIG_FILE, HOME_PATH, ensure_storage, load_config
 from .folders import resolve_directory
+from .app_cache import cached_app, remember_app, forget_app
 
 VERSION = "v1.0.1-alpha"
 
@@ -1191,7 +1192,16 @@ def list_open_applications() -> str:
         return f"Error listing open applications: {error}"
 
 
+def _launch_application(app):
+    if app["Source"] == "registered":
+        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\\{app['AppID']}"],
+                         creationflags=subprocess.CREATE_NO_WINDOW)
+    else:
+        os.startfile(app["Path"])
+
+
 def open_application(application: str) -> str:
+    """Open an app, consulting persistent apps.json before expensive discovery."""
     from src.init.folders import FOLDER_ALIASES
 
     if application.strip().casefold() in FOLDER_ALIASES:
@@ -1200,6 +1210,16 @@ def open_application(application: str) -> str:
     normalized_query = normalize_application_name(query)
     if not normalized_query:
         return "Application name is empty"
+
+    app = cached_app(normalized_query)
+    if app:
+        try:
+            _launch_application(app)
+            return f"Opened application: {app['Name']}"
+        except Exception:
+            forget_app(normalized_query)
+    # Cached drive results can be stale after reinstalling/moving an application.
+    _APPLICATION_SEARCH_CACHE.pop(normalized_query, None)
 
     registered = [
         {**app, "Source": "registered" if app.get("AppID") else "file"}
@@ -1213,12 +1233,10 @@ def open_application(application: str) -> str:
     app = min(matches, key=lambda candidate:
     application_rank(candidate, normalized_query))
     try:
-        if app["Source"] == "registered":
-            subprocess.Popen(
-                ["explorer.exe", f"shell:AppsFolder\\{app['AppID']}"])
-        else:
-            os.startfile(app["Path"])
-        return f"Opened application: {app['Name']}"
+        _launch_application(app)
+        saved = remember_app(normalized_query, app)
+        note = "" if saved else " (could not update apps.json cache)"
+        return f"Opened application: {app['Name']}{note}"
     except Exception as error:
         return f"Error: {error}"
 

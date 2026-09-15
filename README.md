@@ -239,6 +239,15 @@ real messages with `python -m unittest discover -s tests -v`.
 
 ### Windows application management
 
+Application launches use a persistent cache at `~/.nora/json/apps.json`.
+After the first successful launch request, Nora saves the normalized requested
+name, display name and executable/shortcut path (or Windows AppID). Subsequent
+opens consult that file first, avoiding registry and disk scans even after Nora
+restarts. Missing file paths or launch exceptions trigger a fresh search and cache
+update. AppID launches are delegated to Windows; Explorer accepting the request
+does not confirm that the target app actually started. Cache writes are atomic;
+a malformed or unwritable cache does not prevent launching applications.
+
 Nora can search, download, install and uninstall apps using Microsoft WinGet:
 
 - `search_apps(query, installed_only=False)` finds package IDs; set `installed_only`
