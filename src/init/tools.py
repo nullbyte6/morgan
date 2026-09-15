@@ -53,6 +53,7 @@ from .notifications import (
     cancel_timer)
 
 from .message import send_message
+from .commands import execute_command
 from .app_manager import (
     search_apps, install_app, uninstall_app, get_app_operation,
     scan_app_residues, clean_app_residue,
@@ -70,6 +71,7 @@ from src.diagnostics.tools import (
 )
 
 TOOLS = [
+    execute_command,
     search_apps,
     install_app,
     uninstall_app,

@@ -161,6 +161,38 @@ Run the assistant and speak to it through `voice`. Speak after `[MIC]` shortly a
 The LLM then stores said recording, decodes it, and executes the spoken 
 command in the given language.
 
+## General commands and administrator permissions
+
+Ask Nora to run a command or script using `execute_command`. It supports installed
+programs, shell builtins, pipelines and redirection, without a command allowlist.
+The default shell is PowerShell on Windows and `sh` on other systems; `cmd`,
+`pwsh` and `bash` can also be selected when installed. Programs must be on PATH
+or referenced by their path using the selected shell's syntax.
+
+Before each execution, Nora shows the exact command and working directory in its
+terminal. Type `sí` or `yes` to authorize it; any other response cancels it.
+Consent is read directly from the terminal, not supplied by the language model.
+Requests with `elevated=True` require a second confirmation for administrator
+permissions. Nora uses native `sudo.exe` on Windows 11 and `sudo` on POSIX.
+Windows sudo must be enabled in Windows Settings; Nora respects its configured
+mode and does not change settings or fall back to RunAs when sudo fails.
+Windows sudo itself can still display a UAC prompt. No password goes into chat.
+Nora itself does not need to be started as administrator.
+
+Normal execution returns stdout, stderr and the exit code, with a default
+120-second timeout and up to 32,000 characters per output stream. Its stdin is
+closed. Windows sudo uses the configured mode: new-window output is shown in
+that window, while output from inline modes is returned to the model. Inline
+execution has closed stdin; new-window mode allows interaction. POSIX sudo
+uses the system terminal.
+Elevated execution waits for completion without a timeout. Failures never
+automatically rerun with elevation; another attempt requires fresh consent.
+A timeout can leave child processes running, so inspect before retrying.
+
+Directory and environment changes inside a command only affect its subprocess.
+Use Nora's `cd` or `change_directory` to change the session directory. Restart
+Nora after updating the source to register the new tool.
+
 ## Local files and Git
 Use `cd D:\projects\my-app`, `cd ..`, or `cd /d "C:\My Projects"` directly
 at the prompt, or ask the assistant to change directory in natural language. `cd` alone
