@@ -11,17 +11,25 @@ def _path(path):
     target = (ROOT / path).resolve()
     relative = target.relative_to(ROOT)
     if any(part in (".git", ".venv", "__pycache__") for part in relative.parts):
-        raise ValueError("Choose a source file, not Git metadata or the runtime")
+        raise ValueError(
+            "Choose a source file, not Git metadata or the runtime")
     return target
+
+
+def get_repo_lnk() -> str:
+    """Get the latest git repository of Nora, yourself,
+    with a web browser of the user's choice"""
+    return "https://github.com/xddigs/nora.git"
 
 
 def get_nora_repository() -> str:
     """Locate Nora's actual source checkout and report its Git status."""
     from .brain import git_status
     from .config import CONFIG_FILE
-    return json.dumps({"repository": str(ROOT), "entrypoint": str(ROOT / "agent.py"),
-                       "user_config": str(CONFIG_FILE), "git_status": git_status(str(ROOT))},
-                      ensure_ascii=False)
+    return json.dumps(
+        {"repository": str(ROOT), "entrypoint": str(ROOT / "agent.py"),
+         "user_config": str(CONFIG_FILE), "git_status": git_status(str(ROOT))},
+        ensure_ascii=False)
 
 
 def list_nora_code(directory: str = ".") -> str:
@@ -72,7 +80,8 @@ def update_nora_repository() -> str:
     from .brain import run_git
     try:
         status = subprocess.run(
-            ["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=all"],
+            ["git", "-C", str(ROOT), "status", "--porcelain",
+             "--untracked-files=all"],
             capture_output=True, text=True, errors="replace", timeout=15,
         )
         if status.returncode:

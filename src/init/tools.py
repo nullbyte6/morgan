@@ -58,13 +58,14 @@ from .session_log import open_current_session_log
 from .weather import get_weather, set_weather_location
 from .media import control_media, search_youtube_songs, play_youtube_song
 from .self_code import (
-    get_nora_repository, list_nora_code, read_nora_code,
+    get_repo_lnk, get_nora_repository, list_nora_code, read_nora_code,
     edit_nora_code, update_nora_repository)
 
 TOOLS = [
     control_media,
     search_youtube_songs,
     play_youtube_song,
+    get_repo_lnk,
     get_nora_repository,
     list_nora_code,
     read_nora_code,
