@@ -19,7 +19,6 @@ def _path(path):
 
 def get_repo_lnk() -> str:
     """Open Nora's public repository in the user's default external browser.
-
     Use when asked to open Nora's online repository, not to inspect local code.
     """
     url = "https://github.com/xddigs/nora"
