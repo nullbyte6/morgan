@@ -4,7 +4,7 @@ import re
 
 from pygments.lexers import get_lexer_by_name
 from pygments.lexers.special import TextLexer
-from pygments.token import Keyword, Number, Operator, Punctuation
+from pygments.token import Keyword, Name, Number, Operator, Punctuation
 from pygments.util import ClassNotFound
 
 
@@ -15,6 +15,28 @@ CODE_COLOR = "\x1b[37m"
 PROSE_COLOR = "\x1b[90m"
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)[\r\n]*$")
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+JAVA_TYPES = frozenset("""
+    Boolean Byte Character Double Float Integer Long Short Void
+    Object String StringBuilder StringBuffer Number Class Enum Record
+    System Math Exception RuntimeException Throwable
+    Iterable Iterator Comparable Comparator Runnable AutoCloseable
+    Collection Collections List ArrayList LinkedList Set HashSet TreeSet
+    Map HashMap TreeMap Queue Deque Optional Stream Arrays
+""".split())
+
+
+def token_color(kind, value, lexer):
+    """Separate builtins/types from control keywords, strings and comments."""
+    if (kind in Number or kind in Name.Builtin or kind in Keyword.Type
+            or (kind in Keyword and value == "instanceof")
+            or ("java" in lexer.aliases and kind in Name
+                and (kind in Name.Class or value in JAVA_TYPES))):
+        return NUMBER_COLOR
+    if kind in Keyword or kind in Operator.Word:
+        return KEYWORD_COLOR
+    if kind in Operator or kind in Punctuation:
+        return SYMBOL_COLOR
+    return CODE_COLOR
 
 
 def markdown_text(text):
@@ -72,10 +94,7 @@ def chunks_group(chunks, *, color=False):
                 if offset + len(value) <= start:
                     continue
                 value = value[max(0, start - offset):]
-                shade = (KEYWORD_COLOR if kind in Keyword else
-                         NUMBER_COLOR if kind in Number else
-                         SYMBOL_COLOR if kind in Operator or kind in Punctuation else
-                         CODE_COLOR)
+                shade = token_color(kind, value, lexer)
                 highlighted.append(shade + value)
             return "".join(highlighted) + PROSE_COLOR
         parts = re.split(r"(`+[^`]*`+)", line)

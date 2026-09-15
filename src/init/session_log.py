@@ -52,8 +52,13 @@ class SessionLog:
 
     def _start_day(self, started):
         self.path = self.directory / f"{started:%Y-%m-%d}.md"
-        with self.path.open("a", encoding="utf-8") as log:
-            log.write(f"{SESSION_HEADER} Nora Session — {started.isoformat()}\n")
+        try:
+            log = self.path.open("x", encoding="utf-8")
+        except FileExistsError:
+            pass
+        else:
+            with log:
+                log.write(f"{SESSION_HEADER} Nora Log — {started:%Y-%m-%d}\n")
         self._prune()
         global _current_session_path
         _current_session_path = self.path
