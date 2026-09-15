@@ -1,3 +1,6 @@
+
+from agent import Assistant
+
 import base64
 import codecs
 import ctypes
@@ -38,7 +41,6 @@ MODEL_NAME = os.environ.get("NORA_MODEL", load_config().get("model_name"))
 OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE",
                                    load_config().get("keep_alive"))
 GIT_TIMEOUT_SECONDS = int(os.environ.get("NORA_GIT_TIMEOUT", "120"))
-WEB_USER_AGENT = "NoraLocalAssistant/1.0 (personal desktop assistant)"
 NOMINATIM_BASE_URL = os.environ.get(
     "NORA_GEOCODER_URL", "https://nominatim.openstreetmap.org").rstrip("/")
 OSRM_BASE_URL = os.environ.get(
@@ -55,7 +57,7 @@ _LAST_GEOCODE_REQUEST_AT = 0.0
 
 
 def get_version() -> str:
-    """Return Nora's current version from its application configuration."""
+    """Return the assistant's current version from its application configuration."""
     try:
         config = load_config()
         return config.get("version", VERSION)
@@ -64,7 +66,7 @@ def get_version() -> str:
 
 
 def update_version(new_version: str) -> str:
-    """Update Nora's version live, preserving all other configuration settings."""
+    """Update the assistant's version live, preserving all other configuration settings."""
     if not isinstance(new_version, str) or not new_version.strip():
         return "Error updating version: new_version must be a non-empty string"
     new_version = new_version.strip()
@@ -133,7 +135,7 @@ def get_working_directory() -> str:
 
 
 def change_directory(path: str = "") -> str:
-    """Persistently change Nora's working directory; empty path reports it.
+    """Persistently change the assistant's working directory; empty path reports it.
     Accepts relative or absolute paths, Windows drive paths, quotes, ~ and
     environment variables. Subsequent tools resolve relative paths here.
     """
@@ -771,12 +773,12 @@ def read_web_page(url: str, max_characters: int = 12_000) -> str:
 
 
 def request_json(url: str, timeout: int = 15):
-    """Request JSON from a public data API with Nora's identifying user agent."""
+    """Request JSON from a public data API with the assistant's identifying user agent."""
     request = urllib.request.Request(
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": WEB_USER_AGENT,
+            "User-Agent": f"{Assistant().name}LocalAssistant/1.0 (personal desktop assistant)",
         },
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -918,7 +920,7 @@ def kill_process(process: str, force: bool = False,
         if process_id <= 4:
             return f"Refusing to terminate a critical system PID: {process_id}"
         if process_id == os.getpid():
-            return f"Refusing to terminate Nora's own PID: {process_id}"
+            return f"Refusing to terminate {Assistant().name}'s own PID: {process_id}"
         command.extend(["/PID", str(process_id)])
         description = f"PID {process_id}"
     else:
@@ -980,7 +982,7 @@ def shutdown_computer(delay_seconds: int) -> str:
                 "/t",
                 str(delay_seconds),
                 "/c",
-                "Shutdown scheduled by Nora",
+                f"Shutdown scheduled by {Assistant().name}",
             ],
             capture_output=True,
             text=True,

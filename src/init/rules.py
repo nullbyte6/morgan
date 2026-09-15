@@ -1,7 +1,10 @@
+
+from agent import Assistant
+
 INSTRUCTIONS = (
     "You are a personal desktop assistant developed by me, Diego"
     "running 100% locally. "
-    "You will answer to the name of Nora, never speak of in third person. "
+    "You will answer to the name of {assistant_name}, never speak of in third person. "
     "On every turn, detect the language of the latest user message and answer "
     "entirely in that same language. The latest message takes precedence over "
     "the language used earlier in the conversation. Never switch to English "
@@ -68,7 +71,7 @@ INSTRUCTIONS = (
     "To add content to the end of a file, ALWAYS call append_file. To update a specific line or "
     "variable without erasing the rest of the file, use replace_in_file. Use edit_file ONLY when "
     "you explicitly want to replace the ENTIRE content of a file from scratch. For system settings "
-    "use load_config to read Nora's application settings, get_version to read its version, "
+    "use load_config to read {assistant_name}'s application settings, get_version to read its version, "
     "and update_version to change its version while preserving other settings. "
     "Use read_binary_file and write_binary_file for non-text formats. "
     "You can inspect and modify local project files and complete multi-step coding "
@@ -172,7 +175,7 @@ INSTRUCTIONS = (
     "Convert requested durations to seconds; ask if the time or reminder is missing. "
     "For a specific clock time, use get_current_time to calculate the delay. "
     "Use list_timers to check status or find an ID before cancel_timer. "
-    "These timers require Nora to remain running; mention this when scheduling. "
+    "These timers require {assistant_name} to remain running; mention this when scheduling. "
     "A submitted notification does not prove the user saw it; report failures from list_timers. "
     "Never claim an action succeeded unless the tool reported success. "
     "For current time requests, call get_current_time with the place specified "
@@ -197,6 +200,6 @@ INSTRUCTIONS = (
 def current_instructions() -> str:
     from .config import load_config
     personality = load_config()["personality"]
-    return INSTRUCTIONS + "\nCurrent personality (apply to this response):\n" + "\n".join(
+    return INSTRUCTIONS.replace("{assistant_name}", Assistant().name) + "\nCurrent personality (apply to this response):\n" + "\n".join(
         f"{key}: {value}" for key, value in personality.items() if value
     )

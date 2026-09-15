@@ -1,5 +1,8 @@
 """Daily Markdown conversation logs shared by all sessions."""
 
+from agent import Assistant
+
+
 import re
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +19,7 @@ _current_session_path: Path | None = None
 
 
 def open_current_session_log() -> str:
-    """Open this Nora process's current session log in the default application."""
+    """Open this the assistant process's current session log in the default application."""
     from .brain import open_file
 
     if _current_session_path is None:
@@ -58,7 +61,7 @@ class SessionLog:
             pass
         else:
             with log:
-                log.write(f"{SESSION_HEADER} Nora Log — {started:%Y-%m-%d}\n")
+                log.write(f"{SESSION_HEADER} {Assistant().name} Log — {started:%Y-%m-%d}\n")
         self._prune()
         global _current_session_path
         _current_session_path = self.path

@@ -1,5 +1,8 @@
 """User configuration and storage, independent of the working directory."""
 
+from agent import Assistant
+
+
 import json
 import os
 import tempfile
@@ -103,7 +106,7 @@ def load_config():
         _last_error = None
     except (OSError, ValueError) as error:
         if str(error) != _last_error:
-            warnings.warn(f"Nora config: {error}; keeping last valid settings",
+            warnings.warn(f"{Assistant().name} config: {error}; keeping last valid settings",
                           RuntimeWarning)
             _last_error = str(error)
     return deepcopy(_last_valid)

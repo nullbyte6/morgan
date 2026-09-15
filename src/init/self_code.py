@@ -1,4 +1,7 @@
-"""Access Nora's own checkout independently of the user's working directory."""
+"""Access the assistant's own checkout independently of the user's working directory."""
+
+from agent import Assistant
+
 
 import json
 import subprocess
@@ -18,8 +21,8 @@ def _path(path):
 
 
 def get_repo_lnk() -> str:
-    """Open Nora's public repository in the user's default external browser.
-    Use when asked to open Nora's online repository, not to inspect local code.
+    """Open the assistant's public repository in the user's default external browser.
+    Use when asked to open the assistant's online repository, not to inspect local code.
     """
     url = "https://github.com/xddigs/nora"
     try:
@@ -31,7 +34,7 @@ def get_repo_lnk() -> str:
 
 
 def get_nora_repository() -> str:
-    """Locate Nora's actual source checkout and report its Git status."""
+    """Locate the assistant's actual source checkout and report its Git status."""
     from .brain import git_status
     from .config import CONFIG_FILE
     return json.dumps(
@@ -41,7 +44,7 @@ def get_nora_repository() -> str:
 
 
 def list_nora_code(directory: str = ".") -> str:
-    """List a directory inside Nora's source checkout without changing cwd."""
+    """List a directory inside the assistant's source checkout without changing cwd."""
     from .brain import list_files
     try:
         return list_files(str(_path(directory)))
@@ -50,7 +53,7 @@ def list_nora_code(directory: str = ".") -> str:
 
 
 def read_nora_code(path: str) -> str:
-    """Read Nora's source using a repository-relative path, e.g. agent.py."""
+    """Read the assistant's source using a repository-relative path, e.g. agent.py."""
     from .brain import read_file
     try:
         return read_file(str(_path(path)))
@@ -62,7 +65,7 @@ def edit_nora_code(path: str, old_text: str, new_text: str) -> str:
     """Replace one exact source fragment after reading it. Preserves encoding.
 
     Refuses ambiguous matches and invalid Python syntax. Changes are saved on
-    disk; restart Nora to activate them reliably. Does not commit or push.
+    disk; restart the assistant to activate them reliably. Does not commit or push.
     """
     from .brain import atomic_write_bytes, decode_text
     try:
@@ -74,15 +77,15 @@ def edit_nora_code(path: str, old_text: str, new_text: str) -> str:
         if target.suffix.lower() == ".py":
             compile(updated, str(target), "exec")
         atomic_write_bytes(target, updated.encode(encoding))
-        return f"Updated {target}. Restart Nora to activate the change; no commit or push performed."
+        return f"Updated {target}. Restart {Assistant().name} to activate the change; no commit or push performed."
     except (OSError, ValueError, UnicodeError, SyntaxError) as error:
-        return f"Error editing Nora code: {error}"
+        return f"Error editing {Assistant().name} code: {error}"
 
 
 def update_nora_repository() -> str:
-    """Pull Nora's configured upstream with fast-forward only, when requested.
+    """Pull the assistant's configured upstream with fast-forward only, when requested.
 
-    Refuses local changes, including untracked files. Does not restart Nora,
+    Refuses local changes, including untracked files. Does not restart the assistant,
     install dependencies, change version settings, commit, or push.
     """
     from .brain import run_git
@@ -93,10 +96,10 @@ def update_nora_repository() -> str:
             capture_output=True, text=True, errors="replace", timeout=15,
         )
         if status.returncode:
-            return f"Error checking Nora repository: {status.stderr.strip()}"
+            return f"Error checking {Assistant().name} repository: {status.stderr.strip()}"
         if status.stdout.strip():
-            return "Error: Nora has local changes; resolve them before updating.\n" + status.stdout.strip()
+            return f"Error: {Assistant().name} has local changes; resolve them before updating.\n" + status.stdout.strip()
         result = run_git(str(ROOT), ["pull", "--ff-only"])
-        return result + "\nOnly files on disk were updated if Git succeeded. Restart Nora to load them."
+        return result + f"\nOnly files on disk were updated if Git succeeded. Restart {Assistant().name} to load them."
     except (OSError, subprocess.TimeoutExpired) as error:
-        return f"Error updating Nora repository: {error}"
+        return f"Error updating {Assistant().name} repository: {error}"
