@@ -60,6 +60,7 @@ class TerminalUI(io.TextIOBase):
         self.console = console or Console(file=sys.stdout)
         self._lock = threading.RLock()
         self._output = ""
+        self._banner = ""
         self._layout_key = None
         self._layout_lines = []
         self._prompt = None
@@ -101,6 +102,11 @@ class TerminalUI(io.TextIOBase):
         with self._lock:
             return self._output
 
+    def set_banner(self, banner):
+        """Keep startup artwork separate from the scrolling conversation."""
+        with self._lock:
+            self._banner = banner.rstrip("\n")
+
     def update_response(self, prefix, text):
         with self._lock:
             self._output = prefix + text
@@ -109,6 +115,7 @@ class TerminalUI(io.TextIOBase):
         width, height = self.console.size
         with self._lock:
             output, prompt, value, cursor = self._output, self._prompt, self._input, self._cursor
+            banner = self._banner
             scroll, playing = self._scroll, self.playing
             audio_error = self._audio_error
             levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
@@ -152,12 +159,23 @@ class TerminalUI(io.TextIOBase):
             scroll = self._scroll
         end = len(lines) - scroll
         visible = lines[max(0, end - available):end] if available else []
-        visible += [Text("")] * max(0, available - len(visible))
+        spare = max(0, available - len(visible))
+        backdrop = [Text("")] * spare
+        if banner and spare:
+            artwork = [Text(line.rstrip(), style="bright_white")
+                       for line in banner.splitlines()]
+            art_width = max((line.cell_len for line in artwork), default=0)
+            left = max(0, (inner_width - art_width) // 2)
+            top = max(0, (spare - len(artwork)) // 2)
+            if len(artwork) <= spare:
+                for index, line in enumerate(artwork):
+                    line.pad_left(left)
+                    line.truncate(inner_width, overflow="crop")
+                    backdrop[top + index] = line
+        visible = backdrop + visible
         title = Text(
             datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S"),
             style="bright_white")
-        # The meter stands immediately above the baseline, inside the frame.
-        # Keep the bottom border continuous all the way to the right corner.
         footer_width = max(0, width - 4)
         subtitle = Text("↑/↓ · PgUp/PgDn", style="bright_white", end="")
         subtitle.truncate(footer_width, overflow="crop")

@@ -209,8 +209,18 @@ class Assistant:
 
         session = SessionLog()
         refresh_model_keep_alive()
-        sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}\n")
-        self.stream(self.banner)
+        if self.terminal_ui is not None:
+            self.terminal_ui.set_banner(self.banner)
+        else:
+            from colorama import Fore
+            from shutil import get_terminal_size
+
+            lines = self.banner.rstrip("\n").splitlines()
+            width = get_terminal_size().columns
+            left = max(0, (width - max(map(len, lines), default=0)) // 2)
+            sys.stdout.write(f"{RESET_COLOR}{Fore.LIGHTWHITE_EX}\n")
+            sys.stdout.write("\n".join(" " * left + line for line in lines))
+            sys.stdout.write(f"{RESET_COLOR}\n")
         self.stream(brain.get_version())
         self.stream([random.choice(self.startup_greetings)], session=session)
         history = []

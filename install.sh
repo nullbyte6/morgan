@@ -237,7 +237,6 @@ if ! find_python; then
 fi
 "${PYTHON_CMD[@]}" --version
 
-# Reading the singleton identity needs only Python's standard library.
 ASSISTANT_NAME="$(cd -- "$SCRIPT_DIR" && "${PYTHON_CMD[@]}" -c 'from agent import Assistant; print(Assistant().name)')"
 readonly ASSISTANT_NAME
 
