@@ -8,17 +8,40 @@ import threading
 import time
 from getpass import getuser
 
-# Imports from tools must resolve to this module when launched as a script too.
+from colorama import just_fix_windows_console
+from pydantic_ai import Agent, Tool
+from pydantic_ai.messages import (ModelRequest, ModelResponse, TextPart,
+    UserPromptPart)
+from pydantic_ai.models.ollama import OllamaModel
+from pydantic_ai.providers.ollama import OllamaProvider
+from pyfiglet import figlet_format
+
+from src.init import brain
+from src.init.brain import MODEL_NAME
+from src.init.brain import (refresh_model_keep_alive, refresh,
+    get_working_directory)
+
+from src.init.output import chunks_group
+from src.init.session_log import SessionLog
+from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
+from src.init.spin import Spinner
+from src.init.terminal import TerminalUI, interactive_terminal
+from src.init.tools import TOOLS
+from src.init.voice import VOICE_COMMANDS, capture_voice_input
+
 if __name__ == "__main__":
     sys.modules["agent"] = sys.modules[__name__]
 
 
 class Assistant:
-    """One shared assistant; reading its identity never starts the model or UI."""
-
+    """One shared assistant; reading its identity never
+    starts the model or UI."""
     name = "Nora"
     _instance = None
     _instance_lock = threading.Lock()
+
+    def __init__(self):
+        self.terminal_ui = None
 
     def __new__(cls):
         with cls._instance_lock:
@@ -45,22 +68,13 @@ class Assistant:
 
     @property
     def banner(self):
-        from pyfiglet import figlet_format
-
-        return figlet_format(self.name, font="big", width=120)
+        return figlet_format(self.name, font="bigmoney", width=120)
 
     def _initialize_runtime(self):
         if self.agent is not None:
             return
         os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
         os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-        from colorama import just_fix_windows_console
-        from pydantic_ai import Agent, Tool
-        from pydantic_ai.models.ollama import OllamaModel
-        from pydantic_ai.providers.ollama import OllamaProvider
-        from src.init.brain import MODEL_NAME
-        from src.init.tools import TOOLS
-
         just_fix_windows_console()
         self.model_settings = {
             "openai_reasoning_effort": "none",
@@ -79,10 +93,7 @@ class Assistant:
         self.agent.instructions(self.working_directory_instructions)
 
     def stream(self, chunks, session=None) -> None:
-        """Muestra los fragmentos entrantes inmediatamente; el retraso de animación es opcional."""
-        from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
-        from src.init.output import chunks_group
-
+        """Shows remaining fragments immediately, animation delay is optional"""
         sys.stdout.write(f"{ASSISTANT_COLOR}")
         displayed = []
         response_prefix = self.terminal_ui.output_snapshot() if self.terminal_ui is not None else None
@@ -194,16 +205,7 @@ class Assistant:
         return f"Current working directory for this turn: {get_working_directory()}"
 
     def run_session(self):
-        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
-        from src.init import brain
-        from src.init.brain import refresh_model_keep_alive, refresh, get_working_directory
-        from src.init.output import chunks_group
-        from src.init.session_log import SessionLog
-        from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, Spinner
-        from src.init.voice import VOICE_COMMANDS, capture_voice_input
-
         self._initialize_runtime()
-
         session = SessionLog()
         refresh_model_keep_alive()
         sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}\n")
@@ -286,10 +288,7 @@ class Assistant:
                 if cause is not None else str(error))
 
     def run(self):
-        from src.init.terminal import TerminalUI, interactive_terminal
-
         self._initialize_runtime()
-
         try:
             if interactive_terminal():
                 with TerminalUI() as ui:
