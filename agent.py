@@ -43,6 +43,12 @@ class Assistant:
             f"¡Buenas, {self.username}! Manos a la obra.",
         )
 
+    @property
+    def banner(self):
+        from pyfiglet import figlet_format
+
+        return figlet_format(self.name, font="big", width=120)
+
     def _initialize_runtime(self):
         if self.agent is not None:
             return
@@ -201,16 +207,7 @@ class Assistant:
         session = SessionLog()
         refresh_model_keep_alive()
         sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}\n")
-        self.stream("""
-         /$$   /$$                             
-        | $$$ | $$                             
-        | $$$$| $$  /$$$$$$   /$$$$$$  /$$$$$$ 
-        | $$ $$ $$ /$$__  $$ /$$__  $$|____  $$
-        | $$  $$$$| $$  \\ $$| $$  \\__/ /$$$$$$$
-        | $$\\  $$$| $$  | $$| $$      /$$__  $$
-        | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
-        |__/  \\__/ \\______/ |__/      \\_______/
-        """)
+        self.stream(self.banner)
         self.stream(brain.get_version())
         self.stream([random.choice(self.startup_greetings)], session=session)
         history = []
