@@ -1,5 +1,8 @@
 ```
-
+88b 88  dP"Yb  88""Yb    db    
+88Yb88 dP   Yb 88__dP   dPYb   
+88 Y88 Yb   dP 88"Yb   dP__Yb  
+88  Y8  YbodP  88  Yb dP""""Yb 
 ```
 
 **NORA** is a Native Operational Reasoning Assistant runs locally alongside 

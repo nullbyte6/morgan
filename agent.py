@@ -46,8 +46,7 @@ class Assistant:
     @property
     def banner(self):
         from pyfiglet import figlet_format
-
-        return figlet_format(self.name, font="3-d", width=120)
+        return figlet_format(self.name, font="4max", width=128)
 
     def _initialize_runtime(self):
         if self.agent is not None:
