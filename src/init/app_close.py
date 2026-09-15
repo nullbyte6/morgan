@@ -58,7 +58,8 @@ def close_application(application: str, force: bool = False) -> str:
         groups = sorted({p["executable"] for p in matches})
         if len(groups) > 1:
             return result("needs_input", candidates=matches,
-                          question="¿Qué aplicación quieres cerrar? Elige el ejecutable o PID.")
+                          question="Which app do you want to close? Tell me "
+                                   "the PID or the executable")
         windows = get_open_windows()
         outcomes = []
         for match in matches:
