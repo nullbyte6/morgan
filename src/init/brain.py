@@ -35,7 +35,8 @@ from .folders import resolve_directory
 VERSION = "v1.0.1-alpha"
 
 MODEL_NAME = os.environ.get("NORA_MODEL", load_config().get("model_name"))
-OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE", load_config().get("keep_alive"))
+OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE",
+                                   load_config().get("keep_alive"))
 GIT_TIMEOUT_SECONDS = int(os.environ.get("NORA_GIT_TIMEOUT", "120"))
 WEB_USER_AGENT = "NoraLocalAssistant/1.0 (personal desktop assistant)"
 NOMINATIM_BASE_URL = os.environ.get(
@@ -171,7 +172,8 @@ def get_current_time(region: str = "") -> str:
         return "Error: region must be a string"
     region = region.strip()
     if not region:
-        return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z (UTC%z)")
+        return datetime.now().astimezone().strftime(
+            "%Y-%m-%d %H:%M:%S %Z (UTC%z)")
     try:
         place_name = region
         try:
@@ -215,7 +217,9 @@ def save_note(note: str) -> str:
 def read_notes() -> str:
     ensure_storage()
     notes = sorted((HOME_PATH / "note").glob("*.txt"))
-    return "\n\n".join(f"{path.name}\n{path.read_text(encoding='utf-8')}" for path in notes) if notes else "No notes saved yet"
+    return "\n\n".join(
+        f"{path.name}\n{path.read_text(encoding='utf-8')}" for path in
+        notes) if notes else "No notes saved yet"
 
 
 def list_files(path: str = ".") -> str:
@@ -243,7 +247,8 @@ def find_directories(name: str, directory: str = ".", partial: bool = False,
     """
 
     try:
-        if not name.strip() or any(character in name for character in ("/", "\\")):
+        if not name.strip() or any(
+                character in name for character in ("/", "\\")):
             return "Error: name must be a folder name, not a path"
         if type(max_results) is not int or not 1 <= max_results <= 1000:
             return "Error: max_results must be between 1 and 1000"
