@@ -1,6 +1,6 @@
 """Session-local timers and Windows notifications, without blocking input."""
 
-from agent import Assistant
+from .identity import get_assistant
 
 
 import base64
@@ -52,7 +52,7 @@ def _deliver(title, message):
          "-WindowStyle", "Hidden", "-EncodedCommand",
          base64.b64encode(_SCRIPT.encode("utf-16-le")).decode("ascii")],
         input=json.dumps({"title": title, "message": message,
-                          "assistant_name": Assistant().name[:63]}, ensure_ascii=True),
+                          "assistant_name": get_assistant().name[:63]}, ensure_ascii=True),
         capture_output=True, text=True, errors="replace", timeout=25,
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
@@ -63,7 +63,7 @@ def _deliver(title, message):
 def send_notification(message: str, title: str | None = None) -> str:
     """Send a Windows notification now; Windows settings control its visibility."""
     try:
-        title = Assistant().name if title is None else title
+        title = get_assistant().name if title is None else title
         _validate(title, message)
         _deliver(title, message)
         return "Notification submitted to Windows"
@@ -95,7 +95,7 @@ def schedule_notification(delay_seconds: int, message: str, title: str | None = 
     try:
         if os.name != "nt":
             raise ValueError("Notifications are only supported on Windows")
-        title = Assistant().name if title is None else title
+        title = get_assistant().name if title is None else title
         _validate(title, message)
         if type(delay_seconds) is not int or not 0 <= delay_seconds <= 31_536_000:
             raise ValueError("delay_seconds must be an integer between 0 and 31536000")
@@ -124,7 +124,7 @@ def start_timer(duration_seconds: int, label: str = "Timer") -> str:
     """Start an internal countdown and notify Windows when it expires."""
     if type(duration_seconds) is not int or duration_seconds <= 0:
         return "Error: duration_seconds must be a positive integer"
-    return schedule_notification(duration_seconds, label, f"{Assistant().name} — Timer finished")
+    return schedule_notification(duration_seconds, label, f"{get_assistant().name} — Timer finished")
 
 
 def list_timers() -> str:

@@ -1,5 +1,9 @@
-This Native Operational Reasoning Assistant runs locally alongside your software.
-It is **100% open source and uses the local Ollama API**.
+```
+
+```
+
+**NORA** is a Native Operational Reasoning Assistant runs locally alongside 
+your software. It is **100% open source and uses the local Ollama API**.
 
 ## Installation
 Use 64-bit Python 3.12 (also selected by `install.sh`). From the project folder:
@@ -25,6 +29,11 @@ by `pyfiglet`. Restart the process after editing the source.
 `Assistant()` always returns the same instance, including imports made when
 `agent.py` runs as a script. Reading `.name` does not initialize Ollama or the
 terminal. `main()` calls `Assistant().run()`; the runtime is initialized once.
+
+Tools obtain the shared instance through `src/init/identity.py`. `agent.py`
+registers the singleton factory there; helper modules never import the entry
+point. Runtime dependencies load only when needed, and configuration can load
+independently of assistant registration.
 
 Storage paths (`~/.nora`), `NORA_*` environment variables, the `nora.ps1`
 launcher, existing tool identifiers, and the repository URL remain stable for

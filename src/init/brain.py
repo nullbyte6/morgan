@@ -1,5 +1,4 @@
-
-from agent import Assistant
+from .identity import get_assistant
 
 import base64
 import codecs
@@ -778,7 +777,7 @@ def request_json(url: str, timeout: int = 15):
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": f"{Assistant().name}LocalAssistant/1.0 (personal desktop assistant)",
+            "User-Agent": f"{get_assistant().name}LocalAssistant/1.0 (personal desktop assistant)",
         },
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -920,7 +919,7 @@ def kill_process(process: str, force: bool = False,
         if process_id <= 4:
             return f"Refusing to terminate a critical system PID: {process_id}"
         if process_id == os.getpid():
-            return f"Refusing to terminate {Assistant().name}'s own PID: {process_id}"
+            return f"Refusing to terminate {get_assistant().name}'s own PID: {process_id}"
         command.extend(["/PID", str(process_id)])
         description = f"PID {process_id}"
     else:
@@ -982,7 +981,7 @@ def shutdown_computer(delay_seconds: int) -> str:
                 "/t",
                 str(delay_seconds),
                 "/c",
-                f"Shutdown scheduled by {Assistant().name}",
+                f"Shutdown scheduled by {get_assistant().name}",
             ],
             capture_output=True,
             text=True,

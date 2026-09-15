@@ -1,6 +1,6 @@
 """Daily Markdown conversation logs shared by all sessions."""
 
-from agent import Assistant
+from .identity import get_assistant
 
 
 import re
@@ -61,7 +61,7 @@ class SessionLog:
             pass
         else:
             with log:
-                log.write(f"{SESSION_HEADER} {Assistant().name} Log — {started:%Y-%m-%d}\n")
+                log.write(f"{SESSION_HEADER} {get_assistant().name} Log — {started:%Y-%m-%d}\n")
         self._prune()
         global _current_session_path
         _current_session_path = self.path

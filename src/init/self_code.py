@@ -1,6 +1,6 @@
 """Access the assistant's own checkout independently of the user's working directory."""
 
-from agent import Assistant
+from .identity import get_assistant
 
 
 import json
@@ -77,9 +77,9 @@ def edit_nora_code(path: str, old_text: str, new_text: str) -> str:
         if target.suffix.lower() == ".py":
             compile(updated, str(target), "exec")
         atomic_write_bytes(target, updated.encode(encoding))
-        return f"Updated {target}. Restart {Assistant().name} to activate the change; no commit or push performed."
+        return f"Updated {target}. Restart {get_assistant().name} to activate the change; no commit or push performed."
     except (OSError, ValueError, UnicodeError, SyntaxError) as error:
-        return f"Error editing {Assistant().name} code: {error}"
+        return f"Error editing {get_assistant().name} code: {error}"
 
 
 def update_nora_repository() -> str:
@@ -96,10 +96,10 @@ def update_nora_repository() -> str:
             capture_output=True, text=True, errors="replace", timeout=15,
         )
         if status.returncode:
-            return f"Error checking {Assistant().name} repository: {status.stderr.strip()}"
+            return f"Error checking {get_assistant().name} repository: {status.stderr.strip()}"
         if status.stdout.strip():
-            return f"Error: {Assistant().name} has local changes; resolve them before updating.\n" + status.stdout.strip()
+            return f"Error: {get_assistant().name} has local changes; resolve them before updating.\n" + status.stdout.strip()
         result = run_git(str(ROOT), ["pull", "--ff-only"])
-        return result + f"\nOnly files on disk were updated if Git succeeded. Restart {Assistant().name} to load them."
+        return result + f"\nOnly files on disk were updated if Git succeeded. Restart {get_assistant().name} to load them."
     except (OSError, subprocess.TimeoutExpired) as error:
-        return f"Error updating {Assistant().name} repository: {error}"
+        return f"Error updating {get_assistant().name} repository: {error}"

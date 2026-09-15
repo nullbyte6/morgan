@@ -1,5 +1,4 @@
-
-from agent import Assistant
+from .identity import get_assistant
 
 INSTRUCTIONS = (
     "You are a personal desktop assistant developed by me, Diego"
@@ -200,6 +199,6 @@ INSTRUCTIONS = (
 def current_instructions() -> str:
     from .config import load_config
     personality = load_config()["personality"]
-    return INSTRUCTIONS.replace("{assistant_name}", Assistant().name) + "\nCurrent personality (apply to this response):\n" + "\n".join(
+    return INSTRUCTIONS.replace("{assistant_name}", get_assistant().name) + "\nCurrent personality (apply to this response):\n" + "\n".join(
         f"{key}: {value}" for key, value in personality.items() if value
     )
