@@ -240,67 +240,19 @@ def list_files(path: str = ".") -> str:
         return f"Error: {error}"
 
 
-def find_directories(name: str, directory: str = ".", partial: bool = False,
-                     max_results: int = 100, timeout_seconds: int = 30) -> str:
-    """Find descendant folders at any depth under directory, without changing cwd.
-    Match names case-insensitively; partial=True matches substrings. Returns
-    absolute paths and whether the search completed. Does not traverse symbolic
-    links or Windows junctions. Supports ~ and known folders such as Documentos.
-    """
+def find_directories(name: str, directory: str = "", partial: bool = False,
+                     max_results: int = 100, timeout_seconds: int = 30,
+                     refresh: bool = False) -> str:
+    """Find folders: cache first, then all local disks unless directory is specified.
 
+    Returns every matching absolute path and search completeness. Duplicates
+    require user selection. refresh=True bypasses cache. Explicit directory
+    searches only that subtree. Does not follow links or junctions.
+    """
+    from .folder_search import search_folders
     try:
-        if not name.strip() or any(
-                character in name for character in ("/", "\\")):
-            return "Error: name must be a folder name, not a path"
-        if type(max_results) is not int or not 1 <= max_results <= 1000:
-            return "Error: max_results must be between 1 and 1000"
-        if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 300:
-            return "Error: timeout_seconds must be between 1 and 300"
-        root = resolve_directory(directory)
-        if not root.is_dir():
-            return f"Error: search directory does not exist or is not a directory: {root}"
-        pending = [root]
-        matches, errors = [], []
-        skipped_links = 0
-        stop_reason = None
-        deadline = time.monotonic() + timeout_seconds
-        query = name.strip().casefold()
-        while pending and stop_reason is None:
-            if time.monotonic() >= deadline:
-                stop_reason = "timeout"
-                break
-            current = pending.pop()
-            try:
-                with os.scandir(current) as entries:
-                    for entry in entries:
-                        if time.monotonic() >= deadline:
-                            stop_reason = "timeout"
-                            break
-                        try:
-                            target = Path(entry.path)
-                            if entry.is_symlink() or target.is_junction():
-                                skipped_links += 1
-                                continue
-                            if not entry.is_dir(follow_symlinks=False):
-                                continue
-                            candidate = entry.name.casefold()
-                            matches_name = query in candidate if partial else query == candidate
-                            if matches_name:
-                                matches.append(str(target))
-                                if len(matches) >= max_results:
-                                    stop_reason = "max_results"
-                                    break
-                            pending.append(target)
-                        except OSError as error:
-                            errors.append(f"{entry.path}: {error}")
-            except OSError as error:
-                errors.append(f"{current}: {error}")
-        return json.dumps({
-            "directory": str(root), "name": name, "matches": sorted(matches),
-            "complete": stop_reason is None and not errors and not skipped_links,
-            "stop_reason": stop_reason, "skipped_links": skipped_links,
-            "error_count": len(errors), "errors": errors[:20],
-        }, ensure_ascii=False)
+        return json.dumps(search_folders(name, directory, partial, max_results,
+                                         timeout_seconds, refresh), ensure_ascii=False)
     except (OSError, ValueError) as error:
         return f"Error searching directories: {error}"
 
@@ -692,12 +644,27 @@ def open_directory(path: str = ".") -> str:
 
     Accepts paths, ~ or home, Documentos/Documents, Escritorio/Desktop,
     Descargas/Downloads. Default '.' opens the current working directory.
+    Bare names use folders.json first, then all disks. Multiple matches or an
+    incomplete search return candidates for user selection without opening any.
     Uses Windows' configured folder locations, including redirected folders.
     """
     try:
         from src.init.folders import resolve_directory
+        from .folder_search import is_folder_name, search_folders
 
-        target = resolve_directory(path)
+        query = path.strip().strip("\"'")
+        if is_folder_name(query):
+            result = search_folders(query)
+            matches = result["matches"]
+            if len(matches) != 1 or not result["complete"]:
+                result["status"] = "needs_input" if matches else "not_found"
+                result["question"] = (
+                    "Elige la ruta completa de la carpeta que quieres abrir."
+                    if matches else "No se encontraron carpetas en la búsqueda realizada.")
+                return json.dumps(result, ensure_ascii=False)
+            target = Path(matches[0])
+        else:
+            target = resolve_directory(path)
         if not target.is_dir():
             return f"Error: directory does not exist or is not a folder: {target}"
         return open_file(str(target))
@@ -1218,7 +1185,6 @@ def open_application(application: str) -> str:
             return f"Opened application: {app['Name']}"
         except Exception:
             forget_app(normalized_query)
-    # Cached drive results can be stale after reinstalling/moving an application.
     _APPLICATION_SEARCH_CACHE.pop(normalized_query, None)
 
     registered = [

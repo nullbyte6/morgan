@@ -193,6 +193,28 @@ Directory and environment changes inside a command only affect its subprocess.
 Use Nora's `cd` or `change_directory` to change the session directory. Restart
 Nora after updating the source to register the new tool.
 
+## Folder discovery and cache
+
+Ask Nora to find or open a folder by name, such as `coding`, `.workspace`,
+`diego` or `usr`. `find_directories` and `open_directory` consult
+`~/.nora/json/folders.json` first. Without a valid cached match, they search all
+local fixed and removable drives, including hidden directories. A specified
+parent limits the search to that subtree. Use `refresh=True` with
+`find_directories` to bypass cached results and search again.
+
+Discovered paths are saved automatically, with all duplicates retained under
+the same name. Nora lists full paths and waits for your selection when several
+folders match. Choosing one does not remove the others from the cache. Missing
+cached paths are pruned; when none remain, Nora searches the disks again.
+Cache writes are atomic; malformed cache files are not overwritten.
+
+Searches default to 30 seconds and 100 matches (configurable up to 300 seconds
+and 1,000 matches). Links and junctions are not traversed. Permission errors,
+skipped links and limits are reported as incomplete coverage; even a single
+match then needs your selection before opening. Cached results describe the
+previous search, so use refresh to discover newly created duplicates.
+Explicit paths and known folders such as Documents keep their direct behavior.
+
 ## Local files and Git
 Use `cd D:\projects\my-app`, `cd ..`, or `cd /d "C:\My Projects"` directly
 at the prompt, or ask the assistant to change directory in natural language. `cd` alone
