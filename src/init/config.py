@@ -16,6 +16,9 @@ DEFAULTS = {
     "keep_alive": "30m",
     "temperature": 0.2,
     "weather_location": "",
+    "message_service": "whatsapp",
+    "whatsapp_phone_number_id": "",
+    "whatsapp_api_version": "",
     "personality": {
         "tone": "friendly",
         "verbosity": "short",
@@ -46,6 +49,9 @@ def validate_config(config):
         raise ValueError("config.json must contain a JSON object")
     result = deepcopy(DEFAULTS)
     result.update(config)
+    for key in ("message_service", "whatsapp_phone_number_id", "whatsapp_api_version"):
+        if not isinstance(result[key], str):
+            raise ValueError(f"{key} must be text")
     if not isinstance(result["weather_location"], str):
         raise ValueError("weather_location must be text")
     for key in ("version", "model_name", "keep_alive"):
