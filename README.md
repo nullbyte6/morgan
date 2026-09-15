@@ -140,3 +140,46 @@ status and diffs, stage and commit changes, fetch or pull updates, push commits,
 and work with repository history and branches. Tell Nora which repository to use
 when it is not the current directory, and explicitly ask before you want changes
 committed or published to a remote.
+
+## Messages (WhatsApp Cloud API)
+
+Ask Nora to send a message to a saved contact (for example, "manda a Mamá:
+Llegaré a las ocho") or to an international number including its country code.
+If the recipient or message is missing, Nora asks and waits. Contact names match
+exactly, ignoring case, accents and extra spaces; duplicate names require choosing
+a number. Numbers are never inferred from the sender or a default contact.
+
+The following fields in `~/.nora/json/config.json` are read on every send:
+
+```json
+{
+  "message_service": "whatsapp",
+  "whatsapp_phone_number_id": "",
+  "whatsapp_api_version": ""
+}
+```
+
+Fill `whatsapp_phone_number_id` with the sender ID from Meta's WhatsApp API setup,
+and `whatsapp_api_version` with a supported Graph API version (`vNN.0`). Your
+existing `phone_number` is preserved; a telephone number cannot replace Meta's ID.
+Set `ACCESS_TOKEN` in Nora's process environment before sending. Do not store the
+token in the repository or conversation. WhatsApp is the currently implemented
+service; other `message_service` values return an explicit unsupported error.
+
+Contacts live in `~/.nora/json/contacts.json` and are read on each contact send:
+
+```json
+[
+  {"name": "Example", "phone": "+34600000000"}
+]
+```
+
+A direct number works without a contacts file. Texts support up to 4096 characters.
+This integration uses the online WhatsApp Business Cloud API, not a personal
+WhatsApp desktop session. Meta account setup and messaging restrictions apply.
+See [Meta's Cloud API documentation](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api).
+API acceptance is reported as submitted, not confirmed delivery. An uncertain
+network result is not retried automatically to avoid duplicate messages.
+Restart Nora after installing this code to register the new tool; subsequent
+configuration and contact edits do not require restarting. Test without sending
+real messages with `python -m unittest discover -s tests -v`.
