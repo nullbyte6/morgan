@@ -13,8 +13,9 @@ winrt-Windows.Storage.Streams>=3.2.1,<4; sys_platform == "win32"
 shazamio>=0.8.1,<0.9
 soundcard>=0.2.2,<0.4.6
 numpy>=1.26.4,<2.3
-tzdata
 timezonefinder>=6,<9
+twilio
+tzdata
 rich>=10.8.13,<15.0.0
 yt-dlp
 psutil
