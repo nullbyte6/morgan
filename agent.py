@@ -58,7 +58,7 @@ STARTUP_GREETINGS = (
 
 
 def stream(chunks, session=None) -> None:
-    """Display incoming chunks immediately; animation delay is opt-in."""
+    """Muestra los fragmentos entrantes inmediatamente; el retraso de animación es opcional."""
     sys.stdout.write(f"{ASSISTANT_COLOR}")
     displayed = []
     response_prefix = terminal_ui.output_snapshot() if terminal_ui is not None else None
