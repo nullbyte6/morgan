@@ -166,7 +166,7 @@ def run_session():
     session = SessionLog()
     refresh_model_keep_alive()
     sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}\n")
-    print("""
+    stream("""
      /$$   /$$                             
     | $$$ | $$                             
     | $$$$| $$  /$$$$$$   /$$$$$$  /$$$$$$ 
@@ -176,7 +176,7 @@ def run_session():
     | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
     |__/  \\__/ \\______/ |__/      \\_______/
     """)
-    print(brain.get_version())
+    stream(brain.get_version())
     stream([random.choice(STARTUP_GREETINGS)], session=session)
     history = []
     while True:
