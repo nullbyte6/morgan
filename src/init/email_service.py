@@ -15,16 +15,24 @@ from .config import load_config
 
 PROVIDERS = {
     "gmail": {
-        "smtp_host": "smtp.gmail.com", "smtp_port": 465,
-        "smtp_ssl": True, "smtp_starttls": False,
-        "imap_host": "imap.gmail.com", "imap_port": 993,
-        "imap_ssl": True, "imap_starttls": False,
+        "smtp_host": "smtp.gmail.com",
+        "smtp_port": 465,
+        "smtp_ssl": True,
+        "smtp_starttls": False,
+        "imap_host": "imap.gmail.com",
+        "imap_port": 993,
+        "imap_ssl": True,
+        "imap_starttls": False,
     },
     "proton": {
-        "smtp_host": "127.0.0.1", "smtp_port": 1025,
-        "smtp_ssl": False, "smtp_starttls": True,
-        "imap_host": "127.0.0.1", "imap_port": 1143,
-        "imap_ssl": False, "imap_starttls": True,
+        "smtp_host": "127.0.0.1",
+        "smtp_port": 1025,
+        "smtp_ssl": False,
+        "smtp_starttls": True,
+        "imap_host": "127.0.0.1",
+        "imap_port": 1143,
+        "imap_ssl": False,
+        "imap_starttls": True,
     },
 }
 

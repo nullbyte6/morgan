@@ -236,3 +236,37 @@ port fields can be overridden for custom setups. `send_email`, `read_emails` and
 Restart the assistant after installing this code to register the new tool; subsequent
 configuration and contact edits do not require restarting. Test without sending
 real messages with `python -m unittest discover -s tests -v`.
+
+### Windows application management
+
+Nora can search, download, install and uninstall apps using Microsoft WinGet:
+
+- `search_apps(query, installed_only=False)` finds package IDs; set `installed_only`
+  to find installed applications, including apps installed outside WinGet.
+- `install_app(package_id, download_only=False)` installs an exact package from the
+  winget repository. Download-only saves installers to the Windows Downloads folder.
+- `uninstall_app(package_id, purge_portable=False)` runs the registered uninstaller.
+  The optional purge flag deletes portable package files; it is not a general residue cleaner.
+- `get_app_operation(job_id)` reports completion, the exit code and WinGet output.
+  Jobs run in the background and are tracked for the current Nora session. If Nora
+  restarts, inspect installed apps before repeating an operation with unknown status.
+
+Examples: "instala VLC", "descarga el instalador de 7-Zip", "desinstala VLC",
+"busca residuos de VLC". Package selection is exact; ambiguous names need a choice.
+Installer/source agreements are accepted when executing the requested operation.
+Windows may require administrator approval; silent execution does not bypass UAC.
+WinGet must be available through App Installer. Install updated Python requirements
+and restart Nora to load the new tools.
+
+`scan_app_residues(app_name)` inspects matching top-level folders in LocalAppData,
+Roaming AppData and ProgramData. These are candidates, not proven orphan files:
+they can hold settings or personal data. After selecting an exact candidate,
+`clean_app_residue(candidate_id)` moves it to the Windows Recycle Bin using
+Send2Trash. Recovery is possible there; disk space is not reclaimed until the bin
+is emptied separately. Close the app and finish uninstalling before cleanup.
+Shared vendor folders, links/junctions, system directories and registry entries
+are excluded. This is scoped data cleanup, not a comprehensive registry cleaner.
+
+Command reference: [WinGet install](https://learn.microsoft.com/en-us/windows/package-manager/winget/install),
+[download](https://learn.microsoft.com/en-us/windows/package-manager/winget/download),
+and [uninstall](https://learn.microsoft.com/en-us/windows/package-manager/winget/uninstall).

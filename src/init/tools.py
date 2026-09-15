@@ -53,6 +53,10 @@ from .notifications import (
     cancel_timer)
 
 from .message import send_message
+from .app_manager import (
+    search_apps, install_app, uninstall_app, get_app_operation,
+    scan_app_residues, clean_app_residue,
+)
 from .email_service import send_email, read_emails, delete_email
 
 from .session_log import open_current_session_log
@@ -66,6 +70,12 @@ from src.diagnostics.tools import (
 )
 
 TOOLS = [
+    search_apps,
+    install_app,
+    uninstall_app,
+    get_app_operation,
+    scan_app_residues,
+    clean_app_residue,
     check_system_health,
     check_disk_health,
     check_security_health,
