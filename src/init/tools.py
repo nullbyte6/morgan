@@ -53,8 +53,17 @@ from .notifications import (
 )
 from .session_log import open_current_session_log
 from .weather import get_weather, set_weather_location
+from .self_code import (
+    get_nora_repository, list_nora_code, read_nora_code,
+    edit_nora_code, update_nora_repository,
+)
 
 TOOLS = [
+    get_nora_repository,
+    list_nora_code,
+    read_nora_code,
+    edit_nora_code,
+    update_nora_repository,
     get_weather,
     set_weather_location,
     open_current_session_log,
