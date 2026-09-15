@@ -49,7 +49,8 @@ def validate_config(config):
         raise ValueError("config.json must contain a JSON object")
     result = deepcopy(DEFAULTS)
     result.update(config)
-    for key in ("message_service", "whatsapp_phone_number_id", "whatsapp_api_version"):
+    for key in ("message_service", "whatsapp_phone_number_id",
+                "whatsapp_api_version"):
         if not isinstance(result[key], str):
             raise ValueError(f"{key} must be text")
     if not isinstance(result["weather_location"], str):
@@ -58,7 +59,8 @@ def validate_config(config):
         if not isinstance(result[key], str) or not result[key].strip():
             raise ValueError(f"{key} must be a non-empty string")
     temperature = result["temperature"]
-    if isinstance(temperature, bool) or not isinstance(temperature, (int, float)) or not 0 <= temperature <= 2:
+    if isinstance(temperature, bool) or not isinstance(temperature, (int,
+                                                                     float)) or not 0 <= temperature <= 2:
         raise ValueError("temperature must be a number between 0 and 2")
     personality = config.get("personality", {})
     if not isinstance(personality, dict):
@@ -75,7 +77,9 @@ def save_config(config):
     ensure_storage()
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=CONFIG_FILE.parent, delete=False) as file:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                         dir=CONFIG_FILE.parent,
+                                         delete=False) as file:
             temporary = Path(file.name)
             json.dump(config, file, ensure_ascii=False, indent=2)
             file.write("\n")
@@ -91,12 +95,15 @@ def load_config():
     try:
         ensure_storage()
         if not CONFIG_FILE.exists():
-            initial = json.loads(LEGACY_CONFIG.read_text(encoding="utf-8-sig")) if LEGACY_CONFIG.exists() else DEFAULTS
+            initial = json.loads(LEGACY_CONFIG.read_text(
+                encoding="utf-8-sig")) if LEGACY_CONFIG.exists() else DEFAULTS
             save_config(initial)
-        _last_valid = validate_config(json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig")))
+        _last_valid = validate_config(
+            json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig")))
         _last_error = None
     except (OSError, ValueError) as error:
         if str(error) != _last_error:
-            warnings.warn(f"Nora config: {error}; keeping last valid settings", RuntimeWarning)
+            warnings.warn(f"Nora config: {error}; keeping last valid settings",
+                          RuntimeWarning)
             _last_error = str(error)
     return deepcopy(_last_valid)

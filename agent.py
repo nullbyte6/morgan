@@ -43,7 +43,6 @@ model = OllamaModel(
     settings=MODEL_SETTINGS,
 )
 
-
 TYPEWRITER_DELAY_SECONDS = float(
     os.environ.get("NORA_TYPEWRITER_DELAY", "0"))
 
@@ -65,10 +64,13 @@ def stream(chunks, session=None) -> None:
     response_prefix = terminal_ui.output_snapshot() if terminal_ui is not None else None
     try:
         source = ([chunks] if isinstance(chunks, str) else chunks)
-        for chunk in (source if terminal_ui is not None else chunks_group(source)):
+        for chunk in (
+        source if terminal_ui is not None else chunks_group(source)):
             displayed.append(chunk)
             if terminal_ui is not None:
-                terminal_ui.update_response(response_prefix, "".join(chunks_group(["".join(displayed)])))
+                terminal_ui.update_response(response_prefix,
+                                            "".join(chunks_group(
+                                                ["".join(displayed)])))
             elif TYPEWRITER_DELAY_SECONDS:
                 for character in chunk:
                     sys.stdout.write(character)
@@ -82,6 +84,7 @@ def stream(chunks, session=None) -> None:
         sys.stdout.flush()
         if session is not None:
             session.write("Nora", "".join(chunks_group(["".join(displayed)])))
+
 
 def directory_cmd(command: str) -> str | None:
     """Handle standalone cd/chdir commands without a model or shell call."""
@@ -149,7 +152,7 @@ def read_user_input(prompt: str | None = None) -> str:
 
 
 agent = Agent(model=model,
-    tools=[Tool(function, sequential=True) for function in TOOLS])
+              tools=[Tool(function, sequential=True) for function in TOOLS])
 
 
 @agent.instructions
@@ -224,15 +227,18 @@ def run_session():
         try:
             with agent.run_stream_sync(
                     user_input, message_history=history,
-                    model_settings={"temperature": brain.load_config()["temperature"]}) as result:
+                    model_settings={"temperature": brain.load_config()[
+                        "temperature"]}) as result:
                 spinner.stop()
-                stream(result.stream_text(delta=True, debounce_by=None), session=session)
+                stream(result.stream_text(delta=True, debounce_by=None),
+                       session=session)
                 history = result.all_messages()
                 for message in history:
                     if isinstance(message, ModelResponse):
                         for part in message.parts:
                             if isinstance(part, TextPart):
-                                part.content = "".join(chunks_group([part.content]))
+                                part.content = "".join(
+                                    chunks_group([part.content]))
                 refresh_model_keep_alive()
         except Exception as error:
             spinner.stop()
@@ -240,7 +246,8 @@ def run_session():
             cause = error.__cause__
             if cause is not None:
                 print(f"Detail: {cause}")
-            session.write("Error", f"{error}; Detail: {cause}" if cause is not None else str(error))
+            session.write("Error", f"{error}; Detail: {cause}"
+            if cause is not None else str(error))
 
 
 def main():

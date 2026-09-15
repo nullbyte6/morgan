@@ -124,7 +124,6 @@ class MessageService:
 
 def send_message(message: str = '', recipient: str = '') -> str:
     """Send message to a contact name or international number using config.json.
-
     If recipient or message is missing or ambiguous, ask the user and wait.
     Report submitted as API acceptance, never as confirmed delivery.
     """
