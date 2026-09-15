@@ -6,11 +6,11 @@ readonly NORA_MODEL="${NORA_MODEL:-qwen3:14b}"
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 
 info() {
-    printf '\n[Nora] %s\n' "$1"
+    printf '\n[%s] %s\n' "${ASSISTANT_NAME:-Installer}" "$1"
 }
 
 fail() {
-    printf '\n[Nora] ERROR: %s\n' "$1" >&2
+    printf '\n[%s] ERROR: %s\n' "${ASSISTANT_NAME:-Installer}" "$1" >&2
     exit 1
 }
 
@@ -237,6 +237,10 @@ if ! find_python; then
 fi
 "${PYTHON_CMD[@]}" --version
 
+# Reading the singleton identity needs only Python's standard library.
+ASSISTANT_NAME="$(cd -- "$SCRIPT_DIR" && "${PYTHON_CMD[@]}" -c 'from agent import Assistant; print(Assistant().name)')"
+readonly ASSISTANT_NAME
+
 readonly VENV_DIR="${SCRIPT_DIR}/.venv"
 readonly VENV_DIR_WINDOWS="$(to_windows_path "$VENV_DIR")"
 readonly REQUIREMENTS_WINDOWS="$(to_windows_path "${SCRIPT_DIR}/requirements.txt")"
@@ -273,5 +277,5 @@ readonly NORA_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/nora.ps1")"
 
 cleanup_installers
 trap - EXIT
-info "Installation complete. Starting Nora..."
+info "Installation complete. Starting ${ASSISTANT_NAME}..."
 exec "$POWERSHELL_BIN" -NoProfile -ExecutionPolicy Bypass -File "$NORA_SCRIPT"

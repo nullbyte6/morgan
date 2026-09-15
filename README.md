@@ -1,16 +1,5 @@
-```
- /$$   /$$                             
-| $$$ | $$                             
-| $$$$| $$  /$$$$$$   /$$$$$$  /$$$$$$ 
-| $$ $$ $$ /$$__  $$ /$$__  $$|____  $$
-| $$  $$$$| $$  \ $$| $$  \__/ /$$$$$$$
-| $$\  $$$| $$  | $$| $$      /$$__  $$
-| $$ \  $$|  $$$$$$/| $$     |  $$$$$$$
-|__/  \__/ \______/ |__/      \_______/
-```
-
-**NORA** is a Native Operational Reasoning Assistant, made for the 
-local PC and meant to be running alongside your software. It is **100% open source and using Ollama local API**
+This Native Operational Reasoning Assistant runs locally alongside your software.
+It is **100% open source and uses the local Ollama API**.
 
 ## Installation
 Use 64-bit Python 3.12 (also selected by `install.sh`). From the project folder:
@@ -26,15 +15,36 @@ Windows media support uses the modular PyWinRT packages; do not install the
 legacy `winrt` package. ShazamIO 0.8.1 or later is required for compatibility
 with Pydantic AI.
 
+## Assistant identity and runtime
+
+Change `Assistant.name` in `agent.py` to rename the assistant. It is the single
+source for greetings, model instructions, conversation logs, notifications,
+installer messages (once Python is available), and the ASCII banner generated
+by `pyfiglet`. Restart the process after editing the source.
+
+`Assistant()` always returns the same instance, including imports made when
+`agent.py` runs as a script. Reading `.name` does not initialize Ollama or the
+terminal. `main()` calls `Assistant().run()`; the runtime is initialized once.
+
+Storage paths (`~/.nora`), `NORA_*` environment variables, the `nora.ps1`
+launcher, existing tool identifiers, and the repository URL remain stable for
+compatibility. They identify the project rather than its display name.
+
+Run regression checks with:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
 ## Configuration and personality
-Nora uses `~/.nora/json/config.json`, independently of the current directory.
+The assistant uses `~/.nora/json/config.json`, independently of the current directory.
 On first launch it creates this file with defaults, or imports a legacy repository
-config if one exists. Existing user settings take precedence. Nora classifies
+config if one exists. Existing user settings take precedence. the assistant classifies
 files directly inside `~/.nora` by extension: `.txt` into `note/`, `.md` into
 `log/`, and `.json` into `json/`. Name collisions are left in place without
 overwriting either file. Project files outside this folder are unaffected.
 
-Edit the following settings in the user config while Nora is running:
+Edit the following settings in the user config while the assistant is running:
 
 ```json
 {
@@ -53,8 +63,8 @@ These are fields to adjust in the full config; preserve the other settings.
 Personality values are free text, in any language. Temperature accepts numbers
 from 0 to 2. Changes apply automatically to the next response, without `reload`
 or restarting; they do not modify a response already streaming. If an edit is
-invalid, Nora warns and keeps the last valid configuration until the file is
-corrected. Model name and keep-alive settings require restarting Nora;
+invalid, the assistant warns and keeps the last valid configuration until the file is
+corrected. Model name and keep-alive settings require restarting the assistant;
 `NORA_MODEL` and `NORA_KEEP_ALIVE` environment variables take precedence.
 
 Notes are saved in `~/.nora/note/`; reading notes includes previous sessions.
@@ -75,23 +85,23 @@ The alias `/private` also works. These commands run locally and are not logged.
 While active, the prompt shows `[PRIVATE]` and no messages, voice transcripts,
 command results, partial responses or errors are written to the conversation log.
 Resuming only saves new messages; skipped messages are never appended later.
-Private mode lasts until disabled or Nora exits; a new launch starts with logging on.
+Private mode lasts until disabled or the assistant exits; a new launch starts with logging on.
 This mode only pauses the Markdown log: conversation remains visible and in the
 model's session context, so subsequent responses can still refer to it.
 
 ## Conversation scrolling (Windows)
 Use ↑/↓ to scroll through the current conversation, including
-while Nora responds. Page Up/Page Down move by a page. The input stays visible;
+while the assistant responds. Page Up/Page Down move by a page. The input stays visible;
 typing returns to the latest output. Left/Right, Home/End and Delete edit your
 message. Up/Down now scroll the conversation instead of recalling past commands.
 
 ## Playback and YouTube
-Ask Nora to pause, resume, go to the next track or return to the previous one.
+Ask the assistant to pause, resume, go to the next track or return to the previous one.
 `control_media` uses the active Windows media session, or an application's exact
 source ID from `list_media_sessions`. Controls depend on what that application
-supports; Nora reports rejected or unsupported actions.
+supports; the assistant reports rejected or unsupported actions.
 
-For a named song, Nora searches YouTube with the local `yt-dlp` Python package.
+For a named song, the assistant searches YouTube with the local `yt-dlp` Python package.
 Ambiguous requests produce a numbered list of titles and channels so you can
 choose. The selected video opens in your default browser with autoplay requested.
 Browser autoplay restrictions may require a click; opening the page alone does
@@ -99,7 +109,7 @@ not confirm playback. Next/previous on YouTube depends on the browser's exposed
 media controls and available queue.
 
 No paid APIs, API keys or downloads of audio/video are used. YouTube search and
-playback need Internet. Install the updated `requirements.txt` and restart Nora
+playback need Internet. Install the updated `requirements.txt` and restart the assistant
 to load the new tools. If YouTube changes its search interface, updating `yt-dlp`
 may be necessary.
 
@@ -107,7 +117,7 @@ may be necessary.
 Ask "what will the weather be tomorrow morning in Madrid, Spain?" or choose a
 default with "save Madrid, Spain as my weather location". After that, "what will
 the weather be tomorrow morning?" uses the saved city. You can also edit
-`weather_location` in `~/.nora/json/config.json`; an empty value means Nora asks
+`weather_location` in `~/.nora/json/config.json`; an empty value means the assistant asks
 for a city when none is established in the conversation.
 
 The Python tool calls [Open-Meteo](https://open-meteo.com/) over the Internet,
@@ -117,25 +127,25 @@ uses the destination's timezone and returns temperatures in °C. Morning means
 This is a forecast service, not an offline weather model.
 
 ## Notifications and timers (Windows)
-Ask Nora to "notify me to take a break in 10 minutes", "start a 5-minute tea
+Ask the assistant to "notify me to take a break in 10 minutes", "start a 5-minute tea
 timer", "show my timers", or "cancel the tea timer". It can also send an
 immediate notification. Each scheduled item has an ID, remaining time and status;
 failed deliveries include an error. Multiple timers can run alongside conversation.
 
-Timers run inside Nora: keep the process open until they finish. `reload` preserves
+Timers run inside the assistant: keep the process open until they finish. `reload` preserves
 them, but exiting or restarting discards them. They do not wake a sleeping PC.
 Windows notification settings determine whether the alert is displayed; a
 successful submission does not confirm it was seen. Notifications use Windows
 PowerShell and the built-in Windows Forms NotifyIcon, with no extra dependencies.
 
 ## Voice Input
-Run Nora and speak to it through `voice`. Speak after `[MIC]` shortly appears.
+Run the assistant and speak to it through `voice`. Speak after `[MIC]` shortly appears.
 The LLM then stores said recording, decodes it, and executes the spoken 
 command in the given language.
 
 ## Local files and Git
 Use `cd D:\projects\my-app`, `cd ..`, or `cd /d "C:\My Projects"` directly
-at the prompt, or ask Nora to change directory in natural language. `cd` alone
+at the prompt, or ask the assistant to change directory in natural language. `cd` alone
 shows the current directory. Changes persist for the session: relative file and
 Git operations use that directory. Initially the prompt is just `>>`; after a
 successful `cd` (including `cd` alone), it shows the current path and active
@@ -148,16 +158,16 @@ Git branch (including from repository subdirectories), for example:
 The branch updates after switching branches; detached HEAD shows its short commit
 ID. Outside Git repositories, only the path appears.
 
-Nora can inspect, create, and edit local project files. It can also inspect Git
+The assistant can inspect, create, and edit local project files. It can also inspect Git
 status and diffs, stage and commit changes, fetch or pull updates, push commits,
-and work with repository history and branches. Tell Nora which repository to use
+and work with repository history and branches. Tell the assistant which repository to use
 when it is not the current directory, and explicitly ask before you want changes
 committed or published to a remote.
 
 ## Messages (WhatsApp Cloud API)
-Ask Nora to send a message to a saved contact (for example, "manda a Mamá:
+Ask the assistant to send a message to a saved contact (for example, "manda a Mamá:
 Llegaré a las ocho") or to an international number including its country code.
-If the recipient or message is missing, Nora asks and waits. Contact names match
+If the recipient or message is missing, the assistant asks and waits. Contact names match
 exactly, ignoring case, accents and extra spaces; duplicate names require choosing
 a number. Numbers are never inferred from the sender or a default contact.
 
@@ -174,7 +184,7 @@ The following fields in `~/.nora/json/config.json` are read on every send:
 Fill `whatsapp_phone_number_id` with the sender ID from Meta's WhatsApp API setup,
 and `whatsapp_api_version` with a supported Graph API version (`vNN.0`). Your
 existing `phone_number` is preserved; a telephone number cannot replace Meta's ID.
-Set `ACCESS_TOKEN` in Nora's process environment before sending. Do not store the
+Set `ACCESS_TOKEN` in the assistant's process environment before sending. Do not store the
 token in the repository or conversation. WhatsApp is the currently implemented
 service; other `message_service` values return an explicit unsupported error.
 
@@ -191,6 +201,6 @@ WhatsApp desktop session. Meta account setup and messaging restrictions apply.
 See [Meta's Cloud API documentation](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api).
 API acceptance is reported as submitted, not confirmed delivery. An uncertain
 network result is not retried automatically to avoid duplicate messages.
-Restart Nora after installing this code to register the new tool; subsequent
+Restart the assistant after installing this code to register the new tool; subsequent
 configuration and contact edits do not require restarting. Test without sending
 real messages with `python -m unittest discover -s tests -v`.
