@@ -1,4 +1,4 @@
-"""Nonblocking Win32 console events, including the mouse wheel."""
+"""Nonblocking Win32 keyboard events."""
 
 import ctypes
 from ctypes import wintypes as wt
@@ -44,7 +44,7 @@ class ConsoleInput:
         self._check(self.kernel.GetConsoleMode(self.handle, ctypes.byref(mode)))
         self.mode = mode.value
         self._check(self.kernel.SetConsoleMode(
-            self.handle, (self.mode | 0x98) & ~(0x40 | 0x2 | 0x4 | 0x200)))
+            self.handle, (self.mode | 0x88) & ~(0x10 | 0x40 | 0x2 | 0x4 | 0x200)))
 
     @staticmethod
     def _check(result):
@@ -63,9 +63,6 @@ class ConsoleInput:
         record = InputRecord()
         self._check(self.kernel.ReadConsoleInputW(
             self.handle, ctypes.byref(record), 1, ctypes.byref(count)))
-        if record.type == 2 and record.event.mouse.flags & 0x4:
-            delta = ctypes.c_short(record.event.mouse.buttons >> 16).value
-            return [("scroll", 3 if delta > 0 else -3)] if delta else []
         if record.type == 1 and record.event.key.down:
             key = record.event.key
             navigation = {0x26: 1, 0x28: -1, 0x21: "page_up", 0x22: "page_down"}

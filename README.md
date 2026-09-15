@@ -80,7 +80,7 @@ This mode only pauses the Markdown log: conversation remains visible and in the
 model's session context, so subsequent responses can still refer to it.
 
 ## Conversation scrolling (Windows)
-Use the mouse wheel or ↑/↓ to scroll through the current conversation, including
+Use ↑/↓ to scroll through the current conversation, including
 while Nora responds. Page Up/Page Down move by a page. The input stays visible;
 typing returns to the latest output. Left/Right, Home/End and Delete edit your
 message. Up/Down now scroll the conversation instead of recalling past commands.

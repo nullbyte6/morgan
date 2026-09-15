@@ -17,6 +17,13 @@ from rich.panel import Panel
 from rich.text import Text
 
 
+class TerminalPanel(Panel):
+    @property
+    def _subtitle(self):
+        # Panel normally inserts spaces around subtitles, breaking the border.
+        return self.subtitle
+
+
 async def media_is_playing():
     from winrt.windows.media.control import (
         GlobalSystemMediaTransportControlsSessionManager as Manager,
@@ -65,6 +72,7 @@ class TerminalUI(io.TextIOBase):
         self.playing = False
         self._levels = (0.0,) * 7
         self._levels_at = 0.0
+        self._audio_error = None
         self._stop = threading.Event()
         self._stack = ExitStack()
 
@@ -103,6 +111,7 @@ class TerminalUI(io.TextIOBase):
         with self._lock:
             output, prompt, value, cursor = self._output, self._prompt, self._input, self._cursor
             scroll, playing = self._scroll, self.playing
+            audio_error = self._audio_error
             levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
         inner_width = max(1, width - 4)
         input_lines = []
@@ -116,7 +125,15 @@ class TerminalUI(io.TextIOBase):
                                                                  inner_width)) - 1
             input_lines = input_lines[
                 max(0, cursor_line - 2):max(3, cursor_line + 1)]
-        available = max(0, height - 2 - len(input_lines))
+        meter = ("audio !" if audio_error else
+                 "".join(" ▁▂▃▄▅▆▇█"[round(level * 8)] for level in levels)
+                 if any(level >= 0.0625 for level in levels) else "")
+        meter_lines = []
+        if meter:
+            meter_text = Text(meter, style="bright_white", justify="right")
+            meter_text.truncate(inner_width, overflow="crop")
+            meter_lines = [meter_text]
+        available = max(0, height - 2 - len(input_lines) - len(meter_lines))
         layout_key = (output, inner_width)
         if layout_key != self._layout_key:
             previous_count = len(self._layout_lines)
@@ -140,28 +157,26 @@ class TerminalUI(io.TextIOBase):
         title = Text(
             datetime.now().astimezone().strftime("%a %d/%m/%Y  %H:%M:%S"),
             style="bright_white")
-        subtitle = Text("↑/↓ · wheel · PgUp/PgDn")
-        if playing:
-            subtitle.append("  ")
-            subtitle.append(
-                "".join("▁▂▃▄▅▆▇█"[round(level * 7)] for level in levels),
-                style="bright_white")
-        return Panel(Group(*(visible + input_lines)), box=box.SQUARE,
+        # The meter stands immediately above the baseline, inside the frame.
+        # Keep the bottom border continuous all the way to the right corner.
+        footer_width = max(0, width - 4)
+        subtitle = Text("↑/↓ · PgUp/PgDn", style="bright_white", end="")
+        subtitle.truncate(footer_width, overflow="crop")
+        subtitle.append("─" * max(0, footer_width - subtitle.cell_len))
+        return TerminalPanel(Group(*(visible + input_lines + meter_lines)), box=box.SQUARE,
                      border_style="bright_white", title=title,
                      title_align="right",
                      subtitle=subtitle, subtitle_align="right", width=width,
-                     height=height, padding=(0, 1))
+                     height=height, padding=(0, 1), safe_box=False)
 
     def _poll_audio(self):
         """Read only speaker loopback in a worker; never block terminal rendering."""
         try:
             import soundcard as sc
-        except ImportError:
+        except ImportError as error:
+            self._audio_error = str(error)
             return
         while not self._stop.is_set():
-            if not self.playing:
-                self._stop.wait(0.1)
-                continue
             try:
                 speaker = sc.default_speaker()
                 if speaker is None:
@@ -175,10 +190,11 @@ class TerminalUI(io.TextIOBase):
                 with loopback.recorder(samplerate=44100,
                                        blocksize=4096) as recorder:
                     next_device_check = time.monotonic() + 2
-                    while self.playing and not self._stop.is_set():
+                    while not self._stop.is_set():
                         levels = spectrum_levels(
                             recorder.record(numframes=2048))
                         with self._lock:
+                            self._audio_error = None
                             self._levels = tuple(max(float(new), old * 0.8)
                                                  for new, old in
                                                  zip(levels, self._levels))
@@ -188,7 +204,9 @@ class TerminalUI(io.TextIOBase):
                             if current is None or current.id != speaker.id:
                                 break
                             next_device_check = time.monotonic() + 2
-            except Exception:
+            except Exception as error:
+                with self._lock:
+                    self._audio_error = str(error)
                 self._stop.wait(1)
             finally:
                 with self._lock:

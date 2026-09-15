@@ -11,7 +11,8 @@ winrt-Windows.Media>=3.2.1,<4; sys_platform == "win32"
 winrt-Windows.Storage.Streams>=3.2.1,<4; sys_platform == "win32"
 shazamio>=0.8.1,<0.9
 soundcard>=0.2.2,<0.4.6
-numpy>=1.26.4,<2.5.3
+# SoundCard's Windows backend uses binary fromstring, removed in NumPy 2.3.
+numpy>=1.26.4,<2.3
 tzdata
 timezonefinder>=6,<9
 rich>=10.8.13,<15.0.0
