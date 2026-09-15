@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,9 +18,17 @@ def _path(path):
 
 
 def get_repo_lnk() -> str:
-    """Get the latest git repository of Nora, yourself,
-    with a web browser of the user's choice"""
-    return "https://github.com/xddigs/nora.git"
+    """Open Nora's public repository in the user's default external browser.
+
+    Use when asked to open Nora's online repository, not to inspect local code.
+    """
+    url = "https://github.com/xddigs/nora"
+    try:
+        if not webbrowser.open(url, new=2):
+            return f"Error: could not open the default browser. Repository: {url}"
+        return f"Opened repository in the default browser: {url}"
+    except Exception as error:
+        return f"Error opening repository: {error}. Repository: {url}"
 
 
 def get_nora_repository() -> str:
