@@ -20,7 +20,6 @@ def _normalize(name):
 
 def close_application(application: str, force: bool = False) -> str:
     """Close a running application by name, executable or PID on Windows.
-
     A request such as 'close Spotify' authorizes normal closure. Resolve against
     running processes; return candidates if ambiguous. force=True is only for
     explicitly requested forced termination. Normal window closure can leave
@@ -38,7 +37,8 @@ def close_application(application: str, force: bool = False) -> str:
         from .brain import kill_process, normalize_application_name
         app = cached_app(normalize_application_name(application))
         cached_name = _normalize(Path(app["Path"]).name) if app and app.get("Path") else None
-        if query in {"exploradordearchivos", "explorador", "fileexplorer", "windowsexplorer"}:
+        if query in {"explorador de archivos", "explorador", "fileexplorer",
+                     "windowsexplorer"}:
             query = "explorer"
         processes = []
         for process in psutil.process_iter(["pid", "name", "create_time"]):
