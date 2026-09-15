@@ -61,12 +61,19 @@ corrected. Model name and keep-alive settings require restarting Nora;
 Notes are saved in `~/.nora/note/`; reading notes includes previous sessions.
 
 ## Session logs
-Each launch saves a Markdown conversation in `~/.nora/.log/`, named
-`YYYY-MM-DD_HH-MM-SS_microseconds.md` using the session's local start time.
+Conversations are appended to `~/.nora/.log/YYYY-MM-DD.md` using the local date.
+All launches on the same day share this file, with a timestamped session marker.
+Sessions running past midnight switch to the new day's file on the next message.
 It records the greeting, messages, voice transcripts, direct command results and
 errors. Responses are saved as displayed, including partial responses if a stream
-fails. At the next launch after 24 session logs, the oldest is removed to keep
-24 logs including the new session. Other files are left alone.
+fails. When opening a daily log, the oldest daily logs are removed to keep
+24 daily files. Older logs named by session and other files are left alone.
+
+## Conversation scrolling (Windows)
+Use the mouse wheel or ↑/↓ to scroll through the current conversation, including
+while Nora responds. Page Up/Page Down move by a page. The input stays visible;
+typing returns to the latest output. Left/Right, Home/End and Delete edit your
+message. Up/Down now scroll the conversation instead of recalling past commands.
 
 ## Playback and YouTube
 

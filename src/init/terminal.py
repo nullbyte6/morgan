@@ -3,6 +3,7 @@
 import asyncio
 import io
 import os
+import queue
 import sys
 import threading
 import time
@@ -58,7 +59,8 @@ class TerminalUI(io.TextIOBase):
         self._prompt = None
         self._input = ""
         self._cursor = 0
-        self._history = []
+        self._keys = queue.Queue()
+        self._max_scroll = 0
         self._scroll = 0
         self.playing = False
         self._levels = (0.0,) * 7
@@ -83,8 +85,6 @@ class TerminalUI(io.TextIOBase):
                     self._output = self._output.rpartition("\n")[0] + (
                         "\n" if "\n" in self._output else "")
                 self._output += part
-            if len(self._output) > 100_000:
-                self._output = self._output[-80_000:].partition("\n")[2]
         return len(value)
 
     def flush(self):
@@ -119,20 +119,31 @@ class TerminalUI(io.TextIOBase):
         available = max(0, height - 2 - len(input_lines))
         layout_key = (output, inner_width)
         if layout_key != self._layout_key:
+            previous_count = len(self._layout_lines)
+            previous_key = self._layout_key
             self._layout_lines = list(
                 Text.from_ansi(output).wrap(self.console, inner_width))
             self._layout_key = layout_key
+            if previous_key is not None and previous_key[1] == inner_width:
+                with self._lock:
+                    if self._scroll:
+                        self._scroll = max(0, self._scroll +
+                                           len(self._layout_lines) - previous_count)
         lines = self._layout_lines
-        scroll = min(scroll, max(0, len(lines) - available))
+        with self._lock:
+            self._max_scroll = max(0, len(lines) - available)
+            self._scroll = min(self._scroll, self._max_scroll)
+            scroll = self._scroll
         end = len(lines) - scroll
         visible = lines[max(0, end - available):end] if available else []
         visible += [Text("")] * max(0, available - len(visible))
         title = Text(
             datetime.now().astimezone().strftime("%a %d/%m/%Y  %H:%M:%S"),
             style="bright_white")
-        subtitle = None
+        subtitle = Text("↑/↓ · rueda · PgUp/PgDn" + (f" · {scroll} líneas atrás" if scroll else ""))
         if playing:
-            subtitle = Text(
+            subtitle.append("  ")
+            subtitle.append(
                 "".join("▁▂▃▄▅▆▇█"[round(level * 7)] for level in levels),
                 style="bright_white")
         return Panel(Group(*(visible + input_lines)), box=box.SQUARE,
@@ -200,12 +211,45 @@ class TerminalUI(io.TextIOBase):
 
         asyncio.run(poll())
 
+    def _poll_input(self):
+        try:
+            while not self._stop.is_set():
+                for kind, value in self._console_input.poll():
+                    if kind == "scroll":
+                        if value in ("page_up", "page_down"):
+                            value = max(1, self.console.height - 5) * (
+                                1 if value == "page_up" else -1)
+                        with self._lock:
+                            self._scroll = max(0, min(self._max_scroll,
+                                                      self._scroll + value))
+                    else:
+                        for character in value:
+                            self._keys.put(character)
+                self._stop.wait(0.005)
+        except Exception as error:
+            self._keys.put(error)
+
+    def _get_key(self):
+        while True:
+            try:
+                value = self._keys.get(timeout=0.05)
+            except queue.Empty:
+                continue
+            if isinstance(value, Exception):
+                raise value
+            return value
+
     def __enter__(self):
         live = Live(console=self.console, screen=True, refresh_per_second=60,
                     get_renderable=self.render, redirect_stdout=False,
                     redirect_stderr=False, vertical_overflow="crop")
         try:
+            from .console_input import ConsoleInput
+            self._console_input = ConsoleInput()
+            self._stack.callback(self._console_input.close)
             self._stack.enter_context(live)
+            self._input_worker = threading.Thread(target=self._poll_input, daemon=True)
+            self._input_worker.start()
             self._stack.enter_context(redirect_stdout(self))
             self._stack.enter_context(redirect_stderr(self))
             self._worker = threading.Thread(target=self._poll_media,
@@ -222,22 +266,17 @@ class TerminalUI(io.TextIOBase):
 
     def __exit__(self, *exc):
         self._stop.set()
+        self._input_worker.join(timeout=3)
         self._worker.join(timeout=3)
         self._audio_worker.join(timeout=3)
         self._stack.close()
 
     def read_input(self, prompt):
-        import msvcrt
         with self._lock:
-            self._prompt, self._input, self._cursor, self._scroll = prompt, "", 0, 0
-        history_index = len(self._history)
-        draft = ""
+            self._prompt, self._input, self._cursor = prompt, "", 0
         try:
             while True:
-                if not msvcrt.kbhit():
-                    time.sleep(0.005)
-                    continue
-                character = msvcrt.getwch()
+                character = self._get_key()
                 if character == "\x03":
                     raise KeyboardInterrupt
                 if character == "\x1a":
@@ -246,12 +285,10 @@ class TerminalUI(io.TextIOBase):
                     with self._lock:
                         result = self._input
                     self.write(f"\x1b[0m{prompt}\x1b[32m{result}\x1b[0m\n")
-                    if result:
-                        self._history.append(result)
                     return result
                 with self._lock:
                     if character in ("\x00", "\xe0"):
-                        key = msvcrt.getwch()
+                        key = self._get_key()
                         if key == "K":
                             self._cursor = max(0, self._cursor - 1)
                         elif key == "M":
@@ -265,21 +302,6 @@ class TerminalUI(io.TextIOBase):
                             self._input = self._input[
                                               :self._cursor] + self._input[
                                               self._cursor + 1:]
-                        elif key in ("H", "P"):
-                            if history_index == len(self._history):
-                                draft = self._input
-                            history_index = max(0, min(len(self._history),
-                                                       history_index + (
-                                                           -1 if key == "H" else 1)))
-                            self._input = self._history[
-                                history_index] if history_index < len(
-                                self._history) else draft
-                            self._cursor = len(self._input)
-                        elif key == "I":
-                            self._scroll += max(1, self.console.height - 5)
-                        elif key == "Q":
-                            self._scroll = max(0, self._scroll - max(1,
-                                                                     self.console.height - 5))
                     elif character == "\b":
                         if self._cursor:
                             self._input = self._input[
