@@ -1,280 +1,314 @@
-import os
 import json
+import os
 import random
 import re
 import subprocess
 import sys
+import threading
 import time
 from getpass import getuser
 
-from colorama import just_fix_windows_console
-from pydantic_ai import Agent, Tool
-from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, \
-    UserPromptPart
-from pydantic_ai.models.ollama import OllamaModel
-from pydantic_ai.providers.ollama import OllamaProvider
-
-from src.init import brain
-from src.init.brain import (
-    MODEL_NAME, change_directory, get_working_directory,
-    refresh_model_keep_alive, refresh)
-from src.init.output import chunks_group
-from src.init.session_log import SessionLog
-from src.init import rules
-from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, USER_COLOR, Spinner
-from src.init.tools import TOOLS
-from src.init.voice import VOICE_COMMANDS, capture_voice_input
-from src.init.terminal import TerminalUI, interactive_terminal
-
-terminal_ui = None
-
-os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-
-just_fix_windows_console()
-MODEL_SETTINGS = {
-    "openai_reasoning_effort": "none",
-    "temperature": 0.2,
-}
-
-model = OllamaModel(
-    MODEL_NAME,
-    provider=OllamaProvider(base_url="http://localhost:11434/v1"),
-    settings=MODEL_SETTINGS,
-)
-
-TYPEWRITER_DELAY_SECONDS = float(
-    os.environ.get("NORA_TYPEWRITER_DELAY", "0"))
-
-USERNAME = getuser().capitalize()
-STARTUP_GREETINGS = (
-    f"Hola, {USERNAME}. Nora lista para empezar.",
-    f"Ya estoy aquí, {USERNAME}. Vamos a ello.",
-    "Todo listo. Dime qué necesitas y me pongo a ello.",
-    "Hola de nuevo. Lista para echarte una mano.",
-    "Nora al habla. Cuando quieras, empezamos.",
-    f"¡Buenas, {USERNAME}! Manos a la obra.",
-)
+# Imports from tools must resolve to this module when launched as a script too.
+if __name__ == "__main__":
+    sys.modules["agent"] = sys.modules[__name__]
 
 
-def stream(chunks, session=None) -> None:
-    """Muestra los fragmentos entrantes inmediatamente; el retraso de animación es opcional."""
-    sys.stdout.write(f"{ASSISTANT_COLOR}")
-    displayed = []
-    response_prefix = terminal_ui.output_snapshot() if terminal_ui is not None else None
-    def capture(source):
-        for chunk in source:
-            displayed.append(chunk)
-            yield chunk
+class Assistant:
+    """One shared assistant; reading its identity never starts the model or UI."""
 
-    try:
-        source = capture([chunks] if isinstance(chunks, str) else chunks)
-        for chunk in (
-        source if terminal_ui is not None else chunks_group(source, color=True)):
-            if terminal_ui is not None:
-                terminal_ui.update_response(response_prefix,
-                                            "".join(chunks_group(
-                                                ["".join(displayed)], color=True)))
-            elif TYPEWRITER_DELAY_SECONDS:
-                for character in chunk:
-                    sys.stdout.write(character)
-                    sys.stdout.flush()
-                    time.sleep(TYPEWRITER_DELAY_SECONDS)
-            else:
-                sys.stdout.write(chunk)
-                sys.stdout.flush()
-    finally:
-        sys.stdout.write(f"{RESET_COLOR}\n")
-        sys.stdout.flush()
-        if session is not None:
-            session.write("Nora", "".join(displayed))
+    name = "Nora"
+    _instance = None
+    _instance_lock = threading.Lock()
 
+    def __new__(cls):
+        with cls._instance_lock:
+            if cls._instance is None:
+                instance = super().__new__(cls)
+                instance.terminal_ui = None
+                instance.agent = None
+                instance.username = getuser().capitalize()
+                instance.typewriter_delay_seconds = float(
+                    os.environ.get("NORA_TYPEWRITER_DELAY", "0"))
+                cls._instance = instance
+            return cls._instance
 
-def directory_cmd(command: str) -> str | None:
-    """Handle standalone cd/chdir commands without a model or shell call."""
-    match = re.fullmatch(r"(?:cd|chdir)(?=\s|\.|\\|$)\s*(.*)",
-                         command.strip(), flags=re.IGNORECASE)
-    if match is None:
-        return None
-    path = match.group(1)
-    path = re.sub(r"^/d(?:\s+|$)", "", path, count=1, flags=re.IGNORECASE)
-    return change_directory(path)
-
-
-def git_cmd(command: str) -> str | None:
-    """Execute exact supported Git commands through the existing tools."""
-    commands = {
-        "git push": brain.git_push,
-        "git status": brain.git_status,
-        "git diff": brain.git_diff,
-        "git log": brain.git_log,
-    }
-    function = commands.get(command.strip())
-    return function() if function is not None else None
-
-
-def build_user_prompt() -> str:
-    """Show the current location and live Git branch, including unborn branches."""
-    if not brain.should_show_working_directory():
-        return ">> "
-    directory = get_working_directory()
-    branch = ""
-    try:
-        result = subprocess.run(
-            ["git", "-C", directory, "symbolic-ref", "--quiet", "--short",
-             "HEAD"],
-            capture_output=True, text=True, errors="replace", timeout=2,
+    @property
+    def startup_greetings(self):
+        return (
+            f"Hola, {self.username}. {self.name} lista para empezar.",
+            f"Ya estoy aquí, {self.username}. Vamos a ello.",
+            "Todo listo. Dime qué necesitas y me pongo a ello.",
+            "Hola de nuevo. Lista para echarte una mano.",
+            f"{self.name} al habla. Cuando quieras, empezamos.",
+            f"¡Buenas, {self.username}! Manos a la obra.",
         )
-        if result.returncode == 0:
-            branch = result.stdout.strip()
-        elif result.returncode == 1:
+
+    def _initialize_runtime(self):
+        if self.agent is not None:
+            return
+        os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
+        os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+        from colorama import just_fix_windows_console
+        from pydantic_ai import Agent, Tool
+        from pydantic_ai.models.ollama import OllamaModel
+        from pydantic_ai.providers.ollama import OllamaProvider
+        from src.init.brain import MODEL_NAME
+        from src.init.tools import TOOLS
+
+        just_fix_windows_console()
+        self.model_settings = {
+            "openai_reasoning_effort": "none",
+            "temperature": 0.2,
+        }
+        self.model = OllamaModel(
+            MODEL_NAME,
+            provider=OllamaProvider(base_url="http://localhost:11434/v1"),
+            settings=self.model_settings,
+        )
+        self.agent = Agent(
+            model=self.model,
+            tools=[Tool(function, sequential=True) for function in TOOLS],
+        )
+        self.agent.instructions(self.current_instructions)
+        self.agent.instructions(self.working_directory_instructions)
+
+    def stream(self, chunks, session=None) -> None:
+        """Muestra los fragmentos entrantes inmediatamente; el retraso de animación es opcional."""
+        from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
+        from src.init.output import chunks_group
+
+        sys.stdout.write(f"{ASSISTANT_COLOR}")
+        displayed = []
+        response_prefix = self.terminal_ui.output_snapshot() if self.terminal_ui is not None else None
+        def capture(source):
+            for chunk in source:
+                displayed.append(chunk)
+                yield chunk
+
+        try:
+            source = capture([chunks] if isinstance(chunks, str) else chunks)
+            for chunk in (
+            source if self.terminal_ui is not None else chunks_group(source, color=True)):
+                if self.terminal_ui is not None:
+                    self.terminal_ui.update_response(response_prefix,
+                                                "".join(chunks_group(
+                                                    ["".join(displayed)], color=True)))
+                elif self.typewriter_delay_seconds:
+                    for character in chunk:
+                        sys.stdout.write(character)
+                        sys.stdout.flush()
+                        time.sleep(self.typewriter_delay_seconds)
+                else:
+                    sys.stdout.write(chunk)
+                    sys.stdout.flush()
+        finally:
+            sys.stdout.write(f"{RESET_COLOR}\n")
+            sys.stdout.flush()
+            if session is not None:
+                session.write(self.name, "".join(displayed))
+
+    def directory_cmd(self, command: str) -> str | None:
+        """Handle standalone cd/chdir commands without a model or shell call."""
+        from src.init.brain import change_directory
+
+        match = re.fullmatch(r"(?:cd|chdir)(?=\s|\.|\\|$)\s*(.*)",
+                             command.strip(), flags=re.IGNORECASE)
+        if match is None:
+            return None
+        path = match.group(1)
+        path = re.sub(r"^/d(?:\s+|$)", "", path, count=1, flags=re.IGNORECASE)
+        return change_directory(path)
+
+    def git_cmd(self, command: str) -> str | None:
+        """Execute exact supported Git commands through the existing tools."""
+        from src.init import brain
+
+        commands = {
+            "git push": brain.git_push,
+            "git status": brain.git_status,
+            "git diff": brain.git_diff,
+            "git log": brain.git_log,
+        }
+        function = commands.get(command.strip())
+        return function() if function is not None else None
+
+    def build_user_prompt(self) -> str:
+        """Show the current location and live Git branch, including unborn branches."""
+        from src.init import brain
+        from src.init.brain import get_working_directory
+
+        if not brain.should_show_working_directory():
+            return ">> "
+        directory = get_working_directory()
+        branch = ""
+        try:
             result = subprocess.run(
-                ["git", "-C", directory, "rev-parse", "--short", "HEAD"],
+                ["git", "-C", directory, "symbolic-ref", "--quiet", "--short",
+                 "HEAD"],
                 capture_output=True, text=True, errors="replace", timeout=2,
             )
             if result.returncode == 0:
-                branch = f"detached:{result.stdout.strip()}"
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    suffix = f" ({branch})" if branch else ""
-    return f">> {directory}{suffix} > "
+                branch = result.stdout.strip()
+            elif result.returncode == 1:
+                result = subprocess.run(
+                    ["git", "-C", directory, "rev-parse", "--short", "HEAD"],
+                    capture_output=True, text=True, errors="replace", timeout=2,
+                )
+                if result.returncode == 0:
+                    branch = f"detached:{result.stdout.strip()}"
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        suffix = f" ({branch})" if branch else ""
+        return f">> {directory}{suffix} > "
 
+    def read_user_input(self, prompt: str | None = None) -> str:
+        """Read input with a normal prompt and the user's typed text in green."""
+        from src.init.spin import RESET_COLOR, USER_COLOR
 
-def read_user_input(prompt: str | None = None) -> str:
-    """Read input with a normal prompt and the user's typed text in green."""
-    if prompt is None:
-        prompt = build_user_prompt()
-    if terminal_ui is not None:
-        return terminal_ui.read_input(prompt)
-    sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
-    sys.stdout.flush()
-    try:
-        return input()
-    finally:
-        sys.stdout.write(RESET_COLOR)
+        if prompt is None:
+            prompt = self.build_user_prompt()
+        if self.terminal_ui is not None:
+            return self.terminal_ui.read_input(prompt)
+        sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
         sys.stdout.flush()
-
-
-agent = Agent(model=model,
-              tools=[Tool(function, sequential=True) for function in TOOLS])
-
-
-@agent.instructions
-def current_instructions() -> str:
-    return rules.current_instructions()
-
-
-@agent.instructions
-def working_directory_instructions() -> str:
-    return f"Current working directory for this turn: {get_working_directory()}"
-
-
-def run_session():
-    session = SessionLog()
-    refresh_model_keep_alive()
-    sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}\n")
-    stream("""
-     /$$   /$$                             
-    | $$$ | $$                             
-    | $$$$| $$  /$$$$$$   /$$$$$$  /$$$$$$ 
-    | $$ $$ $$ /$$__  $$ /$$__  $$|____  $$
-    | $$  $$$$| $$  \\ $$| $$  \\__/ /$$$$$$$
-    | $$\\  $$$| $$  | $$| $$      /$$__  $$
-    | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
-    |__/  \\__/ \\______/ |__/      \\_______/
-    """)
-    stream(brain.get_version())
-    stream([random.choice(STARTUP_GREETINGS)], session=session)
-    history = []
-    while True:
-        prompt = build_user_prompt()
-        if session.private:
-            prompt = "[PRIVATE] " + prompt
-        user_input = read_user_input(prompt)
-        privacy_result = session.handle_command(user_input)
-        if privacy_result is not None:
-            stream(privacy_result)
-            continue
-        if user_input.strip().casefold() not in VOICE_COMMANDS:
-            session.write(USERNAME, user_input)
-        if user_input.strip().lower() in ("quit", "exit"):
-            break
-
-        if user_input.strip().lower() in ("ref", "reload"):
-            stream([refresh()], session=session)
-            continue
-
-        directory_result = directory_cmd(user_input)
-        if directory_result is not None:
-            print(directory_result)
-            session.write("Nora", directory_result)
-            continue
-        git_result = git_cmd(user_input)
-        if git_result is not None:
-            print(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
-            session.write("Nora", git_result)
-            history.extend([
-                ModelRequest(parts=[UserPromptPart(user_input)]),
-                ModelResponse(parts=[TextPart(
-                    f"Direct Git command result in {get_working_directory()}:\n"
-                    f"{git_result}")]),
-            ])
-            continue
-        if user_input.strip().casefold() in VOICE_COMMANDS:
-            try:
-                user_input = capture_voice_input()
-            except Exception as error:
-                print(f"VOICE ERROR: {error}")
-                session.write("System", str(error))
-                continue
-            if not user_input:
-                session.write("System", "A voice transcription "
-                                        "was impossible to obtain.")
-                continue
-            session.write(USERNAME, json.loads(user_input)[
-                "voice_text"])
-        spinner = Spinner()
-        spinner.start()
         try:
-            with agent.run_stream_sync(
-                    user_input, message_history=history,
-                    model_settings={"temperature": brain.load_config()[
-                        "temperature"]}) as result:
+            return input()
+        finally:
+            sys.stdout.write(RESET_COLOR)
+            sys.stdout.flush()
+
+    def current_instructions(self) -> str:
+        from src.init import rules
+
+        return rules.current_instructions()
+
+    def working_directory_instructions(self) -> str:
+        from src.init.brain import get_working_directory
+
+        return f"Current working directory for this turn: {get_working_directory()}"
+
+    def run_session(self):
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+        from src.init import brain
+        from src.init.brain import refresh_model_keep_alive, refresh, get_working_directory
+        from src.init.output import chunks_group
+        from src.init.session_log import SessionLog
+        from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, Spinner
+        from src.init.voice import VOICE_COMMANDS, capture_voice_input
+
+        self._initialize_runtime()
+
+        session = SessionLog()
+        refresh_model_keep_alive()
+        sys.stdout.write(f"{RESET_COLOR}{ASSISTANT_COLOR}\n")
+        self.stream("""
+         /$$   /$$                             
+        | $$$ | $$                             
+        | $$$$| $$  /$$$$$$   /$$$$$$  /$$$$$$ 
+        | $$ $$ $$ /$$__  $$ /$$__  $$|____  $$
+        | $$  $$$$| $$  \\ $$| $$  \\__/ /$$$$$$$
+        | $$\\  $$$| $$  | $$| $$      /$$__  $$
+        | $$ \\  $$|  $$$$$$/| $$     |  $$$$$$$
+        |__/  \\__/ \\______/ |__/      \\_______/
+        """)
+        self.stream(brain.get_version())
+        self.stream([random.choice(self.startup_greetings)], session=session)
+        history = []
+        while True:
+            prompt = self.build_user_prompt()
+            if session.private:
+                prompt = "[PRIVATE] " + prompt
+            user_input = self.read_user_input(prompt)
+            privacy_result = session.handle_command(user_input)
+            if privacy_result is not None:
+                self.stream(privacy_result)
+                continue
+            if user_input.strip().casefold() not in VOICE_COMMANDS:
+                session.write(self.username, user_input)
+            if user_input.strip().lower() in ("quit", "exit"):
+                break
+
+            if user_input.strip().lower() in ("ref", "reload"):
+                self.stream([refresh()], session=session)
+                continue
+
+            directory_result = self.directory_cmd(user_input)
+            if directory_result is not None:
+                print(directory_result)
+                session.write(self.name, directory_result)
+                continue
+            git_result = self.git_cmd(user_input)
+            if git_result is not None:
+                print(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
+                session.write(self.name, git_result)
+                history.extend([
+                    ModelRequest(parts=[UserPromptPart(user_input)]),
+                    ModelResponse(parts=[TextPart(
+                        f"Direct Git command result in {get_working_directory()}:\n"
+                        f"{git_result}")]),
+                ])
+                continue
+            if user_input.strip().casefold() in VOICE_COMMANDS:
+                try:
+                    user_input = capture_voice_input()
+                except Exception as error:
+                    print(f"VOICE ERROR: {error}")
+                    session.write("System", str(error))
+                    continue
+                if not user_input:
+                    session.write("System", "A voice transcription "
+                                            "was impossible to obtain.")
+                    continue
+                session.write(self.username, json.loads(user_input)[
+                    "voice_text"])
+            spinner = Spinner()
+            spinner.start()
+            try:
+                with self.agent.run_stream_sync(
+                        user_input, message_history=history,
+                        model_settings={"temperature": brain.load_config()[
+                            "temperature"]}) as result:
+                    spinner.stop()
+                    self.stream(result.stream_text(delta=True, debounce_by=None),
+                           session=session)
+                    history = result.all_messages()
+                    for message in history:
+                        if isinstance(message, ModelResponse):
+                            for part in message.parts:
+                                if isinstance(part, TextPart):
+                                    part.content = "".join(
+                                        chunks_group([part.content]))
+                    refresh_model_keep_alive()
+            except Exception as error:
                 spinner.stop()
-                stream(result.stream_text(delta=True, debounce_by=None),
-                       session=session)
-                history = result.all_messages()
-                for message in history:
-                    if isinstance(message, ModelResponse):
-                        for part in message.parts:
-                            if isinstance(part, TextPart):
-                                part.content = "".join(
-                                    chunks_group([part.content]))
-                refresh_model_keep_alive()
-        except Exception as error:
-            spinner.stop()
-            print(f"ERROR: {error}")
-            cause = error.__cause__
-            if cause is not None:
-                print(f"Detail: {cause}")
-            session.write("Error", f"{error}; Detail: {cause}"
-            if cause is not None else str(error))
+                print(f"ERROR: {error}")
+                cause = error.__cause__
+                if cause is not None:
+                    print(f"Detail: {cause}")
+                session.write("Error", f"{error}; Detail: {cause}"
+                if cause is not None else str(error))
+
+    def run(self):
+        from src.init.terminal import TerminalUI, interactive_terminal
+
+        self._initialize_runtime()
+
+        try:
+            if interactive_terminal():
+                with TerminalUI() as ui:
+                    self.terminal_ui = ui
+                    try:
+                        self.run_session()
+                    finally:
+                        self.terminal_ui = None
+            else:
+                self.run_session()
+        except (EOFError, KeyboardInterrupt):
+            pass
 
 
 def main():
-    global terminal_ui
-    try:
-        if interactive_terminal():
-            with TerminalUI() as ui:
-                terminal_ui = ui
-                try:
-                    run_session()
-                finally:
-                    terminal_ui = None
-        else:
-            run_session()
-    except (EOFError, KeyboardInterrupt):
-        pass
+    Assistant().run()
 
 
 if __name__ == "__main__":
