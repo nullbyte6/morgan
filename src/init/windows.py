@@ -68,7 +68,7 @@ def get_open_windows():
                         executable = path.value.rsplit("\\", 1)[-1]
                 finally:
                     close(process)
-            windows.append({"title": title.value, "executable": executable,
+            windows.append({"hwnd": int(hwnd), "title": title.value, "executable": executable,
                             "pid": pid.value, "minimized": bool(minimized(hwnd))})
         except Exception as error:
             errors.append(error)
@@ -83,3 +83,18 @@ def get_open_windows():
             raise ctypes.WinError(error_code)
         raise OSError("Windows could not enumerate windows in this desktop session")
     return windows
+
+
+def request_window_close(hwnd, expected_pid):
+    """Request normal closure, preserving save dialogs and the Explorer shell."""
+    user = ctypes.WinDLL("user32", use_last_error=True)
+    user.GetWindowThreadProcessId.argtypes = [wt.HWND, ctypes.POINTER(wt.DWORD)]
+    user.GetWindowThreadProcessId.restype = wt.DWORD
+    user.PostMessageW.argtypes = [wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM]
+    user.PostMessageW.restype = wt.BOOL
+    pid = wt.DWORD()
+    user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if pid.value != expected_pid:
+        raise OSError("Window no longer belongs to the selected process")
+    if not user.PostMessageW(hwnd, 0x0010, 0, 0):  # WM_CLOSE
+        raise ctypes.WinError(ctypes.get_last_error())

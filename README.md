@@ -293,6 +293,18 @@ real messages with `python -m unittest discover -s tests -v`.
 
 ### Windows application management
 
+Ask "cierra Spotify", "cierra ChatGPT" or "cierra Proton Bridge" to use
+`close_application`. Nora resolves the name against running processes and its
+application cache; ambiguous matches require selecting an executable or PID.
+A normal close request needs no extra confirmation. Visible windows receive a
+normal close request, allowing save dialogs; tray-only processes use `taskkill`
+without force. Force is used only when explicitly requested.
+
+"Cierra el explorador de archivos" closes Explorer windows without terminating
+the Windows desktop. A window close request is not proof the process exited:
+some applications remain in the tray or wait for unsaved changes. Permission
+errors are reported; elevation still goes through the sudo consent flow.
+
 Application launches use a persistent cache at `~/.nora/json/apps.json`.
 After the first successful launch request, Nora saves the normalized requested
 name, display name and executable/shortcut path (or Windows AppID). Subsequent
