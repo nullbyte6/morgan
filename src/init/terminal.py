@@ -140,7 +140,7 @@ class TerminalUI(io.TextIOBase):
         title = Text(
             datetime.now().astimezone().strftime("%a %d/%m/%Y  %H:%M:%S"),
             style="bright_white")
-        subtitle = Text("↑/↓ · rueda · PgUp/PgDn" + (f" · {scroll} líneas atrás" if scroll else ""))
+        subtitle = Text("↑/↓ · wheel · PgUp/PgDn")
         if playing:
             subtitle.append("  ")
             subtitle.append(
@@ -248,7 +248,8 @@ class TerminalUI(io.TextIOBase):
             self._console_input = ConsoleInput()
             self._stack.callback(self._console_input.close)
             self._stack.enter_context(live)
-            self._input_worker = threading.Thread(target=self._poll_input, daemon=True)
+            self._input_worker = threading.Thread(target=self._poll_input,
+                                                  daemon=True)
             self._input_worker.start()
             self._stack.enter_context(redirect_stdout(self))
             self._stack.enter_context(redirect_stderr(self))
