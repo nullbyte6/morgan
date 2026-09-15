@@ -46,19 +46,20 @@ from .brain import (
     list_open_applications,
     list_media_sessions,
     identify_playing_song,
-    get_current_media
-)
+    get_current_media)
 
 from .notifications import (
-    send_notification, schedule_notification, start_timer, list_timers, cancel_timer,
-)
+    send_notification, schedule_notification, start_timer, list_timers,
+    cancel_timer)
+
+from .message import send_message
+
 from .session_log import open_current_session_log
 from .weather import get_weather, set_weather_location
 from .media import control_media, search_youtube_songs, play_youtube_song
 from .self_code import (
     get_nora_repository, list_nora_code, read_nora_code,
-    edit_nora_code, update_nora_repository,
-)
+    edit_nora_code, update_nora_repository)
 
 TOOLS = [
     control_media,
@@ -72,6 +73,7 @@ TOOLS = [
     get_weather,
     set_weather_location,
     open_current_session_log,
+    send_message,
     send_notification,
     schedule_notification,
     start_timer,
