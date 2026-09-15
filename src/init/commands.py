@@ -11,10 +11,9 @@ from .identity import get_assistant
 
 
 def _confirm(message: str) -> bool:
-    # This is deliberately not a tool argument the model can set to True.
     try:
-        answer = get_assistant().read_user_input(message + " [sí/NO]: ")
-        return answer.strip().casefold() in {"sí", "si", "yes"}
+        answer = get_assistant().read_user_input(message + " [yes/no]: ")
+        return answer.strip().casefold() in {"sí", "si", "yes", "y"}
     except (EOFError, KeyboardInterrupt, RuntimeError):
         return False
 
@@ -28,7 +27,6 @@ def _shell_command(command: str, shell: str) -> list[str]:
     if executable is None:
         raise ValueError(f"Shell unavailable: {shell}")
     if shell in {"powershell", "pwsh"}:
-        # Preserve native exit codes, and turn PowerShell errors into failures.
         script = ("$ErrorActionPreference = 'Stop'; $global:LASTEXITCODE = 0; "
                   "try { & {\n" + command + "\n}; "
                   "if (-not $?) { exit 1 }; exit $LASTEXITCODE "
@@ -44,7 +42,6 @@ def _windows_elevated(argv: list[str], cwd: str) -> subprocess.CompletedProcess:
     sudo = shutil.which("sudo.exe")
     if not sudo:
         raise ValueError("Windows sudo is unavailable. Enable sudo in Windows Settings.")
-    # New-window mode otherwise starts in System32. Preserve the configured mode.
     return subprocess.run(
         [sudo, "--chdir", cwd, "--", *argv], cwd=cwd,
         stdin=subprocess.DEVNULL, capture_output=True, text=True,
@@ -85,7 +82,6 @@ def execute_command(command: str, working_directory: str = ".",
             raise ValueError("Working directory is not a directory")
         argv = _shell_command(command, shell)
         context.update(working_directory=cwd, shell=shell)
-        # JSON escaping prevents control characters in commands hiding the prompt.
         preview = json.dumps(command, ensure_ascii=False)
         if not _confirm(f"\nEjecutar en {json.dumps(cwd)} con {shell}:\n{preview}\n¿Autorizar este comando?"):
             return result("denied")
