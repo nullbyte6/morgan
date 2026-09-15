@@ -42,6 +42,18 @@ Run regression checks with:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
+## PC health diagnostics
+
+Ask “How is my PC?” for a quick read-only diagnosis, or explicitly request a
+complete diagnosis for the full scan. “Comprueba los discos” and “Comprueba la
+seguridad del PC” run targeted checks. These tools return measured telemetry,
+issues, unavailable checks and a score calculated in Python. They do not repair
+anything, delete files, change settings or start an antivirus scan.
+
+See [diagnostic data, score rules, limits and tests](src/diagnostics/README.md).
+`psutil` is already included in `requirements.txt`. Restart the assistant to
+register the new tools after updating the code.
+
 ## Configuration and personality
 The assistant uses `~/.nora/json/config.json`, independently of the current directory.
 On first launch it creates this file with defaults, or imports a legacy repository

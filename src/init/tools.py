@@ -60,8 +60,14 @@ from .media import control_media, search_youtube_songs, play_youtube_song
 from .self_code import (
     get_repo_lnk, get_nora_repository, list_nora_code, read_nora_code,
     edit_nora_code, update_nora_repository)
+from src.diagnostics.tools import (
+    check_system_health, check_disk_health, check_security_health,
+)
 
 TOOLS = [
+    check_system_health,
+    check_disk_health,
+    check_security_health,
     control_media,
     search_youtube_songs,
     play_youtube_song,
