@@ -244,12 +244,12 @@ class Assistant:
 
             directory_result = self.directory_cmd(user_input)
             if directory_result is not None:
-                print(directory_result)
+                stream(directory_result)
                 session.write(self.name, directory_result)
                 continue
             git_result = self.git_cmd(user_input)
             if git_result is not None:
-                print(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
+                stream(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
                 session.write(self.name, git_result)
                 history.extend([
                     ModelRequest(parts=[UserPromptPart(user_input)]),
@@ -262,7 +262,7 @@ class Assistant:
                 try:
                     user_input = capture_voice_input()
                 except Exception as error:
-                    print(f"VOICE ERROR: {error}")
+                    stream(f"VOICE ERROR: {error}")
                     session.write("System", str(error))
                     continue
                 if not user_input:
@@ -291,10 +291,10 @@ class Assistant:
                     refresh_model_keep_alive()
             except Exception as error:
                 spinner.stop()
-                print(f"ERROR: {error}")
+                stream(f"ERROR: {error}")
                 cause = error.__cause__
                 if cause is not None:
-                    print(f"Detail: {cause}")
+                    stream(f"Detail: {cause}")
                 session.write("Error", f"{error}; Detail: {cause}"
                 if cause is not None else str(error))
 

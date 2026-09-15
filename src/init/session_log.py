@@ -93,4 +93,4 @@ class SessionLog:
         if self.path.name != f"{now:%Y-%m-%d}.md":
             self._start_day(now)
         with self.path.open("a", encoding="utf-8") as log:
-            log.write(f"\n[{now:%H:%M:%S %z}] {role}:{text}")
+            log.write(f"\n[{now:%H:%M:%S %z}] {role}: {text}")
