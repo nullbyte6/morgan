@@ -16,11 +16,11 @@ import wave
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from functools import lru_cache
 from math import asin, cos, radians, sin, sqrt
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from functools import lru_cache
 
 import unicodedata
 
@@ -30,6 +30,7 @@ except ImportError:
     winreg = None
 
 from .config import CONFIG_FILE, HOME_PATH, ensure_storage, load_config
+from .folders import resolve_directory
 
 VERSION = "v1.0.1-alpha"
 
@@ -231,6 +232,70 @@ def list_files(path: str = ".") -> str:
         return "\n".join(items) if items else "Directory is empty"
     except Exception as error:
         return f"Error: {error}"
+
+
+def find_directories(name: str, directory: str = ".", partial: bool = False,
+                     max_results: int = 100, timeout_seconds: int = 30) -> str:
+    """Find descendant folders at any depth under directory, without changing cwd.
+    Match names case-insensitively; partial=True matches substrings. Returns
+    absolute paths and whether the search completed. Does not traverse symbolic
+    links or Windows junctions. Supports ~ and known folders such as Documentos.
+    """
+
+    try:
+        if not name.strip() or any(character in name for character in ("/", "\\")):
+            return "Error: name must be a folder name, not a path"
+        if type(max_results) is not int or not 1 <= max_results <= 1000:
+            return "Error: max_results must be between 1 and 1000"
+        if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 300:
+            return "Error: timeout_seconds must be between 1 and 300"
+        root = resolve_directory(directory)
+        if not root.is_dir():
+            return f"Error: search directory does not exist or is not a directory: {root}"
+        pending = [root]
+        matches, errors = [], []
+        skipped_links = 0
+        stop_reason = None
+        deadline = time.monotonic() + timeout_seconds
+        query = name.strip().casefold()
+        while pending and stop_reason is None:
+            if time.monotonic() >= deadline:
+                stop_reason = "timeout"
+                break
+            current = pending.pop()
+            try:
+                with os.scandir(current) as entries:
+                    for entry in entries:
+                        if time.monotonic() >= deadline:
+                            stop_reason = "timeout"
+                            break
+                        try:
+                            target = Path(entry.path)
+                            if entry.is_symlink() or target.is_junction():
+                                skipped_links += 1
+                                continue
+                            if not entry.is_dir(follow_symlinks=False):
+                                continue
+                            candidate = entry.name.casefold()
+                            matches_name = query in candidate if partial else query == candidate
+                            if matches_name:
+                                matches.append(str(target))
+                                if len(matches) >= max_results:
+                                    stop_reason = "max_results"
+                                    break
+                            pending.append(target)
+                        except OSError as error:
+                            errors.append(f"{entry.path}: {error}")
+            except OSError as error:
+                errors.append(f"{current}: {error}")
+        return json.dumps({
+            "directory": str(root), "name": name, "matches": sorted(matches),
+            "complete": stop_reason is None and not errors and not skipped_links,
+            "stop_reason": stop_reason, "skipped_links": skipped_links,
+            "error_count": len(errors), "errors": errors[:20],
+        }, ensure_ascii=False)
+    except (OSError, ValueError) as error:
+        return f"Error searching directories: {error}"
 
 
 def create_directory(path: str, parents: bool = True) -> str:
