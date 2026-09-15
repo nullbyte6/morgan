@@ -195,16 +195,21 @@ The following fields in `~/.nora/json/config.json` are read on every send:
 {
   "message_service": "whatsapp",
   "whatsapp_phone_number_id": "",
-  "whatsapp_api_version": ""
+  "whatsapp_api_version": "",
+  "twilio_account_sid": "",
+  "twilio_auth_token": "",
+  "twilio_from_number": ""
 }
 ```
 
 Fill `whatsapp_phone_number_id` with the sender ID from Meta's WhatsApp API setup,
 and `whatsapp_api_version` with a supported Graph API version (`vNN.0`). Your
 existing `phone_number` is preserved; a telephone number cannot replace Meta's ID.
-Set `ACCESS_TOKEN` in the assistant's process environment before sending. Do not store the
-token in the repository or conversation. WhatsApp is the currently implemented
-service; other `message_service` values return an explicit unsupported error.
+Set `ACCESS_TOKEN` in the assistant's process environment before sending through Meta.
+For Twilio, set `message_service` to `twilio`, `twilio_account_sid` to the Twilio
+Account SID, `twilio_auth_token` to the Auth Token, and `twilio_from_number` to the
+approved sender including the `whatsapp:` prefix (for example,
+`whatsapp:+14155238886`). Do not store credentials in the repository or conversation.
 
 Contacts live in `~/.nora/json/contacts.json` and are read on each contact send:
 ```json
@@ -219,6 +224,15 @@ WhatsApp desktop session. Meta account setup and messaging restrictions apply.
 See [Meta's Cloud API documentation](https://www.postman.com/meta/whatsapp-business-platform/documentation/wlk6lh4/whatsapp-cloud-api).
 API acceptance is reported as submitted, not confirmed delivery. An uncertain
 network result is not retried automatically to avoid duplicate messages.
+
+Email tools use `smtplib` for sending and IMAP for reading and deleting. Configure
+`email_provider` as `gmail` or `proton`, then set `email_address` and an app password
+(`email_password`, or the `NORA_EMAIL_PASSWORD` environment variable). Gmail uses
+its standard SMTP/IMAP servers automatically. Proton Mail requires Proton Mail
+Bridge; its local SMTP/IMAP settings are selected automatically. The server and
+port fields can be overridden for custom setups. `send_email`, `read_emails` and
+`delete_email` are available to Nora; deletion requires the numeric ID returned by
+`read_emails` and permanently expunges that message.
 Restart the assistant after installing this code to register the new tool; subsequent
 configuration and contact edits do not require restarting. Test without sending
 real messages with `python -m unittest discover -s tests -v`.

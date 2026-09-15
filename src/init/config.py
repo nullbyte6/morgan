@@ -19,6 +19,20 @@ DEFAULTS = {
     "message_service": "whatsapp",
     "whatsapp_phone_number_id": "",
     "whatsapp_api_version": "",
+    "twilio_account_sid": "",
+    "twilio_auth_token": "",
+    "twilio_from_number": "",
+    "email_provider": "gmail",
+    "email_address": "",
+    "email_password": "",
+    "email_smtp_host": "",
+    "email_smtp_port": 0,
+    "email_smtp_use_ssl": True,
+    "email_smtp_starttls": False,
+    "email_imap_host": "",
+    "email_imap_port": 0,
+    "email_imap_use_ssl": True,
+    "email_imap_starttls": False,
     "personality": {
         "tone": "friendly",
         "verbosity": "short",
@@ -50,9 +64,19 @@ def validate_config(config):
     result = deepcopy(DEFAULTS)
     result.update(config)
     for key in ("message_service", "whatsapp_phone_number_id",
-                "whatsapp_api_version"):
+                "whatsapp_api_version", "twilio_account_sid",
+                "twilio_auth_token", "twilio_from_number", "email_provider",
+                "email_address", "email_password", "email_smtp_host",
+                "email_imap_host"):
         if not isinstance(result[key], str):
             raise ValueError(f"{key} must be text")
+    for key in ("email_smtp_port", "email_imap_port"):
+        if isinstance(result[key], bool) or not isinstance(result[key], int) or not 0 <= result[key] <= 65535:
+            raise ValueError(f"{key} must be an integer between 0 and 65535")
+    for key in ("email_smtp_use_ssl", "email_smtp_starttls",
+                "email_imap_use_ssl", "email_imap_starttls"):
+        if not isinstance(result[key], bool):
+            raise ValueError(f"{key} must be boolean")
     if not isinstance(result["weather_location"], str):
         raise ValueError("weather_location must be text")
     for key in ("version", "model_name", "keep_alive"):

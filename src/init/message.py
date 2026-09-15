@@ -3,6 +3,8 @@ import json
 import os
 import re
 import unicodedata
+import base64
+from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from .config import HOME_PATH, load_config
@@ -33,7 +35,6 @@ def _result(status, **details):
 class MessageService:
     def send(self, message: str = '', recipient: str = '') -> str:
         """Send using config.json to an exact contact name or international number.
-
         Missing or ambiguous details require asking the user and waiting.
         Submitted means API acceptance, not confirmed delivery.
         """
@@ -78,9 +79,11 @@ class MessageService:
             return _result('error', error=str(error))
         config = load_config()
         service = config['message_service'].strip().casefold()
+        if service == 'twilio':
+            return self._send_twilio(config, message, number)
         if service != 'whatsapp':
             return _result('error',
-                           error='Unsupported message_service; currently only whatsapp is implemented')
+                           error='Unsupported message_service; use whatsapp (Meta) or twilio (WhatsApp)')
         phone_id = config['whatsapp_phone_number_id'].strip()
         version = config['whatsapp_api_version'].strip()
         token = os.environ.get('ACCESS_TOKEN', '').strip()
@@ -120,6 +123,52 @@ class MessageService:
                            error='API response has no message ID. Do not claim success or retry automatically.')
         return _result('submitted', service=service, recipient='+' + number,
                        message_id=messages[0]['id'], delivery_confirmed=False)
+
+    @staticmethod
+    def _send_twilio(config, message, number):
+        """Send a WhatsApp message through Twilio's Messages API."""
+        account_sid = config['twilio_account_sid'].strip()
+        auth_token = config['twilio_auth_token'].strip()
+        from_number = config['twilio_from_number'].strip()
+        if not re.fullmatch(r'AC[0-9a-fA-F]{32}', account_sid):
+            return _result('error',
+                           error='Set twilio_account_sid to a valid Twilio Account SID')
+        if not auth_token:
+            return _result('error',
+                           error='Set twilio_auth_token to the Twilio Auth Token')
+        if not from_number.casefold().startswith('whatsapp:'):
+            return _result('error',
+                           error='Set twilio_from_number with the whatsapp: prefix, e.g. whatsapp:+14155238886')
+        try:
+            sender = _phone(from_number[len('whatsapp:'):])
+        except ValueError:
+            return _result('error',
+                           error='Set twilio_from_number to a valid Twilio WhatsApp sender, e.g. whatsapp:+14155238886')
+        endpoint = f'https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json'
+        body = urlencode({'From': 'whatsapp:+' + sender,
+                          'To': 'whatsapp:+' + number,
+                          'Body': message}).encode('utf-8')
+        request = Request(endpoint, data=body, method='POST')
+        credentials = base64.b64encode(
+            f'{account_sid}:{auth_token}'.encode('utf-8')).decode('ascii')
+        request.add_header('Authorization', f'Basic {credentials}')
+        request.add_header('Content-Type', 'application/x-www-form-urlencoded')
+        try:
+            with urlopen(request, timeout=30) as response:
+                payload = json.load(response)
+        except HTTPError as error:
+            return _result('error',
+                           error=f'Twilio API rejected the request (HTTP {error.code})')
+        except (URLError, TimeoutError, OSError, ValueError):
+            return _result('unknown',
+                           error='Could not confirm Twilio API acceptance. '
+                                 'Do not retry automatically; the message may have been submitted.')
+        message_id = payload.get('sid') if isinstance(payload, dict) else None
+        if not message_id:
+            return _result('unknown',
+                           error='Twilio response has no message ID. Do not claim success or retry automatically.')
+        return _result('submitted', service='twilio', recipient='+' + number,
+                       message_id=message_id, delivery_confirmed=False)
 
 
 def send_message(message: str = '', recipient: str = '') -> str:

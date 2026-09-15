@@ -20,7 +20,6 @@ PROVIDERS = {
         "imap_host": "imap.gmail.com", "imap_port": 993,
         "imap_ssl": True, "imap_starttls": False,
     },
-    # Proton's desktop Bridge exposes a local SMTP/IMAP server.
     "proton": {
         "smtp_host": "127.0.0.1", "smtp_port": 1025,
         "smtp_ssl": False, "smtp_starttls": True,

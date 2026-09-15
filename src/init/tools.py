@@ -53,6 +53,7 @@ from .notifications import (
     cancel_timer)
 
 from .message import send_message
+from .email_service import send_email, read_emails, delete_email
 
 from .session_log import open_current_session_log
 from .weather import get_weather, set_weather_location
@@ -81,6 +82,9 @@ TOOLS = [
     set_weather_location,
     open_current_session_log,
     send_message,
+    send_email,
+    read_emails,
+    delete_email,
     send_notification,
     schedule_notification,
     start_timer,
