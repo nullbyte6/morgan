@@ -62,15 +62,19 @@ def stream(chunks, session=None) -> None:
     sys.stdout.write(f"{ASSISTANT_COLOR}")
     displayed = []
     response_prefix = terminal_ui.output_snapshot() if terminal_ui is not None else None
-    try:
-        source = ([chunks] if isinstance(chunks, str) else chunks)
-        for chunk in (
-        source if terminal_ui is not None else chunks_group(source)):
+    def capture(source):
+        for chunk in source:
             displayed.append(chunk)
+            yield chunk
+
+    try:
+        source = capture([chunks] if isinstance(chunks, str) else chunks)
+        for chunk in (
+        source if terminal_ui is not None else chunks_group(source, color=True)):
             if terminal_ui is not None:
                 terminal_ui.update_response(response_prefix,
                                             "".join(chunks_group(
-                                                ["".join(displayed)])))
+                                                ["".join(displayed)], color=True)))
             elif TYPEWRITER_DELAY_SECONDS:
                 for character in chunk:
                     sys.stdout.write(character)
@@ -83,7 +87,7 @@ def stream(chunks, session=None) -> None:
         sys.stdout.write(f"{RESET_COLOR}\n")
         sys.stdout.flush()
         if session is not None:
-            session.write("Nora", "".join(chunks_group(["".join(displayed)])))
+            session.write("Nora", "".join(displayed))
 
 
 def directory_cmd(command: str) -> str | None:

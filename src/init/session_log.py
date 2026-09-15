@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 from .config import HOME_PATH, ensure_storage
+from .output import markdown_text
 
 
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}\.md")
@@ -73,15 +74,15 @@ class SessionLog:
             path.unlink()
 
     def write(self, role, text):
-        """Write one physical line per message, without embedded line breaks."""
+        """Append Markdown with intact code fences, newlines and indentation."""
         if self.private:
             return
-        text = " ".join(str(text).splitlines()).strip() if text else ""
-        if not text:
+        text = markdown_text(text) if text else ""
+        if not text.strip():
             return
         role = " ".join(str(role).splitlines()).strip()
         now = datetime.now().astimezone()
         if self.path.name != f"{now:%Y-%m-%d}.md":
             self._start_day(now)
         with self.path.open("a", encoding="utf-8") as log:
-            log.write(f"[{now:%H:%M:%S %z}] {role}: {text}\n")
+            log.write(f"\n[{now:%H:%M:%S %z}] {role}:\n\n{text}\n\n")
