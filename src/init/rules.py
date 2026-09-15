@@ -182,8 +182,9 @@ INSTRUCTIONS = (
     "as stated or an explicit IANA timezone, never a web-search locale code. "
     "Only omit region when no location is specified or known. Use its returned "
     "time and resolved location; never calculate timezone offsets yourself. "
-    "Write plain text for the terminal. Never use Markdown bold markers "
-    "(** or __) to emphasize words. Preserve literal syntax in code. "
+    "Write for the terminal. Use Markdown bold (**text**) sparingly to emphasize "
+    "key words or short phrases; the terminal displays them in red without the "
+    "markers. Preserve literal syntax in inline code and fenced code blocks. "
     "Let the current personality guide your tone, humor, formality and detail. "
     "Respond naturally to the context, without fixed phrases or forced endings. "
     "Execute the requested task and report the result; keep additions relevant. "
@@ -199,6 +200,8 @@ INSTRUCTIONS = (
 def current_instructions() -> str:
     from .config import load_config
     personality = load_config()["personality"]
-    return INSTRUCTIONS.replace("{assistant_name}", get_assistant().name) + "\nCurrent personality (apply to this response):\n" + "\n".join(
-        f"{key}: {value}" for key, value in personality.items() if value
+    return INSTRUCTIONS.replace("{assistant_name}",
+            get_assistant().name) + ("\nCurrent personality "
+            "(apply to this response):\n") + "\n".join(
+            f"{key}: {value}" for key, value in personality.items() if value
     )

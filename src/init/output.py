@@ -13,6 +13,12 @@ NUMBER_COLOR = "\x1b[38;2;255;165;0m"
 SYMBOL_COLOR = "\x1b[36m"
 CODE_COLOR = "\x1b[37m"
 PROSE_COLOR = "\x1b[90m"
+EMPHASIS_COLOR = "\x1b[91m"
+INLINE_FORMAT = re.compile(
+    r"(?P<code>(?P<ticks>`+).*?(?P=ticks)(?!`))"
+    r"|(?<![\\*])\*\*(?=\S)(?P<stars>.+?)(?<=\S)(?<!\\)\*\*(?!\*)"
+    r"|(?<![\\\w])__(?=\S)(?P<underscores>.+?)(?<=\S)(?<!\\)__(?!\w)"
+)
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)[\r\n]*$")
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 JAVA_TYPES = frozenset("""
@@ -57,7 +63,7 @@ def markdown_text(text):
 
 
 def chunks_group(chunks, *, color=False):
-    """Remove prose bold markers and optionally highlight fenced source code.
+    """Render prose bold in red and optionally highlight fenced source code.
 
     Retokenize the current code block so multiline strings and comments retain
     their language context even when the model splits tokens between chunks.
@@ -97,10 +103,13 @@ def chunks_group(chunks, *, color=False):
                 shade = token_color(kind, value, lexer)
                 highlighted.append(shade + value)
             return "".join(highlighted) + PROSE_COLOR
-        parts = re.split(r"(`+[^`]*`+)", line)
-        for index in range(0, len(parts), 2):
-            parts[index] = re.sub(r"\*\*(?=\S)(.+?)(?<=\S)\*\*", r"\1", parts[index])
-        return "".join(parts)
+        def emphasis(match):
+            if match.group("code") is not None:
+                return match.group(0)
+            text = match.group("stars") or match.group("underscores")
+            return EMPHASIS_COLOR + text + PROSE_COLOR if color else text
+
+        return INLINE_FORMAT.sub(emphasis, line)
 
     for chunk in chunks:
         pending += chunk
