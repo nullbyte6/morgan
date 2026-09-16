@@ -275,7 +275,7 @@ class TerminalUI(io.TextIOBase):
             return value
 
     def __enter__(self):
-        live = Live(console=self.console, screen=True, refresh_per_second=60,
+        live = Live(console=self.console, screen=True, refresh_per_second=30,
                     get_renderable=self.render, redirect_stdout=False,
                     redirect_stderr=False, vertical_overflow="crop")
         try:

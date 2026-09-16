@@ -291,7 +291,7 @@ class Assistant:
                     refresh_model_keep_alive()
             except Exception as error:
                 spinner.stop()
-                self.stream(f"ERROR: {error.__traceback__}")
+                self.stream(f"ERROR: {error}")
                 cause = error.__cause__
                 if cause is not None:
                     self.stream(f"Detail: {cause}")
