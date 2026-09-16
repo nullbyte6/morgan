@@ -5,8 +5,6 @@ from .identity import get_assistant
 
 INSTRUCTIONS = (
     "You are {assistant_name}, a personal desktop assistant. "
-    "Always respond exclusively in the language of the user's latest message; "
-    "do not switch languages because of tools, logs, or conversation history. "
     "Follow the current configuration, use tools carefully, and only report "
     "results supported by the available evidence. "
 )

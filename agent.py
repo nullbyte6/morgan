@@ -1,4 +1,4 @@
-#type: ignore
+# type: ignore
 import json
 import os
 import random
@@ -15,6 +15,7 @@ from src.init.identity import register_assistant
 if __name__ == "__main__":
     sys.modules["agent"] = sys.modules[__name__]
 
+
 class Assistant:
     """One shared assistant; reading its identity never
     starts the model or UI."""
@@ -26,7 +27,6 @@ class Assistant:
         with cls._instance_lock:
             if cls._instance is None:
                 instance = super().__new__(cls)
-                instance.response_language = "español"
                 instance.terminal_ui = None
                 instance.agent = None
                 instance.username = getuser().capitalize()
@@ -86,10 +86,10 @@ class Assistant:
         """Shows remaining fragments immediately, animation delay is optional"""
         from src.init.output import chunks_group
         from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
-
         sys.stdout.write(f"{ASSISTANT_COLOR}")
         displayed = []
         response_prefix = self.terminal_ui.output_snapshot() if self.terminal_ui is not None else None
+
         def capture(source):
             for chunk in source:
                 displayed.append(chunk)
@@ -98,11 +98,13 @@ class Assistant:
         try:
             source = capture([chunks] if isinstance(chunks, str) else chunks)
             for chunk in (
-            source if self.terminal_ui is not None else chunks_group(source, color=True)):
+                    source if self.terminal_ui is not None else chunks_group(
+                        source, color=True)):
                 if self.terminal_ui is not None:
                     self.terminal_ui.update_response(response_prefix,
-                                                "".join(chunks_group(
-                                                    ["".join(displayed)], color=True)))
+                                                     "".join(chunks_group(
+                                                         ["".join(displayed)],
+                                                         color=True)))
                 elif self.typewriter_delay_seconds:
                     for character in chunk:
                         sys.stdout.write(character)
@@ -120,7 +122,6 @@ class Assistant:
     def directory_cmd(self, command: str) -> str | None:
         """Handle standalone cd/chdir commands without a model or shell call."""
         from src.init.brain import change_directory
-
         match = re.fullmatch(r"(?:cd|chdir)(?=\s|\.|\\|$)\s*(.*)",
                              command.strip(), flags=re.IGNORECASE)
         if match is None:
@@ -144,37 +145,27 @@ class Assistant:
                 or re.search(r"\s+(?:y|and)\s+", lowered)
                 or re.search(r"\b[\w.-]+\.(?:com|es|org|net|io)\b", lowered)
                 or any(word in lowered for word in (
-                    "directorio", "carpeta", "folder", "directory", "archivo",
-                    "fichero", "file", "navegador", "browser", "repositorio",
-                    "repository"))):
+                        "directorio", "carpeta", "folder", "directory",
+                        "archivo", "fichero", "file", "navegador", "browser",
+                        "repositorio", "repository"))):
             return None
         target = re.sub(
             r"^(?:la\s+|el\s+)?(?:app|aplicaci[oó]n|application|programa|program)\s+(?:de\s+)?",
-            "", target, flags=re.IGNORECASE,
-        ).strip()
+            "", target, flags=re.IGNORECASE).strip()
+
         target = re.sub(r"\s+(?:por\s+favor|please)$", "", target,
                         flags=re.IGNORECASE).strip()
+
         target = re.sub(r"^(?:el|la)\s+", "", target,
                         flags=re.IGNORECASE).strip()
+
         if not target:
             return None
+
         from src.init.brain import open_application
-
         result = open_application(target)
-        if self._response_language(command) == "español":
-            translations = (
-                ("Opened application:", "Aplicación abierta:"),
-                ("Application not found:", "No se encontró la aplicación:"),
-                ("Application path not found or is not an executable file:",
-                 "La ruta no existe o no es un ejecutable:"),
-                ("Error opening application path:", "Error al abrir la ruta:"),
-            )
-            for source, translated in translations:
-                if result.startswith(source):
-                    return translated + result[len(source):]
-
         steam_match = re.fullmatch(r"(.+?)\s+(?:en|desde|from)\s+steam",
-            target, flags=re.IGNORECASE)
+                                   target, flags=re.IGNORECASE)
 
         if steam_match:
             game = steam_match.group(1).strip()
@@ -244,56 +235,12 @@ class Assistant:
 
     def current_instructions(self) -> str:
         from src.init import rules
-
         return rules.current_instructions()
 
     def working_directory_instructions(self) -> str:
         from src.init.brain import get_working_directory
-
         return f"Current working directory for this turn: {get_working_directory()}"
 
-    @staticmethod
-    def _response_language(text: str) -> str | None:
-        """Infer a lightweight response-language hint from the latest text.
-        Tool output and previous turns can be in another language.  A small
-        local vocabulary is enough to disambiguate the common Spanish/English
-        commands without adding a network dependency or changing the user's
-        message semantics.
-        """
-        words = set(re.findall(r"[a-záéíóúüñ]+", text.casefold()))
-        spanish = {"abre", "abrir", "dime", "cuál", "cual", "qué", "que",
-                   "tienes", "puedes", "quiero", "necesito", "ejecuta",
-                   "reproduce", "reproducir", "pausa", "busca", "cómo",
-                   "como", "por", "para", "con", "en", "el", "la", "los",
-                   "las", "una", "un", "mi", "me", "de", "del", "dónde",
-                   "donde"}
-        english = {"open", "tell", "what", "which", "can", "please", "run",
-                   "play", "pause", "search", "how", "where", "my", "the",
-                   "an", "in", "to", "for", "with"}
-
-        spanish_score = len(words & spanish)
-        english_score = len(words & english)
-        if any(character in text for character in "áéíóúüñ¿¡"):
-            spanish_score += 2
-        if spanish_score > english_score and spanish_score >= 1:
-            return "español"
-        if english_score > spanish_score and english_score >= 1:
-            return "inglés"
-        return None
-
-    def _localized_request(self, user_input: str) -> str:
-        detected = self._response_language(user_input)
-
-        if detected is not None:
-            self.response_language = detected
-
-        return (
-                f"[IDIOMA DE RESPUESTA OBLIGATORIO: responde exclusivamente "
-                f"en {self.response_language}. "
-                f"No cambies de idioma por resultados de herramientas, "
-                f"mensajes del sistema ni por el historial.]\n"
-                + user_input
-        )
 
     def run_session(self):
         self._initialize_runtime()
@@ -381,12 +328,14 @@ class Assistant:
             spinner.start()
             try:
                 with self.agent.run_stream_sync(
-                        self._localized_request(user_input), message_history=history,
-                        model_settings={"temperature": brain.load_config()[
-                            "temperature"]}) as result:
+                        user_input,
+                        message_history=history,
+                        model_settings={"temperature":
+                            brain.load_config()["temperature"]}) as result:
                     spinner.stop()
-                    self.stream(result.stream_text(delta=True, debounce_by=None),
-                           session=session)
+                    self.stream(
+                        result.stream_text(delta=True, debounce_by=None),
+                        session=session)
                     history = result.all_messages()
                     for message in history:
                         if isinstance(message, ModelResponse):
@@ -423,6 +372,7 @@ class Assistant:
 
 
 register_assistant(Assistant)
+
 
 def main():
     Assistant().run()
