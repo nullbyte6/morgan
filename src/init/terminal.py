@@ -7,6 +7,7 @@ import queue
 import sys
 import threading
 import time
+import warnings
 from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from datetime import datetime
 
@@ -205,11 +206,18 @@ class TerminalUI(io.TextIOBase):
                     self._stop.wait(1)
                     continue
                 with loopback.recorder(samplerate=44100,
-                                       blocksize=4096) as recorder:
+                                       blocksize=8192) as recorder:
                     next_device_check = time.monotonic() + 2
                     while not self._stop.is_set():
-                        levels = spectrum_levels(
-                            recorder.record(numframes=2048))
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings(
+                                "ignore",
+                                message=r"^data discontinuity in recording$",
+                                category=Warning,
+                                module=r"soundcard\.mediafoundation",
+                            )
+                            audio = recorder.record(numframes=4096)
+                        levels = spectrum_levels(audio)
                         with self._lock:
                             self._audio_error = None
                             self._levels = tuple(max(float(new), old * 0.8)
