@@ -1,2 +1,2 @@
 @echo off
-pwsh ".\nora.ps1"
+pwsh.exe -ExecutionPolicy Bypass -File "%NORA_HOME%\nora.ps1"
