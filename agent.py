@@ -262,7 +262,7 @@ class Assistant:
                 try:
                     user_input = capture_voice_input()
                 except Exception as error:
-                    stream(f"VOICE ERROR: {error}")
+                    self.stream(f"VOICE ERROR: {error}")
                     session.write("System", str(error))
                     continue
                 if not user_input:
@@ -291,10 +291,10 @@ class Assistant:
                     refresh_model_keep_alive()
             except Exception as error:
                 spinner.stop()
-                stream(f"ERROR: {error}")
+                self.stream(f"ERROR: {error}")
                 cause = error.__cause__
                 if cause is not None:
-                    stream(f"Detail: {cause}")
+                    self.stream(f"Detail: {cause}")
                 session.write("Error", f"{error}; Detail: {cause}"
                 if cause is not None else str(error))
 
