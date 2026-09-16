@@ -9,6 +9,7 @@ import threading
 import time
 from getpass import getuser
 
+from init.brain import launch_steam_game
 from src.init.identity import register_assistant
 
 if __name__ == "__main__":
@@ -169,6 +170,10 @@ class Assistant:
             for source, translated in translations:
                 if result.startswith(source):
                     return translated + result[len(source):]
+
+        if launch_steam_game(target):
+            return f"Steam game launched: {target}"
+
         return result
 
     def git_cmd(self, command: str) -> str | None:

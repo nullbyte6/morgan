@@ -35,6 +35,7 @@ except ImportError:
 
 from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config)
 from .app_cache import cached_app, remember_app, forget_app
+from .steam import steam_manager
 
 VERSION = "v1.0.1-alpha"
 
@@ -1168,6 +1169,13 @@ def _launch_application(app):
                          creationflags=subprocess.CREATE_NO_WINDOW)
     else:
         os.startfile(app["Path"])
+
+
+def launch_steam_game(game: str) -> str:
+    """Launch an installed Steam game by its name."""
+    if steam_manager.launch(game):
+        return f"Steam game launched: {game}"
+    return f"Steam game not found: {game}"
 
 
 def open_application(application: str) -> str:
