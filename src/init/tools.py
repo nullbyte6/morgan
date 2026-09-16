@@ -77,8 +77,10 @@ from .self_code import (get_repo_lnk, get_nora_repository, list_nora_code,
 
 from src.diagnostics.tools import (check_system_health, check_disk_health,
                                    check_security_health,)
+from .editor import open_in_editor
 
 TOOLS = [
+    open_in_editor,
     close_application,
     execute_command,
     search_apps,

@@ -164,7 +164,6 @@ class NoraEditor:
 def open_in_editor(path: str) -> str:
     """
     Open an existing text file in Nora's built-in interactive editor.
-
     Use this tool when the user explicitly wants to manually edit a file
     themselves inside Nora. Do not use it when Nora has been asked to edit
     the file automatically.
