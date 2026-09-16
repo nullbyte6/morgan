@@ -171,8 +171,14 @@ class Assistant:
                 if result.startswith(source):
                     return translated + result[len(source):]
 
-        if launch_steam_game(target):
-            return f"Steam game launched: {target}"
+        steam_match = re.fullmatch(r"(.+?)\s+(?:en|desde|from)\s+steam",
+            target, flags=re.IGNORECASE)
+
+        if steam_match:
+            game = steam_match.group(1).strip()
+            if launch_steam_game(game):
+                return f"Steam game launched: {game}"
+            return f"Steam game not found: {game}"
 
         return result
 

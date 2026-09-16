@@ -1173,9 +1173,7 @@ def _launch_application(app):
 
 def launch_steam_game(game: str) -> str:
     """Launch an installed Steam game by its name."""
-    if steam_manager.launch(game):
-        return f"Steam game launched: {game}"
-    return f"Steam game not found: {game}"
+    return steam_manager.launch(game)
 
 
 def list_steam_games() -> str:
@@ -1188,7 +1186,7 @@ def list_steam_games() -> str:
 def find_steam_game(game: str) -> str:
     """Find an installed Steam game by its name."""
     if steam_manager.find_game(game):
-        return f"Steam game found: {steam_manager.find_game()}"
+        return f"Steam game found: {steam_manager.find_game(game)}"
     return None
 
 
