@@ -695,7 +695,7 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
     if not query:
         return "Error: search query is empty"
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         result_limit = max(1, min(int(max_results), 10))
         results = list(DDGS(timeout=10).text(
