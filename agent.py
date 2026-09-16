@@ -291,11 +291,11 @@ class Assistant:
                     refresh_model_keep_alive()
             except Exception as error:
                 spinner.stop()
-                self.stream(f"ERROR: {error}")
+                self.stream(f"ERROR: {error.__traceback__}")
                 cause = error.__cause__
                 if cause is not None:
                     self.stream(f"Detail: {cause}")
-                session.write("Error", f"{error}; Detail: {cause}"
+                session.write("System", f"{error}; Detail: {cause}"
                 if cause is not None else str(error))
 
     def run(self):

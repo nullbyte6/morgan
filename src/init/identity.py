@@ -19,4 +19,4 @@ def get_assistant() -> AssistantIdentity:
     """Return the registered singleton; the application owns its name and state."""
     if _assistant_factory is None:
         raise RuntimeError("The application has not registered its assistant")
-    return _assistant_factory
+    return _assistant_factory()
