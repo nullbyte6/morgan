@@ -1178,6 +1178,20 @@ def launch_steam_game(game: str) -> str:
     return f"Steam game not found: {game}"
 
 
+def list_steam_games() -> str:
+    """List all installed Steam games."""
+    if steam_manager.games():
+        return "\n".join(sorted(steam_manager.games()))
+    return None
+
+
+def find_steam_game(game: str) -> str:
+    """Find an installed Steam game by its name."""
+    if steam_manager.find_game(game):
+        return f"Steam game found: {steam_manager.find_game()}"
+    return None
+
+
 def open_application(application: str) -> str:
     """Open an app, consulting persistent apps.json before expensive discovery."""
     from src.init.folders import FOLDER_ALIASES

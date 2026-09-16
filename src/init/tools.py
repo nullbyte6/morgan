@@ -43,6 +43,8 @@ from .brain import (
     shutdown_computer,
     cancel_shutdown,
     launch_steam_game,
+    list_steam_games,
+    find_steam_game,
     open_application,
     list_applications,
     list_open_applications,
@@ -161,11 +163,13 @@ TOOLS = [
     kill_process,
     shutdown_computer,
     cancel_shutdown,
+    launch_steam_game,
+    list_steam_games,
+    find_steam_game,
     open_application,
     list_applications,
     list_open_applications,
     list_media_sessions,
     identify_playing_song,
-    get_current_media,
-    launch_steam_game
+    get_current_media
 ]
