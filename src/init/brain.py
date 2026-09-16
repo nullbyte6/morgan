@@ -1178,9 +1178,28 @@ def open_application(application: str) -> str:
     """Open an app, consulting persistent apps.json before expensive discovery."""
     from src.init.folders import FOLDER_ALIASES
 
-    if application.strip().casefold() in FOLDER_ALIASES:
+    raw_application = application.strip().strip('"').strip("'")
+    if raw_application.casefold() in FOLDER_ALIASES:
         return open_directory(application)
-    query = application.strip().casefold()
+    # An explicit executable path is authoritative.  It must not fall
+    # through to a full-disk scan (which can take minutes and can miss files
+    # behind protected or redirected folders).
+    path_candidate = Path(os.path.expandvars(raw_application))
+    path_like = ("\\" in raw_application or "/" in raw_application
+                 or (len(raw_application) >= 2 and raw_application[1] == ":"))
+    if path_like:
+        if path_candidate.is_file() and path_candidate.suffix.casefold() in APPLICATION_SUFFIXES:
+            app = {"Name": path_candidate.stem, "Source": "file",
+                   "Path": str(path_candidate)}
+            try:
+                _launch_application(app)
+                remember_app(normalize_application_name(path_candidate.stem), app)
+                return f"Opened application: {path_candidate.stem}"
+            except Exception as error:
+                return f"Error opening application path {raw_application}: {error}"
+        return f"Application path not found or is not an executable file: {raw_application}"
+
+    query = raw_application.casefold()
     normalized_query = normalize_application_name(query)
     if not normalized_query:
         return "Application name is empty"

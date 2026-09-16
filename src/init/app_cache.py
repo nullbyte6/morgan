@@ -2,13 +2,50 @@
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import threading
+import unicodedata
 
 from .config import HOME_PATH
 
 APPS_FILE = HOME_PATH / "json" / "apps.json"
 _lock = threading.RLock()
+
+
+def _normalize_name(value):
+    name = Path(str(value).strip()).stem
+    name = unicodedata.normalize("NFKD", name.casefold())
+    name = "".join(character for character in name
+                   if not unicodedata.combining(character))
+    return " ".join(re.findall(r"[a-z0-9]+", name))
+
+
+def _normalized_target(app):
+    """Return the cached launch target, accepting older cache shapes.
+
+    Early versions wrote executable paths under ``AppID`` even when the
+    source was ``file``.  Keep those entries usable and normalize them to the
+    shape expected by the launcher instead of invalidating a valid cache.
+    """
+    source = app.get("Source")
+    if source == "registered":
+        app_id = app.get("AppID")
+        if isinstance(app_id, str) and app_id.strip():
+            # A path in a registered entry is a legacy file entry, not an
+            # AppsFolder AUMID.
+            if Path(app_id).is_file():
+                return "file", app_id
+            return "registered", app_id
+        return None, None
+
+    path = app.get("Path")
+    if not isinstance(path, str) or not path.strip():
+        # Compatibility with cache entries that used AppID for a file path.
+        path = app.get("AppID")
+    if isinstance(path, str) and path.strip():
+        return "file", path
+    return None, None
 
 
 def _read():
@@ -24,20 +61,31 @@ def cached_app(query):
     """Read fresh entries; invalid or unavailable cache files are optional."""
     with _lock:
         try:
-            app = _read().get(query)
+            data = _read()
+            app = data.get(query)
+            if not isinstance(app, dict):
+                # Also resolve a request such as ``code.exe`` or an app's
+                # display name against a differently keyed cache entry.
+                for candidate in data.values():
+                    if not isinstance(candidate, dict) or not isinstance(candidate.get("Name"), str):
+                        continue
+                    target_path = candidate.get("Path") or candidate.get("AppID")
+                    aliases = (candidate["Name"],
+                               Path(target_path).name if isinstance(target_path, str) else "")
+                    if any(_normalize_name(alias) == query for alias in aliases):
+                        app = candidate
+                        break
             if not isinstance(app, dict) or not isinstance(app.get("Name"), str):
                 return None
-            target_key = "AppID" if app.get("Source") == "registered" else "Path"
-            target = app.get(target_key)
+            source, target = _normalized_target(app)
             if not isinstance(target, str) or not target.strip() or any(ord(c) < 32 for c in target):
                 return None
-            if target_key == "Path":
+            if source == "file":
                 path = Path(target)
                 if not path.is_absolute() or not path.is_file():
-                    forget_app(query)
                     return None
-            return {"Name": app["Name"], "Source": "registered" if target_key == "AppID" else "file",
-                    target_key: target}
+                return {"Name": app["Name"], "Source": "file", "Path": target}
+            return {"Name": app["Name"], "Source": "registered", "AppID": target}
         except (OSError, ValueError):
             return None
 
