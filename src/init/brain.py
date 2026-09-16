@@ -31,7 +31,8 @@ try:
 except ImportError:
     winreg = None
 
-from .config import CONFIG_FILE, HOME_PATH, ensure_storage, load_config
+from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
+                     update_config)
 from .folders import resolve_directory
 from .app_cache import cached_app, remember_app, forget_app
 

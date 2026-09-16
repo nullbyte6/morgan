@@ -85,6 +85,19 @@ invalid, the assistant warns and keeps the last valid configuration until the fi
 corrected. Model name and keep-alive settings require restarting the assistant;
 `NORA_MODEL` and `NORA_KEEP_ALIVE` environment variables take precedence.
 
+`instructions` contains the operational rules grouped by area (`media`, `files`,
+`repositories`, `weather`, and so on). Nora reads these sections on every turn.
+When a user changes how Nora should communicate or behave in conversation, she
+uses `update_config` to persist the applicable setting immediately; nested
+updates preserve the other configuration fields. For example:
+
+```json
+{
+  "personality": {"verbosity": "detailed"},
+  "instructions": {"response": "Prefer concise numbered steps for technical tasks."}
+}
+```
+
 Notes are saved in `~/.nora/note/`; reading notes includes previous sessions.
 
 ## Session logs

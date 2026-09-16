@@ -1,5 +1,6 @@
 from .brain import (
     load_config,
+    update_config,
     get_version,
     update_version,
     refresh,
@@ -105,6 +106,7 @@ TOOLS = [
     list_timers,
     cancel_timer,
     load_config,
+    update_config,
     get_version,
     update_version,
     refresh,
