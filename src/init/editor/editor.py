@@ -8,6 +8,7 @@ from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 from prompt_toolkit.layout import HSplit, Layout, Window
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.layout.margins import NumberedMargin
 from prompt_toolkit.layout.processors import (
     HighlightSearchProcessor,
     HighlightSelectionProcessor)
@@ -127,9 +128,10 @@ class NoraEditor:
                 input_processors=[
                     HighlightSearchProcessor(),
                     HighlightSelectionProcessor(),
-                ]),
+                ],
+            ),
             wrap_lines=False,
-            left_margins=[])
+            left_margins=[NumberedMargin()])
 
         status_window = Window(
             content=FormattedTextControl(

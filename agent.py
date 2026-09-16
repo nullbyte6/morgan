@@ -175,6 +175,33 @@ class Assistant:
 
         return result
 
+    def editor_cmd(self, command: str) -> str | None:
+        """Use explicit requests to open Nora's built-in editor."""
+        patterns = (
+            r"(?:abre|abrir)\s+(?:el\s+)?editor\s+(?:con\s+)?(.+)",
+            r"(?:edita|editar)\s+(.+)\s+(?:en|con)\s+(?:el\s+)?editor",
+            r"(?:open)\s+(.+)\s+(?:in|with)\s+(?:the\s+)?editor")
+
+        for pattern in patterns:
+            match = re.fullmatch(
+                pattern,
+                command.strip(),
+                flags=re.IGNORECASE)
+
+            if match is None:
+                continue
+
+            path = match.group(1).strip().strip('"').strip("'")
+
+            if not path:
+                return None
+
+            from src.init.editor import open_in_editor
+            return open_in_editor(path)
+
+        return None
+
+
     def git_cmd(self, command: str) -> str | None:
         """Execute exact supported Git commands through the existing tools."""
         from src.init import brain
@@ -294,11 +321,19 @@ class Assistant:
                 self.stream(directory_result)
                 session.write(self.name, directory_result)
                 continue
+
+            editor_result = self.editor_cmd(user_input)
+            if editor_result is not None:
+                self.stream(editor_result, session=session)
+                continue
+
             application_result = self.application_cmd(user_input)
             if application_result is not None:
                 self.stream(application_result, session=session)
                 continue
+                
             git_result = self.git_cmd(user_input)
+
             if git_result is not None:
                 self.stream(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
                 session.write(self.name, git_result)
