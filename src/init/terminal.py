@@ -16,17 +16,9 @@ from contextlib import (
 
 from datetime import datetime
 
-from rich import box
 from rich.console import Console, Group
 from rich.live import Live
-from rich.panel import Panel
 from rich.text import Text
-
-
-class TerminalPanel(Panel):
-    @property
-    def _subtitle(self):
-        return self.subtitle
 
 
 async def media_is_playing():
@@ -181,18 +173,14 @@ class TerminalUI(io.TextIOBase):
                     line.truncate(inner_width, overflow="crop")
                     backdrop[top + index] = line
         visible = backdrop + visible
-        title = Text(
-            datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S"),
-            style="bright_white")
-        footer_width = max(0, width - 4)
-        subtitle = Text("↑/↓ · PgUp/PgDn", style="bright_white", end="")
-        subtitle.truncate(footer_width, overflow="crop")
-        subtitle.append("─" * max(0, footer_width - subtitle.cell_len))
-        return TerminalPanel(Group(*(visible + input_lines + meter_lines)), box=box.SQUARE,
-                     border_style="bright_white", title=title,
-                     title_align="right",
-                     subtitle=subtitle, subtitle_align="right", width=width,
-                     height=height, padding=(0, 1), safe_box=False)
+
+        header = Text(datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S"),
+            style="bright_white",
+            justify="right")
+
+        footer = Text("↑/↓ · PgUp/PgDn", style="bright_white")
+        return Group(header, *(visible + input_lines +
+                               meter_lines), footer)
 
     def _poll_audio(self):
         """Read only speaker loopback in a worker; never block terminal rendering."""
