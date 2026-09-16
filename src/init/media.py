@@ -1,11 +1,13 @@
 """Local Windows playback control and free YouTube search from Python."""
 
 import asyncio
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import time
 import webbrowser
 from collections import OrderedDict
 from typing import Literal
@@ -15,7 +17,7 @@ _spotify_tracks = OrderedDict()
 _VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 _SPOTIFY_SCOPES = (
     "user-read-playback-state user-read-currently-playing "
-    "user-modify-playback-state"
+    "user-modify-playback-state user-read-private"
 )
 
 
@@ -35,23 +37,32 @@ def _spotify_settings() -> tuple[str, str, str] | None:
 def _spotify_metadata_client():
     settings = _spotify_settings()
     if settings is None:
-        raise ValueError("Spotify is disabled: configure spotify-web-clientid and spotify-web-client_secret in config.json")
+        raise ValueError("Spotify is disabled: configure spotify-web-clientid and "
+                         "spotify-web-client_secret in config.json")
     try:
         import spotipy
+        from spotipy.cache_handler import CacheFileHandler
         from spotipy.oauth2 import SpotifyClientCredentials
     except ImportError as error:
         raise ValueError("Spotipy is not installed; install requirements.txt and restart Nora") from error
+    from .config import HOME_PATH
+
     client_id, client_secret, _ = settings
     return spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-        client_id=client_id, client_secret=client_secret,
+        client_id=client_id,
+        client_secret=client_secret,
+        cache_handler=CacheFileHandler(
+            cache_path=str(HOME_PATH / "json" / "spotify_client_token.json"),
+        ),
     ))
 
 
 def _spotify_player_client():
-    """Create an OAuth player client, caching the user token outside config.json."""
+    """Create an OAuth player client with a cache isolated per Spotify app."""
     settings = _spotify_settings()
     if settings is None:
-        raise ValueError("Spotify is disabled: configure spotify-web-clientid and spotify-web-client_secret in config.json")
+        raise ValueError("Spotify is disabled: configure spotify-web-clientid "
+                         "and spotify-web-client_secret in config.json")
     try:
         import spotipy
         from spotipy.oauth2 import SpotifyOAuth
@@ -60,12 +71,14 @@ def _spotify_player_client():
     from .config import HOME_PATH
 
     client_id, client_secret, redirect_uri = settings
+    app_key = hashlib.sha256(client_id.encode("utf-8")).hexdigest()[:16]
     return spotipy.Spotify(auth_manager=SpotifyOAuth(
         client_id=client_id,
         client_secret=client_secret,
         redirect_uri=redirect_uri,
         scope=_SPOTIFY_SCOPES,
-        cache_path=str(HOME_PATH / "json" / "spotify_token.json"),
+        cache_path=str(HOME_PATH / "json" / f"spotify_token_{app_key}.json"),
+        show_dialog=True,
         open_browser=True,
     ))
 
@@ -81,20 +94,82 @@ def _spotify_error(action: str, error: Exception) -> str:
             "authorize the browser prompt, and use an active Spotify Premium device.")
 
 
+def _spotify_target_device(client) -> str:
+    """Choose a safe playback target when Spotify has no active device.
+
+    An explicitly configured device wins. Otherwise Nora uses the device whose
+    name equals this Windows computer name. It never guesses among unrelated
+    Spotify Connect devices such as speakers in another room.
+    """
+    from .config import load_config
+
+    devices = [device for device in client.devices().get("devices", [])
+               if not device.get("is_restricted") and device.get("id")]
+    configured = load_config()["spotify_device_id"].strip()
+    if configured:
+        if any(device["id"] == configured for device in devices):
+            return configured
+        raise ValueError("the configured spotify_device_id is not currently available")
+    active = [device for device in devices if device.get("is_active")]
+    if active:
+        return active[0]["id"]
+    computer_name = os.environ.get("COMPUTERNAME", "").casefold()
+    local = [device for device in devices
+             if device.get("name", "").casefold() == computer_name]
+    if len(local) == 1:
+        return local[0]["id"]
+    candidates = [{"id": device["id"], "name": device.get("name"),
+                   "type": device.get("type")}
+                  for device in devices]
+    if not candidates:
+        raise ValueError("no Spotify Connect devices are available; open Spotify and start a track once")
+    raise ValueError("no active or local Spotify device was found; choose one with "
+                     f"spotify_device_id in config.json: {json.dumps(candidates, ensure_ascii=False)}")
+
+
+def _spotify_playback_confirmation(client, expected_uri: str | None) -> dict:
+    """Read Spotify after a player command; HTTP 204 alone is not playback."""
+    for _ in range(3):
+        state = client.current_playback() or {}
+        item = state.get("item") or {}
+        uri = item.get("uri")
+        playing = bool(state.get("is_playing"))
+        if playing and (expected_uri is None or uri == expected_uri):
+            return {
+                "playback_confirmed": True,
+                "confirmed_uri": uri,
+                "title": item.get("name"),
+                "artists": [artist.get("name") for artist in item.get("artists", [])],
+                "device": (state.get("device") or {}).get("name"),
+            }
+        time.sleep(0.4)
+    return {
+        "playback_confirmed": False,
+        "confirmed_uri": uri,
+        "is_playing": playing,
+        "device": (state.get("device") or {}).get("name"),
+        "note": "Spotify accepted the command but did not report the requested track as playing.",
+    }
+
+
 def _spotify_control(action: Literal["play", "pause", "next", "previous"],
                      uri: str | None = None) -> str:
     try:
         client = _spotify_player_client()
+        device_id = _spotify_target_device(client)
         if action == "play":
-            client.start_playback(uris=[uri] if uri else None)
+            client.start_playback(device_id=device_id, uris=[uri] if uri else None)
         elif action == "pause":
-            client.pause_playback()
+            client.pause_playback(device_id=device_id)
         elif action == "next":
-            client.next_track()
+            client.next_track(device_id=device_id)
         else:
-            client.previous_track()
-        return json.dumps({"action": action, "accepted": True,
-                           "source": "spotify", "uri": uri}, ensure_ascii=False)
+            client.previous_track(device_id=device_id)
+        response = {"action": action, "accepted": True, "source": "spotify",
+                    "uri": uri, "device_id": device_id}
+        if action == "play":
+            response.update(_spotify_playback_confirmation(client, uri))
+        return json.dumps(response, ensure_ascii=False)
     except Exception as error:
         return _spotify_error(f"controlling {action}", error)
 
@@ -227,7 +302,8 @@ def search_youtube_songs(query: str, max_results: int = 5) -> str:
             timeout=45, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
         if result.returncode:
-            return f"Error searching YouTube: {result.stderr.strip() or 'yt-dlp failed'}. Ensure yt-dlp is installed."
+            return (f"Error searching YouTube: {result.stderr.strip() or 'yt-dlp failed'}. "
+                    f"Ensure yt-dlp is installed.")
         entries = json.loads(result.stdout).get("entries") or []
         candidates = []
         for entry in entries:
@@ -243,7 +319,8 @@ def search_youtube_songs(query: str, max_results: int = 5) -> str:
         while len(_videos) > 100:
             _videos.popitem(last=False)
         return json.dumps({"query": query, "candidates": candidates,
-                           "instruction": "For ambiguous requests, ask the user to choose; do not play the first result automatically."},
+                           "instruction": "For ambiguous requests, ask the user to choose; "
+                                          "do not play the first result automatically."},
                           ensure_ascii=False)
     except subprocess.TimeoutExpired:
         return "Error: YouTube search timed out; try again"
@@ -266,7 +343,8 @@ def play_youtube_song(video_id: str) -> str:
             return "Error: the browser did not accept the YouTube URL"
         return json.dumps({"opened": True, "title": candidate["title"], "url": url,
                            "playback_confirmed": False,
-                           "note": "Check get_current_media before claiming playback; browser autoplay may require a click."},
+                           "note": "Check get_current_media before claiming playback;"
+                                   " browser autoplay may require a click."},
                           ensure_ascii=False)
     except OSError as error:
         return f"Error opening YouTube: {error}"

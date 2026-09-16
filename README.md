@@ -153,20 +153,35 @@ fields in `~/.nora/json/config.json` contain values:
 {
   "spotify-web-clientid": "your Spotify application client ID",
   "spotify-web-client_secret": "your Spotify application client secret",
-  "spotify_redirect_uri": "http://127.0.0.1:8888/callback"
+  "spotify_redirect_uri": "http://127.0.0.1:8888/callback",
+  "spotify_device_id": ""
 }
 ```
 
 Register the exact `spotify_redirect_uri` in the app's Spotify developer
 dashboard. On the first attempt to play or control Spotify, Nora opens the
 Spotify authorization page and stores the refresh token locally in
-`~/.nora/json/spotify_token.json`; it never places that token in the
+`~/.nora/json/spotify_token_<app-id>.json`; it never places that token in the
 configuration or displays either secret. Ask for Spotify explicitly to search
 with `search_spotify_songs` and play a selected result with
 `play_spotify_song`. `control_media` continues to control the active Windows
 media session; when there is none, it falls back to the authorized Spotify
 Connect device if Spotify is configured. Spotify playback through the Web API
 requires an active Spotify Premium device.
+
+Spotify's client-credentials search token is stored separately at
+`~/.nora/json/spotify_client_token.json`, so Nora never creates Spotipy's
+default `.cache` file in the current project directory.
+
+When no Spotify Connect device is marked active, Nora selects the device whose
+Spotify name equals the current Windows computer name. Set `spotify_device_id`
+only to target a different device explicitly; Nora reports available choices
+instead of guessing between other speakers or computers.
+
+Nora requests playback control and `user-read-private` during authorization.
+The latter lets Spotify identify the authorized account and subscription when
+diagnosing playback. Changing either Spotify client credential creates a new,
+app-specific token cache and requires authorizing in the browser again.
 
 ## Weather
 Ask "what will the weather be tomorrow morning in Madrid, Spain?" or choose a
