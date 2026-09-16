@@ -327,8 +327,6 @@ def search_spotify_playlists(query: str, max_results: int = 10) -> str:
     if type(max_results) is not int or not 1 <= max_results <= 10:
         return "Error: max_results must be between 1 and 10"
     try:
-        # Use the user client: current Spotify search may require
-        # user-read-private even for public playlist metadata.
         items = _spotify_player_client().search(
             q=query.strip(), type="playlist", limit=max_results,
         ).get("playlists", {}).get("items", [])

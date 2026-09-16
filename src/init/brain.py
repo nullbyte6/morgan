@@ -650,7 +650,7 @@ def open_directory(path: str = ".") -> str:
     """
     try:
         from src.init.folders import resolve_directory
-        from .folder_search import is_folder_name, search_folders
+        from .folder_search import is_folder_name, remember_folders, search_folders
 
         query = path.strip().strip("\"'")
         if is_folder_name(query):
@@ -667,7 +667,13 @@ def open_directory(path: str = ".") -> str:
             target = resolve_directory(path)
         if not target.is_dir():
             return f"Error: directory does not exist or is not a folder: {target}"
-        return open_file(str(target))
+        # A folder selected from a search is opened by its explicit absolute
+        # path on the next turn. Persist that successful resolution as well;
+        # otherwise only disk-search results ever reach folders.json.
+        opened = open_file(str(target))
+        if target.name and opened.startswith("Opened:"):
+            remember_folders(target.name, [str(target)], complete=True)
+        return opened
     except Exception as error:
         return f"Error opening directory: {error}"
 
