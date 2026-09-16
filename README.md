@@ -144,6 +144,30 @@ playback need Internet. Install the updated `requirements.txt` and restart the a
 to load the new tools. If YouTube changes its search interface, updating `yt-dlp`
 may be necessary.
 
+## Spotify playback
+
+Spotify is optional. Nora enables its Spotify tools only when both of these
+fields in `~/.nora/json/config.json` contain values:
+
+```json
+{
+  "spotify-web-clientid": "your Spotify application client ID",
+  "spotify-web-client_secret": "your Spotify application client secret",
+  "spotify_redirect_uri": "http://127.0.0.1:8888/callback"
+}
+```
+
+Register the exact `spotify_redirect_uri` in the app's Spotify developer
+dashboard. On the first attempt to play or control Spotify, Nora opens the
+Spotify authorization page and stores the refresh token locally in
+`~/.nora/json/spotify_token.json`; it never places that token in the
+configuration or displays either secret. Ask for Spotify explicitly to search
+with `search_spotify_songs` and play a selected result with
+`play_spotify_song`. `control_media` continues to control the active Windows
+media session; when there is none, it falls back to the authorized Spotify
+Connect device if Spotify is configured. Spotify playback through the Web API
+requires an active Spotify Premium device.
+
 ## Weather
 Ask "what will the weather be tomorrow morning in Madrid, Spain?" or choose a
 default with "save Madrid, Spain as my weather location". After that, "what will
