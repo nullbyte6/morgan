@@ -1,5 +1,3 @@
-from .identity import get_assistant
-
 import base64
 import codecs
 import ctypes
@@ -25,15 +23,16 @@ from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import unicodedata
+import winshell
+
+from .identity import get_assistant
 
 try:
     import winreg
 except ImportError:
     winreg = None
 
-from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
-                     update_config)
-from .folders import resolve_directory
+from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config)
 from .app_cache import cached_app, remember_app, forget_app
 
 VERSION = "v1.0.1-alpha"
@@ -1481,3 +1480,11 @@ def atomic_write_bytes(path: Path, content: bytes) -> None:
 def should_show_working_directory() -> bool:
     """Whether a successful cd has enabled the location in the prompt."""
     return _SHOW_WORKING_DIRECTORY
+
+def empty_recycle_bin() -> str:
+    """Empty the recycle bin directory"""
+    try:
+        winshell.recycle_bin().empty(confirm=False,
+        show_progress=False, sound=True)
+    except Exception:
+        print("Error: Recycle Bin is already empty!")

@@ -1,9 +1,9 @@
 from .brain import (
     load_config,
-    update_config,
     get_version,
     update_version,
     refresh,
+    empty_recycle_bin,
     get_working_directory,
     change_directory,
     get_current_time,
@@ -49,29 +49,27 @@ from .brain import (
     identify_playing_song,
     get_current_media)
 
-from .notifications import (
-    send_notification, schedule_notification, start_timer, list_timers,
-    cancel_timer)
+from .config import update_config
+from .notifications import (send_notification, schedule_notification,
+                            start_timer, list_timers, cancel_timer)
 
 from .message import send_message
 from .commands import execute_command
 from .app_close import close_application
-from .app_manager import (
-    search_apps, install_app, uninstall_app, get_app_operation,
-    scan_app_residues, clean_app_residue,
-)
+from .app_manager import (search_apps, install_app, uninstall_app, get_app_operation,
+                        scan_app_residues, clean_app_residue)
+
 from .email_service import send_email, read_emails, delete_email
 
 from .session_log import open_current_session_log
 from .weather import get_weather, set_weather_location
 from .media import (control_media, search_youtube_songs, play_youtube_song,
                     search_spotify_songs, play_spotify_song)
-from .self_code import (
-    get_repo_lnk, get_nora_repository, list_nora_code, read_nora_code,
-    edit_nora_code, update_nora_repository)
-from src.diagnostics.tools import (
-    check_system_health, check_disk_health, check_security_health,
-)
+from .self_code import (get_repo_lnk, get_nora_repository, list_nora_code,
+                        read_nora_code,edit_nora_code, update_nora_repository)
+
+from src.diagnostics.tools import (check_system_health, check_disk_health,
+                                   check_security_health,)
 
 TOOLS = [
     close_application,
@@ -113,6 +111,7 @@ TOOLS = [
     get_version,
     update_version,
     refresh,
+    empty_recycle_bin,
     get_working_directory,
     change_directory,
     get_current_time,
