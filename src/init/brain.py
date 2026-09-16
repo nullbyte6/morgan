@@ -668,9 +668,6 @@ def open_directory(path: str = ".") -> str:
             target = resolve_directory(path)
         if not target.is_dir():
             return f"Error: directory does not exist or is not a folder: {target}"
-        # A folder selected from a search is opened by its explicit absolute
-        # path on the next turn. Persist that successful resolution as well;
-        # otherwise only disk-search results ever reach folders.json.
         opened = open_file(str(target))
         if target.name and opened.startswith("Opened:"):
             remember_folders(target.name, [str(target)], complete=True)
@@ -698,16 +695,15 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
     if not query:
         return "Error: search query is empty"
     try:
-        from ddgs import DDGS
+        from duckduckgo_search import DDGS
 
         result_limit = max(1, min(int(max_results), 10))
-        results = DDGS(timeout=10).text(
+        results = list(DDGS(timeout=10).text(
             query,
             region=region,
             safesearch="moderate",
-            max_results=result_limit,
-            backend="google,brave,duckduckgo",
-        )
+            max_results=result_limit
+        ))
         if not results:
             return f"No web results found for: {query}"
         formatted_results = []
@@ -1181,9 +1177,6 @@ def open_application(application: str) -> str:
     raw_application = application.strip().strip('"').strip("'")
     if raw_application.casefold() in FOLDER_ALIASES:
         return open_directory(application)
-    # An explicit executable path is authoritative.  It must not fall
-    # through to a full-disk scan (which can take minutes and can miss files
-    # behind protected or redirected folders).
     path_candidate = Path(os.path.expandvars(raw_application))
     path_like = ("\\" in raw_application or "/" in raw_application
                  or (len(raw_application) >= 2 and raw_application[1] == ":"))

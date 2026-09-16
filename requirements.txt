@@ -21,5 +21,4 @@ yt-dlp
 psutil
 spotipy
 Send2Trash>=1.8.3,<2
-
 winshell

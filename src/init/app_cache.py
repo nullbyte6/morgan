@@ -23,7 +23,6 @@ def _normalize_name(value):
 
 def _normalized_target(app):
     """Return the cached launch target, accepting older cache shapes.
-
     Early versions wrote executable paths under ``AppID`` even when the
     source was ``file``.  Keep those entries usable and normalize them to the
     shape expected by the launcher instead of invalidating a valid cache.
@@ -32,8 +31,6 @@ def _normalized_target(app):
     if source == "registered":
         app_id = app.get("AppID")
         if isinstance(app_id, str) and app_id.strip():
-            # A path in a registered entry is a legacy file entry, not an
-            # AppsFolder AUMID.
             if Path(app_id).is_file():
                 return "file", app_id
             return "registered", app_id
@@ -41,7 +38,6 @@ def _normalized_target(app):
 
     path = app.get("Path")
     if not isinstance(path, str) or not path.strip():
-        # Compatibility with cache entries that used AppID for a file path.
         path = app.get("AppID")
     if isinstance(path, str) and path.strip():
         return "file", path
@@ -64,8 +60,6 @@ def cached_app(query):
             data = _read()
             app = data.get(query)
             if not isinstance(app, dict):
-                # Also resolve a request such as ``code.exe`` or an app's
-                # display name against a differently keyed cache entry.
                 for candidate in data.values():
                     if not isinstance(candidate, dict) or not isinstance(candidate.get("Name"), str):
                         continue
