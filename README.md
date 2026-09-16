@@ -178,10 +178,16 @@ Spotify name equals the current Windows computer name. Set `spotify_device_id`
 only to target a different device explicitly; Nora reports available choices
 instead of guessing between other speakers or computers.
 
-Nora requests playback control and `user-read-private` during authorization.
+Nora requests playback control, `user-read-private`,
+`playlist-read-private` and `playlist-read-collaborative` during authorization.
 The latter lets Spotify identify the authorized account and subscription when
 diagnosing playback. Changing either Spotify client credential creates a new,
 app-specific token cache and requires authorizing in the browser again.
+
+Playlist commands use the current-user endpoint (`/me/playlists`): ask Nora to
+“lista mis playlists de Spotify”, inspect the numbered results, and then ask it
+to reproduce the selected playlist. Nora reads playlist tracks only after a
+playlist URI has been returned by that list operation.
 
 ## Weather
 Ask "what will the weather be tomorrow morning in Madrid, Spain?" or choose a

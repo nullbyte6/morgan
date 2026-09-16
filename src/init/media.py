@@ -14,10 +14,12 @@ from typing import Literal
 
 _videos = OrderedDict()
 _spotify_tracks = OrderedDict()
+_spotify_playlists = OrderedDict()
 _VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 _SPOTIFY_SCOPES = (
     "user-read-playback-state user-read-currently-playing "
-    "user-modify-playback-state user-read-private"
+    "user-modify-playback-state user-read-private "
+    "playlist-read-private playlist-read-collaborative"
 )
 
 
@@ -96,7 +98,6 @@ def _spotify_error(action: str, error: Exception) -> str:
 
 def _spotify_target_device(client) -> str:
     """Choose a safe playback target when Spotify has no active device.
-
     An explicitly configured device wins. Otherwise Nora uses the device whose
     name equals this Windows computer name. It never guesses among unrelated
     Spotify Connect devices such as speakers in another room.
@@ -113,9 +114,11 @@ def _spotify_target_device(client) -> str:
     active = [device for device in devices if device.get("is_active")]
     if active:
         return active[0]["id"]
+
     computer_name = os.environ.get("COMPUTERNAME", "").casefold()
     local = [device for device in devices
              if device.get("name", "").casefold() == computer_name]
+
     if len(local) == 1:
         return local[0]["id"]
     candidates = [{"id": device["id"], "name": device.get("name"),
@@ -127,17 +130,23 @@ def _spotify_target_device(client) -> str:
                      f"spotify_device_id in config.json: {json.dumps(candidates, ensure_ascii=False)}")
 
 
-def _spotify_playback_confirmation(client, expected_uri: str | None) -> dict:
+def _spotify_playback_confirmation(client, expected_uri: str | None,
+                                   expected_context_uri: str | None = None) -> dict:
     """Read Spotify after a player command; HTTP 204 alone is not playback."""
     for _ in range(3):
         state = client.current_playback() or {}
         item = state.get("item") or {}
         uri = item.get("uri")
+        context_uri = (state.get("context") or {}).get("uri")
         playing = bool(state.get("is_playing"))
-        if playing and (expected_uri is None or uri == expected_uri):
+        track_matches = expected_uri is None or uri == expected_uri
+        context_matches = (expected_context_uri is None
+                           or context_uri == expected_context_uri)
+        if playing and track_matches and context_matches:
             return {
                 "playback_confirmed": True,
                 "confirmed_uri": uri,
+                "confirmed_context_uri": context_uri,
                 "title": item.get("name"),
                 "artists": [artist.get("name") for artist in item.get("artists", [])],
                 "device": (state.get("device") or {}).get("name"),
@@ -146,6 +155,7 @@ def _spotify_playback_confirmation(client, expected_uri: str | None) -> dict:
     return {
         "playback_confirmed": False,
         "confirmed_uri": uri,
+        "confirmed_context_uri": context_uri,
         "is_playing": playing,
         "device": (state.get("device") or {}).get("name"),
         "note": "Spotify accepted the command but did not report the requested track as playing.",
@@ -153,23 +163,52 @@ def _spotify_playback_confirmation(client, expected_uri: str | None) -> dict:
 
 
 def _spotify_control(action: Literal["play", "pause", "next", "previous"],
-                     uri: str | None = None) -> str:
+        uri: str | None = None, context: bool = False) -> str:
     try:
         client = _spotify_player_client()
         device_id = _spotify_target_device(client)
+
         if action == "play":
-            client.start_playback(device_id=device_id, uris=[uri] if uri else None)
+            devices = client.devices().get("devices", [])
+            target = next((d for d in devices if d.get("id") == device_id), None)
+            if target is not None and not target.get("is_active"):
+                client.transfer_playback(
+                    device_id=device_id,
+                    force_play=False,
+                )
+                time.sleep(0.5)
+
+            playback = {"device_id": device_id}
+            if context:
+                playback["context_uri"] = uri
+            else:
+                playback["uris"] = [uri] if uri else None
+            client.start_playback(**playback)
+
         elif action == "pause":
             client.pause_playback(device_id=device_id)
+
         elif action == "next":
             client.next_track(device_id=device_id)
+
         else:
             client.previous_track(device_id=device_id)
-        response = {"action": action, "accepted": True, "source": "spotify",
-                    "uri": uri, "device_id": device_id}
+
+        response = {
+            "action": action,
+            "accepted": True,
+            "source": "spotify",
+            "uri": uri,
+            "device_id": device_id,
+        }
+
         if action == "play":
-            response.update(_spotify_playback_confirmation(client, uri))
+            response.update(_spotify_playback_confirmation(
+                client, None if context else uri,
+                uri if context else None,
+            ))
         return json.dumps(response, ensure_ascii=False)
+
     except Exception as error:
         return _spotify_error(f"controlling {action}", error)
 
@@ -231,7 +270,6 @@ def control_media(action: Literal["play", "pause", "next", "previous"],
 
 def search_spotify_songs(query: str, max_results: int = 5) -> str:
     """Search Spotify tracks when Spotify is configured; does not start playback.
-
     Results contain Spotify track URIs. Use play_spotify_song with one URI from
     this recent search. Client credentials are enough to search; playback later
     opens the user OAuth flow only when it is needed.
@@ -264,7 +302,8 @@ def search_spotify_songs(query: str, max_results: int = 5) -> str:
             _spotify_tracks.popitem(last=False)
         return json.dumps({"query": query, "service": "spotify",
                            "candidates": candidates,
-                           "instruction": "For ambiguous requests, ask the user to choose; do not play the first result automatically."},
+                           "instruction": "For ambiguous requests, ask the user to choose; "
+                                          "do not play the first result automatically."},
                           ensure_ascii=False)
     except Exception as error:
         return _spotify_error("searching", error)
@@ -278,6 +317,93 @@ def play_spotify_song(uri: str) -> str:
     if uri not in _spotify_tracks:
         return "Error: uri must come from a recent search_spotify_songs result; search again"
     return _spotify_control("play", uri)
+
+
+def list_spotify_playlists(max_results: int = 50) -> str:
+    """List playlists owned or followed by the authorized Spotify user.
+    This uses the current-user endpoint and OAuth playlist scopes. Results are
+    cached by URI so a later play_spotify_playlist call cannot guess an ID.
+    """
+    if type(max_results) is not int or not 1 <= max_results <= 500:
+        return "Error: max_results must be between 1 and 500"
+    try:
+        client = _spotify_player_client()
+        page = client.current_user_playlists(limit=min(max_results, 50))
+        candidates = []
+        while page and len(candidates) < max_results:
+            for playlist in page.get("items", []):
+                uri = playlist.get("uri", "")
+                if not uri.startswith("spotify:playlist:"):
+                    continue
+                candidate = {
+                    "number": len(candidates) + 1,
+                    "uri": uri,
+                    "name": playlist.get("name"),
+                    "owner": (playlist.get("owner") or {}).get("display_name")
+                             or (playlist.get("owner") or {}).get("id"),
+                    "public": playlist.get("public"),
+                    "collaborative": playlist.get("collaborative"),
+                    "tracks_total": (playlist.get("tracks") or {}).get("total"),
+                }
+                candidates.append(candidate)
+                _spotify_playlists[uri] = candidate
+                _spotify_playlists.move_to_end(uri)
+                if len(candidates) >= max_results:
+                    break
+            if len(candidates) >= max_results or not page.get("next"):
+                break
+            page = client.next(page)
+        while len(_spotify_playlists) > 500:
+            _spotify_playlists.popitem(last=False)
+        return json.dumps({
+            "service": "spotify",
+            "playlists": candidates,
+            "instruction": "For ambiguous playlist requests, ask the user to choose a "
+                           "numbered playlist; then use its exact uri.",
+        }, ensure_ascii=False)
+    except Exception as error:
+        return _spotify_error("listing playlists", error)
+
+
+def get_spotify_playlist_tracks(uri: str, max_results: int = 100) -> str:
+    """Read tracks from a playlist returned by list_spotify_playlists."""
+    if uri not in _spotify_playlists:
+        return "Error: uri must come from a recent list_spotify_playlists result; list playlists again"
+    if type(max_results) is not int or not 1 <= max_results <= 500:
+        return "Error: max_results must be between 1 and 500"
+    playlist_id = uri.rsplit(":", 1)[-1]
+    try:
+        client = _spotify_player_client()
+        page = client.playlist_items(playlist_id, limit=min(max_results, 50))
+        tracks = []
+        while page and len(tracks) < max_results:
+            for entry in page.get("items", []):
+                track = entry.get("track") or {}
+                track_uri = track.get("uri")
+                if not track_uri:
+                    continue
+                tracks.append({
+                    "number": len(tracks) + 1,
+                    "uri": track_uri,
+                    "title": track.get("name"),
+                    "artists": [artist.get("name") for artist in track.get("artists", [])],
+                })
+                if len(tracks) >= max_results:
+                    break
+            if len(tracks) >= max_results or not page.get("next"):
+                break
+            page = client.next(page)
+        return json.dumps({"playlist_uri": uri, "playlist": _spotify_playlists[uri].get("name"),
+                           "tracks": tracks}, ensure_ascii=False)
+    except Exception as error:
+        return _spotify_error("reading playlist tracks", error)
+
+
+def play_spotify_playlist(uri: str) -> str:
+    """Start a playlist returned by list_spotify_playlists on Spotify."""
+    if uri not in _spotify_playlists:
+        return "Error: uri must come from a recent list_spotify_playlists result; list playlists again"
+    return _spotify_control("play", uri, context=True)
 
 
 def search_youtube_songs(query: str, max_results: int = 5) -> str:
@@ -330,7 +456,6 @@ def search_youtube_songs(query: str, max_results: int = 5) -> str:
 
 def play_youtube_song(video_id: str) -> str:
     """Open a candidate from search_youtube_songs in YouTube with autoplay requested.
-
     Use the user's selection when the original request was ambiguous. Browser
     autoplay may be blocked; opening a video does not confirm playback.
     """
