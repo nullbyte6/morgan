@@ -13,7 +13,9 @@ NUMBER_COLOR = "\x1b[38;2;255;165;0m"
 SYMBOL_COLOR = "\x1b[36m"
 CODE_COLOR = "\x1b[37m"
 PROSE_COLOR = "\x1b[90m"
-EMPHASIS_COLOR = "\x1b[91m"
+# Bold Markdown text is rendered in bright blue so it stands out from the
+# regular prose and remains readable on both dark and light terminal themes.
+EMPHASIS_COLOR = "\x1b[94m"
 INLINE_FORMAT = re.compile(
     r"(?P<code>(?P<ticks>`+).*?(?P=ticks)(?!`))"
     r"|(?<![\\*])\*\*(?=\S)(?P<stars>.+?)(?<=\S)(?<!\\)\*\*(?!\*)"
@@ -63,7 +65,7 @@ def markdown_text(text):
 
 
 def chunks_group(chunks, *, color=False):
-    """Render prose bold in red and optionally highlight fenced source code.
+    """Render prose bold in blue and optionally highlight fenced source code.
 
     Retokenize the current code block so multiline strings and comments retain
     their language context even when the model splits tokens between chunks.

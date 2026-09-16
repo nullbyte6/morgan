@@ -126,6 +126,54 @@ class Assistant:
         path = re.sub(r"^/d(?:\s+|$)", "", path, count=1, flags=re.IGNORECASE)
         return change_directory(path)
 
+    def application_cmd(self, command: str) -> str | None:
+        """Open explicit app requests without delegating routing to the LLM."""
+        match = re.fullmatch(
+            r"(?:abre|abrir|ejecuta|inicia|lanza|open|launch|run)\s+(.+)",
+            command.strip(), flags=re.IGNORECASE,
+        )
+        if match is None:
+            return None
+        target = match.group(1).strip().strip('"').strip("'")
+        if not target:
+            return None
+        # Leave folders, files, URLs and browser requests to their dedicated
+        # tools; this fast path is only for desktop applications.
+        lowered = target.casefold()
+        if (lowered.startswith(("http://", "https://", "www."))
+                or re.search(r"\s+(?:y|and)\s+", lowered)
+                or re.search(r"\b[\w.-]+\.(?:com|es|org|net|io)\b", lowered)
+                or any(word in lowered for word in (
+                    "directorio", "carpeta", "folder", "directory", "archivo",
+                    "fichero", "file", "navegador", "browser", "repositorio",
+                    "repository"))):
+            return None
+        target = re.sub(
+            r"^(?:la\s+|el\s+)?(?:app|aplicaci[oó]n|application|programa|program)\s+(?:de\s+)?",
+            "", target, flags=re.IGNORECASE,
+        ).strip()
+        target = re.sub(r"\s+(?:por\s+favor|please)$", "", target,
+                        flags=re.IGNORECASE).strip()
+        target = re.sub(r"^(?:el|la)\s+", "", target,
+                        flags=re.IGNORECASE).strip()
+        if not target:
+            return None
+        from src.init.brain import open_application
+
+        result = open_application(target)
+        if self._response_language(command) == "español":
+            translations = (
+                ("Opened application:", "Aplicación abierta:"),
+                ("Application not found:", "No se encontró la aplicación:"),
+                ("Application path not found or is not an executable file:",
+                 "La ruta no existe o no es un ejecutable:"),
+                ("Error opening application path:", "Error al abrir la ruta:"),
+            )
+            for source, translated in translations:
+                if result.startswith(source):
+                    return translated + result[len(source):]
+        return result
+
     def git_cmd(self, command: str) -> str | None:
         """Execute exact supported Git commands through the existing tools."""
         from src.init import brain
@@ -194,6 +242,43 @@ class Assistant:
 
         return f"Current working directory for this turn: {get_working_directory()}"
 
+    @staticmethod
+    def _response_language(text: str) -> str | None:
+        """Infer a lightweight response-language hint from the latest text.
+
+        Tool output and previous turns can be in another language.  A small
+        local vocabulary is enough to disambiguate the common Spanish/English
+        commands without adding a network dependency or changing the user's
+        message semantics.
+        """
+        words = set(re.findall(r"[a-záéíóúüñ]+", text.casefold()))
+        spanish = {"abre", "abrir", "dime", "cuál", "cual", "qué", "que",
+                   "tienes", "puedes", "quiero", "necesito", "ejecuta",
+                   "reproduce", "reproducir", "pausa", "busca", "cómo",
+                   "como", "por", "para", "con", "en", "el", "la", "los",
+                   "las", "una", "un", "mi", "me", "de", "del", "dónde",
+                   "donde"}
+        english = {"open", "tell", "what", "which", "can", "please", "run",
+                   "play", "pause", "search", "how", "where", "my", "the",
+                   "a", "an", "in", "to", "for", "with"}
+        spanish_score = len(words & spanish)
+        english_score = len(words & english)
+        if any(character in text for character in "áéíóúüñ¿¡"):
+            spanish_score += 2
+        if spanish_score > english_score and spanish_score >= 1:
+            return "español"
+        if english_score > spanish_score and english_score >= 1:
+            return "inglés"
+        return None
+
+    def _localized_request(self, user_input: str) -> str:
+        language = self._response_language(user_input)
+        if language is None:
+            return user_input
+        return (f"[IDIOMA DE RESPUESTA OBLIGATORIO: responde exclusivamente en {language}. "
+                "No cambies de idioma por el resultado de una herramienta ni por el historial.]\n"
+                + user_input)
+
     def run_session(self):
         self._initialize_runtime()
         from pydantic_ai.messages import (
@@ -245,12 +330,16 @@ class Assistant:
 
             directory_result = self.directory_cmd(user_input)
             if directory_result is not None:
-                stream(directory_result)
+                self.stream(directory_result)
                 session.write(self.name, directory_result)
+                continue
+            application_result = self.application_cmd(user_input)
+            if application_result is not None:
+                self.stream(application_result, session=session)
                 continue
             git_result = self.git_cmd(user_input)
             if git_result is not None:
-                stream(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
+                self.stream(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
                 session.write(self.name, git_result)
                 history.extend([
                     ModelRequest(parts=[UserPromptPart(user_input)]),
@@ -276,7 +365,7 @@ class Assistant:
             spinner.start()
             try:
                 with self.agent.run_stream_sync(
-                        user_input, message_history=history,
+                        self._localized_request(user_input), message_history=history,
                         model_settings={"temperature": brain.load_config()[
                             "temperature"]}) as result:
                     spinner.stop()
