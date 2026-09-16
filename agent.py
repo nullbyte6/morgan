@@ -66,7 +66,6 @@ class Assistant:
         self.MODEL_NAME = MODEL_NAME
         just_fix_windows_console()
         self.model_settings = {
-            "openai_reasoning_effort": "none",
             "temperature": 0.2,
         }
 
@@ -192,7 +191,6 @@ class Assistant:
         """Show the current location and live Git branch, including unborn branches."""
         from src.init import brain
         from src.init.brain import get_working_directory
-
         if not brain.should_show_working_directory():
             return ">> "
         directory = get_working_directory()
@@ -220,7 +218,6 @@ class Assistant:
     def read_user_input(self, prompt: str | None = None) -> str:
         """Read input with a normal prompt and the user's typed text in green."""
         from src.init.spin import RESET_COLOR, USER_COLOR
-
         if prompt is None:
             prompt = self.build_user_prompt()
         if self.terminal_ui is not None:
