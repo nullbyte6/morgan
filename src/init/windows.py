@@ -96,5 +96,5 @@ def request_window_close(hwnd, expected_pid):
     user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     if pid.value != expected_pid:
         raise OSError("Window no longer belongs to the selected process")
-    if not user.PostMessageW(hwnd, 0x0010, 0, 0):  # WM_CLOSE
+    if not user.PostMessageW(hwnd, 0x0010, 0, 0):
         raise ctypes.WinError(ctypes.get_last_error())
