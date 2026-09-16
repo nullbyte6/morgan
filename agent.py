@@ -176,11 +176,13 @@ class Assistant:
         return result
 
     def editor_cmd(self, command: str) -> str | None:
-        """Use explicit requests to open Nora's built-in editor."""
+        """Update explicit requests to open Nora's built-in editor."""
         patterns = (
             r"(?:abre|abrir)\s+(?:el\s+)?editor\s+(?:con\s+)?(.+)",
-            r"(?:edita|editar)\s+(.+)\s+(?:en|con)\s+(?:el\s+)?editor",
-            r"(?:open)\s+(.+)\s+(?:in|with)\s+(?:the\s+)?editor")
+            r"(?:abre|abrir)\s+(.+?)\s+(?:en|con)\s+(?:el\s+)?editor",
+            r"(?:edita|editar)\s+(.+)",
+            r"open\s+(.+?)\s+(?:in|with)\s+(?:the\s+)?editor",
+            r"open\s+(?:the\s+)?editor\s+(?:with\s+)?(.+)")
 
         for pattern in patterns:
             match = re.fullmatch(
@@ -331,7 +333,7 @@ class Assistant:
             if application_result is not None:
                 self.stream(application_result, session=session)
                 continue
-                
+
             git_result = self.git_cmd(user_input)
 
             if git_result is not None:
