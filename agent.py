@@ -9,7 +9,7 @@ import threading
 import time
 from getpass import getuser
 
-from init.brain import launch_steam_game
+from src.init.brain import launch_steam_game
 from src.init.identity import register_assistant
 
 if __name__ == "__main__":
