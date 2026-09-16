@@ -1,9 +1,6 @@
 # Nora
-
 Nora is a local desktop assistant that uses Ollama to run tools and automate tasks on Windows. It requires Windows, PowerShell, Python 3.12, and Ollama. The `nora.ps1` launcher starts the application using the `.venv` virtual environment.
-
 Configuration and user data are stored in `C:\Users\<username>\.nora`. Refer to the source code and `config.json` to discover additional features and configuration options.
-
 You can install Nora from Git Bash or WSL by running the repository installer directly:
 
 ```bash
@@ -11,7 +8,6 @@ curl -fsSL https://raw.githubusercontent.com/xddigs/nora/main/install.sh | bash
 ```
 
 The installation script creates the virtual environment, installs the required dependencies, sets up Ollama, and downloads the configured model.
-
 If you have already cloned the repository, navigate to its directory and run:
 
 ```bash
