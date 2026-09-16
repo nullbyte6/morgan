@@ -26,6 +26,7 @@ class Assistant:
         with cls._instance_lock:
             if cls._instance is None:
                 instance = super().__new__(cls)
+                instance.response_language = "español"
                 instance.terminal_ui = None
                 instance.agent = None
                 instance.username = getuser().capitalize()
@@ -68,15 +69,16 @@ class Assistant:
             "openai_reasoning_effort": "none",
             "temperature": 0.2,
         }
+
         self.model = OllamaModel(
             self.MODEL_NAME,
             provider=OllamaProvider(base_url="http://localhost:11434/v1"),
-            settings=self.model_settings,
-        )
+            settings=self.model_settings)
+
         self.agent = Agent(
             model=self.model,
-            tools=[Tool(function, sequential=True) for function in TOOLS],
-        )
+            tools=[Tool(function, sequential=True) for function in TOOLS])
+
         self.agent.instructions(self.current_instructions)
         self.agent.instructions(self.working_directory_instructions)
 
@@ -253,7 +255,6 @@ class Assistant:
     @staticmethod
     def _response_language(text: str) -> str | None:
         """Infer a lightweight response-language hint from the latest text.
-
         Tool output and previous turns can be in another language.  A small
         local vocabulary is enough to disambiguate the common Spanish/English
         commands without adding a network dependency or changing the user's
@@ -268,7 +269,8 @@ class Assistant:
                    "donde"}
         english = {"open", "tell", "what", "which", "can", "please", "run",
                    "play", "pause", "search", "how", "where", "my", "the",
-                   "a", "an", "in", "to", "for", "with"}
+                   "an", "in", "to", "for", "with"}
+
         spanish_score = len(words & spanish)
         english_score = len(words & english)
         if any(character in text for character in "áéíóúüñ¿¡"):
@@ -280,12 +282,18 @@ class Assistant:
         return None
 
     def _localized_request(self, user_input: str) -> str:
-        language = self._response_language(user_input)
-        if language is None:
-            return user_input
-        return (f"[IDIOMA DE RESPUESTA OBLIGATORIO: responde exclusivamente en {language}. "
-                "No cambies de idioma por el resultado de una herramienta ni por el historial.]\n"
-                + user_input)
+        detected = self._response_language(user_input)
+
+        if detected is not None:
+            self.response_language = detected
+
+        return (
+                f"[IDIOMA DE RESPUESTA OBLIGATORIO: responde exclusivamente "
+                f"en {self.response_language}. "
+                f"No cambies de idioma por resultados de herramientas, "
+                f"mensajes del sistema ni por el historial.]\n"
+                + user_input
+        )
 
     def run_session(self):
         self._initialize_runtime()
