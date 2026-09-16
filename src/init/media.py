@@ -15,6 +15,7 @@ from typing import Literal
 _videos = OrderedDict()
 _spotify_tracks = OrderedDict()
 _spotify_playlists = OrderedDict()
+_spotify_albums = OrderedDict()
 _VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 _SPOTIFY_SCOPES = (
     "user-read-playback-state user-read-currently-playing "
@@ -317,6 +318,87 @@ def play_spotify_song(uri: str) -> str:
     if uri not in _spotify_tracks:
         return "Error: uri must come from a recent search_spotify_songs result; search again"
     return _spotify_control("play", uri)
+
+
+def search_spotify_playlists(query: str, max_results: int = 10) -> str:
+    """Search public Spotify playlists by name without reading their tracks."""
+    if not query.strip():
+        return "Error: specify a playlist name or search phrase"
+    if type(max_results) is not int or not 1 <= max_results <= 10:
+        return "Error: max_results must be between 1 and 10"
+    try:
+        # Use the user client: current Spotify search may require
+        # user-read-private even for public playlist metadata.
+        items = _spotify_player_client().search(
+            q=query.strip(), type="playlist", limit=max_results,
+        ).get("playlists", {}).get("items", [])
+        candidates = []
+        for playlist in items:
+            if not playlist or playlist.get("type") != "playlist":
+                continue
+            uri = playlist.get("uri", "")
+            if not uri.startswith("spotify:playlist:"):
+                continue
+            candidate = {
+                "number": len(candidates) + 1,
+                "uri": uri,
+                "name": playlist.get("name"),
+                "owner": (playlist.get("owner") or {}).get("display_name")
+                         or (playlist.get("owner") or {}).get("id"),
+                "public": playlist.get("public"),
+                "collaborative": playlist.get("collaborative"),
+                "tracks_total": (playlist.get("tracks") or {}).get("total"),
+            }
+            candidates.append(candidate)
+            _spotify_playlists[uri] = candidate
+            _spotify_playlists.move_to_end(uri)
+        return json.dumps({"service": "spotify", "query": query,
+                           "playlists": candidates,
+                           "instruction": "Choose a numbered result when ambiguous, then use its exact uri with play_spotify_playlist. Do not read tracks merely to play a public playlist."},
+                          ensure_ascii=False)
+    except Exception as error:
+        return _spotify_error("searching playlists", error)
+
+
+def search_spotify_albums(query: str, max_results: int = 10) -> str:
+    """Search Spotify albums and cache their context URIs for playback."""
+    if not query.strip():
+        return "Error: specify an album, artist or search phrase"
+    if type(max_results) is not int or not 1 <= max_results <= 10:
+        return "Error: max_results must be between 1 and 10"
+    try:
+        items = _spotify_metadata_client().search(
+            q=query.strip(), type="album", limit=max_results,
+        ).get("albums", {}).get("items", [])
+        candidates = []
+        for album in items:
+            uri = album.get("uri", "")
+            if not uri.startswith("spotify:album:"):
+                continue
+            candidate = {
+                "number": len(candidates) + 1,
+                "uri": uri,
+                "name": album.get("name"),
+                "artists": [artist.get("name") for artist in album.get("artists", [])],
+                "release_date": album.get("release_date"),
+                "total_tracks": album.get("total_tracks"),
+            }
+            candidates.append(candidate)
+            _spotify_albums[uri] = candidate
+            _spotify_albums.move_to_end(uri)
+        return json.dumps({"service": "spotify", "query": query,
+                           "albums": candidates,
+                           "instruction": "Choose a numbered result when ambiguous, then use its exact uri with play_spotify_album."},
+                          ensure_ascii=False)
+    except Exception as error:
+        return _spotify_error("searching albums", error)
+
+
+def play_spotify_album(uri: str) -> str:
+    """Start an album returned by search_spotify_albums."""
+    if uri not in _spotify_albums:
+        return "Error: uri must come from a recent search_spotify_albums result; search again"
+    return _spotify_control("play", uri, context=True)
 
 
 def list_spotify_playlists(max_results: int = 50) -> str:

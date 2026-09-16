@@ -189,6 +189,13 @@ Playlist commands use the current-user endpoint (`/me/playlists`): ask Nora to
 to reproduce the selected playlist. Nora reads playlist tracks only after a
 playlist URI has been returned by that list operation.
 
+For public playlists not owned or followed by the account, ask Nora to search
+the catalog (for example, “busca la playlist oficial de phonk en Spotify”) and
+then reproduce the selected result. Spotify can allow playback by playlist URI
+without allowing Nora to enumerate that playlist's tracks. Album requests use
+`search_spotify_albums` and `play_spotify_album`; song requests use
+`search_spotify_songs` and `play_spotify_song`.
+
 ## Weather
 Ask "what will the weather be tomorrow morning in Madrid, Spain?" or choose a
 default with "save Madrid, Spain as my weather location". After that, "what will

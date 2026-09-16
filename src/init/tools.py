@@ -65,6 +65,8 @@ from .session_log import open_current_session_log
 from .weather import get_weather, set_weather_location
 from .media import (control_media, search_youtube_songs, play_youtube_song,
                     search_spotify_songs, play_spotify_song,
+                    search_spotify_playlists, search_spotify_albums,
+                    play_spotify_album,
                     list_spotify_playlists, get_spotify_playlist_tracks,
                     play_spotify_playlist)
 from .self_code import (get_repo_lnk, get_nora_repository, list_nora_code,
@@ -90,6 +92,9 @@ TOOLS = [
     play_youtube_song,
     search_spotify_songs,
     play_spotify_song,
+    search_spotify_playlists,
+    search_spotify_albums,
+    play_spotify_album,
     list_spotify_playlists,
     get_spotify_playlist_tracks,
     play_spotify_playlist,
