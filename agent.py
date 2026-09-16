@@ -130,15 +130,12 @@ class Assistant:
         """Open explicit app requests without delegating routing to the LLM."""
         match = re.fullmatch(
             r"(?:abre|abrir|ejecuta|inicia|lanza|open|launch|run)\s+(.+)",
-            command.strip(), flags=re.IGNORECASE,
-        )
+            command.strip(), flags=re.IGNORECASE)
         if match is None:
             return None
         target = match.group(1).strip().strip('"').strip("'")
         if not target:
             return None
-        # Leave folders, files, URLs and browser requests to their dedicated
-        # tools; this fast path is only for desktop applications.
         lowered = target.casefold()
         if (lowered.startswith(("http://", "https://", "www."))
                 or re.search(r"\s+(?:y|and)\s+", lowered)

@@ -13,8 +13,6 @@ NUMBER_COLOR = "\x1b[38;2;255;165;0m"
 SYMBOL_COLOR = "\x1b[36m"
 CODE_COLOR = "\x1b[37m"
 PROSE_COLOR = "\x1b[90m"
-# Bold Markdown text is rendered in bright blue so it stands out from the
-# regular prose and remains readable on both dark and light terminal themes.
 EMPHASIS_COLOR = "\x1b[94m"
 INLINE_FORMAT = re.compile(
     r"(?P<code>(?P<ticks>`+).*?(?P=ticks)(?!`))"
