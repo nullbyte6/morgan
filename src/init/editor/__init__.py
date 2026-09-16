@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -24,7 +23,6 @@ def open_in_editor(path: str) -> str:
         return f"Not a file: {requested}"
 
     executable = shutil.which("pyvim")
-
     if executable is None:
         return (
             "PyVim is not installed or is not available on PATH. "

@@ -8,7 +8,12 @@ import sys
 import threading
 import time
 import warnings
-from contextlib import ExitStack, redirect_stderr, redirect_stdout
+from contextlib import (
+    ExitStack,
+    contextmanager,
+    redirect_stderr,
+    redirect_stdout)
+
 from datetime import datetime
 
 from rich import box
@@ -76,6 +81,8 @@ class TerminalUI(io.TextIOBase):
         self._audio_error = None
         self._stop = threading.Event()
         self._stack = ExitStack()
+        self._live = None
+        self._suspended = False
 
     def writable(self):
         return True
@@ -257,18 +264,26 @@ class TerminalUI(io.TextIOBase):
     def _poll_input(self):
         try:
             while not self._stop.is_set():
+                if self._suspended:
+                    self._stop.wait(0.01)
+                    continue
+
                 for kind, value in self._console_input.poll():
                     if kind == "scroll":
                         if value in ("page_up", "page_down"):
                             value = max(1, self.console.height - 5) * (
                                 1 if value == "page_up" else -1)
+
                         with self._lock:
-                            self._scroll = max(0, min(self._max_scroll,
-                                                      self._scroll + value))
+                            self._scroll = max(0, min(
+                                    self._max_scroll,
+                                    self._scroll + value))
                     else:
                         for character in value:
                             self._keys.put(character)
+
                 self._stop.wait(0.005)
+
         except Exception as error:
             self._keys.put(error)
 
@@ -283,14 +298,20 @@ class TerminalUI(io.TextIOBase):
             return value
 
     def __enter__(self):
-        live = Live(console=self.console, screen=True, refresh_per_second=30,
-                    get_renderable=self.render, redirect_stdout=False,
-                    redirect_stderr=False, vertical_overflow="crop")
+        self._live = Live(
+            console=self.console,
+            screen=True,
+            refresh_per_second=60,
+            get_renderable=self.render,
+            redirect_stdout=False,
+            redirect_stderr=False,
+            vertical_overflow="crop")
+
         try:
             from .console_input import ConsoleInput
             self._console_input = ConsoleInput()
             self._stack.callback(self._console_input.close)
-            self._stack.enter_context(live)
+            self._stack.enter_context(self._live)
             self._input_worker = threading.Thread(target=self._poll_input,
                                                   daemon=True)
             self._input_worker.start()
@@ -314,6 +335,38 @@ class TerminalUI(io.TextIOBase):
         self._worker.join(timeout=3)
         self._audio_worker.join(timeout=3)
         self._stack.close()
+
+    @contextmanager
+    def suspend(self):
+        """Temporarily give full control of the terminal to an external
+        interactive application such as PyVim."""
+
+        if self._suspended:
+            yield
+            return
+
+        self._suspended = True
+
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+
+        try:
+            if self._live is not None:
+                self._live.stop()
+
+            sys.stdout = self.console.file
+            sys.stderr = sys.__stderr__
+            sys.stdout.flush()
+            sys.stderr.flush()
+            yield
+
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+            if self._live is not None:
+                self._live.start(refresh=True)
+            self._suspended = False
 
     def read_input(self, prompt):
         with self._lock:

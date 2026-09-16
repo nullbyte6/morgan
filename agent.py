@@ -199,6 +199,10 @@ class Assistant:
                 return None
 
             from src.init.editor import open_in_editor
+            if self.terminal_ui is not None:
+                with self.terminal_ui.suspend():
+                    return open_in_editor(path)
+
             return open_in_editor(path)
 
         return None
