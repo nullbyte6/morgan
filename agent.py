@@ -37,15 +37,16 @@ class Assistant:
             return cls._instance
 
     @property
-    def startup_greetings(self):
-        return (
-            f"Hola, {self.username}. {self.name} lista para empezar.",
-            f"Ya estoy aquí, {self.username}. Vamos a ello.",
-            "Todo listo. Dime qué necesitas y me pongo a ello.",
-            "Hola de nuevo. Lista para echarte una mano.",
-            f"{self.name} al habla. Cuando quieras, empezamos.",
-            f"¡Buenas, {self.username}! Manos a la obra.",
+    def startup_greeting(self) -> str:
+        greetings = (
+            f"Hola, {self.username}. ¿Qué quieres hacer?",
+            f"Hola, {self.username}. ¿En qué te ayudo?",
+            f"Estoy lista, {self.username}. ¿Qué hacemos?",
+            f"¿Qué necesitas hoy, {self.username}?",
+            f"Todo listo, {self.username}. ¿Por dónde empezamos?",
+            f"{self.name} preparada. Escribe lo que necesites.",
         )
+        return random.choice(greetings)
 
     @property
     def banner(self):
@@ -207,7 +208,6 @@ class Assistant:
 
         return None
 
-
     def git_cmd(self, command: str) -> str | None:
         """Execute exact supported Git commands through the existing tools."""
         from src.init import brain
@@ -230,8 +230,8 @@ class Assistant:
 
         for pattern in patterns:
             match = re.fullmatch(pattern,
-                command.strip(),
-                flags=re.IGNORECASE)
+                                 command.strip(),
+                                 flags=re.IGNORECASE)
 
             if match is None:
                 continue
@@ -252,14 +252,14 @@ class Assistant:
         else:
             print(content)
 
-
     def build_user_prompt(self) -> str:
         """Show the current location and live Git branch,
         including unborn branches."""
         from src.init import brain
         from src.init.brain import get_working_directory
         if not brain.should_show_working_directory():
-            return ">> "
+            return f">> "
+
         directory = get_working_directory()
         branch = ""
         try:
@@ -283,14 +283,37 @@ class Assistant:
         return f">> {directory}{suffix} > "
 
     def read_user_input(self, prompt: str | None = None) -> str:
-        """Read input with a normal prompt and the user's typed text in green."""
         from src.init.spin import RESET_COLOR, USER_COLOR
         if prompt is None:
             prompt = self.build_user_prompt()
+
         if self.terminal_ui is not None:
             return self.terminal_ui.read_input(prompt)
+
         sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
         sys.stdout.flush()
+        try:
+            return input()
+        finally:
+            sys.stdout.write(RESET_COLOR)
+            sys.stdout.flush()
+
+    def read_user_input(self, prompt: str | None = None,
+                        placeholder: str = "") -> str:
+        """Read input with a normal prompt and the user's typed text in green."""
+        from src.init.spin import RESET_COLOR, USER_COLOR
+
+        if prompt is None:
+            prompt = self.build_user_prompt()
+
+        if self.terminal_ui is not None:
+            return self.terminal_ui.read_input(
+                prompt=prompt,
+                placeholder=placeholder)
+
+        sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
+        sys.stdout.flush()
+
         try:
             return input()
         finally:
@@ -305,22 +328,23 @@ class Assistant:
         from src.init.brain import get_working_directory
         return f"Current working directory for this turn: {get_working_directory()}"
 
-
     def run_session(self):
         self._initialize_runtime()
         from pydantic_ai.messages import (
-            ModelRequest, ModelResponse, TextPart, UserPromptPart,
-        )
+            ModelRequest, ModelResponse, TextPart, UserPromptPart)
+
         from src.init import brain
         from src.init.brain import (
-            refresh_model_keep_alive, refresh, get_working_directory,
-        )
+            refresh_model_keep_alive, refresh, get_working_directory)
+
         from src.init.output import chunks_group
         from src.init.session_log import SessionLog
         from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, Spinner
         from src.init.voice import VOICE_COMMANDS, capture_voice_input
 
         session = SessionLog()
+        greeting = self.startup_greeting
+
         refresh_model_keep_alive()
         if self.terminal_ui is not None:
             self.terminal_ui.set_banner(self.banner)
@@ -335,19 +359,25 @@ class Assistant:
             sys.stdout.write("\n".join(" " * left + line for line in lines))
             sys.stdout.write(f"{RESET_COLOR}\n")
         self.stream(brain.get_version())
-        self.stream([random.choice(self.startup_greetings)], session=session)
         history = []
         while True:
             prompt = self.build_user_prompt()
             if session.private:
                 prompt = "[PRIVATE] " + prompt
-            user_input = self.read_user_input(prompt)
+
+            user_input = self.read_user_input( prompt,
+                placeholder=greeting)
+
+            greeting = ""
             privacy_result = session.handle_command(user_input)
+
             if privacy_result is not None:
                 self.stream(privacy_result)
                 continue
+
             if user_input.strip().casefold() not in VOICE_COMMANDS:
                 session.write(self.username, user_input)
+
             if user_input.strip().lower() in ("quit", "exit"):
                 break
 
@@ -410,7 +440,8 @@ class Assistant:
                         user_input,
                         message_history=history,
                         model_settings={"temperature":
-                            brain.load_config()["temperature"]}) as result:
+                                            brain.load_config()[
+                                                "temperature"]}) as result:
                     spinner.stop()
                     self.stream(
                         result.stream_text(delta=True, debounce_by=None),

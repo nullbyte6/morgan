@@ -1,8 +1,11 @@
 """Browses the local Steam library and checks whether the installed games
 match the game requested by the user, managed by a Steam account"""
 
+import os
+import re
 import winreg
-
+from difflib import get_close_matches
+from pathlib import Path
 
 class SteamManager:
     """Represents a steam game manager. Holds the entire registry of
