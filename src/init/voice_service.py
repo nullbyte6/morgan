@@ -23,8 +23,7 @@ class VoiceService:
         model_path: str | Path,
         voice_reference: str | Path,
         reference_text: str,
-        speed: float = 1.0,
-    ):
+        speed: float = 1.0):
         self.model_path = Path(model_path)
         self.voice_reference = Path(voice_reference)
         self.reference_text = reference_text.strip()
