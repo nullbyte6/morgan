@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
+
+from agent import Assistant
 
 
 def open_in_editor(path: str) -> str:
@@ -22,17 +23,10 @@ def open_in_editor(path: str) -> str:
     if not requested.is_file():
         return f"Not a file: {requested}"
 
-    executable = shutil.which("nvim")
-
     try:
-        result = subprocess.run([
-            executable,
-            str(requested),
-        ])
-
-        if result.returncode != 0:
-            return f"Nvim exited with code {result.returncode}"
-        return f"Editor closed: {requested}"
+        with Assistant().suspend_terminal():
+            subprocess.run(["nvim", str(path)])
+        return f"Editor closed: {path}"
 
     except OSError as error:
         return f"Could not launch Neovim: {error}"

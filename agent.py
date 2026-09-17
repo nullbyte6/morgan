@@ -8,7 +8,9 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import nullcontext
 from getpass import getuser
+
 from src.init.identity import register_assistant
 
 if __name__ == "__main__":
@@ -66,6 +68,7 @@ class Assistant:
         self.MODEL_NAME = MODEL_NAME
         just_fix_windows_console()
         self.model_settings = {
+            "openai_reasoning_effort": "none",
             "temperature": 0.2,
         }
 
@@ -80,6 +83,13 @@ class Assistant:
 
         self.agent.instructions(self.current_instructions)
         self.agent.instructions(self.working_directory_instructions)
+
+
+    def suspend_terminal(self):
+        if self.terminal_ui is None:
+            return nullcontext()
+        return self.terminal_ui.suspend()
+
 
     def stream(self, chunks, session=None) -> None:
         """Shows remaining fragments immediately, animation delay is optional"""
@@ -204,21 +214,6 @@ class Assistant:
         suffix = f" ({branch})" if branch else ""
         return f">> {directory}{suffix} > "
 
-    def read_user_input(self, prompt: str | None = None) -> str:
-        from src.init.spin import RESET_COLOR, USER_COLOR
-        if prompt is None:
-            prompt = self.build_user_prompt()
-
-        if self.terminal_ui is not None:
-            return self.terminal_ui.read_input(prompt)
-
-        sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
-        sys.stdout.flush()
-        try:
-            return input()
-        finally:
-            sys.stdout.write(RESET_COLOR)
-            sys.stdout.flush()
 
     def read_user_input(self, prompt: str | None = None,
                         placeholder: str = "") -> str:
