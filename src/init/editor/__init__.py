@@ -22,12 +22,7 @@ def open_in_editor(path: str) -> str:
     if not requested.is_file():
         return f"Not a file: {requested}"
 
-    executable = shutil.which("pyvim")
-    if executable is None:
-        return (
-            "PyVim is not installed or is not available on PATH. "
-            "Install it with: pip install pyvim"
-        )
+    executable = shutil.which("nvim")
 
     try:
         result = subprocess.run([
@@ -36,8 +31,8 @@ def open_in_editor(path: str) -> str:
         ])
 
         if result.returncode != 0:
-            return f"PyVim exited with code {result.returncode}"
+            return f"Nvim exited with code {result.returncode}"
         return f"Editor closed: {requested}"
 
     except OSError as error:
-        return f"Could not launch PyVim: {error}"
+        return f"Could not launch Neovim: {error}"

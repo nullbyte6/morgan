@@ -119,7 +119,7 @@ class TerminalUI(io.TextIOBase):
             scroll, playing = self._scroll, self.playing
             audio_error = self._audio_error
             levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
-        inner_width = max(1, width - 4)
+        inner_width = width
         input_lines = []
         if prompt is not None:
             entry = Text(prompt)
