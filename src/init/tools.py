@@ -62,7 +62,14 @@ from .app_close import close_application
 from .app_manager import (search_apps, install_app, uninstall_app, get_app_operation,
                         scan_app_residues, clean_app_residue)
 
-from .email_service import send_email, read_emails, delete_email
+from .email_service import (
+    send_email,
+    read_emails,
+    delete_email,
+    draft_email,
+    get_email_draft,
+    edit_email_draft,
+    send_email_draft)
 
 from .session_log import open_current_session_log
 from .weather import get_weather, set_weather_location
@@ -113,6 +120,10 @@ TOOLS = [
     set_weather_location,
     open_current_session_log,
     send_message,
+    draft_email,
+    get_email_draft,
+    edit_email_draft,
+    send_email_draft,
     send_email,
     read_emails,
     delete_email,

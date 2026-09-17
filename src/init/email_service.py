@@ -36,6 +36,76 @@ PROVIDERS = {
 }
 
 
+_EMAIL_DRAFT = {
+    "to": "",
+    "subject": "",
+    "body": "",
+    "cc": "",
+    "bcc": "",
+}
+
+
+def draft_email(
+    to: str = "",
+    subject: str = "",
+    body: str = "",
+    cc: str = "",
+    bcc: str = "") -> str:
+    """Create or replace the current email draft without sending it."""
+
+    global _EMAIL_DRAFT
+
+    _EMAIL_DRAFT = {
+        "to": to.strip(),
+        "subject": subject.strip(),
+        "body": body.strip(),
+        "cc": cc.strip(),
+        "bcc": bcc.strip(),
+    }
+
+    return _result("drafted", draft=_EMAIL_DRAFT)
+
+
+def get_email_draft() -> str:
+    """Return the current unsent email draft."""
+    return _result("ok", draft=_EMAIL_DRAFT)
+
+
+def edit_email_draft(
+    to: str = "",
+    subject: str = "",
+    body: str = "",
+    cc: str = "",
+    bcc: str = "",
+) -> str:
+    """Modify fields of the current unsent email draft."""
+
+    if to:
+        _EMAIL_DRAFT["to"] = to.strip()
+    if subject:
+        _EMAIL_DRAFT["subject"] = subject.strip()
+    if body:
+        _EMAIL_DRAFT["body"] = body.strip()
+    if cc:
+        _EMAIL_DRAFT["cc"] = cc.strip()
+    if bcc:
+        _EMAIL_DRAFT["bcc"] = bcc.strip()
+
+    return _result("drafted", draft=_EMAIL_DRAFT)
+
+
+def send_email_draft() -> str:
+    """Send the current email draft."""
+
+    return send_email(
+        to=_EMAIL_DRAFT["to"],
+        subject=_EMAIL_DRAFT["subject"],
+        body=_EMAIL_DRAFT["body"],
+        cc=_EMAIL_DRAFT["cc"],
+        bcc=_EMAIL_DRAFT["bcc"],
+    )
+
+
 def _result(status, **details):
     return json.dumps({"status": status, **details}, ensure_ascii=False)
 
@@ -85,15 +155,41 @@ def _decoded(value):
 
 
 def _body(message):
-    if message.is_multipart():
-        parts = message.walk()
-        for part in parts:
-            if part.get_content_type() == "text/plain" and "attachment" not in str(
-                    part.get("Content-Disposition", "")).lower():
-                return part.get_content()
-        return ""
-    return message.get_content() if message.get_content_type() == "text/plain" else ""
+    plain = None
+    html = None
 
+    parts = message.walk() if message.is_multipart() else [message]
+
+    for part in parts:
+        disposition = str(part.get("Content-Disposition", "")).lower()
+
+        if "attachment" in disposition:
+            continue
+
+        content_type = part.get_content_type()
+
+        try:
+            content = part.get_content()
+        except (UnicodeError, LookupError):
+            continue
+
+        if content_type == "text/plain" and plain is None:
+            plain = content
+        elif content_type == "text/html" and html is None:
+            html = content
+
+    if plain:
+        return plain.strip()
+
+    if html:
+        from html import unescape
+
+        text = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+        text = re.sub(r"</p\s*>", "\n\n", text, flags=re.IGNORECASE)
+        text = re.sub(r"<[^>]+>", "", text)
+        return unescape(text).strip()
+
+    return ""
 
 def send_email(to: str = "", subject: str = "", body: str = "", cc: str = "",
                bcc: str = "") -> str:
