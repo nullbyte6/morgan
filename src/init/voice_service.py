@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import queue
 import re
-import tempfile
 import threading
-import wave
-import winsound
 from pathlib import Path
-
+import sounddevice as sd
 from piper import PiperVoice
 
 """The class in charge of Nora's voice, using the piper lib
@@ -29,7 +26,7 @@ class VoiceService:
 
     @staticmethod
     def _clean_text(text: str) -> str:
-        """Remove formatting that should not be spoken."""
+        """Remove formatting and symbols that should not be spoken."""
         text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
         text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
         text = re.sub(r"\*(.*?)\*", r"\1", text)
@@ -37,6 +34,26 @@ class VoiceService:
         text = re.sub(r"_(.*?)_", r"\1", text)
         text = re.sub(r"`([^`]+)`", r"\1", text)
         text = re.sub(r"https?://\S+", "", text)
+
+        text = re.sub(
+            "["
+            "\U0001F1E0-\U0001F1FF"
+            "\U0001F300-\U0001F5FF"
+            "\U0001F600-\U0001F64F"
+            "\U0001F680-\U0001F6FF"
+            "\U0001F700-\U0001F77F"
+            "\U0001F780-\U0001F7FF"
+            "\U0001F800-\U0001F8FF"
+            "\U0001F900-\U0001F9FF"
+            "\U0001FA00-\U0001FAFF"
+            "\U00002600-\U000026FF"
+            "\U00002700-\U000027BF"
+            "\U0000FE0F"
+            "\U0000200D"
+            "]+",
+            "",
+            text)
+
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 
@@ -56,14 +73,20 @@ class VoiceService:
                 self._queue.task_done()
 
     def _speak(self, text: str) -> None:
-        with tempfile.NamedTemporaryFile(
-            suffix=".wav", delete=False) as tmp:
-            path = Path(tmp.name)
-
+        """Synthesize and play Piper audio progressively."""
+        stream = None
         try:
-            with wave.open(str(path), "wb") as wav_file:
-                self.voice.synthesize_wav(text, wav_file)
+            for chunk in self.voice.synthesize(text):
+                if stream is None:
+                    stream = sd.RawOutputStream(
+                        samplerate=chunk.sample_rate,
+                        channels=chunk.sample_channels,
+                        dtype="int16",
+                    )
+                    stream.start()
 
-            winsound.PlaySound(str(path), winsound.SND_FILENAME)
+                stream.write(chunk.audio_int16_bytes)
         finally:
-            path.unlink(missing_ok=True)
+            if stream is not None:
+                stream.stop()
+                stream.close()
