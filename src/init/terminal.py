@@ -64,6 +64,7 @@ class TerminalUI(io.TextIOBase):
         self._prompt = None
         self._input = ""
         self._cursor = 0
+        self._placeholder = ""
         self._keys = queue.Queue()
         self._max_scroll = 0
         self._scroll = 0
@@ -114,7 +115,12 @@ class TerminalUI(io.TextIOBase):
     def render(self):
         width, height = self.console.size
         with self._lock:
-            output, prompt, value, cursor = self._output, self._prompt, self._input, self._cursor
+            output, prompt, value, cursor = (
+                self._output,
+                self._prompt,
+                self._input,
+                self._cursor)
+            placeholder = self._placeholder
             banner = self._banner
             scroll, playing = self._scroll, self.playing
             audio_error = self._audio_error
@@ -123,9 +129,16 @@ class TerminalUI(io.TextIOBase):
         input_lines = []
         if prompt is not None:
             entry = Text(prompt)
-            entry.append(value[:cursor], style="green")
-            entry.append(value[cursor:cursor + 1] or " ", style="green reverse")
-            entry.append(value[cursor + 1:], style="green")
+            if not value and placeholder:
+                entry.append(placeholder, style="dim")
+            else:
+                entry.append(value[:cursor], style="green")
+                entry.append(
+                    value[cursor:cursor + 1] or " ",
+                    style="green reverse")
+
+                entry.append(value[cursor + 1:], style="green")
+
             input_lines = list(entry.wrap(self.console, inner_width))
             cursor_line = len(Text(prompt + value[:cursor]).wrap(self.console,
                                                                  inner_width)) - 1
@@ -364,7 +377,7 @@ class TerminalUI(io.TextIOBase):
 
             self._suspended = False
 
-    def read_input(self, prompt):
+    def read_input(self, prompt, placeholder=""):
         with self._lock:
             self._prompt, self._input, self._cursor = prompt, "", 0
         try:
@@ -410,6 +423,7 @@ class TerminalUI(io.TextIOBase):
         finally:
             with self._lock:
                 self._prompt = None
+                self._placeholder = ""
 
 
 def interactive_terminal():
