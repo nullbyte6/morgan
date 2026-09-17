@@ -5,18 +5,23 @@ import re
 import threading
 from pathlib import Path
 import sounddevice as sd
-from piper import PiperVoice
+from piper import PiperVoice, SynthesisConfig
 
 """The class in charge of Nora's voice, using the piper lib
 from pip"""
 class VoiceService:
-    def __init__(self, model_path: str | Path):
+    def __init__(self, model_path: str | Path,
+            speed: float = 1.0):
         self.model_path = Path(model_path)
+
         if not self.model_path.exists():
             raise FileNotFoundError(
                 f"Piper voice model not found: {self.model_path}")
 
         self.voice = PiperVoice.load(str(self.model_path))
+        self.synthesis_config = SynthesisConfig(
+            length_scale=1.0/speed)
+
         self._queue: queue.Queue[str] = queue.Queue()
         self._worker = threading.Thread(
             target=self._voice_worker,
@@ -76,7 +81,8 @@ class VoiceService:
         """Synthesize and play Piper audio progressively."""
         stream = None
         try:
-            for chunk in self.voice.synthesize(text):
+            for chunk in self.voice.synthesize(text,
+                    syn_config=self.synthesis_config):
                 if stream is None:
                     stream = sd.RawOutputStream(
                         samplerate=chunk.sample_rate,

@@ -69,7 +69,7 @@ class Assistant:
         from src.init.brain import MODEL_NAME
         from src.init.tools import TOOLS
 
-        self.voice = VoiceService(VOICE_MODEL)
+        self.voice = VoiceService(VOICE_MODEL, speed=1.20)
         self.MODEL_NAME = MODEL_NAME
         just_fix_windows_console()
         self.model_settings = {
@@ -138,7 +138,7 @@ class Assistant:
         reply = "".join(displayed)
         return reply
 
-    def stream_with_voice(self, chunks):
+    def speak(self, chunks):
         buffer = ""
         for chunk in chunks:
             yield chunk
@@ -376,7 +376,7 @@ class Assistant:
                                                 "temperature"]}) as result:
                     spinner.stop()
                     reply = self.stream(
-                        self.stream_with_voice(
+                        self.speak(
                             result.stream_text(
                                 delta=True,
                                 debounce_by=None)),
