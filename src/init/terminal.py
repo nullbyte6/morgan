@@ -379,7 +379,10 @@ class TerminalUI(io.TextIOBase):
 
     def read_input(self, prompt, placeholder=""):
         with self._lock:
-            self._prompt, self._input, self._cursor = prompt, "", 0
+            self._prompt = prompt
+            self._input = ""
+            self._cursor = 0
+            self._placeholder = placeholder
         try:
             while True:
                 character = self._get_key()

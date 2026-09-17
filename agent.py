@@ -260,8 +260,6 @@ class Assistant:
         from src.init.voice import VOICE_COMMANDS, capture_voice_input
 
         session = SessionLog()
-        greeting = self.startup_greeting
-
         refresh_model_keep_alive()
         if self.terminal_ui is not None:
             self.terminal_ui.set_banner(self.banner)
@@ -276,13 +274,15 @@ class Assistant:
             sys.stdout.write("\n".join(" " * left + line for line in lines))
             sys.stdout.write(f"{RESET_COLOR}\n")
         self.stream(brain.get_version())
+        greeting = self.startup_greeting
+
         history = []
         while True:
             prompt = self.build_user_prompt()
             if session.private:
                 prompt = "[PRIVATE] " + prompt
 
-            user_input = self.read_user_input( prompt,
+            user_input = self.read_user_input(prompt,
                 placeholder=greeting)
 
             greeting = ""
