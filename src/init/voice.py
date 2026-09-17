@@ -9,7 +9,7 @@ from collections import deque
 from .spin import RESET_COLOR, USER_COLOR, Spinner
 
 VOICE_COMMANDS = {"/voice", "voice"}
-VOICE_MODEL_NAME = os.environ.get("NORA_WHISPER_MODEL", "small")
+VOICE_MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
 VOICE_BLOCK_SECONDS = 0.1
 VOICE_MAX_SECONDS = 30
 VOICE_START_TIMEOUT_SECONDS = 10

@@ -7,7 +7,7 @@ from pathlib import Path
 import sounddevice as sd
 from piper import PiperVoice, SynthesisConfig
 
-"""The class in charge of Nora's voice, using the piper lib
+"""The class in charge of Arlo's voice, using the piper lib
 from pip"""
 class VoiceService:
     def __init__(self, model_path: str | Path,

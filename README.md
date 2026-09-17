@@ -1,10 +1,11 @@
-# Nora
-Nora is a local desktop assistant that uses Ollama to run tools and automate tasks on Windows. It requires Windows, PowerShell, Python 3.12, and Ollama. The `nora.ps1` launcher starts the application using the `.venv` virtual environment.
-Configuration and user data are stored in `C:\Users\<username>\.nora`. Refer to the source code and `config.json` to discover additional features and configuration options.
-You can install Nora from Git Bash or WSL by running the repository installer directly:
+# ARLO
+Adaptive Reasoning Local Operator is a local desktop assistant that uses 
+Ollama to run tools and automate tasks on Windows. It requires Windows, PowerShell, Python 3.12, and Ollama. The `arlo.ps1` launcher starts the application using the `.venv` virtual environment.
+Configuration and user data are stored in `C:\Users\<username>\.arlo`. Refer to the source code and `config.json` to discover additional features and configuration options.
+You can install arlo from Git Bash or WSL by running the repository installer directly:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/xddigs/nora/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/xddigs/arlo/main/install.sh | bash
 ```
 
 The installation script creates the virtual environment, installs the required dependencies, sets up Ollama, and downloads the configured model.
@@ -13,4 +14,4 @@ If you have already cloned the repository, navigate to its directory and run:
 ```bash
 bash install.sh
 ```
-For an existing installation, you can start Nora directly by running `nora.ps1`.
+For an existing installation, you can start arlo directly by running `arlo.ps1`.

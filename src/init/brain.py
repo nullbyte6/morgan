@@ -39,14 +39,14 @@ from .steam import steam_manager
 
 VERSION = "v1.0.1-alpha"
 
-MODEL_NAME = os.environ.get("NORA_MODEL", load_config().get("model_name"))
-OLLAMA_KEEP_ALIVE = os.environ.get("NORA_KEEP_ALIVE",
+MODEL_NAME = os.environ.get("MODEL", load_config().get("model_name"))
+OLLAMA_KEEP_ALIVE = os.environ.get("KEEP_ALIVE",
                                    load_config().get("keep_alive"))
-GIT_TIMEOUT_SECONDS = int(os.environ.get("NORA_GIT_TIMEOUT", "120"))
+GIT_TIMEOUT_SECONDS = int(os.environ.get("GIT_TIMEOUT", "120"))
 NOMINATIM_BASE_URL = os.environ.get(
-    "NORA_GEOCODER_URL", "https://nominatim.openstreetmap.org").rstrip("/")
+    "GEOCODER_URL", "https://nominatim.openstreetmap.org").rstrip("/")
 OSRM_BASE_URL = os.environ.get(
-    "NORA_ROUTER_URL", "https://router.project-osrm.org").rstrip("/")
+    "ROUTER_URL", "https://router.project-osrm.org").rstrip("/")
 NOMINATIM_MIN_INTERVAL_SECONDS = 1.05
 _GEOCODE_CACHE: dict[str, dict[str, object] | None] = {}
 _GEOCODE_LOCK = threading.Lock()

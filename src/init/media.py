@@ -47,7 +47,8 @@ def _spotify_metadata_client():
         from spotipy.cache_handler import CacheFileHandler
         from spotipy.oauth2 import SpotifyClientCredentials
     except ImportError as error:
-        raise ValueError("Spotipy is not installed; install requirements.txt and restart Nora") from error
+        raise ValueError("Spotipy is not installed; install requirements.txt "
+                         "and restart Arlo") from error
     from .config import HOME_PATH
 
     client_id, client_secret, _ = settings
@@ -70,7 +71,8 @@ def _spotify_player_client():
         import spotipy
         from spotipy.oauth2 import SpotifyOAuth
     except ImportError as error:
-        raise ValueError("Spotipy is not installed; install requirements.txt and restart Nora") from error
+        raise ValueError("Spotipy is not installed; install requirements.txt "
+                         "and restart Arlo") from error
     from .config import HOME_PATH
 
     client_id, client_secret, redirect_uri = settings
@@ -99,7 +101,7 @@ def _spotify_error(action: str, error: Exception) -> str:
 
 def _spotify_target_device(client) -> str:
     """Choose a safe playback target when Spotify has no active device.
-    An explicitly configured device wins. Otherwise Nora uses the device whose
+    An explicitly configured device wins. Otherwise, Arlo uses the device whose
     name equals this Windows computer name. It never guesses among unrelated
     Spotify Connect devices such as speakers in another room.
     """

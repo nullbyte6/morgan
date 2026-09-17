@@ -115,7 +115,7 @@ def schedule_notification(delay_seconds: int, message: str, title: str | None = 
                 del _timers[timer_id]
                 raise
         return json.dumps({"id": timer_id, "status": "pending", "delay_seconds": delay_seconds,
-                           "requires_nora_running": True})
+                           "requires_arlo_running": True})
     except (OSError, ValueError, RuntimeError) as error:
         return f"Error scheduling notification: {error}"
 

@@ -22,7 +22,7 @@ if __name__ == "__main__":
 class Assistant:
     """One shared assistant; reading its identity never
     starts the model or UI."""
-    name = "Nora"
+    name = "Arlo"
     voice: VoiceService
     _instance = None
     _instance_lock = threading.Lock()
@@ -36,7 +36,7 @@ class Assistant:
                 instance.voice = None
                 instance.username = getuser().capitalize()
                 instance.typewriter_delay_seconds = float(
-                    os.environ.get("NORA_TYPEWRITER_DELAY", "0"))
+                    os.environ.get("TYPEWRITER_DELAY", "0"))
                 cls._instance = instance
             return cls._instance
 

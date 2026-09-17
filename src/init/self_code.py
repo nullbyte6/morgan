@@ -24,7 +24,7 @@ def get_repo_lnk() -> str:
     """Open the assistant's public repository in the user's default external browser.
     Use when asked to open the assistant's online repository, not to inspect local code.
     """
-    url = "https://github.com/xddigs/nora"
+    url = "https://github.com/xddigs/arlo"
     try:
         if not webbrowser.open(url, new=2):
             return f"Error: could not open the default browser. Repository: {url}"
@@ -33,7 +33,7 @@ def get_repo_lnk() -> str:
         return f"Error opening repository: {error}. Repository: {url}"
 
 
-def get_nora_repository() -> str:
+def get_repo() -> str:
     """Locate the assistant's actual source checkout and report its Git status."""
     from .brain import git_status
     from .config import CONFIG_FILE
@@ -43,7 +43,7 @@ def get_nora_repository() -> str:
         ensure_ascii=False)
 
 
-def list_nora_code(directory: str = ".") -> str:
+def list_code(directory: str = ".") -> str:
     """List a directory inside the assistant's source checkout without changing cwd."""
     from .brain import list_files
     try:
@@ -52,7 +52,7 @@ def list_nora_code(directory: str = ".") -> str:
         return f"Error: {error}"
 
 
-def read_nora_code(path: str) -> str:
+def read_code(path: str) -> str:
     """Read the assistant's source using a repository-relative path, e.g. agent.py."""
     from .brain import read_file
     try:
@@ -61,9 +61,8 @@ def read_nora_code(path: str) -> str:
         return f"Error: {error}"
 
 
-def edit_nora_code(path: str, old_text: str, new_text: str) -> str:
+def edit_code(path: str, old_text: str, new_text: str) -> str:
     """Replace one exact source fragment after reading it. Preserves encoding.
-
     Refuses ambiguous matches and invalid Python syntax. Changes are saved on
     disk; restart the assistant to activate them reliably. Does not commit or push.
     """
@@ -82,9 +81,8 @@ def edit_nora_code(path: str, old_text: str, new_text: str) -> str:
         return f"Error editing {get_assistant().name} code: {error}"
 
 
-def update_nora_repository() -> str:
+def update_repo() -> str:
     """Pull the assistant's configured upstream with fast-forward only, when requested.
-
     Refuses local changes, including untracked files. Does not restart the assistant,
     install dependencies, change version settings, commit, or push.
     """

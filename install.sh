@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-readonly NORA_MODEL="${NORA_MODEL:-qwen3:14b}"
+readonly ARLO_MODEL="${ARLO_MODEL:-qwen3:14b}"
 # shellcheck disable=SC2155
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 info() {
@@ -86,9 +86,9 @@ curl \
 verify_authenticode_signature() {
     local installer_windows
     installer_windows="$(to_windows_path "$1")"
-NORA_INSTALLER_TO_VERIFY="$installer_windows" \
+ARLO_INSTALLER_TO_VERIFY="$installer_windows" \
     "$POWERSHELL_BIN" -NoProfile -Command \
-    '$Signature = Get-AuthenticodeSignature -LiteralPath $env:NORA_INSTALLER_TO_VERIFY;
+    '$Signature = Get-AuthenticodeSignature -LiteralPath $env:ARLO_INSTALLER_TO_VERIFY;
     if ($Signature.Status -ne "Valid") {
         Write-Error "Invalid installer signature: $($Signature.Status)"
         exit 1
@@ -96,7 +96,7 @@ NORA_INSTALLER_TO_VERIFY="$installer_windows" \
 
 }
 install_python_directly() {
-    local installer="${TMPDIR:-/tmp}/nora-python-3.12.10-$RANDOM.exe"
+    local installer="${TMPDIR:-/tmp}/ARLO-python-3.12.10-$RANDOM.exe"
     TEMP_INSTALLERS+=("$installer")
 info "Downloading the official Python 3.12.10 installer..."
 
@@ -122,7 +122,7 @@ MSYS2_ARG_CONV_EXCL='*' "$installer" \
 
 }
 install_ollama_directly() {
-    local installer="${TMPDIR:-/tmp}/nora-ollama-setup-$RANDOM.exe"
+    local installer="${TMPDIR:-/tmp}/ARLO-ollama-setup-$RANDOM.exe"
     TEMP_INSTALLERS+=("$installer")
 info "Downloading the official Ollama installer..."
 
@@ -258,7 +258,7 @@ ensure_ollama_server() {
     fi
 info "Starting the local Ollama service..."
 
-local log_file="${TMPDIR:-/tmp}/nora-ollama.log"
+local log_file="${TMPDIR:-/tmp}/ARLO-ollama.log"
 
 nohup "$OLLAMA_BIN" serve >"$log_file" 2>&1 &
 
@@ -632,8 +632,8 @@ info "Neovim configuration installed successfully."
 find_powershell
 [[ -f "${SCRIPT_DIR}/requirements.txt" ]] || fail 
     "${SCRIPT_DIR}/requirements.txt was not found."
-[[ -f "${SCRIPT_DIR}/nora.ps1" ]] || fail 
-    "${SCRIPT_DIR}/nora.ps1 was not found."
+[[ -f "${SCRIPT_DIR}/ARLO.ps1" ]] || fail 
+    "${SCRIPT_DIR}/ARLO.ps1 was not found."
 readonly LOCAL_APP_DATA_WINDOWS="${LOCALAPPDATA:-$(get_windows_folder LocalApplicationData)}"
 readonly USER_PROFILE_WINDOWS="${USERPROFILE:-$(get_windows_folder UserProfile)}"
 readonly PROGRAM_FILES_WINDOWS="${PROGRAMFILES:-$(get_windows_folder ProgramFiles)}"
@@ -720,12 +720,12 @@ VOICE_DIR="$SCRIPT_DIR/src/voices"
 mkdir -p "$VOICE_DIR"
 if [[ ! -f "$VOICE_DIR/$VOICE_NAME.onnx" ]] ||
    [[ ! -f "$VOICE_DIR/$VOICE_NAME.onnx.json" ]]; then
-    info "Downloading Nora's voice ($VOICE_NAME)..."
+    info "Downloading ARLO's voice ($VOICE_NAME)..."
     "$VENV_PYTHON" -m piper.download_voices \
         --download-dir "$VOICE_DIR" \
         "$VOICE_NAME"
 else
-    info "Nora's voice is already installed."
+    info "ARLO's voice is already installed."
 fi
 
 info "Checking for Ollama..."
@@ -743,13 +743,13 @@ find_ollama || fail \
 fi
 "$OLLAMA_BIN" --version
 ensure_ollama_server
-info "Downloading/verifying ${NORA_MODEL} (approximately 9.3 GB)..."
-"$OLLAMA_BIN" pull "$NORA_MODEL"
-readonly NORA_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/nora.ps1")"
+info "Downloading/verifying ${ARLO_MODEL} (approximately 9.3 GB)..."
+"$OLLAMA_BIN" pull "$ARLO_MODEL"
+readonly ARLO_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/ARLO.ps1")"
 cleanup_installers
 trap - EXIT
 info "Installation complete. Starting ${ASSISTANT_NAME}..."
 exec "$POWERSHELL_BIN" 
     -NoProfile 
     -ExecutionPolicy Bypass 
-    -File "$NORA_SCRIPT"
+    -File "$ARLO_SCRIPT"

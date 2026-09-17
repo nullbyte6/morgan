@@ -114,7 +114,7 @@ def _settings():
     config = load_config()
     provider = config["email_provider"].strip().casefold()
     defaults = PROVIDERS.get(provider, {})
-    password = os.environ.get("NORA_EMAIL_PASSWORD", "").strip() or config[
+    password = os.environ.get("EMAIL_PASSWORD", "").strip() or config[
         "email_password"]
     settings = {
         "address": config["email_address"].strip(),
@@ -141,7 +141,7 @@ def _settings():
                 "imap_port") if not settings[key]]
     if missing:
         raise ValueError(
-            "Configure email_address, email_password (or NORA_EMAIL_PASSWORD) and the email server settings")
+            "Configure email_address, email_password (or EMAIL_PASSWORD) and the email server settings")
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", settings["address"]):
         raise ValueError("email_address must be a valid email address")
     return settings

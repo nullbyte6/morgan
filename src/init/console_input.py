@@ -53,7 +53,7 @@ class ConsoleInput:
         )
 
     def resume(self):
-        """Restore Nora's custom console input mode."""
+        """Restore your own custom console input mode."""
         self._check(self.kernel.SetConsoleMode(
                 self.handle,
                 (self.mode | 0x88) & ~(0x10 | 0x40 | 0x2 | 0x4 | 0x200)

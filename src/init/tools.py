@@ -79,8 +79,8 @@ from .media import (control_media, search_youtube_songs, play_youtube_song,
                     play_spotify_album,
                     list_spotify_playlists, get_spotify_playlist_tracks,
                     play_spotify_playlist)
-from .self_code import (get_repo_lnk, get_nora_repository, list_nora_code,
-                        read_nora_code,edit_nora_code, update_nora_repository)
+from .self_code import (get_repo_lnk, get_repo, list_code,
+                        read_code, edit_code, update_repo)
 
 from src.diagnostics.tools import (check_system_health, check_disk_health,
                                    check_security_health,)
@@ -111,11 +111,11 @@ TOOLS = [
     get_spotify_playlist_tracks,
     play_spotify_playlist,
     get_repo_lnk,
-    get_nora_repository,
-    list_nora_code,
-    read_nora_code,
-    edit_nora_code,
-    update_nora_repository,
+    get_repo,
+    list_code,
+    read_code,
+    edit_code,
+    update_repo,
     get_weather,
     set_weather_location,
     open_current_session_log,
