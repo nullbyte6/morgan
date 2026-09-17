@@ -24,4 +24,3 @@ Send2Trash>=1.8.3,<2
 winshell
 steam-client
 pygments
-pyvim
