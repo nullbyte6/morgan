@@ -221,8 +221,41 @@ class Assistant:
         function = commands.get(command.strip())
         return function() if function is not None else None
 
+    def print_file_cmd(self, command: str) -> str | None:
+        """Print explicit requests for a file's contents without using the LLM."""
+        patterns = (
+            r"(?:imprime|muestra|enseña|lee|print|show|cat)\s+(?:el\s+contenido\s+de\s+)?(.+)",
+            r"(?:muéstrame|enséñame)\s+(?:el\s+contenido\s+de\s+)?(.+)",
+        )
+
+        for pattern in patterns:
+            match = re.fullmatch(pattern,
+                command.strip(),
+                flags=re.IGNORECASE)
+
+            if match is None:
+                continue
+
+            path = match.group(1).strip().strip('"').strip("'")
+            if not path:
+                return None
+
+            from src.init.brain import read_file
+            return read_file(path)
+
+        return None
+
+    def printlns(self, content: str) -> None:
+        if self.terminal_ui is not None:
+            with self.terminal_ui.suspend():
+                print(content)
+        else:
+            print(content)
+
+
     def build_user_prompt(self) -> str:
-        """Show the current location and live Git branch, including unborn branches."""
+        """Show the current location and live Git branch,
+        including unborn branches."""
         from src.init import brain
         from src.init.brain import get_working_directory
         if not brain.should_show_working_directory():
@@ -350,6 +383,13 @@ class Assistant:
                         f"{git_result}")]),
                 ])
                 continue
+
+            file_content = self.print_file_cmd(user_input)
+            if file_content is not None:
+                self.printlns(file_content)
+                session.write(self.name, file_content)
+                continue
+
             if user_input.strip().casefold() in VOICE_COMMANDS:
                 try:
                     user_input = capture_voice_input()
