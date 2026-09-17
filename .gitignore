@@ -4,4 +4,5 @@ __pycache__/
 .cache
 *.txt
 src/voices/*
+!src/voices/.gitkeep
 !requirements.txt
