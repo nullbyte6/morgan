@@ -7,7 +7,7 @@ import smtplib
 import ssl
 from email.header import decode_header, make_header
 from email.message import EmailMessage
-from email import message_from_bytes
+from email import message_from_bytes, policy
 from email.utils import parseaddr
 
 from .config import load_config
@@ -279,7 +279,11 @@ def read_emails(folder: str = "INBOX", message_id: str = "",
             status, data = client.uid("fetch", uid, "(RFC822)")
             if status != "OK" or not data or not isinstance(data[0], tuple):
                 continue
-            parsed = message_from_bytes(data[0][1])
+
+            parsed = message_from_bytes(
+                data[0][1],
+                policy=policy.default)
+
             results.append({"id": uid.decode(),
                             "from": parseaddr(parsed.get("From", ""))[1],
                             "to": parsed.get("To", ""),
