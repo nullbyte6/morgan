@@ -75,7 +75,7 @@ class Assistant:
             model_path=VOICE_MODEL,
             voice_reference=VOICE_REFERENCE,
             reference_text=VOICE_REFERENCE_TEXT,
-            speed=1.20,
+            speed=1.0,
         )
 
         self.MODEL_NAME = MODEL_NAME

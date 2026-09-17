@@ -67,27 +67,33 @@ class VoiceService:
                 f"Voice reference not found: {self.voice_reference}"
             )
 
-        self.voice = AutoModel(
-            model_dir=str(self.model_path)
-        )
+        self.voice = None
+        self.sample_rate = None
+        self._audio_stream = None
 
-        self.sample_rate = self.voice.sample_rate
-        self._queue: queue.Queue[str] = queue.Queue()
-        self._worker = threading.Thread(
-            target=self._voice_worker,
+        self._ready = threading.Event()
+        self._load_error = None
+
+        self._text_queue: queue.Queue[str] = queue.Queue()
+        self._audio_queue: queue.Queue[np.ndarray] = queue.Queue()
+
+        self._tts_worker = threading.Thread(
+            target=self._tts_loop,
             daemon=True,
         )
-        self._worker.start()
+        self._tts_worker.start()
 
-        self._audio_stream = sd.OutputStream(
-            samplerate=self.sample_rate,
-            channels=1,
-            dtype="float32",
-            blocksize=0,
-            latency="low",
+        self._playback_worker = threading.Thread(
+            target=self._playback_loop,
+            daemon=True,
         )
+        self._playback_worker.start()
 
-        self._audio_stream.start()
+        self._loader = threading.Thread(
+            target=self._load_model,
+            daemon=True,
+        )
+        self._loader.start()
 
     @staticmethod
     def _clean_text(text: str) -> str:
@@ -124,24 +130,62 @@ class VoiceService:
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 
-    def say(self, text: str) -> None:
-        """Queue text to be spoken."""
-        text = self._clean_text(text)
-        if text:
-            self._queue.put(text)
 
-    def _voice_worker(self) -> None:
-        """Continuously consume queued speech."""
+    def _tts_loop(self) -> None:
         while True:
-            text = self._queue.get()
+            text = self._text_queue.get()
             try:
-                self._speak(text)
+                self._generate(text)
             except Exception as error:
                 print(f"VOICE ERROR: {error}")
             finally:
-                self._queue.task_done()
+                self._text_queue.task_done()
 
-    def _speak(self, text: str) -> None:
+
+    def _playback_loop(self) -> None:
+        self._wait_until_ready()
+        while True:
+            samples = self._audio_queue.get()
+            try:
+                self._audio_stream.write(samples)
+            except Exception as error:
+                print(f"AUDIO ERROR: {error}")
+            finally:
+                self._audio_queue.task_done()
+
+
+    def _load_model(self) -> None:
+        try:
+            self.voice = AutoModel(
+                model_dir=str(self.model_path))
+
+            self.sample_rate = self.voice.sample_rate
+            self._audio_stream = sd.OutputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="float32",
+                blocksize=0,
+                latency="low",
+            )
+            self._audio_stream.start()
+
+        except Exception as error:
+            self._load_error = error
+
+        finally:
+            self._ready.set()
+
+
+    def _wait_until_ready(self) -> None:
+        self._ready.wait()
+        if self._load_error is not None:
+            raise RuntimeError(
+                f"CosyVoice failed to load: {self._load_error}"
+            ) from self._load_error
+
+
+    def _generate(self, text: str) -> None:
+        self._wait_until_ready()
         generator = self.voice.inference_zero_shot(
             text,
             self.reference_text,
@@ -153,8 +197,14 @@ class VoiceService:
             audio = chunk["tts_speech"]
             if hasattr(audio, "detach"):
                 audio = audio.detach().cpu().numpy()
-
             samples = np.asarray(audio, dtype=np.float32).squeeze()
             if samples.ndim == 1:
                 samples = samples.reshape(-1, 1)
-            self._audio_stream.write(samples)
+
+            self._audio_queue.put(samples)
+
+    def say(self, text: str) -> None:
+        """Queue text to be synthesized."""
+        text = self._clean_text(text)
+        if text:
+            self._text_queue.put(text)
