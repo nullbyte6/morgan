@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
+import torch
 from transformers.utils import logging as transformers_logging
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -27,6 +28,10 @@ if str(SRC_DIR) not in sys.path:
 
 if str(MATCHA_DIR) not in sys.path:
     sys.path.insert(0, str(MATCHA_DIR))
+
+torch.backends.cuda.enable_flash_sdp(False)
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_math_sdp(True)
 
 import cosyvoice.cli.cosyvoice as cosyvoice_module
 from cosyvoice.cli.cosyvoice import AutoModel
@@ -143,7 +148,8 @@ class VoiceService:
     def _load_model(self) -> None:
         try:
             self.voice = AutoModel(
-                model_dir=str(self.model_path)
+                model_dir=str(self.model_path),
+                fp16=True,
             )
 
             self.sample_rate = self.voice.sample_rate
