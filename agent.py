@@ -147,22 +147,32 @@ class Assistant:
         return reply
 
     def speak(self, chunks):
+        response = self.voice.start_response()
         buffer = ""
-        for chunk in chunks:
-            yield chunk
-            buffer += chunk
+        try:
+            for chunk in chunks:
+                yield chunk
+                buffer += chunk
 
-            while True:
-                match = re.search(r"(?<=[.!?])\s+", buffer)
-                if match is None:
-                    break
+                while True:
+                    match = re.search(r"(?<=[.!?])\s+", buffer)
+                    if match is None:
+                        break
 
-                sentence = buffer[:match.start() + 1]
-                buffer = buffer[match.end():]
-                self.voice.say(sentence)
+                    sentence = buffer[:match.start() + 1]
+                    buffer = buffer[match.end():]
 
-        if buffer.strip():
-            self.voice.say(buffer)
+                    self.voice.feed_response(
+                        response,
+                        sentence)
+
+            if buffer.strip():
+                self.voice.feed_response(
+                    response,
+                    buffer)
+
+        finally:
+            self.voice.end_response(response)
 
     def directory_cmd(self, command: str) -> str | None:
         """Handle standalone cd/chdir commands without a model or shell call."""

@@ -28,7 +28,13 @@ if str(SRC_DIR) not in sys.path:
 if str(MATCHA_DIR) not in sys.path:
     sys.path.insert(0, str(MATCHA_DIR))
 
+import cosyvoice.cli.cosyvoice as cosyvoice_module
 from cosyvoice.cli.cosyvoice import AutoModel
+
+def _silent_tqdm(iterable, *args, **kwargs):
+    return iterable
+
+cosyvoice_module.tqdm = _silent_tqdm
 
 import shutil
 
@@ -44,9 +50,10 @@ class VoiceService:
     Speech synthesis runs on a background worker so it does not block
     text generation.
     """
+
     def __init__(self, model_path: str | Path,
-        voice_reference: str | Path, reference_text: str,
-        speed: float = 1.0):
+                 voice_reference: str | Path, reference_text: str,
+                 speed: float = 1.0):
         self.model_path = Path(model_path)
         self.voice_reference = Path(voice_reference)
         reference_text = reference_text.strip()
@@ -74,20 +81,12 @@ class VoiceService:
         self._ready = threading.Event()
         self._load_error = None
 
-        self._text_queue: queue.Queue[str] = queue.Queue()
-        self._audio_queue: queue.Queue[np.ndarray] = queue.Queue()
-
+        self._response_queue: queue.Queue = queue.Queue()
         self._tts_worker = threading.Thread(
             target=self._tts_loop,
             daemon=True,
         )
         self._tts_worker.start()
-
-        self._playback_worker = threading.Thread(
-            target=self._playback_loop,
-            daemon=True,
-        )
-        self._playback_worker.start()
 
         self._loader = threading.Thread(
             target=self._load_model,
@@ -130,36 +129,30 @@ class VoiceService:
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 
-
     def _tts_loop(self) -> None:
+        self._wait_until_ready()
         while True:
-            text = self._text_queue.get()
+            response = self._response_queue.get()
             try:
-                self._generate(text)
+                self._speak_response(response)
             except Exception as error:
                 print(f"VOICE ERROR: {error}")
             finally:
-                self._text_queue.task_done()
-
-
-    def _playback_loop(self) -> None:
-        self._wait_until_ready()
-        while True:
-            samples = self._audio_queue.get()
-            try:
-                self._audio_stream.write(samples)
-            except Exception as error:
-                print(f"AUDIO ERROR: {error}")
-            finally:
-                self._audio_queue.task_done()
-
+                self._response_queue.task_done()
 
     def _load_model(self) -> None:
         try:
             self.voice = AutoModel(
-                model_dir=str(self.model_path))
+                model_dir=str(self.model_path)
+            )
 
             self.sample_rate = self.voice.sample_rate
+            self.voice.add_zero_shot_spk(
+                self.reference_text,
+                str(self.voice_reference),
+                "arlo",
+            )
+
             self._audio_stream = sd.OutputStream(
                 samplerate=self.sample_rate,
                 channels=1,
@@ -175,6 +168,21 @@ class VoiceService:
         finally:
             self._ready.set()
 
+    def start_response(self) -> queue.Queue:
+        """
+        Start one continuous CosyVoice bi-streaming response.
+        """
+        text_queue = queue.Queue()
+        self._response_queue.put(text_queue)
+        return text_queue
+
+    def feed_response(self, response: queue.Queue, text: str) -> None:
+        text = self._clean_text(text)
+        if text:
+            response.put(text)
+
+    def end_response(self, response: queue.Queue) -> None:
+        response.put(None)
 
     def _wait_until_ready(self) -> None:
         self._ready.wait()
@@ -183,28 +191,38 @@ class VoiceService:
                 f"CosyVoice failed to load: {self._load_error}"
             ) from self._load_error
 
+    @staticmethod
+    def _text_stream(text_queue: queue.Queue):
+        while True:
+            text = text_queue.get()
+            try:
+                if text is None:
+                    return
 
-    def _generate(self, text: str) -> None:
-        self._wait_until_ready()
+                yield text
+            finally:
+                text_queue.task_done()
+
+    def _speak_response(self, text_queue: queue.Queue) -> None:
+        text_stream = self._text_stream(text_queue)
+
         generator = self.voice.inference_zero_shot(
-            text,
+            text_stream,
             self.reference_text,
             str(self.voice_reference),
+            zero_shot_spk_id="arlo",
             stream=True,
-            speed=self.speed)
+            speed=self.speed,
+        )
 
         for chunk in generator:
             audio = chunk["tts_speech"]
             if hasattr(audio, "detach"):
                 audio = audio.detach().cpu().numpy()
+
             samples = np.asarray(audio, dtype=np.float32).squeeze()
+
             if samples.ndim == 1:
                 samples = samples.reshape(-1, 1)
 
-            self._audio_queue.put(samples)
-
-    def say(self, text: str) -> None:
-        """Queue text to be synthesized."""
-        text = self._clean_text(text)
-        if text:
-            self._text_queue.put(text)
+            self._audio_stream.write(samples)
