@@ -148,28 +148,11 @@ class Assistant:
 
     def speak(self, chunks):
         response = self.voice.start_response()
-        buffer = ""
         try:
             for chunk in chunks:
                 yield chunk
-                buffer += chunk
-
-                while True:
-                    match = re.search(r"(?<=[.!?])\s+", buffer)
-                    if match is None:
-                        break
-
-                    sentence = buffer[:match.start() + 1]
-                    buffer = buffer[match.end():]
-
-                    self.voice.feed_response(
-                        response,
-                        sentence)
-
-            if buffer.strip():
-                self.voice.feed_response(
-                    response,
-                    buffer)
+                if chunk:
+                    self.voice.feed_response(response,chunk,)
 
         finally:
             self.voice.end_response(response)
