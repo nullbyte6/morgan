@@ -715,7 +715,7 @@ fi
 configure_neovim
 bootstrap_neovim
 
-VOICE_NAME="es_MX-claude-high"
+VOICE_NAME="es_ES-davefx-medium"
 VOICE_DIR="$SCRIPT_DIR/src/voices"
 mkdir -p "$VOICE_DIR"
 if [[ ! -f "$VOICE_DIR/$VOICE_NAME.onnx" ]] ||

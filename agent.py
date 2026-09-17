@@ -11,9 +11,10 @@ import time
 from contextlib import nullcontext
 from getpass import getuser
 
-from src.init.identity import register_assistant
-from src.init.voice_service import VoiceService
 from src.init.brain import VOICE_MODEL
+from src.init.identity import register_assistant
+from src.init.terminal import TerminalUI, interactive_terminal
+from src.init.voice_service import VoiceService
 
 if __name__ == "__main__":
     sys.modules["agent"] = sys.modules[__name__]
@@ -401,8 +402,6 @@ class Assistant:
                 if cause is not None else str(error))
 
     def run(self):
-        from src.init.terminal import TerminalUI, interactive_terminal
-
         self._initialize_runtime()
         try:
             if interactive_terminal():
