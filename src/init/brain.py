@@ -1178,9 +1178,13 @@ def launch_steam_game(game: str) -> str:
 
 def list_steam_games() -> str:
     """List all installed Steam games."""
-    if steam_manager.games():
-        return "\n".join(sorted(steam_manager.games()))
-    return None
+    games = steam_manager.games()
+    if not games:
+        return "No Steam games found"
+
+    return "\n".join(
+        sorted((str(game) for game in games), key=str.casefold)
+    )
 
 
 def find_steam_game(game: str) -> str:
