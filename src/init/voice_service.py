@@ -4,36 +4,58 @@ import queue
 import re
 import threading
 from pathlib import Path
-import sounddevice as sd
-from piper import PiperVoice, SynthesisConfig
-from .config import load_config, update_config
 
-"""The class in charge of Arlo's voice, using the piper lib
-from pip, it adapts the pronounciations as well of certain words"""
+import numpy as np
+import sounddevice as sd
+
+from cosyvoice.cli.cosyvoice import AutoModel
+
+
 class VoiceService:
-    def __init__(self, model_path: str | Path,
-            speed: float = 1.0):
+    """
+    Arlo's multilingual voice service using Fun-CosyVoice3.
+    The model is loaded once and kept alive for the entire Arlo session.
+    Speech synthesis runs on a background worker so it does not block
+    text generation.
+    """
+    def __init__(
+        self,
+        model_path: str | Path,
+        voice_reference: str | Path,
+        reference_text: str,
+        speed: float = 1.0,
+    ):
         self.model_path = Path(model_path)
-        self.pronunciations = load_config().get("pronunciations", {})
+        self.voice_reference = Path(voice_reference)
+        self.reference_text = reference_text.strip()
+        self.speed = speed
 
         if not self.model_path.exists():
             raise FileNotFoundError(
-                f"Piper voice model not found: {self.model_path}")
+                f"CosyVoice model not found: {self.model_path}"
+            )
 
-        self.voice = PiperVoice.load(str(self.model_path))
-        self.synthesis_config = SynthesisConfig(
-            length_scale=1.0/speed)
+        if not self.voice_reference.exists():
+            raise FileNotFoundError(
+                f"Voice reference not found: {self.voice_reference}"
+            )
 
+        self.voice = AutoModel(
+            model_dir=str(self.model_path)
+        )
+
+        self.sample_rate = self.voice.sample_rate
         self._queue: queue.Queue[str] = queue.Queue()
         self._worker = threading.Thread(
             target=self._voice_worker,
-            daemon=True)
-
+            daemon=True,
+        )
         self._worker.start()
 
     @staticmethod
     def _clean_text(text: str) -> str:
         """Remove formatting and symbols that should not be spoken."""
+
         text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
         text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
         text = re.sub(r"\*(.*?)\*", r"\1", text)
@@ -59,69 +81,62 @@ class VoiceService:
             "\U0000200D"
             "]+",
             "",
-            text)
+            text,
+        )
 
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 
     def say(self, text: str) -> None:
         """Queue text to be spoken."""
-        text = self.normalize(self._clean_text(text))
+        text = self._clean_text(text)
         if text:
             self._queue.put(text)
 
     def _voice_worker(self) -> None:
-        """Continuously consume queued sentences."""
+        """Continuously consume queued speech."""
         while True:
             text = self._queue.get()
             try:
                 self._speak(text)
+            except Exception as error:
+                print(f"VOICE ERROR: {error}")
             finally:
                 self._queue.task_done()
 
-
-    def normalize(self, text: str) -> str:
-        for word, pronunciation in self.pronunciations.items():
-            text = re.sub(
-                rf"\b{re.escape(word)}\b",
-                pronunciation,
-                text,
-                flags=re.IGNORECASE)
-        return text
-
-    def learn_pronunciation(self, word: str, pronunciation: str) -> str:
-        word = word.strip()
-        pronunciation = pronunciation.strip()
-        if not word or not pronunciation:
-            return "Word and pronunciation cannot be empty"
-
-        self.pronunciations[word] = pronunciation
-        result = update_config({
-            "pronunciations": {
-                word: pronunciation
-            }
-        })
-
-        if result.startswith("Error"):
-            return result
-
-        return f"Learned pronunciation: {word} -> {pronunciation}"
-
     def _speak(self, text: str) -> None:
-        """Synthesize and play Piper audio progressively."""
+        """Generate and play CosyVoice audio progressively."""
+        generator = self.voice.inference_zero_shot(
+            text, ("You are a helpful assistant.<|endofprompt|>" +
+                   self.reference_text),
+            str(self.voice_reference),
+            stream=True,
+            speed=self.speed,
+        )
+
         stream = None
         try:
-            for chunk in self.voice.synthesize(text,
-                    syn_config=self.synthesis_config):
+            for chunk in generator:
+                audio = chunk["tts_speech"]
+
+                if hasattr(audio, "detach"):
+                    audio = audio.detach().cpu().numpy()
+
+                samples = np.asarray(audio,
+                    dtype=np.float32).squeeze()
+
+                if samples.ndim == 1:
+                    samples = samples.reshape(-1, 1)
+
                 if stream is None:
-                    stream = sd.RawOutputStream(
-                        samplerate=chunk.sample_rate,
-                        channels=chunk.sample_channels,
-                        dtype="int16",
-                    )
+                    stream = sd.OutputStream(
+                        samplerate=self.sample_rate,
+                        channels=1,
+                        dtype="float32")
                     stream.start()
 
-                stream.write(chunk.audio_int16_bytes)
+                stream.write(samples)
+
         finally:
             if stream is not None:
                 stream.stop()

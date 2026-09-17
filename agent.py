@@ -11,10 +11,10 @@ import time
 from contextlib import nullcontext
 from getpass import getuser
 
-from src.init.brain import VOICE_MODEL
 from src.init.identity import register_assistant
 from src.init.terminal import TerminalUI, interactive_terminal
 from src.init.voice_service import VoiceService
+from src.init.brain import VOICE_MODEL, VOICE_REFERENCE, VOICE_REFERENCE_TEXT
 
 if __name__ == "__main__":
     sys.modules["agent"] = sys.modules[__name__]
@@ -71,7 +71,13 @@ class Assistant:
         from src.init.brain import MODEL_NAME
         from src.init.tools import TOOLS
 
-        self.voice = VoiceService(VOICE_MODEL, speed=1.20)
+        self.voice = VoiceService(
+            model_path=VOICE_MODEL,
+            voice_reference=VOICE_REFERENCE,
+            reference_text=VOICE_REFERENCE_TEXT,
+            speed=1.20,
+        )
+
         self.MODEL_NAME = MODEL_NAME
         just_fix_windows_console()
         self.model_settings = {

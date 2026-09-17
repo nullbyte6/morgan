@@ -57,10 +57,12 @@ _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 _SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
 
-
-VOICE_NAME = "es_ES-davefx-medium"
 VOICE_DIR = Path(__file__).resolve().parents[1] / "voices"
-VOICE_MODEL = VOICE_DIR / f"{VOICE_NAME}.onnx"
+MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
+VOICE_REFERENCE = VOICE_DIR / "arlo.wav"
+VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy preparado para ayudarte "
+    "con lo que necesites.")
+VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
 
 
 def get_version() -> str:
