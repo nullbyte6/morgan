@@ -2,7 +2,8 @@
 Adaptive Reasoning Local Operator is a local desktop assistant that uses 
 Ollama to run tools and automate tasks on Windows. It requires Windows, PowerShell, Python 3.12, and Ollama. The `arlo.ps1` launcher starts the application using the `.venv` virtual environment.
 Configuration and user data are stored in `C:\Users\<username>\.arlo`. Refer to the source code and `config.json` to discover additional features and configuration options.
-You can install arlo from Git Bash or WSL by running the repository installer directly:
+You can install Arlo from Git Bash or WSL by running the repository installer 
+directly:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/xddigs/arlo/main/install.sh | bash
