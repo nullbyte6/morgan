@@ -3,4 +3,5 @@
 __pycache__/
 .cache
 *.txt
+src/voices/*
 !requirements.txt

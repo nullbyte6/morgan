@@ -12,6 +12,8 @@ from contextlib import nullcontext
 from getpass import getuser
 
 from src.init.identity import register_assistant
+from src.init.voice_service import VoiceService
+from src.init.brain import VOICE_MODEL
 
 if __name__ == "__main__":
     sys.modules["agent"] = sys.modules[__name__]
@@ -21,6 +23,7 @@ class Assistant:
     """One shared assistant; reading its identity never
     starts the model or UI."""
     name = "Nora"
+    voice: VoiceService
     _instance = None
     _instance_lock = threading.Lock()
 
@@ -30,6 +33,7 @@ class Assistant:
                 instance = super().__new__(cls)
                 instance.terminal_ui = None
                 instance.agent = None
+                instance.voice = None
                 instance.username = getuser().capitalize()
                 instance.typewriter_delay_seconds = float(
                     os.environ.get("NORA_TYPEWRITER_DELAY", "0"))
@@ -65,6 +69,7 @@ class Assistant:
         from src.init.brain import MODEL_NAME
         from src.init.tools import TOOLS
 
+        self.voice = VoiceService(VOICE_MODEL)
         self.MODEL_NAME = MODEL_NAME
         just_fix_windows_console()
         self.model_settings = {
@@ -91,13 +96,14 @@ class Assistant:
         return self.terminal_ui.suspend()
 
 
-    def stream(self, chunks, session=None) -> None:
+    def stream(self, chunks, session=None) -> str:
         """Shows remaining fragments immediately, animation delay is optional"""
         from src.init.output import chunks_group
         from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
         sys.stdout.write(f"{ASSISTANT_COLOR}")
         displayed = []
-        response_prefix = self.terminal_ui.output_snapshot() if self.terminal_ui is not None else None
+        response_prefix = self.terminal_ui.output_snapshot() \
+            if self.terminal_ui is not None else None
 
         def capture(source):
             for chunk in source:
@@ -125,8 +131,30 @@ class Assistant:
         finally:
             sys.stdout.write(f"{RESET_COLOR}\n")
             sys.stdout.flush()
-            if session is not None:
-                session.write(self.name, "".join(displayed))
+
+        if session is not None:
+            session.write(self.name, "".join(displayed))
+
+        reply = "".join(displayed)
+        return reply
+
+    def stream_with_voice(self, chunks):
+        buffer = ""
+        for chunk in chunks:
+            yield chunk
+            buffer += chunk
+
+            while True:
+                match = re.search(r"(?<=[.!?])\s+", buffer)
+                if match is None:
+                    break
+
+                sentence = buffer[:match.start() + 1]
+                buffer = buffer[match.end():]
+                self.voice.say(sentence)
+
+        if buffer.strip():
+            self.voice.say(buffer)
 
     def directory_cmd(self, command: str) -> str | None:
         """Handle standalone cd/chdir commands without a model or shell call."""
@@ -343,16 +371,17 @@ class Assistant:
             spinner = Spinner()
             spinner.start()
             try:
-                with self.agent.run_stream_sync(
-                        user_input,
-                        message_history=history,
-                        model_settings={"temperature":
-                                            brain.load_config()[
+                with self.agent.run_stream_sync(user_input,message_history=history,
+                        model_settings={"temperature": brain.load_config()[
                                                 "temperature"]}) as result:
                     spinner.stop()
-                    self.stream(
-                        result.stream_text(delta=True, debounce_by=None),
+                    reply = self.stream(
+                        self.stream_with_voice(
+                            result.stream_text(
+                                delta=True,
+                                debounce_by=None)),
                         session=session)
+
                     history = result.all_messages()
                     for message in history:
                         if isinstance(message, ModelResponse):

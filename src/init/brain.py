@@ -58,6 +58,11 @@ _SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
 
 
+VOICE_NAME = "es_AR-daniela-high"
+VOICE_DIR = Path(__file__).resolve().parents[1] / "voices"
+VOICE_MODEL = VOICE_DIR / f"{VOICE_NAME}.onnx"
+
+
 def get_version() -> str:
     """Return the assistant's current version from its application configuration."""
     try:
