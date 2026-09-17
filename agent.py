@@ -9,8 +9,6 @@ import sys
 import threading
 import time
 from getpass import getuser
-
-from src.init.brain import launch_steam_game
 from src.init.identity import register_assistant
 
 if __name__ == "__main__":
@@ -131,50 +129,6 @@ class Assistant:
         path = re.sub(r"^/d(?:\s+|$)", "", path, count=1, flags=re.IGNORECASE)
         return change_directory(path)
 
-    def application_cmd(self, command: str) -> str | None:
-        """Open explicit app requests without delegating routing to the LLM."""
-        match = re.fullmatch(
-            r"(?:abre|abrir|ejecuta|inicia|lanza|open|launch|run)\s+(.+)",
-            command.strip(), flags=re.IGNORECASE)
-        if match is None:
-            return None
-        target = match.group(1).strip().strip('"').strip("'")
-        if not target:
-            return None
-        lowered = target.casefold()
-        if (lowered.startswith(("http://", "https://", "www."))
-                or re.search(r"\s+(?:y|and)\s+", lowered)
-                or re.search(r"\b[\w.-]+\.(?:com|es|org|net|io)\b", lowered)
-                or any(word in lowered for word in (
-                        "directorio", "carpeta", "folder", "directory",
-                        "archivo", "fichero", "file", "navegador", "browser",
-                        "repositorio", "repository"))):
-            return None
-        target = re.sub(
-            r"^(?:la\s+|el\s+)?(?:app|aplicaci[oó]n|application|programa|program)\s+(?:de\s+)?",
-            "", target, flags=re.IGNORECASE).strip()
-
-        target = re.sub(r"\s+(?:por\s+favor|please)$", "", target,
-                        flags=re.IGNORECASE).strip()
-
-        target = re.sub(r"^(?:el|la)\s+", "", target,
-                        flags=re.IGNORECASE).strip()
-
-        if not target:
-            return None
-
-        from src.init.brain import open_application
-        result = open_application(target)
-        steam_match = re.fullmatch(r"(.+?)\s+(?:en|desde|from)\s+steam",
-                                   target, flags=re.IGNORECASE)
-
-        if steam_match:
-            game = steam_match.group(1).strip()
-            if launch_steam_game(game):
-                return f"Steam game launched: {game}"
-            return f"Steam game not found: {game}"
-
-        return result
 
     def editor_cmd(self, command: str) -> str | None:
         """Update explicit requests to open Nora's built-in editor."""
@@ -394,11 +348,6 @@ class Assistant:
             editor_result = self.editor_cmd(user_input)
             if editor_result is not None:
                 self.stream(editor_result, session=session)
-                continue
-
-            application_result = self.application_cmd(user_input)
-            if application_result is not None:
-                self.stream(application_result, session=session)
                 continue
 
             git_result = self.git_cmd(user_input)
