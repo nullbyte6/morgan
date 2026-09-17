@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 import sounddevice as sd
 from piper import PiperVoice, SynthesisConfig
-from .config import load_config
+from .config import load_config, update_config
 
 """The class in charge of Arlo's voice, using the piper lib
 from pip, it adapts the pronounciations as well of certain words"""
