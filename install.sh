@@ -413,7 +413,6 @@ info "Installing dependencies from requirements.txt..."
 "$VENV_PYTHON" -m pip install --requirement "$REQUIREMENTS_WINDOWS"
 
 info "Ensuring Hugging Face Hub is available..."
-"$VENV_PYTHON" -m pip install --upgrade huggingface_hub
 "$VENV_PYTHON" -m pip check
 
 readonly SRC_DIR="${SCRIPT_DIR}/src"
