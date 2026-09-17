@@ -130,38 +130,6 @@ class Assistant:
         return change_directory(path)
 
 
-    def editor_cmd(self, command: str) -> str | None:
-        """Update explicit requests to open Nora's built-in editor."""
-        patterns = (
-            r"(?:abre|abrir)\s+(?:el\s+)?editor\s+(?:con\s+)?(.+)",
-            r"(?:abre|abrir)\s+(.+?)\s+(?:en|con)\s+(?:el\s+)?editor",
-            r"(?:edita|editar)\s+(.+)",
-            r"open\s+(.+?)\s+(?:in|with)\s+(?:the\s+)?editor",
-            r"open\s+(?:the\s+)?editor\s+(?:with\s+)?(.+)")
-
-        for pattern in patterns:
-            match = re.fullmatch(
-                pattern,
-                command.strip(),
-                flags=re.IGNORECASE)
-
-            if match is None:
-                continue
-
-            path = match.group(1).strip().strip('"').strip("'")
-
-            if not path:
-                return None
-
-            from src.init.editor import open_in_editor
-            if self.terminal_ui is not None:
-                with self.terminal_ui.suspend():
-                    return open_in_editor(path)
-
-            return open_in_editor(path)
-
-        return None
-
     def git_cmd(self, command: str) -> str | None:
         """Execute exact supported Git commands through the existing tools."""
         from src.init import brain
@@ -343,11 +311,6 @@ class Assistant:
             if directory_result is not None:
                 self.stream(directory_result)
                 session.write(self.name, directory_result)
-                continue
-
-            editor_result = self.editor_cmd(user_input)
-            if editor_result is not None:
-                self.stream(editor_result, session=session)
                 continue
 
             git_result = self.git_cmd(user_input)
