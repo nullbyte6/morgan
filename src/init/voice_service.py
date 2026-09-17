@@ -1,14 +1,40 @@
 from __future__ import annotations
 
+import logging
 import queue
 import re
+import sys
 import threading
+import warnings
 from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
+from transformers.utils import logging as transformers_logging
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+logging.getLogger("root").setLevel(logging.WARNING)
+logging.getLogger().setLevel(logging.ERROR)
+transformers_logging.set_verbosity_error()
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SRC_DIR = PROJECT_ROOT / "src"
+MATCHA_DIR = SRC_DIR / "third_party" / "Matcha-TTS"
+
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+if str(MATCHA_DIR) not in sys.path:
+    sys.path.insert(0, str(MATCHA_DIR))
 
 from cosyvoice.cli.cosyvoice import AutoModel
+
+import shutil
+
+if shutil.which("ffmpeg") is None:
+    raise RuntimeError("FFmpeg is required by CosyVoice "
+                       "but was not found in PATH.")
 
 
 class VoiceService:
@@ -18,15 +44,17 @@ class VoiceService:
     Speech synthesis runs on a background worker so it does not block
     text generation.
     """
-    def __init__(
-        self,
-        model_path: str | Path,
-        voice_reference: str | Path,
-        reference_text: str,
+    def __init__(self, model_path: str | Path,
+        voice_reference: str | Path, reference_text: str,
         speed: float = 1.0):
         self.model_path = Path(model_path)
         self.voice_reference = Path(voice_reference)
-        self.reference_text = reference_text.strip()
+        reference_text = reference_text.strip()
+        if "<|endofprompt|>" not in reference_text:
+            reference_text = ("You are a helpful assistant.<|endofprompt|>" +
+                              reference_text)
+
+        self.reference_text = reference_text
         self.speed = speed
 
         if not self.model_path.exists():
@@ -50,6 +78,16 @@ class VoiceService:
             daemon=True,
         )
         self._worker.start()
+
+        self._audio_stream = sd.OutputStream(
+            samplerate=self.sample_rate,
+            channels=1,
+            dtype="float32",
+            blocksize=0,
+            latency="low",
+        )
+
+        self._audio_stream.start()
 
     @staticmethod
     def _clean_text(text: str) -> str:
@@ -104,39 +142,19 @@ class VoiceService:
                 self._queue.task_done()
 
     def _speak(self, text: str) -> None:
-        """Generate and play CosyVoice audio progressively."""
         generator = self.voice.inference_zero_shot(
-            text, ("You are a helpful assistant.<|endofprompt|>" +
-                   self.reference_text),
+            text,
+            self.reference_text,
             str(self.voice_reference),
             stream=True,
-            speed=self.speed,
-        )
+            speed=self.speed)
 
-        stream = None
-        try:
-            for chunk in generator:
-                audio = chunk["tts_speech"]
+        for chunk in generator:
+            audio = chunk["tts_speech"]
+            if hasattr(audio, "detach"):
+                audio = audio.detach().cpu().numpy()
 
-                if hasattr(audio, "detach"):
-                    audio = audio.detach().cpu().numpy()
-
-                samples = np.asarray(audio,
-                    dtype=np.float32).squeeze()
-
-                if samples.ndim == 1:
-                    samples = samples.reshape(-1, 1)
-
-                if stream is None:
-                    stream = sd.OutputStream(
-                        samplerate=self.sample_rate,
-                        channels=1,
-                        dtype="float32")
-                    stream.start()
-
-                stream.write(samples)
-
-        finally:
-            if stream is not None:
-                stream.stop()
-                stream.close()
+            samples = np.asarray(audio, dtype=np.float32).squeeze()
+            if samples.ndim == 1:
+                samples = samples.reshape(-1, 1)
+            self._audio_stream.write(samples)

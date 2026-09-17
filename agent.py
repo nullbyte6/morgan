@@ -153,7 +153,7 @@ class Assistant:
             buffer += chunk
 
             while True:
-                match = re.search(r"(?<=[.!?,;:])\s+", buffer)
+                match = re.search(r"(?<=[.!?])\s+", buffer)
                 if match is None:
                     break
 
