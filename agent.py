@@ -24,6 +24,7 @@ class Assistant:
     starts the model or UI."""
     name = "Arlo"
     voice: VoiceService
+    terminal_ui: TerminalUI
     _instance = None
     _instance_lock = threading.Lock()
 
