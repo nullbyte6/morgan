@@ -47,10 +47,10 @@ class Assistant:
         greetings = (
             f"Hola, {self.username}. ¿Qué quieres hacer?",
             f"Hola, {self.username}. ¿En qué te ayudo?",
-            f"Estoy lista, {self.username}. ¿Qué hacemos?",
+            f"Estoy listo, {self.username}. ¿Qué hacemos?",
             f"¿Qué necesitas hoy, {self.username}?",
             f"Todo listo, {self.username}. ¿Por dónde empezamos?",
-            f"{self.name} preparada. Escribe lo que necesites.",
+            f"{self.name} preparado. Escribe lo que necesites.",
         )
         return random.choice(greetings)
 
