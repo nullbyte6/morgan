@@ -33,7 +33,7 @@ try:
 except ImportError:
     winreg = None
 
-from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config)
+from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config, save_config)
 from .app_cache import cached_app, remember_app, forget_app
 from .steam import steam_manager
 
@@ -1524,6 +1524,16 @@ def atomic_write_bytes(path: Path, content: bytes) -> None:
             temporary_path.unlink()
         raise
 
+
+def learn_pronunciation(word: str, pronunciation: str) -> str:
+    """Learn how a word should be pronounced aloud and remember it permanently."""
+    from .identity import get_assistant
+
+    assistant = get_assistant()
+    if assistant.voice is None:
+        return "Voice service is not initialized"
+
+    return assistant.voice.learn_pronunciation(word, pronunciation)
 
 def should_show_working_directory() -> bool:
     """Whether a successful cd has enabled the location in the prompt."""

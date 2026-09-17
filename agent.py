@@ -377,12 +377,12 @@ class Assistant:
                         model_settings={"temperature": brain.load_config()[
                                                 "temperature"]}) as result:
                     spinner.stop()
-                    reply = self.stream(
-                        self.speak(
+
+                    self.stream(self.speak(
                             result.stream_text(
                                 delta=True,
                                 debounce_by=None)),
-                        session=session)
+                                session=session)
 
                     history = result.all_messages()
                     for message in history:

@@ -6,13 +6,15 @@ import threading
 from pathlib import Path
 import sounddevice as sd
 from piper import PiperVoice, SynthesisConfig
+from .config import load_config
 
 """The class in charge of Arlo's voice, using the piper lib
-from pip"""
+from pip, it adapts the pronounciations as well of certain words"""
 class VoiceService:
     def __init__(self, model_path: str | Path,
             speed: float = 1.0):
         self.model_path = Path(model_path)
+        self.pronunciations = load_config().get("pronunciations", {})
 
         if not self.model_path.exists():
             raise FileNotFoundError(
@@ -64,7 +66,7 @@ class VoiceService:
 
     def say(self, text: str) -> None:
         """Queue text to be spoken."""
-        text = self._clean_text(text)
+        text = self.normalize(self._clean_text(text))
         if text:
             self._queue.put(text)
 
@@ -76,6 +78,34 @@ class VoiceService:
                 self._speak(text)
             finally:
                 self._queue.task_done()
+
+
+    def normalize(self, text: str) -> str:
+        for word, pronunciation in self.pronunciations.items():
+            text = re.sub(
+                rf"\b{re.escape(word)}\b",
+                pronunciation,
+                text,
+                flags=re.IGNORECASE)
+        return text
+
+    def learn_pronunciation(self, word: str, pronunciation: str) -> str:
+        word = word.strip()
+        pronunciation = pronunciation.strip()
+        if not word or not pronunciation:
+            return "Word and pronunciation cannot be empty"
+
+        self.pronunciations[word] = pronunciation
+        result = update_config({
+            "pronunciations": {
+                word: pronunciation
+            }
+        })
+
+        if result.startswith("Error"):
+            return result
+
+        return f"Learned pronunciation: {word} -> {pronunciation}"
 
     def _speak(self, text: str) -> None:
         """Synthesize and play Piper audio progressively."""
