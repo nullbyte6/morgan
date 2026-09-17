@@ -326,9 +326,8 @@ class TerminalUI(io.TextIOBase):
 
     @contextmanager
     def suspend(self):
-        """Temporarily give full control of the terminal to an external
-        interactive application such as PyVim."""
-
+        """Give full terminal control to an external
+         interactive application."""
         if self._suspended:
             yield
             return
@@ -342,18 +341,27 @@ class TerminalUI(io.TextIOBase):
             if self._live is not None:
                 self._live.stop()
 
+            if hasattr(self, "_console_input"):
+                self._console_input.suspend()
+
             sys.stdout = self.console.file
             sys.stderr = sys.__stderr__
+
             sys.stdout.flush()
             sys.stderr.flush()
+
             yield
 
         finally:
+            if hasattr(self, "_console_input"):
+                self._console_input.resume()
+
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
             if self._live is not None:
                 self._live.start(refresh=True)
+
             self._suspended = False
 
     def read_input(self, prompt):

@@ -46,6 +46,19 @@ class ConsoleInput:
         self._check(self.kernel.SetConsoleMode(
             self.handle, (self.mode | 0x88) & ~(0x10 | 0x40 | 0x2 | 0x4 | 0x200)))
 
+    def suspend(self):
+        """Restore the console mode for external interactive applications."""
+        self._check(
+            self.kernel.SetConsoleMode(self.handle, self.mode)
+        )
+
+    def resume(self):
+        """Restore Nora's custom console input mode."""
+        self._check(self.kernel.SetConsoleMode(
+                self.handle,
+                (self.mode | 0x88) & ~(0x10 | 0x40 | 0x2 | 0x4 | 0x200)
+            ))
+
     @staticmethod
     def _check(result):
         if not result:
