@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 readonly NORA_MODEL="${NORA_MODEL:-qwen3:14b}"
+# shellcheck disable=SC2155
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 info() {
     printf '\n[%s] %s\n' "${ASSISTANT_NAME:-Installer}" "$1"
@@ -713,6 +714,20 @@ fi
 "$NVIM_BIN" --version
 configure_neovim
 bootstrap_neovim
+
+VOICE_NAME="es_MX-claude-high"
+VOICE_DIR="$SCRIPT_DIR/src/voices"
+mkdir -p "$VOICE_DIR"
+if [[ ! -f "$VOICE_DIR/$VOICE_NAME.onnx" ]] ||
+   [[ ! -f "$VOICE_DIR/$VOICE_NAME.onnx.json" ]]; then
+    info "Downloading Nora's voice ($VOICE_NAME)..."
+    "$VENV_PYTHON" -m piper.download_voices \
+        --download-dir "$VOICE_DIR" \
+        "$VOICE_NAME"
+else
+    info "Nora's voice is already installed."
+fi
+
 info "Checking for Ollama..."
 OLLAMA_BIN=""
 if ! find_ollama; then
