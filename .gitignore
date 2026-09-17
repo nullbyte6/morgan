@@ -3,7 +3,5 @@
 __pycache__/
 .cache
 *.txt
-src/voices/*
 src/models/
-!src/voices/.gitkeep
 !requirements.txt
