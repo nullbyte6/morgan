@@ -130,7 +130,7 @@ class TerminalUI(io.TextIOBase):
         if prompt is not None:
             entry = Text(prompt)
             if not value and placeholder:
-                entry.append(placeholder, style="dim")
+                entry.append(placeholder, style="dim italic")
             else:
                 entry.append(value[:cursor], style="green")
                 entry.append(
