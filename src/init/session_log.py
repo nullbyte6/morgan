@@ -13,7 +13,7 @@ from .output import markdown_text
 
 
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}\.md")
-SESSION_HEADER = "<!-- New Log -->"
+SESSION_HEADER = "###"
 MAX_DAYS = 24
 _current_session_path: Path | None = None
 
