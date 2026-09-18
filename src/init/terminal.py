@@ -9,11 +9,12 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 
-from rich.align import Align
-from rich.console import Console, Group
 from rich.live import Live
 from rich.text import Text
 from rich.cells import cell_len
+from rich.console import Console, Group
+from rich.align import Align
+from rich.layout import Layout
 
 from src.init.console_input import ConsoleInput
 
@@ -241,50 +242,31 @@ class TerminalUI:
             banner = self._banner
             version = self._version
 
-        header_height = 1
-        spacer_bottom_height = 1
-        status_height = 1
         input_height = self._input_height(width) if has_prompt else 1
-        version_height = 1
 
-        fixed_height = (
-                header_height
-                + spacer_bottom_height
-                + status_height
-                + input_height
-                + version_height)
+        header = self._header(width)
+        center = Group(self._banner_renderable() if banner else Text(""), Text(""),
+            self._meter_renderable(width))
 
-        main_height = max(1, height - fixed_height - 1)
-        banner_height = (len(banner.rstrip("\n").splitlines())
-            if banner else 0)
+        bottom = Group(Text("Pensando" if thinking else "",
+                style=RICH_DIM_COLOR), self._input_renderable()
+                if has_prompt else Text(""),
+                Text(version, style=RICH_DIM_COLOR))
 
-        meter_height = 3
-        banner_meter_gap = 1
-        visual_height = (banner_height + banner_meter_gap + meter_height)
+        layout = Layout(size=height - 1)
+        layout.split_column(
+            Layout(header, name="header", size=1),
+            Layout(name="main"),
+            Layout(bottom,
+                name="bottom",
+                size=input_height + 2))
 
-        body = []
+        layout["main"].update(
+            Align.center(center,
+                vertical="middle",
+                height=max(1, height - input_height - 4)))
 
-        if banner and visual_height <= main_height:
-            free_height = main_height - visual_height
-            top_padding = free_height // 2
-            bottom_padding = free_height - top_padding
-            body.extend(Text("") for _ in range(top_padding))
-            body.append(self._banner_renderable())
-            body.append(Text(""))
-            body.append(self._meter_renderable(width))
-            body.extend(Text("") for _ in range(bottom_padding))
-        else:
-            body.extend(Text("") for _ in range(main_height))
-
-        return Group(
-            self._header(width),
-            *body,
-            Text(""),
-            Text("Pensando" if thinking else "",
-                style=RICH_DIM_COLOR),
-            self._input_renderable() if has_prompt else Text(""),
-            Text(version, style=RICH_DIM_COLOR),
-        )
+        return layout
 
     def set_banner(self, banner):
         with self._lock:
