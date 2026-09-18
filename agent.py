@@ -159,31 +159,39 @@ class Assistant:
         return reply
 
     def speak(self, chunks) -> str:
-        """Consume the LLM stream and queue complete phrases for speech."""
+        """Stream LLM output invisibly and feed complete phrases to TTS."""
         buffer = ""
         reply = []
+        started = False
+
         for chunk in chunks:
             if not chunk:
                 continue
 
+            if not started:
+                started = True
+
+                if self.terminal_ui is not None:
+                    self.terminal_ui.set_thinking(False)
+
             reply.append(chunk)
             buffer += chunk
+
             while True:
-                match = re.search(r"(?<=[.!?,;:\n])\s+", buffer)
-                if match is not None:
-                    end = match.end()
-                elif len(buffer) >= 50:
-                    split = buffer.rfind(" ", 0, 50)
-                    end = split + 1 if split > 20 else 50
-                else:
+                match = re.search(r'(?<=[.!?;:])(?:["»”’])?\s+', buffer)
+                if match is None:
                     break
+
+                end = match.end()
                 phrase = buffer[:end].strip()
                 buffer = buffer[end:]
+
                 if phrase:
                     self.voice.enqueue(phrase)
 
-        if buffer.strip():
-            self.voice.enqueue(buffer.strip())
+        remaining = buffer.strip()
+        if remaining:
+            self.voice.enqueue(remaining)
 
         return "".join(reply)
 
@@ -402,25 +410,28 @@ class Assistant:
                 self.terminal_ui.set_thinking(True)
 
             try:
-                result = self.agent.run_sync(
-                    user_input,
-                    message_history=history,
-                    model_settings={"temperature": brain.load_config()["temperature"]})
+                with self.agent.run_stream_sync(
+                        user_input,
+                        message_history=history,
+                        model_settings={
+                            "temperature": brain.load_config()["temperature"]
+                        }) as result:
 
-                reply = result.output
-                if self.terminal_ui is not None:
-                    self.terminal_ui.set_thinking(False)
+                    reply = self.speak(
+                        result.stream_text(delta=True, debounce_by=0.05))
 
-                if reply:
-                    session.write(self.name, reply)
-                    self.voice.enqueue(reply)
+                    if self.terminal_ui is not None:
+                        self.terminal_ui.set_thinking(False)
 
-                self.voice.wait_until_done()
+                    if reply:
+                        session.write(self.name, reply)
 
-                if self.terminal_ui is not None:
-                    self.terminal_ui.clear_audio_levels()
+                    self.voice.wait_until_done()
 
-                history = result.all_messages()
+                    if self.terminal_ui is not None:
+                        self.terminal_ui.clear_audio_levels()
+
+                    history = result.all_messages()
 
             except Exception as error:
                 if self.terminal_ui is not None:
