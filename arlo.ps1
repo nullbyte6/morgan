@@ -13,15 +13,18 @@ if (-not (Test-Path $agent)) {
 }
 
 $command = @"
-`$Host.UI.RawUI.WindowTitle = 'Arlo'
 `$env:PYTHONPATH = '$root\src;$root\src\third_party\Matcha-TTS'
 Set-Location -LiteralPath '$root'
 & '$python' '$agent'
 "@
 
 Start-Process `
-    -FilePath "pwsh.exe" `
+    -FilePath "wt.exe" `
     -ArgumentList @(
+        "-w", "new",
+        "new-tab",
+        "--title", "Arlo",
+        "pwsh.exe",
         "-NoLogo",
         "-NoProfile",
         "-NoExit",
