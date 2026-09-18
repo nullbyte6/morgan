@@ -159,10 +159,12 @@ class Assistant:
         return reply
 
     def speak(self, chunks) -> str:
-        """Stream LLM output invisibly and feed complete phrases to TTS."""
+        """Stream LLM output invisibly and
+        feed complete phrases to TTS."""
         buffer = ""
         reply = []
         started = False
+        first_phrase_sent = False
 
         for chunk in chunks:
             if not chunk:
@@ -170,7 +172,6 @@ class Assistant:
 
             if not started:
                 started = True
-
                 if self.terminal_ui is not None:
                     self.terminal_ui.set_thinking(False)
 
@@ -178,7 +179,28 @@ class Assistant:
             buffer += chunk
 
             while True:
-                match = re.search(r'(?<=[.!?;:])["»”’]?\s+', buffer)
+                if not first_phrase_sent:
+                    match = re.search(
+                        r'(?<=[,.!?;:])["»”’]?\s+',
+                        buffer
+                    )
+
+                    if match is None and len(buffer) >= 60:
+                        split = buffer.rfind(" ", 30, 60)
+
+                        if split != -1:
+                            phrase = buffer[:split].strip()
+                            buffer = buffer[split:].lstrip()
+
+                            if phrase:
+                                self.voice.enqueue(phrase)
+                                first_phrase_sent = True
+
+                        continue
+
+                else:
+                    match = re.search(r'(?<=[.!?;:])["»”’]?\s+',buffer)
+
                 if match is None:
                     break
 
@@ -188,8 +210,10 @@ class Assistant:
 
                 if phrase:
                     self.voice.enqueue(phrase)
+                    first_phrase_sent = True
 
         remaining = buffer.strip()
+
         if remaining:
             self.voice.enqueue(remaining)
 

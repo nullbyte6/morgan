@@ -129,8 +129,8 @@ class VoiceService:
                 self.speaking = True
                 generator = self.voice.inference_zero_shot(
                     text,
-                    self.reference_text,
-                    str(self.voice_reference),
+                    "",
+                    "",
                     zero_shot_spk_id="arlo",
                     stream=True,
                     speed=self.speed
