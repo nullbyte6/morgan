@@ -1,23 +1,6 @@
 param([switch]$Run)
 
 $ErrorActionPreference = "Stop"
-
-$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-$principal = [Security.Principal.WindowsPrincipal]::new($identity)
-$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
-if (-not $isAdmin) {
-    Start-Process `
-        -FilePath "pwsh.exe" `
-        -Verb RunAs `
-        -ArgumentList @(
-            "-NoLogo",
-            "-NoProfile",
-            "-ExecutionPolicy", "Bypass",
-            "-File", "`"$PSCommandPath`"")
-    exit
-}
-
 $root = $PSScriptRoot
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $agent = Join-Path $root "agent.py"
@@ -33,7 +16,7 @@ if (-not (Test-Path $agent)) {
 if (-not $Run) {
     $self = $PSCommandPath
 
-    sudo cmd.exe /c start "" wt.exe -w new `
+    cmd.exe /c start "" wt.exe -w new `
         new-tab `
         --title "ARLO" `
         --suppressApplicationTitle `
