@@ -243,8 +243,8 @@ class TerminalUI:
             *body,
             Text(""),
             Text("Pensando" if thinking else "", style=RICH_DIM_COLOR),
-            Text(version, style=RICH_DIM_COLOR),
             self._input_renderable() if has_prompt else Text(""),
+            Text(version, style=RICH_DIM_COLOR),
         ]
 
         return Group(*renderables)
