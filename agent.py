@@ -159,39 +159,25 @@ class Assistant:
         return reply
 
     def speak(self, chunks) -> str:
-        """Stream LLM output invisibly and feed complete phrases to TTS."""
-        buffer = ""
+        """Pipe the LLM text stream directly into CosyVoice."""
         reply = []
         started = False
+        self.voice.begin()
+        try:
+            for chunk in chunks:
+                if not chunk:
+                    continue
 
-        for chunk in chunks:
-            if not chunk:
-                continue
+                if not started:
+                    started = True
+                    if self.terminal_ui is not None:
+                        self.terminal_ui.set_thinking(False)
 
-            if not started:
-                started = True
+                reply.append(chunk)
+                self.voice.feed(chunk)
 
-                if self.terminal_ui is not None:
-                    self.terminal_ui.set_thinking(False)
-
-            reply.append(chunk)
-            buffer += chunk
-
-            while True:
-                match = re.search(r'(?<=[.!?;:])["»”’]?\s+', buffer)
-                if match is None:
-                    break
-
-                end = match.end()
-                phrase = buffer[:end].strip()
-                buffer = buffer[end:]
-
-                if phrase:
-                    self.voice.enqueue(phrase)
-
-        remaining = buffer.strip()
-        if remaining:
-            self.voice.enqueue(remaining)
+        finally:
+            self.voice.end()
 
         return "".join(reply)
 

@@ -60,101 +60,185 @@ if shutil.which("ffmpeg") is None:
 
 
 def _clean_for_speech(text: str) -> str:
-    """Remove Markdown/formatting that should not be spoken."""
-    text = re.sub(r"```[\s\S]*?```", " ", text)
-    text = re.sub(r"`([^`]+)`", r"\1", text)
-    text = re.sub(r"!\[([^\]]*)]\([^)]+\)", r"\1", text)
-    text = re.sub(r"\[([^\]]+)]\([^)]+\)", r"\1", text)
-    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
-    text = re.sub(r"(?m)^\s*>\s?", "", text)
-    text = re.sub(r"(?m)^\s*[-+*]\s+", "", text)
-    text = re.sub(r"(?m)^\s*\d+[.)]\s+", "", text)
-    text = re.sub(r"[*_~]+", "", text)
-    text = re.sub(r"(?m)^\s*[-*_]{3,}\s*$", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
+    """Remove speech-irrelevant Markdown from a streaming text chunk."""
+    text = text.replace("*", "")
+    text = text.replace("_", "")
+    text = text.replace("`", "")
+    text = text.replace("#", "")
+    text = text.replace("~", "")
     return text
 
 
 class VoiceService:
     """
     Arlo's multilingual voice service using Fun-CosyVoice3.
-    The model is loaded once and kept alive for the entire Arlo session.
-    Speech synthesis runs on a background worker so it does not block
-    text generation.
+    LLM text and synthesized audio are both streamed:
+        LLM -> text chunks -> CosyVoice -> PCM chunks -> sounddevice
     """
+    _END = object()
 
-    def __init__(self, model_path, voice_reference, reference_text,
-                 speed=1.0,
-                 audio_callback=None):
+    def __init__(
+        self,
+        model_path,
+        voice_reference,
+        reference_text,
+        speed=1.0,
+        audio_callback=None):
+
         self.model_path = Path(model_path)
         self.voice_reference = Path(voice_reference)
+
         reference_text = reference_text.strip()
         if "<|endofprompt|>" not in reference_text:
-            reference_text = "You are a helpful assistant.<|endofprompt|>" + reference_text
+            reference_text = (
+                "You are a helpful assistant.<|endofprompt|>"
+                + reference_text
+            )
 
         self.reference_text = reference_text
         self.speed = speed
+        self.audio_callback = audio_callback
 
-        self.voice = AutoModel(model_dir=str(self.model_path), fp16=True)
+        self.voice = AutoModel(
+            model_dir=str(self.model_path),
+            fp16=True)
+
         self.sample_rate = self.voice.sample_rate
-        self.voice.add_zero_shot_spk(self.reference_text, str(self.voice_reference), "arlo")
+        self.voice.add_zero_shot_spk(
+            self.reference_text,
+            str(self.voice_reference),
+            "arlo")
 
-        self._text_queue = queue.Queue()
+        self._request_queue = queue.Queue()
         self._audio_queue = queue.Queue()
-
+        self._current_text_queue = None
+        self._stream_lock = threading.Lock()
         self.speaking = False
-
-        self._tts_worker = threading.Thread(target=self._tts_loop, daemon=True)
-        self._tts_worker.start()
-
-        self._player_worker = threading.Thread(target=self._play_loop, daemon=True)
-        self._player_worker.start()
-
         self._speech_done = threading.Event()
         self._speech_done.set()
 
-        self.audio_callback = audio_callback
+        self._tts_worker = threading.Thread(
+            target=self._tts_loop,
+            daemon=True)
+        self._tts_worker.start()
 
-    def enqueue(self, text: str) -> None:
-        text = _clean_for_speech(text)
-        if text:
+        self._player_worker = threading.Thread(
+            target=self._play_loop,
+            daemon=True)
+        self._player_worker.start()
+
+    def begin(self) -> None:
+        """Start a new streaming speech request."""
+        with self._stream_lock:
+            if self._current_text_queue is not None:
+                raise RuntimeError(
+                    "A speech stream is already active."
+                )
+
+            text_queue = queue.Queue()
+
+            self._current_text_queue = text_queue
             self._speech_done.clear()
-            self._text_queue.put(text)
+            self._request_queue.put(text_queue)
+
+    def feed(self, text: str) -> None:
+        """Feed another LLM text chunk into the active speech stream."""
+        if not text:
+            return
+
+        with self._stream_lock:
+            text_queue = self._current_text_queue
+
+        if text_queue is None:
+            raise RuntimeError(
+                "VoiceService.feed() called without begin().")
+
+        text_queue.put(text)
+
+    def end(self) -> None:
+        """Tell CosyVoice that the current LLM response has finished."""
+        with self._stream_lock:
+            text_queue = self._current_text_queue
+            if text_queue is None:
+                return
+
+            self._current_text_queue = None
+        text_queue.put(self._END)
+
+    def _text_stream(self, text_queue):
+        """
+        Generator consumed directly by CosyVoice.
+        It blocks only when CosyVoice asks for more text faster than the
+        LLM is producing it.
+        """
+        while True:
+            item = text_queue.get()
+            try:
+                if item is self._END:
+                    return
+
+                text = _clean_for_speech(item)
+                if text:
+                    yield text
+
+            finally:
+                text_queue.task_done()
 
     def _tts_loop(self) -> None:
-        """Generates audio from text to speech and adds it to the queue"""
+        """Run one bi-streaming CosyVoice inference per Arlo response."""
         while True:
-            text = self._text_queue.get()
+            text_queue = self._request_queue.get()
+
             try:
                 self.speaking = True
+
                 generator = self.voice.inference_zero_shot(
-                    text,
+                    self._text_stream(text_queue),
                     self.reference_text,
                     str(self.voice_reference),
                     zero_shot_spk_id="arlo",
                     stream=True,
-                    speed=self.speed
-                )
+                    speed=self.speed)
+
                 for chunk in generator:
                     audio = chunk["tts_speech"]
+
                     if hasattr(audio, "detach"):
                         audio = audio.detach().cpu().numpy()
-                    samples = np.asarray(audio, dtype=np.float32).squeeze()
+
+                    samples = np.asarray(
+                        audio,
+                        dtype=np.float32).squeeze()
+
                     if samples.size:
                         self._audio_queue.put(samples)
-            except Exception as e:
-                logging.error(f"Error en inferencia de voz: {e}")
+
+            except Exception as error:
+                logging.error(
+                    "Error en inferencia de voz: %s",
+                    error)
+
             finally:
-                self._text_queue.task_done()
+                self._request_queue.task_done()
+                self._audio_queue.put(self._END)
 
     def _play_loop(self) -> None:
         frame_size = int(self.sample_rate * 0.04)
 
-        with sd.OutputStream(samplerate=self.sample_rate, channels=1,
-                             dtype="float32") as stream:
+        with sd.OutputStream(
+            samplerate=self.sample_rate,
+            channels=1,
+            dtype="float32") as stream:
+
             while True:
                 samples = self._audio_queue.get()
+
                 try:
+                    if samples is self._END:
+                        self.speaking = False
+                        self._speech_done.set()
+                        continue
+
                     for start in range(0, len(samples), frame_size):
                         frame = samples[start:start + frame_size]
 
@@ -162,13 +246,9 @@ class VoiceService:
                             self.audio_callback(frame, self.sample_rate)
 
                         stream.write(frame)
+
                 finally:
                     self._audio_queue.task_done()
-
-                if (self._text_queue.unfinished_tasks == 0 and
-                        self._audio_queue.unfinished_tasks == 0):
-                    self.speaking = False
-                    self._speech_done.set()
 
     def wait_until_done(self) -> None:
         self._speech_done.wait()
