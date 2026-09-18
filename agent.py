@@ -64,7 +64,6 @@ class Assistant:
             return
         os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
         os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-        from colorama import just_fix_windows_console
         from pydantic_ai import Agent, Tool
         from pydantic_ai.models.ollama import OllamaModel
         from pydantic_ai.providers.ollama import OllamaProvider
@@ -79,7 +78,6 @@ class Assistant:
         )
 
         self.MODEL_NAME = MODEL_NAME
-        just_fix_windows_console()
         self.model_settings = {
             "openai_reasoning_effort": "none",
             "temperature": 0.2,
@@ -285,7 +283,7 @@ class Assistant:
 
         from src.init.output import chunks_group
         from src.init.session_log import SessionLog
-        from src.init.spin import ASSISTANT_COLOR, RESET_COLOR, Spinner
+        from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
         from src.init.voice import VOICE_COMMANDS, capture_voice_input
 
         session = SessionLog()
@@ -302,6 +300,7 @@ class Assistant:
             sys.stdout.write(f"{RESET_COLOR}{Fore.LIGHTWHITE_EX}\n")
             sys.stdout.write("\n".join(" " * left + line for line in lines))
             sys.stdout.write(f"{RESET_COLOR}\n")
+
         self.stream(brain.get_version())
         greeting = self.startup_greeting
 
@@ -369,19 +368,25 @@ class Assistant:
                     continue
                 session.write(self.username, json.loads(user_input)[
                     "voice_text"])
-            spinner = Spinner()
-            spinner.start()
-            try:
-                with self.agent.run_stream_sync(user_input,message_history=history,
-                        model_settings={"temperature": brain.load_config()[
-                                                "temperature"]}) as result:
-                    spinner.stop()
 
-                    self.stream(self.speak(
+            if self.terminal_ui is not None:
+                self.terminal_ui.set_thinking(True)
+
+            try:
+                with self.agent.run_stream_sync(
+                        user_input,
+                        message_history=history,
+                        model_settings={"temperature":
+                        brain.load_config()["temperature"]}) as result:
+
+                    if self.terminal_ui is not None:
+                        self.terminal_ui.set_thinking(False)
+
+                    self.stream(
+                        self.speak(
                             result.stream_text(
                                 delta=True,
-                                debounce_by=None)),
-                                session=session)
+                                debounce_by=None)), session=session)
 
                     history = result.all_messages()
                     for message in history:
@@ -390,9 +395,13 @@ class Assistant:
                                 if isinstance(part, TextPart):
                                     part.content = "".join(
                                         chunks_group([part.content]))
+
                     refresh_model_keep_alive()
+
             except Exception as error:
-                spinner.stop()
+                if self.terminal_ui is not None:
+                    self.terminal_ui.set_thinking(False)
+
                 self.stream(f"ERROR: {error}")
                 cause = error.__cause__
                 if cause is not None:

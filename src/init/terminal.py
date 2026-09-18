@@ -11,7 +11,9 @@ import warnings
 from contextlib import (
     ExitStack,
     contextmanager,
-    redirect_stdout)
+    redirect_stdout,
+    redirect_stderr)
+
 from datetime import datetime
 
 from rich.console import Console, Group
@@ -74,6 +76,11 @@ class TerminalUI(io.TextIOBase):
         self._stack = ExitStack()
         self._live = None
         self._suspended = False
+        self._thinking = False
+
+    def set_thinking(self, thinking: bool) -> None:
+        with self._lock:
+            self._thinking = thinking
 
     def writable(self):
         return True
@@ -123,6 +130,14 @@ class TerminalUI(io.TextIOBase):
             scroll, playing = self._scroll, self.playing
             audio_error = self._audio_error
             levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
+
+        thinking = self._thinking
+        thinking_lines = []
+
+        if thinking:
+            thinking_lines = [
+                Text("Pensando", style="dim")]
+
         inner_width = width
         input_lines = []
         if prompt is not None:
@@ -150,7 +165,10 @@ class TerminalUI(io.TextIOBase):
             meter_text = Text(meter, style="bright_white", justify="right")
             meter_text.truncate(inner_width, overflow="crop")
             meter_lines = [meter_text]
-        available = max(0, height - 2 - len(input_lines) - len(meter_lines))
+
+        available = max(0, height - 2 - len(input_lines) - len(thinking_lines) - len(
+                meter_lines))
+
         layout_key = (output, inner_width)
         if layout_key != self._layout_key:
             previous_count = len(self._layout_lines)
@@ -190,8 +208,8 @@ class TerminalUI(io.TextIOBase):
             justify="right")
 
         footer = Text("↑/↓ · PgUp/PgDn", style="bright_white")
-        return Group(header, *(visible + input_lines +
-                               meter_lines), footer)
+        return Group(header, *(visible + thinking_lines +
+                               input_lines + meter_lines),footer)
 
     def _poll_audio(self):
         """Read only speaker loopback in a worker; never block terminal rendering."""
@@ -311,10 +329,11 @@ class TerminalUI(io.TextIOBase):
             self._console_input = ConsoleInput()
             self._stack.callback(self._console_input.close)
             self._stack.enter_context(self._live)
+            self._stack.enter_context(redirect_stdout(self))
+            self._stack.enter_context(redirect_stderr(self))
             self._input_worker = threading.Thread(target=self._poll_input,
                                                   daemon=True)
             self._input_worker.start()
-            self._stack.enter_context(redirect_stdout(self))
             self._worker = threading.Thread(target=self._poll_media,
                                             daemon=True)
             self._worker.start()

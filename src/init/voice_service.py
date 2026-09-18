@@ -6,7 +6,6 @@ import re
 import sys
 import threading
 import warnings
-from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 import numpy as np
@@ -102,10 +101,6 @@ class VoiceService:
         self._loader.start()
 
     @staticmethod
-    def _silence_output():
-        return open(os.devnull, "w", encoding="utf-8")
-
-    @staticmethod
     def _clean_text(text: str) -> str:
         """Remove formatting and symbols that should not be spoken."""
 
@@ -141,45 +136,45 @@ class VoiceService:
         return text.strip()
 
     def _tts_loop(self) -> None:
-        self._wait_until_ready()
+        try:
+            self._wait_until_ready()
+        except Exception:
+            logging.exception("VOICE MODEL LOAD FAILED")
+            return
+
         while True:
             response = self._response_queue.get()
             try:
                 self._speak_response(response)
-            except Exception as error:
-                logging.getLogger(__name__).error(
-                    "VOICE ERROR: %s",
-                    error)
+            except Exception:
+                logging.exception("VOICE SYNTHESIS FAILED")
             finally:
                 self._response_queue.task_done()
 
     def _load_model(self) -> None:
         try:
-            with self._silence_output() as sink:
-                with redirect_stdout(sink), redirect_stderr(sink):
-                    self.voice = AutoModel(
-                        model_dir=str(self.model_path),
-                        fp16=True)
+            self.voice = AutoModel(
+                model_dir=str(self.model_path),
+                fp16=True)
 
-                    self.sample_rate = self.voice.sample_rate
+            self.sample_rate = self.voice.sample_rate
 
-                    self.voice.add_zero_shot_spk(
-                        self.reference_text,
-                        str(self.voice_reference),
-                        "arlo",
-                    )
+            self.voice.add_zero_shot_spk(
+                self.reference_text,
+                str(self.voice_reference),
+                "arlo")
 
             self._audio_stream = sd.OutputStream(
                 samplerate=self.sample_rate,
                 channels=1,
                 dtype="float32",
                 blocksize=0,
-                latency="low",
-            )
+                latency="low")
             self._audio_stream.start()
 
         except Exception as error:
             self._load_error = error
+            logging.exception("CosyVoice initialization failed")
 
         finally:
             self._ready.set()
@@ -204,8 +199,7 @@ class VoiceService:
         self._ready.wait()
         if self._load_error is not None:
             raise RuntimeError(
-                f"CosyVoice failed to load: {self._load_error}"
-            ) from self._load_error
+                f"CosyVoice failed to load: {self._load_error}") from self._load_error
 
     @staticmethod
     def _text_stream(text_queue: queue.Queue):
