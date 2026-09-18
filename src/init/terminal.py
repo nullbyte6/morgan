@@ -273,10 +273,10 @@ class TerminalUI:
             full_screen=True,
             mouse_support=False,
             style=Style.from_dict({
-                "banner": "fg:#666666 bold",
+                "banner": "fg:#CDD6F4 bold",
                 "placeholder": "italic fg:#666666",
                 "dim": "fg:#666666",
-                "user-input": "fg:#00aa00"
+                "user-input": "fg:#A6E3A1"
             }),
             refresh_interval=1.0
         )
