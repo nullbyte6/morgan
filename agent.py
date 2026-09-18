@@ -303,7 +303,7 @@ class Assistant:
 
         from src.init.output import chunks_group
         from src.init.session_log import SessionLog
-        from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
+        from src.init.colors import ASSISTANT_COLOR, RESET_COLOR
         from src.init.voice import VOICE_COMMANDS, capture_voice_input
 
         session = SessionLog()
