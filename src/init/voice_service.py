@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import re
 import sys
-import threading
 import warnings
 from pathlib import Path
 
@@ -49,22 +48,10 @@ torch.backends.cuda.enable_flash_sdp(False)
 torch.backends.cuda.enable_mem_efficient_sdp(False)
 torch.backends.cuda.enable_math_sdp(True)
 
-import tqdm
-
-_original_tqdm = tqdm.tqdm
-
-
-def _quiet_tqdm(*args, **kwargs):
-    kwargs["disable"] = True
-    return _original_tqdm(*args, **kwargs)
-
-
-tqdm.tqdm = _quiet_tqdm
-
 _silence_tts_loggers()
 from cosyvoice.cli.cosyvoice import AutoModel
-
 _silence_tts_loggers()
+
 import shutil
 
 if shutil.which("ffmpeg") is None:
@@ -104,18 +91,10 @@ class VoiceService:
             )
 
         self.speaking = False
-        self.voice = None
-        self.sample_rate = None
-
-        self._ready = threading.Event()
-        self._load_error = None
-        self._tts_error = None
-
-        self._loader = threading.Thread(
-            target=self._load_model,
-            daemon=True,
-        )
-        self._loader.start()
+        self.voice = AutoModel(model_dir=str(self.model_path), fp16=True)
+        self.sample_rate = self.voice.sample_rate
+        self.voice.add_zero_shot_spk(self.reference_text,
+                                     str(self.voice_reference), "arlo")
 
     @property
     def error(self):
@@ -124,7 +103,6 @@ class VoiceService:
     @staticmethod
     def _clean_text(text: str) -> str:
         """Remove formatting and symbols that should not be spoken."""
-
         text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
         text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
         text = re.sub(r"\*(.*?)\*", r"\1", text)
@@ -156,41 +134,20 @@ class VoiceService:
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 
-    def _load_model(self) -> None:
-        try:
-            self.voice = AutoModel(
-                model_dir=str(self.model_path),
-                fp16=True)
-
-            self.sample_rate = self.voice.sample_rate
-
-            self.voice.add_zero_shot_spk(self.reference_text,
-                                         str(self.voice_reference), "arlo")
-
-        except Exception as error:
-            self._load_error = error
-
-        finally:
-            self._ready.set()
-
     def speak(self, text: str) -> None:
         text = self._clean_text(text)
         if not text:
             return
 
-        self._wait_until_ready()
         self.speaking = True
-
         try:
             generator = self.voice.inference_zero_shot(
                 text,
                 self.reference_text,
                 str(self.voice_reference),
                 zero_shot_spk_id="arlo",
-                stream=False,
+                stream=True,
                 speed=self.speed)
-
-            audio_parts = []
 
             for chunk in generator:
                 audio = chunk["tts_speech"]
@@ -199,12 +156,9 @@ class VoiceService:
                     audio = audio.detach().cpu().numpy()
 
                 samples = np.asarray(audio, dtype=np.float32).squeeze()
-                if samples.size:
-                    audio_parts.append(samples)
 
-            if audio_parts:
-                audio = np.concatenate(audio_parts)
-                sd.play(audio, samplerate=self.sample_rate)
-                sd.wait()
+                if samples.size:
+                    sd.play(samples, samplerate=self.sample_rate)
+                    sd.wait()
         finally:
             self.speaking = False

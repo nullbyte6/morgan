@@ -177,8 +177,7 @@ class Assistant:
 
         text = "".join(response)
         if text.strip():
-            threading.Thread(target=self.voice.speak, args=(text,),
-                             daemon=True).start()
+            self.voice.speak(text)
 
     def directory_cmd(self, command: str) -> str | None:
         """Handle standalone cd/chdir commands without a model or shell call."""
