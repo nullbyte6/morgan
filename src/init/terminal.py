@@ -72,23 +72,17 @@ class TerminalUI:
         self._input = ""
         self._cursor = 0
         self._thinking = False
-
-        self._scroll_offset = 0
         self._reading_input = False
-        self._follow_output = True
 
         self.playing = False
         self._levels = (0.0,) * 7
         self._levels_at = 0.0
-        self._audio_error = None
 
         self._stop = threading.Event()
         self._input_done = threading.Event()
         self._input_result = ""
 
         self._media_worker = None
-        self._audio_worker = None
-        self._input_worker = None
 
     def _refresh(self):
         live = self.live
@@ -101,26 +95,7 @@ class TerminalUI:
     def clear_conversation(self):
         with self._lock:
             self._output = ""
-            self._scroll_offset = 0
-            self._follow_output = True
         self._refresh()
-
-    @staticmethod
-    def _visible_length(value):
-        return len(ANSI_RE.sub("", value))
-
-    @staticmethod
-    def _wrapped_height(value, width):
-        if not value:
-            return 0
-
-        width = max(1, width)
-        height = 0
-
-        for line in ANSI_RE.sub("", value).splitlines() or [""]:
-            height += max(1, (len(line) + width - 1) // width)
-
-        return height
 
     def _header(self, width):
         value = datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S")
@@ -183,14 +158,7 @@ class TerminalUI:
         if height <= 0 or not lines:
             return []
 
-        with self._lock:
-            max_offset = max(0, len(lines) - height)
-            self._scroll_offset = min(self._scroll_offset, max_offset)
-            offset = self._scroll_offset
-
-        end = len(lines) - offset
-        start = max(0, end - height)
-        return lines[start:end]
+        return lines[-height:]
 
     def render(self):
         terminal = shutil.get_terminal_size((120, 30))
@@ -261,9 +229,6 @@ class TerminalUI:
 
                 self._output += part
 
-            if self._follow_output:
-                self._scroll_offset = 0
-
         self._refresh()
         return len(value)
 
@@ -289,10 +254,6 @@ class TerminalUI:
     def update_response(self, prefix, text):
         with self._lock:
             self._output = prefix + text
-
-            if self._follow_output:
-                self._scroll_offset = 0
-
         self._refresh()
 
     def _handle_key(self, key):
@@ -351,8 +312,6 @@ class TerminalUI:
             self._cursor = 0
             self._input_result = ""
             self._input_done.clear()
-            self._follow_output = True
-            self._scroll_offset = 0
 
         self._refresh()
         self._input_done.wait()
@@ -376,7 +335,6 @@ class TerminalUI:
             self._levels = tuple(max(float(new), old * 0.8) for new, old in
                                  zip(levels, self._levels))
             self._levels_at = time.monotonic()
-            self._audio_error = None
         self._refresh()
 
     def clear_audio_levels(self):
@@ -397,7 +355,6 @@ class TerminalUI:
                     self.playing = playing
 
                 self._refresh()
-
                 for _ in range(20):
                     if self._stop.is_set():
                         return
@@ -411,18 +368,14 @@ class TerminalUI:
         self.console_input = ConsoleInput()
 
         self.live = Live(self.render(), console=self.console, screen=True,
-                         refresh_per_second=30, auto_refresh=True,
+                         refresh_per_second=60, auto_refresh=True,
                          redirect_stdout=False, redirect_stderr=False,
                          vertical_overflow="crop")
 
         self.live.start(refresh=True)
-
-        self._input_worker = threading.Thread(target=self._poll_input,
-                                              daemon=True)
         self._media_worker = threading.Thread(target=self._poll_media,
                                               daemon=True)
 
-        self._input_worker.start()
         self._media_worker.start()
 
         return self
@@ -431,14 +384,8 @@ class TerminalUI:
         self._stop.set()
         self._input_done.set()
 
-        if self._input_worker is not None:
-            self._input_worker.join(timeout=2)
-
         if self._media_worker is not None:
             self._media_worker.join(timeout=3)
-
-        if self._audio_worker is not None:
-            self._audio_worker.join(timeout=3)
 
         if self.live is not None:
             try:
