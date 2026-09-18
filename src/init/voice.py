@@ -6,7 +6,7 @@ import wave
 from array import array
 from collections import deque
 
-from .spin import RESET_COLOR, USER_COLOR
+from .colors import RESET_COLOR, USER_COLOR
 
 VOICE_COMMANDS = {"/voice", "voice"}
 VOICE_MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
