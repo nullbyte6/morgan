@@ -492,16 +492,19 @@ class Assistant:
             logging.getLogger("arlo").info("Arlo is awake")
 
             if interactive_terminal():
-                with TerminalUI() as ui:
-                    self.terminal_ui = ui
-                    ui.set_banner(self.banner)
-                    self.debug_console.redirect_streams()
+                ui = TerminalUI()
+                self.terminal_ui = ui
+                self.debug_console.redirect_native_streams()
+                self.debug_console.redirect_streams()
 
-                    try:
+                try:
+                    with ui:
+                        ui.set_banner(self.banner)
                         self.run_session()
-                    finally:
-                        self.debug_console.restore_streams()
-                        self.terminal_ui = None
+                finally:
+                    self.debug_console.restore_streams()
+                    self.debug_console.restore_native_streams()
+                    self.terminal_ui = None
             else:
                 self._initialize_runtime()
                 self.run_session()

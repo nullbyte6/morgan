@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 import tempfile
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -56,6 +58,11 @@ class DebugConsole:
         self.console_script = log_dir / f"{timestamp}-console.ps1"
         self.original_stdout = sys.stdout
         self.original_stderr = sys.stderr
+
+        self._original_fd1 = None
+        self._original_fd2 = None
+        self._native_threads = []
+        self._native_read_fds = []
 
     def start(self):
         self.log_path.touch()
@@ -116,3 +123,65 @@ class DebugConsole:
 
     def print_to_ui(self, *args, **kwargs):
         print(*args, file=self.original_stdout, **kwargs,)
+
+    def _pipe_native_stream(self, fd: int, logger_name: str):
+        read_fd, write_fd = os.pipe()
+
+        original_fd = os.dup(fd)
+        os.dup2(write_fd, fd)
+        os.close(write_fd)
+
+        logger = logging.getLogger(logger_name)
+
+        def reader():
+            with os.fdopen(
+                    read_fd,
+                    "r",
+                    encoding="utf-8",
+                    errors="replace",
+                    buffering=1) as pipe:
+                for line in pipe:
+                    line = line.rstrip("\r\n")
+                    if line.strip():
+                        logger.info(line)
+
+        thread = threading.Thread(
+            target=reader,
+            name=f"{logger_name}-reader",
+            daemon=True)
+        thread.start()
+
+        self._native_threads.append(thread)
+        return original_fd
+
+    def redirect_native_streams(self):
+        if self._original_fd1 is not None:
+            return
+
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass
+
+        try:
+            sys.stderr.flush()
+        except Exception:
+            pass
+
+        self._original_fd1 = self._pipe_native_stream(1,"arlo.native.stdout")
+        self._original_fd2 = self._pipe_native_stream(2, "arlo.native.stderr")
+
+    def restore_native_streams(self):
+        if self._original_fd1 is not None:
+            try:
+                os.dup2(self._original_fd1, 1)
+            finally:
+                os.close(self._original_fd1)
+                self._original_fd1 = None
+
+        if self._original_fd2 is not None:
+            try:
+                os.dup2(self._original_fd2, 2)
+            finally:
+                os.close(self._original_fd2)
+                self._original_fd2 = None

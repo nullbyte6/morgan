@@ -3,7 +3,6 @@
 import asyncio
 import os
 import re
-import shutil
 import sys
 import threading
 import time
@@ -73,11 +72,20 @@ def spectrum_levels(audio, sample_rate=44100):
 class TerminalUI:
     def __init__(self):
         self._terminal_stdout = sys.stdout
+        self._terminal_fd = os.dup(sys.stdout.fileno())
+        self._terminal_stdout = os.fdopen(
+            self._terminal_fd,
+            "w",
+            encoding=sys.stdout.encoding or "utf-8",
+            errors="replace",
+            buffering=1,
+            closefd=True)
+
         self.console = Console(
             file=self._terminal_stdout,
             highlight=False,
-            force_terminal=True,
-        )
+            force_terminal=True)
+
         self.console_input = None
         self.live = None
 
@@ -202,9 +210,11 @@ class TerminalUI:
             Align.center(Text(" ".join(middle), style=style), width=width),
             Align.center(Text(" ".join(bottom), style=style), width=width))
 
-
     def render(self):
-        terminal = shutil.get_terminal_size((120, 30))
+        try:
+            terminal = os.get_terminal_size(self._terminal_fd)
+        except OSError:
+            terminal = os.terminal_size((120, 30))
         width = max(20, terminal.columns)
         height = max(8, terminal.lines)
 
@@ -396,7 +406,7 @@ class TerminalUI:
             console=self.console,
             screen=True,
             refresh_per_second=20,
-            auto_refresh=True,
+            auto_refresh=False,
             redirect_stdout=False,
             redirect_stderr=False,
             vertical_overflow="crop",
