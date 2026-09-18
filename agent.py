@@ -120,7 +120,7 @@ class Assistant:
     def stream(self, chunks, session=None) -> str:
         """Stream assistant output to the active frontend."""
         from src.init.output import chunks_group
-        from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
+        from src.init.colors import ASSISTANT_COLOR, RESET_COLOR
 
         displayed = []
 
