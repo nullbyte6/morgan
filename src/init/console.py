@@ -60,7 +60,7 @@ class DebugConsole:
         self.log_path.touch()
 
         command = (
-            f"$Host.UI.RawUI.WindowTitle = 'Debugging Console'; "
+            f"$Host.UI.RawUI.WindowTitle = 'ARLO Console'; "
             f"Get-Content -Path '{self.log_path}' -Wait")
 
         subprocess.Popen(
@@ -95,7 +95,7 @@ class DebugConsole:
 
     def redirect_streams(self):
         sys.stdout = LogStream("arlo.stdout", logging.INFO)
-        sys.stderr = LogStream("arlo.stderr", logging.ERROR)
+        sys.stderr = LogStream("arlo.stderr", logging.INFO)
 
     def restore_streams(self):
         sys.stdout = self.original_stdout

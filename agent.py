@@ -161,12 +161,18 @@ class Assistant:
         return reply
 
     def speak(self, chunks) -> str:
-        """Stream LLM output invisibly and
-        feed complete phrases to TTS."""
+        """Stream LLM output invisibly and feed complete phrases to TTS."""
         buffer = ""
         reply = []
         started = False
         first_phrase_sent = False
+        min_phrase_length = 20
+
+        def find_split(text, pattern):
+            for match in re.finditer(pattern, text):
+                if match.end() >= min_phrase_length:
+                    return match
+            return None
 
         for chunk in chunks:
             if not chunk:
@@ -182,10 +188,7 @@ class Assistant:
 
             while True:
                 if not first_phrase_sent:
-                    match = re.search(
-                        r'(?<=[,.!?;:])["»”’]?\s+',
-                        buffer
-                    )
+                    match = find_split(buffer, r'(?<=[,.!?;:])["»”’]?\s+')
 
                     if match is None and len(buffer) >= 60:
                         split = buffer.rfind(" ", 30, 60)
@@ -201,18 +204,19 @@ class Assistant:
                         continue
 
                 else:
-                    match = re.search(r'(?<=[.!?;:])["»”’]?\s+',buffer)
+                    match = find_split(buffer, r'(?<=[.!?;:])["»”’]?\s+')
 
                 if match is None:
                     break
 
                 end = match.end()
                 phrase = buffer[:end].strip()
-                buffer = buffer[end:]
+                if len(phrase) < min_phrase_length:
+                    break
 
-                if phrase:
-                    self.voice.enqueue(phrase)
-                    first_phrase_sent = True
+                buffer = buffer[end:]
+                self.voice.enqueue(phrase)
+                first_phrase_sent = True
 
         remaining = buffer.strip()
 

@@ -72,7 +72,12 @@ def spectrum_levels(audio, sample_rate=44100):
 # noinspection PyBroadException
 class TerminalUI:
     def __init__(self):
-        self.console = Console(highlight=False)
+        self._terminal_stdout = sys.stdout
+        self.console = Console(
+            file=self._terminal_stdout,
+            highlight=False,
+            force_terminal=True,
+        )
         self.console_input = None
         self.live = None
 
