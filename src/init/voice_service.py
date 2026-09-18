@@ -30,7 +30,6 @@ def _silence_tts_loggers():
         logger.handlers.clear()
         logger.propagate = False
         logger.disabled = True
-        logger.disabled(logging.CRITICAL)
 
 transformers_logging.set_verbosity_error()
 
