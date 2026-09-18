@@ -15,9 +15,17 @@ from transformers.utils import logging as transformers_logging
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
-logging.getLogger("cosyvoice").setLevel(logging.ERROR)
-logging.getLogger("transformers").setLevel(logging.ERROR)
-logging.getLogger("onnxruntime").setLevel(logging.ERROR)
+for logger_name in (
+    "httpx",
+    "httpcore",
+    "urllib3",
+    "requests",
+    "asyncio",
+    "onnxruntime",
+    "transformers",
+    "cosyvoice"):
+    logging.getLogger(logger_name).setLevel(logging.CRITICAL)
+
 transformers_logging.set_verbosity_error()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

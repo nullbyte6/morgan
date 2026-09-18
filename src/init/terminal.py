@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import logging
 import os
 import queue
 import sys
@@ -13,7 +14,6 @@ from contextlib import (
     contextmanager,
     redirect_stdout,
     redirect_stderr)
-
 from datetime import datetime
 
 from rich.console import Console, Group
@@ -315,6 +315,21 @@ class TerminalUI(io.TextIOBase):
             return value
 
     def __enter__(self):
+        class TerminalUIHandler(logging.Handler):
+            def __init__(self, ui):
+                super().__init__()
+                self.ui = ui
+
+            def emit(self, record):
+                try:
+                    msg = self.format(record)
+                    self.ui.write(msg + "\n")
+                except Exception:
+                    self.handleError(record)
+
+        root_logger = logging.getLogger()
+        root_logger.handlers = [TerminalUIHandler(self)]
+
         self._live = Live(
             console=self.console,
             screen=True,
@@ -443,7 +458,6 @@ class TerminalUI(io.TextIOBase):
             with self._lock:
                 self._prompt = None
                 self._placeholder = ""
-
 
 def interactive_terminal():
     return (os.name == "nt" and sys.stdin.isatty() and
