@@ -1277,18 +1277,15 @@ def identify_playing_song(seconds: int = 8) -> str:
         )
 
     speaker = sc.default_speaker()
-
     if speaker is None:
         return "Error: no default audio output device was found"
     loopbacks = sc.all_microphones(include_loopback=True)
 
     loopback = next(
-        (
-            microphone
+        (microphone
             for microphone in loopbacks
             if speaker.name.casefold() in microphone.name.casefold()
-               or microphone.name.casefold() in speaker.name.casefold()
-        ),
+               or microphone.name.casefold() in speaker.name.casefold()),
         None,
     )
 

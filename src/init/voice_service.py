@@ -68,7 +68,9 @@ class VoiceService:
     text generation.
     """
 
-    def __init__(self, model_path, voice_reference, reference_text, speed=1.0):
+    def __init__(self, model_path, voice_reference, reference_text,
+                 speed=1.0,
+                 audio_callback=None):
         self.model_path = Path(model_path)
         self.voice_reference = Path(voice_reference)
         reference_text = reference_text.strip()
@@ -93,8 +95,14 @@ class VoiceService:
         self._player_worker = threading.Thread(target=self._play_loop, daemon=True)
         self._player_worker.start()
 
+        self._speech_done = threading.Event()
+        self._speech_done.set()
+
+        self.audio_callback = audio_callback
+
     def enqueue(self, text: str) -> None:
         if text:
+            self._speech_done.clear()
             self._text_queue.put(text)
 
     def _tts_loop(self) -> None:
@@ -122,15 +130,29 @@ class VoiceService:
                 logging.error(f"Error en inferencia de voz: {e}")
             finally:
                 self._text_queue.task_done()
-                if self._text_queue.empty():
-                    self.speaking = False
 
     def _play_loop(self) -> None:
-        """Opens continous stream and plays audio until stopped"""
-        with sd.OutputStream(samplerate=self.sample_rate, channels=1, dtype='float32') as stream:
+        frame_size = int(self.sample_rate * 0.04)
+
+        with sd.OutputStream(samplerate=self.sample_rate, channels=1,
+                             dtype="float32") as stream:
             while True:
                 samples = self._audio_queue.get()
                 try:
-                    stream.write(samples)
+                    for start in range(0, len(samples), frame_size):
+                        frame = samples[start:start + frame_size]
+
+                        if self.audio_callback is not None:
+                            self.audio_callback(frame, self.sample_rate)
+
+                        stream.write(frame)
                 finally:
                     self._audio_queue.task_done()
+
+                if (self._text_queue.unfinished_tasks == 0 and
+                        self._audio_queue.unfinished_tasks == 0):
+                    self.speaking = False
+                    self._speech_done.set()
+
+    def wait_until_done(self) -> None:
+        self._speech_done.wait()

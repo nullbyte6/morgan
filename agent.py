@@ -95,7 +95,8 @@ class Assistant:
             voice_reference=VOICE_REFERENCE,
             reference_text=VOICE_REFERENCE_TEXT,
             speed=1.0,
-        )
+            audio_callback=self.terminal_ui.update_audio_levels
+            if self.terminal_ui is not None else None)
 
         self.MODEL_NAME = MODEL_NAME
         self.model_settings = {
@@ -172,21 +173,49 @@ class Assistant:
 
     def speak(self, chunks):
         buffer = ""
-        for chunk in chunks:
-            yield chunk
-            buffer += chunk
-            while True:
-                match = re.search(r"(?<=[.!?\n])\s+", buffer)
-                if match is None:
-                    break
+        subtitles = []
 
-                sentence = buffer[:match.end()].strip()
+        for chunk in chunks:
+            buffer += chunk
+            subtitles.append(chunk)
+            match = re.search(r"(?<=[.!?,;:\n])\s+", buffer)
+            if match is None and len(buffer) < 50:
+                continue
+
+            if match is not None:
+                end = match.end()
+            else:
+                split = buffer.rfind(" ", 0, 50)
+                end = split + 1 if split > 20 else 50
+
+            phrase = buffer[:end].strip()
+            buffer = buffer[end:]
+
+            if phrase:
+                self.voice.enqueue(phrase)
+
+            if self.voice.speaking:
+                yield from subtitles
+                subtitles.clear()
+
+            if self.voice.speaking:
+                break
+
+        for chunk in chunks:
+            buffer += chunk
+            match = re.search(r"(?<=[.!?,;:\n])\s+", buffer)
+            if match is not None:
+                phrase = buffer[:match.end()].strip()
                 buffer = buffer[match.end():]
-                if sentence:
-                    self.voice.enqueue(sentence)
+                if phrase:
+                    self.voice.enqueue(phrase)
+
+            yield chunk
 
         if buffer.strip():
             self.voice.enqueue(buffer.strip())
+
+        yield from subtitles
 
     def directory_cmd(self, command: str) -> str | None:
         """Handle standalone cd/chdir commands without a model or shell call."""
@@ -418,6 +447,12 @@ class Assistant:
                             result.stream_text(
                                 delta=True,
                                 debounce_by=None)), session=session)
+
+                    self.voice.wait_until_done()
+
+                    if self.terminal_ui is not None:
+                        self.terminal_ui.clear_audio_levels()
+                        self.terminal_ui.clear_conversation()
 
                     history = result.all_messages()
                     for message in history:
