@@ -112,7 +112,7 @@ class TerminalUI:
                 pass
 
     def _header(self, width):
-        value = datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M")
+        value = datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S")
         return Align.right(Text(value, style=RICH_FOREGROUND_COLOR),
                            width=width)
 
