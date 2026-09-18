@@ -442,8 +442,7 @@ class Assistant:
                     if self.terminal_ui is not None:
                         self.terminal_ui.set_thinking(False)
 
-                    self.stream(
-                        self.speak(
+                    self.stream(self.speak(
                             result.stream_text(
                                 delta=True,
                                 debounce_by=None)), session=session)

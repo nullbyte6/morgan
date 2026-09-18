@@ -136,7 +136,7 @@ class TerminalUI:
         with self._lock:
             levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
 
-        value = Text("".join(" ▁▂▃▄▅▆▇█"[round(level * 8)] for level in levels)
+        value = Text("".join(" ▁▂▃▄▅▆▇█▇▆▅▄▃▂▁"[round(level * 16)] for level in levels)
                      if any(level >= 0.0625 for level in levels) else "",
                      style=RICH_FOREGROUND_COLOR)
 
@@ -170,53 +170,60 @@ class TerminalUI:
             has_prompt = self._reading_input
             banner = self._banner
 
-        bottom_height = (1 if thinking else 0) + (1 if has_prompt else 0) + 2
+        status_height = 1
+        input_height = 1
+        bottom_padding = 1
+
+        bottom_height = status_height + input_height + bottom_padding
         main_height = max(1, height - bottom_height - 1)
+
         output_lines = self._output_lines(width)
 
-        banner_height = len(banner.rstrip("\n").splitlines()) if banner else 0
-        show_banner = bool(
-            banner and len(output_lines) + banner_height + 2 <= main_height)
+        subtitle_height = min(3, main_height)
+        viewport = self._viewport(output_lines, subtitle_height)
 
-        if show_banner:
-            output_height = min(len(output_lines),
-                                main_height - banner_height - 2)
-        else:
-            output_height = main_height
+        banner_height = len(
+            banner.rstrip("\n").splitlines()
+        ) if banner else 0
 
-        viewport = self._viewport(output_lines, output_height)
+        show_banner = bool(banner and banner_height + 1 <= main_height)
         body = []
 
         if show_banner:
-            free_height = main_height - len(viewport) - banner_height
-            top = max(0, free_height // 2)
-            bottom = max(0, free_height - top)
+            reserved_subtitle_height = min(3, main_height)
 
-            for _ in range(top):
-                body.append(Text())
+            center_area_height = max(1, main_height - reserved_subtitle_height)
+            visual_height = banner_height + 1
+            free_height = max(0, center_area_height - visual_height)
+
+            top = free_height // 2
+            bottom = free_height - top
+
+            body.extend(Text() for _ in range(top))
 
             body.append(self._banner_renderable())
             body.append(self._meter_renderable(width))
 
-            for _ in range(bottom):
-                body.append(Text())
+            body.extend(Text() for _ in range(bottom))
 
+            subtitle_padding = max(0,
+                reserved_subtitle_height - len(viewport))
+
+            body.extend(Text() for _ in range(subtitle_padding))
             body.extend(viewport)
+
         else:
             padding = max(0, main_height - len(viewport))
-
-            for _ in range(padding):
-                body.append(Text())
-
+            body.extend(Text() for _ in range(padding))
             body.extend(viewport)
 
-        renderables = [self._header(width), *body]
-
-        if thinking:
-            renderables.append(Text("Pensando", style=RICH_DIM_COLOR))
-
-        if has_prompt:
-            renderables.append(self._input_renderable())
+        renderables = [
+            self._header(width),
+            *body,
+            Text("Pensando" if thinking else "", style=RICH_DIM_COLOR),
+            self._input_renderable() if has_prompt else Text(""),
+            Text(""),
+        ]
 
         return Group(*renderables)
 
