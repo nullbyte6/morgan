@@ -13,6 +13,7 @@ from rich.align import Align
 from rich.console import Console, Group
 from rich.live import Live
 from rich.text import Text
+from rich.cells import cell_len
 
 from src.init.console_input import ConsoleInput
 
@@ -141,6 +142,18 @@ class TerminalUI:
 
         return Align.center(Text(banner, style=f"bold {RICH_FOREGROUND_COLOR}"))
 
+    def _input_height(self, width: int) -> int:
+        with self._lock:
+            prompt = ANSI_RE.sub("", self._prompt)
+            placeholder = self._placeholder
+            value = self._input
+
+        content = prompt + (value if value else placeholder)
+        if not content:
+            return 1
+
+        return max(1, (cell_len(content) + width - 1) // width)
+
     def _input_renderable(self):
         with self._lock:
             prompt = self._prompt
@@ -231,7 +244,7 @@ class TerminalUI:
         header_height = 1
         spacer_bottom_height = 1
         status_height = 1
-        input_height = 1
+        input_height = self._input_height(width) if has_prompt else 1
         version_height = 1
 
         fixed_height = (
@@ -270,6 +283,7 @@ class TerminalUI:
             Text("Pensando" if thinking else "",
                 style=RICH_DIM_COLOR),
             self._input_renderable() if has_prompt else Text(""),
+            Text(version, style=RICH_DIM_COLOR),
         )
 
     def set_banner(self, banner):
