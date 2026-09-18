@@ -149,12 +149,33 @@ class VoiceService:
 
     def _play_loop(self) -> None:
         frame_size = int(self.sample_rate * 0.04)
+        prebuffer_samples = int(self.sample_rate * 0.16)
+        with sd.OutputStream(
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype="float32",
+                latency="low",
+                blocksize=0) as stream:
+            buffered = []
+            buffered_size = 0
+            playing = False
 
-        with sd.OutputStream(samplerate=self.sample_rate, channels=1,
-                             dtype="float32") as stream:
             while True:
                 samples = self._audio_queue.get()
+
                 try:
+                    if not playing:
+                        buffered.append(samples)
+                        buffered_size += len(samples)
+
+                        if buffered_size < prebuffer_samples:
+                            continue
+
+                        samples = np.concatenate(buffered)
+                        buffered.clear()
+                        buffered_size = 0
+                        playing = True
+
                     for start in range(0, len(samples), frame_size):
                         frame = samples[start:start + frame_size]
 
@@ -162,11 +183,16 @@ class VoiceService:
                             self.audio_callback(frame, self.sample_rate)
 
                         stream.write(frame)
+
                 finally:
                     self._audio_queue.task_done()
 
-                if (self._text_queue.unfinished_tasks == 0 and
-                        self._audio_queue.unfinished_tasks == 0):
+                if (self._text_queue.unfinished_tasks == 0
+                        and self._audio_queue.unfinished_tasks == 0):
+                    playing = False
+                    buffered.clear()
+                    buffered_size = 0
+
                     self.speaking = False
                     self._speech_done.set()
 
