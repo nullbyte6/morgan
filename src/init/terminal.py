@@ -20,7 +20,7 @@ from src.init import colors
 from src.init.console_input import ConsoleInput
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-BANNER_COLOR = colors.RESET_COLOR
+FOREGROUND_COLOR = colors.RESET_COLOR
 DIM_COLOR = colors.ASSISTANT_COLOR
 USER_COLOR = colors.USER_COLOR
 
@@ -58,6 +58,7 @@ def spectrum_levels(audio, sample_rate=44100):
     return np.clip((20 * np.log10(np.maximum(rms, 1e-8)) + 60) / 60, 0, 1)
 
 
+# noinspection PyBroadException
 class TerminalUI:
     def __init__(self):
         self.console = Console(highlight=False)
@@ -93,7 +94,7 @@ class TerminalUI:
         live = self.live
         if live is not None:
             try:
-                live.refresh()
+                live.update(self.render(), refresh=True)
             except Exception:
                 pass
 
@@ -116,16 +117,14 @@ class TerminalUI:
 
     def _header(self, width):
         value = datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S")
-        return Align.right(Text(value, style=DIM_COLOR), width=width)
+        return Align.right(Text(value, style=FOREGROUND_COLOR), width=width)
 
     def _banner_renderable(self):
         with self._lock:
             banner = self._banner
-
         if not banner:
             return Text("")
-
-        return Align.center(Text(banner, style=f"bold {BANNER_COLOR}"))
+        return Align.center(Text(banner, style=f"bold {FOREGROUND_COLOR}"))
 
     def _input_renderable(self):
         with self._lock:
@@ -135,25 +134,19 @@ class TerminalUI:
             cursor = self._cursor
 
         line = Text()
-        line.append(ANSI_RE.sub("", prompt))
+        line.append(ANSI_RE.sub("", prompt), style=FOREGROUND_COLOR)
 
         if value:
             before = value[:cursor]
-            character = value[cursor:cursor + 1]
-            after = value[cursor + 1:]
-
+            after = value[cursor:]
             line.append(before, style=USER_COLOR)
-
-            if character:
-                line.append(character, style=f"reverse {USER_COLOR}")
-                line.append(after, style=USER_COLOR)
-            else:
-                line.append(" ", style=f"reverse {USER_COLOR}")
-        elif placeholder:
-            line.append(placeholder, style=f"italic {DIM_COLOR}")
-            line.append(" ", style="reverse")
+            line.append(" ", style=USER_COLOR)
+            line.append(after, style=USER_COLOR)
         else:
-            line.append(" ", style="reverse")
+            line.append(" ", style=USER_COLOR)
+
+            if placeholder:
+                line.append(placeholder, style=f"italic {DIM_COLOR}")
 
         return line
 
@@ -166,14 +159,15 @@ class TerminalUI:
             value = Text("audio !", style=DIM_COLOR)
         elif any(level >= 0.0625 for level in levels):
             value = Text("".join(" ▁▂▃▄▅▆▇█"[round(level * 8)] for level in levels),
-                         style=USER_COLOR)
+                style=FOREGROUND_COLOR)
         else:
             value = Text("")
 
         return Align.right(value, width=width)
 
     def _footer(self, width):
-        return Align.right(Text("↑/↓ · PgUp/PgDn", style=DIM_COLOR), width=width)
+        return Align.right(Text("↑/↓ · PgUp/PgDn", style=FOREGROUND_COLOR),
+                           width=width)
 
     def _output_lines(self, width):
         with self._lock:
@@ -207,62 +201,48 @@ class TerminalUI:
         with self._lock:
             thinking = self._thinking
             has_prompt = bool(self._prompt)
+            banner = self._banner
 
-        header_height = 1
-        thinking_height = 1 if thinking else 0
-        input_height = 1 if has_prompt else 0
-        meter_height = 1
-        footer_height = 1
-        fixed_bottom = thinking_height + input_height + meter_height + footer_height
-
-        content_height = max(0, height - header_height - fixed_bottom)
+        bottom_height = (1 if thinking else 0) + (1 if has_prompt else 0) + 2
+        main_height = max(1, height - bottom_height - 1)
         output_lines = self._output_lines(width)
 
-        banner = self._banner_renderable()
-        banner_height = len(self._banner.rstrip("\n").splitlines()) if self._banner else 0
+        banner_height = len(banner.rstrip("\n").splitlines()) if banner else 0
+        show_banner = bool(
+            banner and len(output_lines) + banner_height + 2 <= main_height)
 
-        output_needed = min(len(output_lines), content_height)
-        free_height = max(0, content_height - output_needed)
+        if show_banner:
+            output_height = min(len(output_lines),
+                                main_height - banner_height - 2)
+        else:
+            output_height = main_height
 
-        show_banner = bool(self._banner and banner_height and free_height >= banner_height + 2)
-
+        viewport = self._viewport(output_lines, output_height)
         body = []
 
         if show_banner:
-            available_above_output = max(0, content_height - output_needed)
-            top = max(0, (content_height - banner_height) // 2)
-            top = min(top, max(0, available_above_output - banner_height))
-            bottom = max(0, available_above_output - top - banner_height)
+            free_height = main_height - len(viewport) - banner_height
+            top = max(0, free_height // 2)
+            bottom = max(0, free_height - top)
 
-            if top:
-                body.append(Text("\n" * top))
+            for _ in range(top):
+                body.append(Text())
 
-            body.append(banner)
+            body.append(self._banner_renderable())
 
-            if bottom:
-                body.append(Text("\n" * bottom))
+            for _ in range(bottom):
+                body.append(Text())
 
-            viewport_height = output_needed
+            body.extend(viewport)
         else:
-            viewport_height = content_height
+            padding = max(0, main_height - len(viewport))
 
-        viewport = self._viewport(output_lines, viewport_height)
+            for _ in range(padding):
+                body.append(Text())
 
-        if viewport:
             body.extend(viewport)
 
-        used = (banner_height if show_banner else 0) + len(viewport)
-
-        if show_banner:
-            used += max(0, content_height - output_needed - banner_height)
-
-        if not show_banner and used < content_height:
-            body.insert(0, Text("\n" * (content_height - used)))
-
-        renderables = [self._header(width)]
-
-        if body:
-            renderables.extend(body)
+        renderables = [self._header(width), *body]
 
         if thinking:
             renderables.append(Text("Pensando", style=DIM_COLOR))
