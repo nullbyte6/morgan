@@ -215,6 +215,7 @@ class TerminalUI:
             terminal = os.get_terminal_size(self._terminal_fd)
         except OSError:
             terminal = os.terminal_size((120, 30))
+
         width = max(20, terminal.columns)
         height = max(8, terminal.lines)
 
@@ -224,45 +225,50 @@ class TerminalUI:
             banner = self._banner
             version = self._version
 
-        version_height = 1
+        header_height = 1
+        spacer_bottom_height = 1
         status_height = 1
         input_height = 1
+        version_height = 1
 
-        bottom_height = version_height + status_height + input_height
-        main_height = max(1, height - bottom_height - 1)
+        fixed_height = (
+                header_height
+                + spacer_bottom_height
+                + status_height
+                + input_height
+                + version_height)
 
-        banner_height = (
-            len(banner.rstrip("\n").splitlines())
+        main_height = max(1, height - fixed_height)
+        banner_height = (len(banner.rstrip("\n").splitlines())
             if banner else 0)
 
         meter_height = 3
-        spacer_height = 1
-        visual_height = (banner_height + spacer_height + meter_height)
+        banner_meter_gap = 1
+        visual_height = (banner_height + banner_meter_gap + meter_height)
 
         body = []
 
         if banner and visual_height <= main_height:
-            free_height = max(0, main_height - visual_height)
-            top = free_height // 2
-            bottom = free_height - top
-            body.extend(Text() for _ in range(top))
+            free_height = main_height - visual_height
+            top_padding = free_height // 2
+            bottom_padding = free_height - top_padding
+            body.extend(Text("") for _ in range(top_padding))
             body.append(self._banner_renderable())
             body.append(Text(""))
             body.append(self._meter_renderable(width))
-            body.extend(Text() for _ in range(bottom))
+            body.extend(Text("") for _ in range(bottom_padding))
         else:
-            body.extend(Text() for _ in range(main_height))
+            body.extend(Text("") for _ in range(main_height))
 
-        renderables = [
+        return Group(
             self._header(width),
             *body,
             Text(""),
-            Text("Pensando" if thinking else "", style=RICH_DIM_COLOR),
+            Text("Pensando" if thinking else "",
+                style=RICH_DIM_COLOR),
             self._input_renderable() if has_prompt else Text(""),
             Text(version, style=RICH_DIM_COLOR),
-        ]
-
-        return Group(*renderables)
+        )
 
     def set_banner(self, banner):
         with self._lock:
