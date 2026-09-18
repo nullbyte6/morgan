@@ -40,22 +40,34 @@ def spectrum_levels(audio, sample_rate=44100):
     if samples.ndim == 1:
         samples = samples[:, None]
 
+    band_count = 15
+
     if len(samples) < 2 or samples.shape[1] == 0:
-        return np.zeros(7)
+        return np.zeros(band_count)
 
     window = np.hanning(len(samples))
-    spectrum = np.abs(np.fft.rfft(samples * window[:, None], axis=0))
-    power = np.mean((spectrum / max(window.sum(), 1)) ** 2, axis=1)
-    frequencies = np.fft.rfftfreq(len(samples), 1 / sample_rate)
-    edges = (0, 125, 250, 500, 1000, 2000, 4000, sample_rate / 2 + 1)
+    spectrum = np.abs(
+        np.fft.rfft(samples * window[:, None], axis=0))
+
+    power = np.mean(
+        (spectrum / max(window.sum(), 1)) ** 2,
+        axis=1)
+
+    frequencies = np.fft.rfftfreq(
+        len(samples),
+        1 / sample_rate)
+
+    edges = np.geomspace(60,
+        min(12000, sample_rate / 2),
+        band_count + 1)
 
     rms = np.array([
-        np.sqrt(power[(frequencies >= low) & (frequencies < high)].sum())
-        for low, high in zip(edges, edges[1:])
-    ])
+        np.sqrt(power[
+                (frequencies >= low) &
+                (frequencies < high)
+            ].sum()) for low, high in zip(edges, edges[1:])])
 
     return np.clip((20 * np.log10(np.maximum(rms, 1e-8)) + 60) / 60, 0, 1)
-
 
 # noinspection PyBroadException
 class TerminalUI:
@@ -65,7 +77,6 @@ class TerminalUI:
         self.live = None
 
         self._lock = threading.RLock()
-        self._output = ""
         self._banner = ""
         self._prompt = ""
         self._placeholder = ""
@@ -75,7 +86,7 @@ class TerminalUI:
         self._reading_input = False
 
         self.playing = False
-        self._levels = (0.0,) * 7
+        self._levels = (0.0,) * 15
         self._levels_at = 0.0
 
         self._stop = threading.Event()
@@ -85,6 +96,13 @@ class TerminalUI:
         self._media_worker = None
         self._input_worker = None
 
+        self._version = ""
+
+    def set_version(self, version: str):
+        with self._lock:
+            self._version = ANSI_RE.sub("", version).strip()
+        self._refresh()
+
     def _refresh(self):
         live = self.live
         if live is not None:
@@ -92,11 +110,6 @@ class TerminalUI:
                 live.update(self.render(), refresh=True)
             except Exception:
                 pass
-
-    def clear_conversation(self):
-        with self._lock:
-            self._output = ""
-        self._refresh()
 
     def _header(self, width):
         value = datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S")
@@ -135,31 +148,55 @@ class TerminalUI:
 
     def _meter_renderable(self, width):
         with self._lock:
-            levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
+            levels = (
+                self._levels
+                if time.monotonic() - self._levels_at < 0.5
+                else (0.0,) * 15
+            )
 
-        value = Text("".join(" ▁▂▃▄▅▆▇█▇▆▅▄▃▂▁"[round(level * 16)] for level in levels)
-                     if any(level >= 0.0625 for level in levels) else "",
-                     style=RICH_FOREGROUND_COLOR)
+        style = RICH_FOREGROUND_COLOR
+        activity = max(levels, default=0.0)
+        if activity < 0.08:
+            idle = "─" * 31
 
-        return Align.center(value, width=width)
+            return Group(
+                Align.center(Text(""), width=width),
+                Align.center(Text(idle, style=RICH_DIM_COLOR), width=width),
+                Align.center(Text(""), width=width),
+            )
 
-    def _output_lines(self, width):
-        with self._lock:
-            output = self._output
+        top = []
+        middle = []
+        bottom = []
 
-        if not output:
-            return []
+        for level in levels:
+            level = min(1.0, level * 1.35)
 
-        text = Text.from_ansi(output)
-        text.stylize(RICH_DIM_COLOR)
-        return text.wrap(self.console, max(1, width), overflow="fold",
-                         no_wrap=False)
+            if level < 0.12:
+                top.append(" ")
+                middle.append("─")
+                bottom.append(" ")
 
-    def _viewport(self, lines, height):
-        if height <= 0 or not lines:
-            return []
+            elif level < 0.35:
+                top.append(" ")
+                middle.append("━")
+                bottom.append(" ")
 
-        return lines[-height:]
+            elif level < 0.65:
+                top.append("▄")
+                middle.append("█")
+                bottom.append("▀")
+
+            else:
+                top.append("█")
+                middle.append("█")
+                bottom.append("█")
+
+        return Group(
+            Align.center(Text(" ".join(top), style=style), width=width),
+            Align.center(Text(" ".join(middle), style=style), width=width),
+            Align.center(Text(" ".join(bottom), style=style), width=width))
+
 
     def render(self):
         terminal = shutil.get_terminal_size((120, 30))
@@ -170,98 +207,57 @@ class TerminalUI:
             thinking = self._thinking
             has_prompt = self._reading_input
             banner = self._banner
+            version = self._version
 
+        version_height = 1
         status_height = 1
         input_height = 1
-        bottom_padding = 1
 
-        bottom_height = status_height + input_height + bottom_padding
+        bottom_height = version_height + status_height + input_height
         main_height = max(1, height - bottom_height - 1)
 
-        output_lines = self._output_lines(width)
+        banner_height = (
+            len(banner.rstrip("\n").splitlines())
+            if banner else 0)
 
-        subtitle_height = min(3, main_height)
-        viewport = self._viewport(output_lines, subtitle_height)
+        meter_height = 3
+        spacer_height = 1
+        visual_height = (banner_height + spacer_height + meter_height)
 
-        banner_height = len(
-            banner.rstrip("\n").splitlines()
-        ) if banner else 0
-
-        show_banner = bool(banner and banner_height + 1 <= main_height)
         body = []
 
-        if show_banner:
-            reserved_subtitle_height = min(3, main_height)
-
-            center_area_height = max(1, main_height - reserved_subtitle_height)
-            visual_height = banner_height + 1
-            free_height = max(0, center_area_height - visual_height)
-
+        if banner and visual_height <= main_height:
+            free_height = max(0, main_height - visual_height)
             top = free_height // 2
             bottom = free_height - top
-
             body.extend(Text() for _ in range(top))
-
             body.append(self._banner_renderable())
+            body.append(Text(""))
             body.append(self._meter_renderable(width))
-
             body.extend(Text() for _ in range(bottom))
-
-            subtitle_padding = max(0,
-                reserved_subtitle_height - len(viewport))
-
-            body.extend(Text() for _ in range(subtitle_padding))
-            body.extend(viewport)
-
         else:
-            padding = max(0, main_height - len(viewport))
-            body.extend(Text() for _ in range(padding))
-            body.extend(viewport)
+            body.extend(Text() for _ in range(main_height))
 
         renderables = [
             self._header(width),
             *body,
-            Text("Pensando" if thinking else "", style=RICH_DIM_COLOR),
-            self._input_renderable() if has_prompt else Text(""),
             Text(""),
+            Text("Pensando" if thinking else "", style=RICH_DIM_COLOR),
+            Text(version, style=RICH_DIM_COLOR),
+            self._input_renderable() if has_prompt else Text(""),
         ]
 
         return Group(*renderables)
 
-    def write(self, value):
-        with self._lock:
-            for part_index, part in enumerate(value.split("\r")):
-                if part_index:
-                    before, separator, _ = self._output.rpartition("\n")
-                    self._output = before + separator
-
-                self._output += part
-
-        self._refresh()
-        return len(value)
-
-    def flush(self):
-        pass
-
-    def output_snapshot(self):
-        with self._lock:
-            return self._output
-
     def set_banner(self, banner):
         with self._lock:
             self._banner = banner.rstrip("\n")
-
         self._refresh()
 
     def set_thinking(self, thinking: bool):
         with self._lock:
             self._thinking = thinking
 
-        self._refresh()
-
-    def update_response(self, prefix, text):
-        with self._lock:
-            self._output = prefix + text
         self._refresh()
 
     def _handle_key(self, key):
@@ -347,7 +343,7 @@ class TerminalUI:
 
     def clear_audio_levels(self):
         with self._lock:
-            self._levels = (0.0,) * 7
+            self._levels = (0.0,) * 15
         self._refresh()
 
     def _poll_input(self):
@@ -394,7 +390,7 @@ class TerminalUI:
             self.render(),
             console=self.console,
             screen=True,
-            refresh_per_second=60,
+            refresh_per_second=20,
             auto_refresh=True,
             redirect_stdout=False,
             redirect_stderr=False,

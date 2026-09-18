@@ -123,32 +123,19 @@ class Assistant:
         return self.terminal_ui.suspend()
 
     def stream(self, chunks, session=None) -> str:
-        """Stream assistant output to the active frontend."""
+        """Consume assistant output without rendering it in TerminalUI."""
         from src.init.output import chunks_group
         from src.init.colors import ASSISTANT_COLOR, RESET_COLOR
 
+        source = [chunks] if isinstance(chunks, str) else chunks
         displayed = []
+
         if self.terminal_ui is not None:
-            response_prefix = self.terminal_ui.output_snapshot()
-            last_update_time = 0.0
-
-            for chunk in ([chunks] if isinstance(chunks, str) else chunks):
+            for chunk in source:
                 displayed.append(chunk)
-                now = time.time()
-
-                if now - last_update_time > 0.035:
-                    rendered = "".join(
-                        chunks_group(["".join(displayed)], color=True))
-                    self.terminal_ui.update_response(response_prefix, rendered)
-                    last_update_time = now
-
-            rendered = "".join(chunks_group(["".join(displayed)], color=True))
-            self.terminal_ui.update_response(response_prefix, rendered)
-            self.terminal_ui.write("\n")
-
         else:
             sys.stdout.write(ASSISTANT_COLOR)
-            source = ([chunks] if isinstance(chunks, str) else chunks)
+
             for chunk in chunks_group(source, color=True):
                 displayed.append(chunk)
 
@@ -171,51 +158,34 @@ class Assistant:
 
         return reply
 
-    def speak(self, chunks):
+    def speak(self, chunks) -> str:
+        """Consume the LLM stream and queue complete phrases for speech."""
         buffer = ""
-        subtitles = []
-
+        reply = []
         for chunk in chunks:
-            buffer += chunk
-            subtitles.append(chunk)
-            match = re.search(r"(?<=[.!?,;:\n])\s+", buffer)
-            if match is None and len(buffer) < 50:
+            if not chunk:
                 continue
 
-            if match is not None:
-                end = match.end()
-            else:
-                split = buffer.rfind(" ", 0, 50)
-                end = split + 1 if split > 20 else 50
-
-            phrase = buffer[:end].strip()
-            buffer = buffer[end:]
-
-            if phrase:
-                self.voice.enqueue(phrase)
-
-            if self.voice.speaking:
-                yield from subtitles
-                subtitles.clear()
-
-            if self.voice.speaking:
-                break
-
-        for chunk in chunks:
+            reply.append(chunk)
             buffer += chunk
-            match = re.search(r"(?<=[.!?,;:\n])\s+", buffer)
-            if match is not None:
-                phrase = buffer[:match.end()].strip()
-                buffer = buffer[match.end():]
+            while True:
+                match = re.search(r"(?<=[.!?,;:\n])\s+", buffer)
+                if match is not None:
+                    end = match.end()
+                elif len(buffer) >= 50:
+                    split = buffer.rfind(" ", 0, 50)
+                    end = split + 1 if split > 20 else 50
+                else:
+                    break
+                phrase = buffer[:end].strip()
+                buffer = buffer[end:]
                 if phrase:
                     self.voice.enqueue(phrase)
-
-            yield chunk
 
         if buffer.strip():
             self.voice.enqueue(buffer.strip())
 
-        yield from subtitles
+        return "".join(reply)
 
     def directory_cmd(self, command: str) -> str | None:
         """Handle standalone cd/chdir commands without a model or shell call."""
@@ -362,7 +332,13 @@ class Assistant:
             sys.stdout.write("\n".join(" " * left + line for line in lines))
             sys.stdout.write(f"{RESET_COLOR}\n")
 
-        self.stream(brain.get_version())
+        version = brain.get_version()
+
+        if self.terminal_ui is not None:
+            self.terminal_ui.set_version(version)
+        else:
+            self.stream(version)
+
         greeting = self.startup_greeting
 
         history = []
@@ -436,30 +412,32 @@ class Assistant:
                 with self.agent.run_stream_sync(
                         user_input,
                         message_history=history,
-                        model_settings={"temperature":
-                        brain.load_config()["temperature"]}) as result:
+                        model_settings={
+                            "temperature": brain.load_config()["temperature"]
+                        }) as result:
 
                     if self.terminal_ui is not None:
                         self.terminal_ui.set_thinking(False)
 
-                    self.stream(self.speak(
-                            result.stream_text(
-                                delta=True,
-                                debounce_by=None)), session=session)
+                    reply = self.speak(
+                        result.stream_text(
+                            delta=True,
+                            debounce_by=None))
+
+                    if reply:
+                        session.write(self.name, reply)
 
                     self.voice.wait_until_done()
-
                     if self.terminal_ui is not None:
                         self.terminal_ui.clear_audio_levels()
-                        self.terminal_ui.clear_conversation()
-
                     history = result.all_messages()
                     for message in history:
                         if isinstance(message, ModelResponse):
                             for part in message.parts:
                                 if isinstance(part, TextPart):
                                     part.content = "".join(
-                                        chunks_group([part.content]))
+                                        chunks_group([part.content])
+                                    )
 
                     refresh_model_keep_alive()
 
