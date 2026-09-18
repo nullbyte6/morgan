@@ -69,21 +69,32 @@ class ConsoleInput:
 
     def poll(self):
         count = wt.DWORD()
-        self._check(self.kernel.GetNumberOfConsoleInputEvents(
-            self.handle, ctypes.byref(count)))
+        self._check(
+            self.kernel.GetNumberOfConsoleInputEvents(
+                self.handle, ctypes.byref(count)))
+
         if not count.value:
             return []
+
         record = InputRecord()
-        self._check(self.kernel.ReadConsoleInputW(
-            self.handle, ctypes.byref(record), 1, ctypes.byref(count)))
+        self._check(
+            self.kernel.ReadConsoleInputW(
+                self.handle, ctypes.byref(record), 1, ctypes.byref(count)))
+
         if record.type == 1 and record.event.key.down:
             key = record.event.key
-            navigation = {0x26: 1, 0x28: -1, 0x21: "page_up", 0x22: "page_down"}
-            if key.key in navigation:
-                return [("scroll", navigation[key.key])] * key.repeat
-            special = {0x25: "K", 0x27: "M", 0x24: "G", 0x23: "O", 0x2e: "S"}
+            special = {
+                0x25: "K",
+                0x27: "M",
+                0x24: "G",
+                0x23: "O",
+                0x2E: "S",
+            }
+
             if key.key in special:
                 return [("key", "\xe0" + special[key.key])] * key.repeat
+
             if key.character != "\x00":
                 return [("key", key.character)] * key.repeat
+
         return []

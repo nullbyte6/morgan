@@ -83,6 +83,7 @@ class TerminalUI:
         self._input_result = ""
 
         self._media_worker = None
+        self._input_worker = None
 
     def _refresh(self):
         live = self.live
@@ -349,6 +350,21 @@ class TerminalUI:
             self._levels = (0.0,) * 7
         self._refresh()
 
+    def _poll_input(self):
+        while not self._stop.is_set():
+            try:
+                events = self.console_input.poll()
+
+                for event_type, value in events:
+                    if event_type == "key":
+                        self._handle_key(value)
+
+            except Exception:
+                if self._stop.is_set():
+                    return
+
+            time.sleep(0.01)
+
     def _poll_media(self):
         async def poll():
             while not self._stop.is_set():
@@ -374,15 +390,27 @@ class TerminalUI:
         self._stop.clear()
         self.console_input = ConsoleInput()
 
-        self.live = Live(self.render(), console=self.console, screen=True,
-                         refresh_per_second=60, auto_refresh=True,
-                         redirect_stdout=False, redirect_stderr=False,
-                         vertical_overflow="crop")
+        self.live = Live(
+            self.render(),
+            console=self.console,
+            screen=True,
+            refresh_per_second=60,
+            auto_refresh=True,
+            redirect_stdout=False,
+            redirect_stderr=False,
+            vertical_overflow="crop",
+        )
 
         self.live.start(refresh=True)
-        self._media_worker = threading.Thread(target=self._poll_media,
-                                              daemon=True)
 
+        self._input_worker = threading.Thread(
+            target=self._poll_input,
+            daemon=True)
+        self._input_worker.start()
+
+        self._media_worker = threading.Thread(
+            target=self._poll_media,
+            daemon=True)
         self._media_worker.start()
 
         return self
@@ -390,6 +418,9 @@ class TerminalUI:
     def __exit__(self, *exc):
         self._stop.set()
         self._input_done.set()
+
+        if self._input_worker is not None:
+            self._input_worker.join(timeout=1)
 
         if self._media_worker is not None:
             self._media_worker.join(timeout=3)
