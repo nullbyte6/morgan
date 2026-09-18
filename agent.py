@@ -333,10 +333,9 @@ class Assistant:
             if session.private:
                 prompt = "[PRIVATE] " + prompt
 
-            user_input = self.read_user_input(prompt,
-                placeholder=greeting)
-
+            user_input = self.read_user_input(prompt, placeholder=greeting)
             greeting = ""
+
             privacy_result = session.handle_command(user_input)
 
             if privacy_result is not None:
