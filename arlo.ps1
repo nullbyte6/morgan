@@ -12,18 +12,15 @@ if (-not (Test-Path $agent)) {
     throw "Arlo agent not found: $agent"
 }
 
-$command = @"
-`$env:PYTHONPATH = '$root\src;$root\src\third_party\Matcha-TTS'
-Set-Location -LiteralPath '$root'
-& '$python' '$agent'
-"@
+$env:PYTHONPATH = "$root\src;$root\src\third_party\Matcha-TTS"
 
 & wt.exe `
     -w new `
     new-tab `
     --title "Arlo" `
+    --startingDirectory "$root" `
     pwsh.exe `
     -NoLogo `
     -NoProfile `
     -NoExit `
-    -Command $command
+    -Command "& '$python' '$agent'"
