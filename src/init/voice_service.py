@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import queue
 import re
 import sys
 import threading
@@ -110,14 +109,7 @@ class VoiceService:
 
         self._ready = threading.Event()
         self._load_error = None
-
-        self._response_queue: queue.Queue = queue.Queue()
         self._tts_error = None
-        self._tts_worker = threading.Thread(
-            target=self._tts_loop,
-            daemon=True,
-        )
-        self._tts_worker.start()
 
         self._loader = threading.Thread(
             target=self._load_model,
@@ -164,22 +156,6 @@ class VoiceService:
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 
-    def _tts_loop(self) -> None:
-        try:
-            self._wait_until_ready()
-        except Exception as error:
-            self._tts_error = error
-            return
-
-        while True:
-            response = self._response_queue.get()
-            try:
-                self._speak_response(response)
-            except Exception as error:
-                self._tts_error = error
-            finally:
-                self._response_queue.task_done()
-
     def _load_model(self) -> None:
         try:
             self.voice = AutoModel(
@@ -197,55 +173,24 @@ class VoiceService:
         finally:
             self._ready.set()
 
-    def start_response(self) -> queue.Queue:
-        """
-        Start one continuous CosyVoice bi-streaming response.
-        """
-        text_queue = queue.Queue()
-        self._response_queue.put(text_queue)
-        return text_queue
+    def speak(self, text: str) -> None:
+        text = self._clean_text(text)
+        if not text:
+            return
 
-    def feed_response(self, response: queue.Queue, text: str) -> None:
-        if text:
-            response.put(text)
-
-    def end_response(self, response: queue.Queue) -> None:
-        response.put(None)
-
-    def _wait_until_ready(self) -> None:
-        self._ready.wait()
-        if self._load_error is not None:
-            raise RuntimeError(
-                f"CosyVoice failed to load: {self._load_error}") from self._load_error
-
-    @staticmethod
-    def _text_stream(text_queue: queue.Queue):
-        while True:
-            text = text_queue.get()
-            try:
-                if text is None:
-                    return
-                if text:
-                    yield text
-            finally:
-                text_queue.task_done()
-
-    def _speak_response(self, text_queue: queue.Queue) -> None:
+        self._wait_until_ready()
         self.speaking = True
+
         try:
-            text = "".join(self._text_stream(text_queue))
-            text = self._clean_text(text)
-
-            if not text:
-                return
-
             generator = self.voice.inference_zero_shot(
                 text,
                 self.reference_text,
                 str(self.voice_reference),
                 zero_shot_spk_id="arlo",
-                stream=True,
+                stream=False,
                 speed=self.speed)
+
+            audio_parts = []
 
             for chunk in generator:
                 audio = chunk["tts_speech"]
@@ -254,9 +199,12 @@ class VoiceService:
                     audio = audio.detach().cpu().numpy()
 
                 samples = np.asarray(audio, dtype=np.float32).squeeze()
-
                 if samples.size:
-                    sd.play(samples, samplerate=self.sample_rate)
-                    sd.wait()
+                    audio_parts.append(samples)
+
+            if audio_parts:
+                audio = np.concatenate(audio_parts)
+                sd.play(audio, samplerate=self.sample_rate)
+                sd.wait()
         finally:
             self.speaking = False

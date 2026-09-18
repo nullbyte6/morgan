@@ -170,15 +170,15 @@ class Assistant:
         return reply
 
     def speak(self, chunks):
-        response = self.voice.start_response()
-        try:
-            for chunk in chunks:
-                yield chunk
-                if chunk:
-                    self.voice.feed_response(response,chunk,)
+        response = []
+        for chunk in chunks:
+            response.append(chunk)
+            yield chunk
 
-        finally:
-            self.voice.end_response(response)
+        text = "".join(response)
+        if text.strip():
+            threading.Thread(target=self.voice.speak, args=(text,),
+                             daemon=True).start()
 
     def directory_cmd(self, command: str) -> str | None:
         """Handle standalone cd/chdir commands without a model or shell call."""
