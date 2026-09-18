@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import queue
 import sys
+import re
 import threading
 import warnings
 from pathlib import Path
@@ -58,6 +59,22 @@ if shutil.which("ffmpeg") is None:
                        "but was not found in PATH.")
 
 
+def _clean_for_speech(text: str) -> str:
+    """Remove Markdown/formatting that should not be spoken."""
+    text = re.sub(r"```[\s\S]*?```", " ", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"!\[([^\]]*)]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)]\([^)]+\)", r"\1", text)
+    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
+    text = re.sub(r"(?m)^\s*>\s?", "", text)
+    text = re.sub(r"(?m)^\s*[-+*]\s+", "", text)
+    text = re.sub(r"(?m)^\s*\d+[.)]\s+", "", text)
+    text = re.sub(r"[*_~]+", "", text)
+    text = re.sub(r"(?m)^\s*[-*_]{3,}\s*$", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 class VoiceService:
     """
     Arlo's multilingual voice service using Fun-CosyVoice3.
@@ -99,6 +116,7 @@ class VoiceService:
         self.audio_callback = audio_callback
 
     def enqueue(self, text: str) -> None:
+        text = _clean_for_speech(text)
         if text:
             self._speech_done.clear()
             self._text_queue.put(text)
