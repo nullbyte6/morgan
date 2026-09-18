@@ -107,12 +107,12 @@ class VoiceService:
         self.speaking = False
         self.voice = None
         self.sample_rate = None
-        self._audio_stream = None
 
         self._ready = threading.Event()
         self._load_error = None
 
         self._response_queue: queue.Queue = queue.Queue()
+        self._tts_error = None
         self._tts_worker = threading.Thread(
             target=self._tts_loop,
             daemon=True,
@@ -124,6 +124,10 @@ class VoiceService:
             daemon=True,
         )
         self._loader.start()
+
+    @property
+    def error(self):
+        return self._tts_error or self._load_error
 
     @staticmethod
     def _clean_text(text: str) -> str:
@@ -164,8 +168,7 @@ class VoiceService:
         try:
             self._wait_until_ready()
         except Exception as error:
-            logging.getLogger(__name__).exception(
-                "Arlo TTS initialization failed: %s", error)
+            self._tts_error = error
             return
 
         while True:
@@ -173,8 +176,7 @@ class VoiceService:
             try:
                 self._speak_response(response)
             except Exception as error:
-                logging.getLogger(__name__).exception(
-                    "Arlo TTS failed: %s",error)
+                self._tts_error = error
             finally:
                 self._response_queue.task_done()
 
@@ -186,15 +188,8 @@ class VoiceService:
 
             self.sample_rate = self.voice.sample_rate
 
-
-
-            self._audio_stream = sd.OutputStream(
-                samplerate=self.sample_rate,
-                channels=1,
-                dtype="float32",
-                blocksize=0,
-                latency="low")
-            self._audio_stream.start()
+            self.voice.add_zero_shot_spk(self.reference_text,
+                                         str(self.voice_reference), "arlo")
 
         except Exception as error:
             self._load_error = error
@@ -211,7 +206,6 @@ class VoiceService:
         return text_queue
 
     def feed_response(self, response: queue.Queue, text: str) -> None:
-        text = self._clean_text(text)
         if text:
             response.put(text)
 
@@ -231,32 +225,37 @@ class VoiceService:
             try:
                 if text is None:
                     return
-
-                yield text
+                if text:
+                    yield text
             finally:
                 text_queue.task_done()
 
     def _speak_response(self, text_queue: queue.Queue) -> None:
         self.speaking = True
         try:
-            text_stream = self._text_stream(text_queue)
+            text = "".join(self._text_stream(text_queue))
+            text = self._clean_text(text)
+
+            if not text:
+                return
 
             generator = self.voice.inference_zero_shot(
-                text_stream,
+                text,
                 self.reference_text,
                 str(self.voice_reference),
+                zero_shot_spk_id="arlo",
                 stream=True,
                 speed=self.speed)
 
             for chunk in generator:
-                if "tts_speech" not in chunk:
-                    continue
                 audio = chunk["tts_speech"]
+
                 if hasattr(audio, "detach"):
                     audio = audio.detach().cpu().numpy()
 
-                samples = np.array(audio, dtype=np.float32).flatten()
-                if samples.size > 0:
+                samples = np.asarray(audio, dtype=np.float32).squeeze()
+
+                if samples.size:
                     sd.play(samples, samplerate=self.sample_rate)
                     sd.wait()
         finally:
