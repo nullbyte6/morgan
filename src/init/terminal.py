@@ -20,6 +20,8 @@ from prompt_toolkit.layout import (
     BufferControl,
     ConditionalContainer,
     Dimension,
+    Float,
+    FloatContainer,
     FormattedTextControl,
     HSplit,
     Layout,
@@ -200,99 +202,84 @@ class TerminalUI:
         )
 
     def _create_application(self):
-        header = Window(content=FormattedTextControl(
-                text=self._header),
-            height=1, align="RIGHT",)
+        header = Window(
+            content=FormattedTextControl(text=self._header),
+            height=1,
+            align="RIGHT")
 
         banner = Window(
-            content=FormattedTextControl(
-                text=self._banner_text),
-            height=Dimension(
-                min=4,
-                preferred=4,
-                max=4),
-            align="CENTER",
-            dont_extend_height=True)
-
-        upper_spacer = Window()
-        lower_spacer = Window()
+            content=FormattedTextControl(text=self._banner_text),
+            height=4,
+            align="CENTER")
 
         body = Window(
-            content=FormattedTextControl(
-                text=self._body,
-                focusable=False,
-            ),
+            content=FormattedTextControl(text=self._body, focusable=False),
             wrap_lines=True,
             always_hide_cursor=True,
             dont_extend_height=True,
-            height=Dimension(
-                min=0,
-                preferred=1))
+            height=Dimension(min=0, preferred=1))
 
         thinking = ConditionalContainer(
             content=Window(
-                content=FormattedTextControl(
-                    text=self._thinking_text), height=1),
-            filter=Condition(lambda: self._thinking))
+                content=FormattedTextControl(text=self._thinking_text),
+                height=1
+            ), filter=Condition(lambda: self._thinking))
 
         prompt_control = Window(
-            content=FormattedTextControl(
-                text=self._prompt_text),
-            width=lambda: len(
-                ANSI_RE.sub("", self._prompt)) + (
-                              len(self._placeholder)
-                              if not self._buffer.text
-                              else 0), height=1, dont_extend_width=True)
+            content=FormattedTextControl(text=self._prompt_text),
+            width=lambda: len(ANSI_RE.sub("", self._prompt)) + (
+                len(self._placeholder) if not self._buffer.text else 0),
+            height=1,
+            dont_extend_width=True)
 
         input_window = Window(
-            content=BufferControl(
-                buffer=self._buffer,
-                focusable=True,
-            ), height=1, style="class:user-input")
+            content=BufferControl(buffer=self._buffer, focusable=True),
+            height=1,
+            style="class:user-input")
 
-        input_row = VSplit([
-            prompt_control,
-            input_window,
-        ])
+        input_row = VSplit([prompt_control, input_window])
 
         meter = Window(
-            content=FormattedTextControl(
-                text=self._meter),
+            content=FormattedTextControl(text=self._meter),
             height=1,
-            align="RIGHT",
-            dont_extend_height=True)
+            align="RIGHT")
 
         footer = Window(
-            content=FormattedTextControl(
-                text=lambda: "↑/↓ · PgUp/PgDn"),
-            height=1)
+            content=FormattedTextControl(text=lambda: "↑/↓ · PgUp/PgDn"),
+            height=1,
+            align="RIGHT")
 
-        root = HSplit([
-            header,
-            upper_spacer,
-            banner,
-            lower_spacer,
+        bottom = HSplit([
+            Window(height=Dimension(weight=1)),
             body,
             thinking,
             input_row,
             meter,
-            footer,
+            footer
         ])
 
+        background = HSplit([header, bottom])
+        root = FloatContainer(
+            content=background,
+            floats=[
+                Float(
+                    content=banner,
+                    xcursor=False,
+                    ycursor=False)])
+
         self.application = Application(
-            layout=Layout(
-                root,
-                focused_element=input_window,
-            ),
+            layout=Layout(root, focused_element=input_window),
             key_bindings=self._bindings,
             full_screen=True,
             mouse_support=False,
             style=Style.from_dict({
-                "banner": "fg:#ffffff bold",
+                "banner": "fg:#666666 bold",
                 "placeholder": "italic fg:#666666",
                 "dim": "fg:#666666",
-                "user-input": "fg:#00aa00",
-            }), refresh_interval=1.0)
+                "user-input": "fg:#00aa00"
+            }),
+            refresh_interval=1.0
+        )
 
     def write(self, value):
         with self._lock:

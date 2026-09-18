@@ -1,8 +1,13 @@
 #! /usr/bin/env python3
 # type: ignore
+"""Arlo's main entry to the whole brain, no pun intended"""
 import json
 import logging
 import os
+
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
+os.environ["TORCH_LOGS"] = "-all"
+
 import random
 import re
 import subprocess
@@ -70,7 +75,6 @@ class Assistant:
         from pydantic_ai.models.ollama import OllamaModel
         from pydantic_ai.providers.ollama import OllamaProvider
 
-        warnings.filterwarnings("ignore", message=r".*triton not found.*")
         logging.getLogger().setLevel(logging.WARNING)
         for logger_name in (
                 "httpx",
