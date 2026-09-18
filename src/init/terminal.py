@@ -120,6 +120,9 @@ class TerminalUI:
         live = self.live
         if live is not None:
             try:
+                terminal = os.get_terminal_size(self._terminal_fd)
+                self.console.width = terminal.columns
+                self.console.height = terminal.lines
                 live.update(self.render(), refresh=True)
             except Exception:
                 pass
@@ -238,7 +241,7 @@ class TerminalUI:
                 + input_height
                 + version_height)
 
-        main_height = max(1, height - fixed_height)
+        main_height = max(1, height - fixed_height - 1)
         banner_height = (len(banner.rstrip("\n").splitlines())
             if banner else 0)
 
@@ -267,7 +270,6 @@ class TerminalUI:
             Text("Pensando" if thinking else "",
                 style=RICH_DIM_COLOR),
             self._input_renderable() if has_prompt else Text(""),
-            Text(version, style=RICH_DIM_COLOR),
         )
 
     def set_banner(self, banner):
@@ -406,6 +408,10 @@ class TerminalUI:
     def __enter__(self):
         self._stop.clear()
         self.console_input = ConsoleInput()
+
+        terminal = os.get_terminal_size(self._terminal_fd)
+        self.console.width = terminal.columns
+        self.console.height = terminal.lines
 
         self.live = Live(
             self.render(),
