@@ -1,2 +1,2 @@
 @echo off
-pwsh.exe -ExecutionPolicy Bypass -File "%ARLO_HOME%\arlo.ps1"
+schtasks /run /tn "ARLO" >nul 2>&1
