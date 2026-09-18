@@ -1,20 +1,22 @@
 #! /usr/bin/env python3
 # type: ignore
 import json
+import logging
 import os
 import random
 import re
 import subprocess
 import sys
 import threading
+import warnings
 import time
 from contextlib import nullcontext
 from getpass import getuser
 
 from src.init.identity import register_assistant
 from src.init.terminal import TerminalUI, interactive_terminal
-from src.init.voice_service import VoiceService
 from src.init.brain import VOICE_MODEL, VOICE_REFERENCE, VOICE_REFERENCE_TEXT
+from src.init.voice_service import VoiceService
 
 if __name__ == "__main__":
     sys.modules["agent"] = sys.modules[__name__]
@@ -24,7 +26,7 @@ class Assistant:
     """One shared assistant; reading its identity never
     starts the model or UI."""
     name = "Arlo"
-    voice: VoiceService
+    voice: VoiceService = None
     terminal_ui: TerminalUI
     _instance = None
     _instance_lock = threading.Lock()
@@ -67,9 +69,6 @@ class Assistant:
         from pydantic_ai import Agent, Tool
         from pydantic_ai.models.ollama import OllamaModel
         from pydantic_ai.providers.ollama import OllamaProvider
-
-        import logging
-        import warnings
 
         warnings.filterwarnings("ignore", message=r".*triton not found.*")
         logging.getLogger().setLevel(logging.WARNING)
@@ -118,32 +117,35 @@ class Assistant:
             return nullcontext()
         return self.terminal_ui.suspend()
 
-
     def stream(self, chunks, session=None) -> str:
-        """Shows remaining fragments immediately, animation delay is optional"""
+        """Stream assistant output to the active frontend."""
         from src.init.output import chunks_group
         from src.init.spin import ASSISTANT_COLOR, RESET_COLOR
-        sys.stdout.write(f"{ASSISTANT_COLOR}")
+
         displayed = []
-        response_prefix = self.terminal_ui.output_snapshot() \
-            if self.terminal_ui is not None else None
 
-        def capture(source):
-            for chunk in source:
+        if self.terminal_ui is not None:
+            response_prefix = self.terminal_ui.output_snapshot()
+            for chunk in ([chunks] if isinstance(chunks, str) else chunks):
                 displayed.append(chunk)
-                yield chunk
 
-        try:
-            source = capture([chunks] if isinstance(chunks, str) else chunks)
-            for chunk in (
-                    source if self.terminal_ui is not None else chunks_group(
-                        source, color=True)):
-                if self.terminal_ui is not None:
-                    self.terminal_ui.update_response(response_prefix,
-                                                     "".join(chunks_group(
-                                                         ["".join(displayed)],
-                                                         color=True)))
-                elif self.typewriter_delay_seconds:
+                rendered = "".join(
+                    chunks_group(["".join(displayed)],
+                        color=True))
+
+                self.terminal_ui.update_response(
+                    response_prefix,
+                    rendered)
+
+            self.terminal_ui.write("\n")
+
+        else:
+            sys.stdout.write(ASSISTANT_COLOR)
+            source = ([chunks] if isinstance(chunks, str) else chunks)
+            for chunk in chunks_group(source, color=True):
+                displayed.append(chunk)
+
+                if self.typewriter_delay_seconds:
                     for character in chunk:
                         sys.stdout.write(character)
                         sys.stdout.flush()
@@ -151,14 +153,15 @@ class Assistant:
                 else:
                     sys.stdout.write(chunk)
                     sys.stdout.flush()
-        finally:
+
             sys.stdout.write(f"{RESET_COLOR}\n")
             sys.stdout.flush()
 
-        if session is not None:
-            session.write(self.name, "".join(displayed))
-
         reply = "".join(displayed)
+
+        if session is not None:
+            session.write(self.name, reply)
+
         return reply
 
     def speak(self, chunks):
@@ -262,7 +265,7 @@ class Assistant:
     def read_user_input(self, prompt: str | None = None,
                         placeholder: str = "") -> str:
         """Read input with a normal prompt and the user's typed text in green."""
-        from src.init.spin import RESET_COLOR, USER_COLOR
+        from src.init.colors import RESET_COLOR, USER_COLOR
 
         if prompt is None:
             prompt = self.build_user_prompt()
@@ -305,9 +308,8 @@ class Assistant:
 
         session = SessionLog()
         refresh_model_keep_alive()
-        if self.terminal_ui is not None:
-            self.terminal_ui.set_banner(self.banner)
-        else:
+
+        if self.terminal_ui is None:
             from colorama import Fore
             from shutil import get_terminal_size
 
@@ -427,17 +429,19 @@ class Assistant:
                 if cause is not None else str(error))
 
     def run(self):
-        self._initialize_runtime()
         try:
             if interactive_terminal():
                 with TerminalUI() as ui:
                     self.terminal_ui = ui
+                    ui.set_banner(self.banner)
                     try:
                         self.run_session()
                     finally:
                         self.terminal_ui = None
             else:
+                self._initialize_runtime()
                 self.run_session()
+
         except (EOFError, KeyboardInterrupt):
             pass
 

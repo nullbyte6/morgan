@@ -1,106 +1,277 @@
-"""Rich terminal frame with nonblocking Windows input and media status."""
+"""Arlo full-screen terminal UI using prompt_toolkit."""
 
 import asyncio
-import io
-import logging
 import os
-import queue
-import sys
+import re
 import threading
 import time
 import warnings
-from contextlib import (
-    ExitStack,
-    contextmanager,
-    redirect_stdout,
-    redirect_stderr)
+from contextlib import contextmanager
 from datetime import datetime
 
-from rich.console import Console, Group
-from rich.live import Live
-from rich.text import Text
+from prompt_toolkit import Application
+from prompt_toolkit.application import run_in_terminal
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.filters import Condition
+from prompt_toolkit.formatted_text import ANSI, FormattedText
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import (
+    BufferControl,
+    ConditionalContainer,
+    FormattedTextControl,
+    HSplit,
+    Layout,
+    Window)
+
+from prompt_toolkit.styles import Style
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
 async def media_is_playing():
     from winrt.windows.media.control import (
         GlobalSystemMediaTransportControlsSessionManager as Manager,
-        GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
-    )
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status)
+
     manager = await Manager.request_async()
-    return any(session.get_playback_info().playback_status == Status.PLAYING
-               for session in manager.get_sessions())
+    return any(
+        session.get_playback_info().playback_status == Status.PLAYING
+        for session in manager.get_sessions())
 
 
 def spectrum_levels(audio, sample_rate=44100):
-    """Measure seven frequency bands from output audio, preserving stereo energy."""
     import numpy as np
 
     samples = np.asarray(audio)
     if samples.ndim == 1:
         samples = samples[:, None]
+
     if len(samples) < 2 or samples.shape[1] == 0:
         return np.zeros(7)
+
     window = np.hanning(len(samples))
-    spectrum = np.abs(np.fft.rfft(samples * window[:, None], axis=0))
-    power = np.mean((spectrum / max(window.sum(), 1)) ** 2, axis=1)
-    frequencies = np.fft.rfftfreq(len(samples), 1 / sample_rate)
-    edges = (0, 125, 250, 500, 1000, 2000, 4000, sample_rate / 2 + 1)
-    rms = np.array(
-        [np.sqrt(power[(frequencies >= low) & (frequencies < high)].sum())
-         for low, high in zip(edges, edges[1:])])
-    return np.clip((20 * np.log10(np.maximum(rms, 1e-8)) + 60) / 60, 0, 1)
+    spectrum = np.abs(
+        np.fft.rfft(samples * window[:, None], axis=0))
+
+    power = np.mean(
+        (spectrum / max(window.sum(), 1)) ** 2,
+        axis=1)
+
+    frequencies = np.fft.rfftfreq(
+        len(samples),
+        1 / sample_rate)
+
+    edges = (
+        0,
+        125,
+        250,
+        500,
+        1000,
+        2000,
+        4000,
+        sample_rate / 2 + 1)
+
+    rms = np.array([
+        np.sqrt(
+            power[
+                (frequencies >= low)
+                & (frequencies < high)
+            ].sum())
+        for low, high in zip(edges, edges[1:])
+    ])
+
+    return np.clip((20 * np.log10(np.maximum(rms, 1e-8)) + 60)
+                   / 60, 0, 1)
 
 
-class TerminalUI(io.TextIOBase):
-    """Capture existing print/stream output inside one full-screen panel."""
-
-    def __init__(self, console=None):
-        self.console = console or Console(file=sys.stdout)
+class TerminalUI:
+    def __init__(self):
         self._lock = threading.RLock()
+
         self._output = ""
         self._banner = ""
-        self._layout_key = None
-        self._layout_lines = []
-        self._prompt = None
-        self._input = ""
-        self._cursor = 0
+        self._prompt = ""
         self._placeholder = ""
-        self._keys = queue.Queue()
-        self._max_scroll = 0
-        self._scroll = 0
+        self._thinking = False
+
         self.playing = False
         self._levels = (0.0,) * 7
         self._levels_at = 0.0
         self._audio_error = None
+
         self._stop = threading.Event()
-        self._stack = ExitStack()
-        self._live = None
-        self._suspended = False
-        self._thinking = False
-        self._devnull = open(os.devnull, "w", encoding="utf-8")
-        self._stack.callback(self._devnull.close)
+        self._input_done = threading.Event()
+        self._input_result = ""
 
-    def set_thinking(self, thinking: bool) -> None:
+        self._buffer = Buffer(multiline=False)
+        self._bindings = KeyBindings()
+
+        self._create_keybindings()
+        self._create_application()
+
+    def _invalidate(self):
+        app = getattr(self, "application", None)
+
+        if app is not None and app.is_running:
+            app.invalidate()
+
+    def _create_keybindings(self):
+        @self._bindings.add("enter")
+        def _(event):
+            self._input_result = self._buffer.text
+            self._input_done.set()
+
+        @self._bindings.add("c-c")
+        def _(event):
+            self._input_result = ""
+            self._input_done.set()
+            event.app.exit(exception=KeyboardInterrupt)
+
+        @self._bindings.add("c-z")
+        def _(event):
+            self._input_result = ""
+            self._input_done.set()
+            event.app.exit(exception=EOFError)
+
+    def _header(self):
+        return datetime.now().astimezone().strftime(
+            "%a %d/%m/%Y · %H:%M:%S"
+        )
+
+    def _body(self):
         with self._lock:
-            self._thinking = thinking
+            output = self._output
+            banner = self._banner
 
-    def writable(self):
-        return True
+        if output:
+            return ANSI(output)
 
-    def isatty(self):
-        return True
+        if banner:
+            return FormattedText([
+                ("class:banner", banner)
+            ])
 
-    @property
-    def encoding(self):
-        return "utf-8"
+        return ""
+
+    def _thinking_text(self):
+        if self._thinking:
+            return FormattedText([
+                ("class:dim", "Pensando")
+            ])
+
+        return ""
+
+    def _prompt_text(self):
+        with self._lock:
+            prompt = self._prompt
+            placeholder = self._placeholder
+            empty = not self._buffer.text
+
+        if empty and placeholder:
+            return FormattedText([
+                ("", prompt),
+                ("class:placeholder", placeholder),
+            ])
+
+        return FormattedText([
+            ("", prompt)
+        ])
+
+    def _meter(self):
+        with self._lock:
+            audio_error = self._audio_error
+            levels = (
+                self._levels
+                if time.monotonic() - self._levels_at < 0.5
+                else (0.0,) * 7)
+
+        if audio_error:
+            return "audio !"
+
+        if not any(level >= 0.0625 for level in levels):
+            return ""
+
+        return "".join(
+            " ▁▂▃▄▅▆▇█"[round(level * 8)]
+            for level in levels
+        )
+
+    def _create_application(self):
+        body = Window(
+            content=FormattedTextControl(
+                text=self._body,
+                focusable=False),
+            wrap_lines=True,
+            always_hide_cursor=True)
+
+        thinking = ConditionalContainer(
+            content=Window(
+                FormattedTextControl(
+                    text=self._thinking_text), height=1),
+            filter=Condition(
+                lambda: self._thinking))
+
+        prompt = Window(
+            content=FormattedTextControl(
+                text=self._prompt_text),
+            height=1)
+
+        input_window = Window(
+            content=BufferControl(
+                buffer=self._buffer),
+            height=1)
+
+        meter = Window(
+            content=FormattedTextControl(
+                text=self._meter),
+            height=1,
+            dont_extend_height=True)
+
+        header = Window(
+            content=FormattedTextControl(
+                text=self._header),
+            height=1,
+            align="RIGHT")
+
+        footer = Window(
+            content=FormattedTextControl(
+                text=lambda: "↑/↓ · PgUp/PgDn"),
+            height=1)
+
+        root = HSplit([
+            header,
+            body,
+            thinking,
+            prompt,
+            input_window,
+            meter,
+            footer,
+        ])
+
+        self.application = Application(
+            layout=Layout(
+                root,
+                focused_element=input_window),
+            key_bindings=self._bindings,
+            full_screen=True,
+            mouse_support=False,
+            style=Style.from_dict({
+                "banner": "fg:#ffffff",
+                "placeholder": "italic fg:#666666",
+                "dim": "fg:#666666",
+            }), refresh_interval=1.0)
 
     def write(self, value):
         with self._lock:
-            for part_index, part in enumerate(value.split("\r")):
+            for part_index, part in enumerate(
+                value.split("\r")):
                 if part_index:
-                    self._output = self._output.rpartition("\n")[0] + (
-                        "\n" if "\n" in self._output else "")
+                    before, separator, _ = (self._output.rpartition("\n"))
+                    self._output = (before + separator)
+
                 self._output += part
+
+        self._invalidate()
         return len(value)
 
     def flush(self):
@@ -111,154 +282,124 @@ class TerminalUI(io.TextIOBase):
             return self._output
 
     def set_banner(self, banner):
-        """Keep startup artwork separate from the scrolling conversation."""
         with self._lock:
             self._banner = banner.rstrip("\n")
+
+        self._invalidate()
+
+    def set_thinking(self, thinking: bool):
+        with self._lock:
+            self._thinking = thinking
+
+        self._invalidate()
 
     def update_response(self, prefix, text):
         with self._lock:
             self._output = prefix + text
 
-    def render(self):
-        width, height = self.console.size
+        self._invalidate()
+
+    def read_input(self, prompt, placeholder=""):
         with self._lock:
-            output, prompt, value, cursor = (
-                self._output,
-                self._prompt,
-                self._input,
-                self._cursor)
-            placeholder = self._placeholder
-            banner = self._banner
-            scroll, playing = self._scroll, self.playing
-            audio_error = self._audio_error
-            levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
+            self._prompt = prompt
+            self._placeholder = placeholder
 
-        thinking = self._thinking
-        thinking_lines = []
+        self._buffer.reset()
+        self._input_result = ""
+        self._input_done.clear()
+        self._invalidate()
 
-        if thinking:
-            thinking_lines = [
-                Text("Pensando", style="dim")]
+        self._input_done.wait()
 
-        inner_width = width
-        input_lines = []
-        if prompt is not None:
-            entry = Text(prompt)
-            if not value and placeholder:
-                entry.append(placeholder, style="dim italic")
-            else:
-                entry.append(value[:cursor], style="green")
-                entry.append(
-                    value[cursor:cursor + 1] or " ",
-                    style="green reverse")
+        result = self._input_result
 
-                entry.append(value[cursor + 1:], style="green")
+        self.write(
+            f"\x1b[0m{prompt}"
+            f"\x1b[32m{result}"
+            f"\x1b[0m\n" )
 
-            input_lines = list(entry.wrap(self.console, inner_width))
-            cursor_line = len(Text(prompt + value[:cursor]).wrap(self.console,
-                                                                 inner_width)) - 1
-            input_lines = input_lines[
-                max(0, cursor_line - 2):max(3, cursor_line + 1)]
-        meter = ("audio !" if audio_error else
-                 "".join(" ▁▂▃▄▅▆▇█"[round(level * 8)] for level in levels)
-                 if any(level >= 0.0625 for level in levels) else "")
-        meter_lines = []
-        if meter:
-            meter_text = Text(meter, style="bright_white", justify="right")
-            meter_text.truncate(inner_width, overflow="crop")
-            meter_lines = [meter_text]
-
-        available = max(0, height - 2 - len(input_lines) - len(thinking_lines) - len(
-                meter_lines))
-
-        layout_key = (output, inner_width)
-        if layout_key != self._layout_key:
-            previous_count = len(self._layout_lines)
-            previous_key = self._layout_key
-            self._layout_lines = list(
-                Text.from_ansi(output).wrap(self.console, inner_width))
-            self._layout_key = layout_key
-            if previous_key is not None and previous_key[1] == inner_width:
-                with self._lock:
-                    if self._scroll:
-                        self._scroll = max(0, self._scroll +
-                                           len(self._layout_lines) - previous_count)
-        lines = self._layout_lines
         with self._lock:
-            self._max_scroll = max(0, len(lines) - available)
-            self._scroll = min(self._scroll, self._max_scroll)
-            scroll = self._scroll
-        end = len(lines) - scroll
-        visible = lines[max(0, end - available):end] if available else []
-        spare = max(0, available - len(visible))
-        backdrop = [Text("")] * spare
-        if banner and spare:
-            artwork = [Text(line.rstrip(), style="bright_white")
-                       for line in banner.splitlines()]
-            art_width = max((line.cell_len for line in artwork), default=0)
-            left = max(0, (inner_width - art_width) // 2)
-            top = max(0, (spare - len(artwork)) // 2)
-            if len(artwork) <= spare:
-                for index, line in enumerate(artwork):
-                    line.pad_left(left)
-                    line.truncate(inner_width, overflow="crop")
-                    backdrop[top + index] = line
-        visible = backdrop + visible
+            self._prompt = ""
+            self._placeholder = ""
 
-        header = Text(datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S"),
-            style="bright_white",
-            justify="right")
-
-        footer = Text("↑/↓ · PgUp/PgDn", style="bright_white")
-        return Group(header, *(visible + thinking_lines +
-                               input_lines + meter_lines),footer)
+        return result
 
     def _poll_audio(self):
-        """Read only speaker loopback in a worker; never block terminal rendering."""
         try:
             import soundcard as sc
         except ImportError as error:
             self._audio_error = str(error)
+            self._invalidate()
             return
+
         while not self._stop.is_set():
             try:
                 speaker = sc.default_speaker()
+
                 if speaker is None:
                     self._stop.wait(1)
                     continue
-                loopback = sc.get_microphone(id=speaker.id,
-                                             include_loopback=True)
+
+                loopback = sc.get_microphone(
+                    id=speaker.id,
+                    include_loopback=True)
+
                 if not loopback.isloopback:
                     self._stop.wait(1)
                     continue
-                with loopback.recorder(samplerate=44100,
-                                       blocksize=8192) as recorder:
-                    next_device_check = time.monotonic() + 2
+
+                with loopback.recorder(
+                    samplerate=44100,
+                    blocksize=8192) as recorder:
+
+                    next_device_check = (time.monotonic() + 2)
+
                     while not self._stop.is_set():
                         with warnings.catch_warnings():
                             warnings.filterwarnings(
                                 "ignore",
-                                message=r"^data discontinuity in recording$",
+                                message=(r"^data discontinuity "
+                                    r"in recording$"),
                                 category=Warning,
-                                module=r"soundcard\.mediafoundation",
-                            )
+                                module=(r"soundcard"
+                                    r"\.mediafoundation"))
+
                             audio = recorder.record(numframes=4096)
+
                         levels = spectrum_levels(audio)
+
                         with self._lock:
                             self._audio_error = None
-                            self._levels = tuple(max(float(new), old * 0.8)
-                                                 for new, old in
-                                                 zip(levels, self._levels))
-                            self._levels_at = time.monotonic()
-                        if time.monotonic() >= next_device_check:
-                            current = sc.default_speaker()
-                            if current is None or current.id != speaker.id:
+                            self._levels = tuple(
+                                max(float(new), old * 0.8)
+                                for new, old in zip(
+                                    levels, self._levels))
+
+                            self._levels_at = (
+                                time.monotonic())
+
+                        self._invalidate()
+
+                        if (time.monotonic()
+                            >= next_device_check):
+                            current = (
+                                sc.default_speaker())
+
+                            if (current is None
+                                or current.id
+                                != speaker.id):
                                 break
-                            next_device_check = time.monotonic() + 2
+
+                            next_device_check = (
+                                time.monotonic() + 2)
+
             except Exception as error:
                 with self._lock:
                     self._audio_error = str(error)
+
+                self._invalidate()
                 self._stop.wait(1)
+
             finally:
                 with self._lock:
                     self._levels = (0.0,) * 7
@@ -267,190 +408,73 @@ class TerminalUI(io.TextIOBase):
         async def poll():
             while not self._stop.is_set():
                 try:
-                    playing = await asyncio.wait_for(media_is_playing(),
-                                                     timeout=2)
+                    playing = await asyncio.wait_for(
+                        media_is_playing(),
+                        timeout=2)
+
                 except Exception:
                     playing = False
+
                 with self._lock:
                     self.playing = playing
+
+                self._invalidate()
+
                 for _ in range(20):
                     if self._stop.is_set():
                         return
+
                     await asyncio.sleep(0.1)
 
         asyncio.run(poll())
 
-    def _poll_input(self):
-        try:
-            while not self._stop.is_set():
-                if self._suspended:
-                    self._stop.wait(0.01)
-                    continue
-
-                for kind, value in self._console_input.poll():
-                    if kind == "scroll":
-                        if value in ("page_up", "page_down"):
-                            value = max(1, self.console.height - 5) * (
-                                1 if value == "page_up" else -1)
-
-                        with self._lock:
-                            self._scroll = max(0, min(
-                                    self._max_scroll,
-                                    self._scroll + value))
-                    else:
-                        for character in value:
-                            self._keys.put(character)
-
-                self._stop.wait(0.005)
-
-        except Exception as error:
-            self._keys.put(error)
-
-    def _get_key(self):
-        while True:
-            try:
-                value = self._keys.get(timeout=0.05)
-            except queue.Empty:
-                continue
-            if isinstance(value, Exception):
-                raise value
-            return value
-
     def __enter__(self):
-        self._devnull = open(os.devnull, "w", encoding="utf-8")
-        self._stack.callback(self._devnull.close)
+        self._stop.clear()
 
-        self._live = Live(
-            console=self.console,
-            screen=True,
-            refresh_per_second=20,
-            get_renderable=self.render,
-            redirect_stdout=False,
-            redirect_stderr=False,
-            vertical_overflow="crop")
+        self._media_worker = threading.Thread(
+            target=self._poll_media,
+            daemon=True)
+        self._media_worker.start()
 
-        try:
-            from .console_input import ConsoleInput
-            self._console_input = ConsoleInput()
-            self._stack.callback(self._console_input.close)
-            self._stack.enter_context(self._live)
+        self._audio_worker = threading.Thread(
+            target=self._poll_audio,
+            daemon=True)
+        self._audio_worker.start()
 
-            self._stack.enter_context(redirect_stdout(self))
-            self._stack.enter_context(redirect_stderr(self._devnull))
+        self._app_worker = threading.Thread(
+            target=self.application.run,
+            daemon=True)
+        self._app_worker.start()
 
-            self._input_worker = threading.Thread(target=self._poll_input,
-                                                  daemon=True)
-            self._input_worker.start()
-            self._worker = threading.Thread(target=self._poll_media,
-                                            daemon=True)
-            self._worker.start()
-            self._audio_worker = threading.Thread(target=self._poll_audio,
-                                                  daemon=True)
-            self._audio_worker.start()
-        except BaseException:
-            self._stop.set()
-            self._stack.close()
-            raise
         return self
 
     def __exit__(self, *exc):
         self._stop.set()
-        self._input_worker.join(timeout=3)
-        self._worker.join(timeout=3)
+
+        if self.application.is_running:
+            self.application.exit()
+
+        self._media_worker.join(timeout=3)
         self._audio_worker.join(timeout=3)
-        self._stack.close()
+        self._app_worker.join(timeout=3)
 
     @contextmanager
     def suspend(self):
-        """Give full terminal control to an external
-         interactive application."""
-        if self._suspended:
+        if not self.application.is_running:
             yield
             return
 
-        self._suspended = True
-
-        old_stdout = sys.stdout
-        old_stderr = sys.stderr
-
-        try:
-            if self._live is not None:
-                self._live.stop()
-
-            if hasattr(self, "_console_input"):
-                self._console_input.suspend()
-
-            sys.stdout = self.console.file
-            sys.stderr = sys.__stderr__
-
-            sys.stdout.flush()
-            sys.stderr.flush()
-
+        with run_in_terminal(
+            lambda: None,
+            in_executor=False,
+        ):
             yield
 
-        finally:
-            if hasattr(self, "_console_input"):
-                self._console_input.resume()
-
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
-
-            if self._live is not None:
-                self._live.start(refresh=True)
-
-            self._suspended = False
-
-    def read_input(self, prompt, placeholder=""):
-        with self._lock:
-            self._prompt = prompt
-            self._input = ""
-            self._cursor = 0
-            self._placeholder = placeholder
-        try:
-            while True:
-                character = self._get_key()
-                if character == "\x03":
-                    raise KeyboardInterrupt
-                if character == "\x1a":
-                    raise EOFError
-                if character in ("\r", "\n"):
-                    with self._lock:
-                        result = self._input
-                    self.write(f"\x1b[0m{prompt}\x1b[32m{result}\x1b[0m\n")
-                    return result
-                with self._lock:
-                    if character in ("\x00", "\xe0"):
-                        key = self._get_key()
-                        if key == "K":
-                            self._cursor = max(0, self._cursor - 1)
-                        elif key == "M":
-                            self._cursor = min(len(self._input),
-                                               self._cursor + 1)
-                        elif key == "G":
-                            self._cursor = 0
-                        elif key == "O":
-                            self._cursor = len(self._input)
-                        elif key == "S":
-                            self._input = self._input[
-                                              :self._cursor] + self._input[
-                                              self._cursor + 1:]
-                    elif character == "\b":
-                        if self._cursor:
-                            self._input = self._input[
-                                              :self._cursor - 1] + self._input[
-                                              self._cursor:]
-                            self._cursor -= 1
-                    elif character >= " ":
-                        self._input = self._input[
-                                          :self._cursor] + character + self._input[
-                                          self._cursor:]
-                        self._cursor += 1
-                        self._scroll = 0
-        finally:
-            with self._lock:
-                self._prompt = None
-                self._placeholder = ""
 
 def interactive_terminal():
-    return (os.name == "nt" and sys.stdin.isatty() and
-            sys.stdout.isatty() and os.environ.get("TERM") != "dumb")
+    return (
+        os.name == "nt"
+        and sys.stdin.isatty()
+        and sys.stdout.isatty()
+        and os.environ.get("TERM") != "dumb"
+    )

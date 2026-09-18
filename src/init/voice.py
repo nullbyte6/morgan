@@ -6,7 +6,7 @@ import wave
 from array import array
 from collections import deque
 
-from .spin import RESET_COLOR, USER_COLOR, Spinner
+from .spin import RESET_COLOR, USER_COLOR
 
 VOICE_COMMANDS = {"/voice", "voice"}
 VOICE_MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
@@ -136,12 +136,11 @@ def capture_voice_input() -> str | None:
         print("No se detectó voz.")
         return None
 
-    spinner = Spinner()
-    spinner.start()
     try:
         transcript, language = transcribe_voice(*recording)
     finally:
-        spinner.stop()
+        pass
+
     if not transcript:
         print("No se pudo transcribir la voz.")
         return None

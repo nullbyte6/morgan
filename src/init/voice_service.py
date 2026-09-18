@@ -16,22 +16,22 @@ from transformers.utils import logging as transformers_logging
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-for logger_name in (
-    "asyncio",
-    "cosyvoice",
-    "httpx",
-    "httpcore",
-    "modelscope",
-    "onnxruntime",
-    "requests",
-    "transformers",
-    "ttsfrd",
-    "urllib3",
-    "wetext"):
-    logger = logging.getLogger(logger_name)
-    logger.handlers.clear()
-    logger.propagate = False
-    logger.disabled = True
+def _silence_tts_loggers():
+    prefixes = (
+        "cosyvoice",
+        "modelscope",
+        "onnxruntime",
+        "transformers",
+        "ttsfrd",
+        "wetext",
+    )
+
+    for name in prefixes:
+        logger = logging.getLogger(name)
+        logger.handlers.clear()
+        logger.propagate = False
+        logger.disabled = True
+
 
 transformers_logging.set_verbosity_error()
 
@@ -58,7 +58,9 @@ def _quiet_tqdm(*args, **kwargs):
 
 tqdm.tqdm = _quiet_tqdm
 
+_silence_tts_loggers()
 from cosyvoice.cli.cosyvoice import AutoModel
+_silence_tts_loggers()
 import shutil
 
 if shutil.which("ffmpeg") is None:
