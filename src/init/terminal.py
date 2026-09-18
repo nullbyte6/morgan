@@ -302,7 +302,7 @@ class TerminalUI(io.TextIOBase):
         self._live = Live(
             console=self.console,
             screen=True,
-            refresh_per_second=60,
+            refresh_per_second=20,
             get_renderable=self.render,
             redirect_stdout=False,
             redirect_stderr=False,

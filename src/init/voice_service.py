@@ -16,7 +16,11 @@ from transformers.utils import logging as transformers_logging
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 logging.getLogger("root").setLevel(logging.WARNING)
-logging.getLogger().setLevel(logging.ERROR)
+logging.getLogger("cosyvoice").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("onnxruntime").setLevel(logging.ERROR)
+
+transformers_logging.set_verbosity_error()
 transformers_logging.set_verbosity_error()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
