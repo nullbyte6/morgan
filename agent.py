@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 # type: ignore
-"""Arlo's main entry to the whole brain, no pun intended"""
+"""Arlo's main entry to the whole brain, no pun intended
+see how Arlo works and engineers from here"""
 import json
 import logging
 import os

@@ -16,6 +16,7 @@ from transformers.utils import logging as transformers_logging
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
+
 def _silence_tts_loggers():
     prefixes = (
         "cosyvoice",
@@ -50,16 +51,20 @@ torch.backends.cuda.enable_mem_efficient_sdp(False)
 torch.backends.cuda.enable_math_sdp(True)
 
 import tqdm
+
 _original_tqdm = tqdm.tqdm
+
 
 def _quiet_tqdm(*args, **kwargs):
     kwargs["disable"] = True
     return _original_tqdm(*args, **kwargs)
 
+
 tqdm.tqdm = _quiet_tqdm
 
 _silence_tts_loggers()
 from cosyvoice.cli.cosyvoice import AutoModel
+
 _silence_tts_loggers()
 import shutil
 
@@ -99,6 +104,7 @@ class VoiceService:
                 f"Voice reference not found: {self.voice_reference}"
             )
 
+        self.speaking = False
         self.voice = None
         self.sample_rate = None
         self._audio_stream = None
@@ -157,15 +163,18 @@ class VoiceService:
     def _tts_loop(self) -> None:
         try:
             self._wait_until_ready()
-        except Exception:
+        except Exception as error:
+            logging.getLogger(__name__).exception(
+                "Arlo TTS initialization failed: %s", error)
             return
 
         while True:
             response = self._response_queue.get()
             try:
                 self._speak_response(response)
-            except Exception:
-                pass
+            except Exception as error:
+                logging.getLogger(__name__).exception(
+                    "Arlo TTS failed: %s",error)
             finally:
                 self._response_queue.task_done()
 
@@ -177,10 +186,7 @@ class VoiceService:
 
             self.sample_rate = self.voice.sample_rate
 
-            self.voice.add_zero_shot_spk(
-                self.reference_text,
-                str(self.voice_reference),
-                "arlo")
+
 
             self._audio_stream = sd.OutputStream(
                 samplerate=self.sample_rate,
@@ -231,25 +237,27 @@ class VoiceService:
                 text_queue.task_done()
 
     def _speak_response(self, text_queue: queue.Queue) -> None:
-        text_stream = self._text_stream(text_queue)
+        self.speaking = True
+        try:
+            text_stream = self._text_stream(text_queue)
 
-        generator = self.voice.inference_zero_shot(
-            text_stream,
-            self.reference_text,
-            str(self.voice_reference),
-            zero_shot_spk_id="arlo",
-            stream=True,
-            speed=self.speed,
-        )
+            generator = self.voice.inference_zero_shot(
+                text_stream,
+                self.reference_text,
+                str(self.voice_reference),
+                stream=True,
+                speed=self.speed)
 
-        for chunk in generator:
-            audio = chunk["tts_speech"]
-            if hasattr(audio, "detach"):
-                audio = audio.detach().cpu().numpy()
+            for chunk in generator:
+                if "tts_speech" not in chunk:
+                    continue
+                audio = chunk["tts_speech"]
+                if hasattr(audio, "detach"):
+                    audio = audio.detach().cpu().numpy()
 
-            samples = np.asarray(audio, dtype=np.float32).squeeze()
-
-            if samples.ndim == 1:
-                samples = samples.reshape(-1, 1)
-
-            self._audio_stream.write(samples)
+                samples = np.array(audio, dtype=np.float32).flatten()
+                if samples.size > 0:
+                    sd.play(samples, samplerate=self.sample_rate)
+                    sd.wait()
+        finally:
+            self.speaking = False

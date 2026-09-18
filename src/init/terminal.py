@@ -20,9 +20,9 @@ from src.init import colors
 from src.init.console_input import ConsoleInput
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-FOREGROUND_COLOR = colors.RESET_COLOR
-DIM_COLOR = colors.ASSISTANT_COLOR
-USER_COLOR = colors.USER_COLOR
+RICH_FOREGROUND_COLOR = "white"
+RICH_DIM_COLOR = "bright_black"
+RICH_USER_COLOR = "green"
 
 async def media_is_playing():
     from winrt.windows.media.control import (
@@ -75,6 +75,7 @@ class TerminalUI:
         self._thinking = False
 
         self._scroll_offset = 0
+        self._reading_input = False
         self._follow_output = True
 
         self.playing = False
@@ -117,14 +118,17 @@ class TerminalUI:
 
     def _header(self, width):
         value = datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M:%S")
-        return Align.right(Text(value, style=FOREGROUND_COLOR), width=width)
+        return Align.right(Text(value, style=RICH_FOREGROUND_COLOR),
+                           width=width)
 
     def _banner_renderable(self):
         with self._lock:
             banner = self._banner
+
         if not banner:
             return Text("")
-        return Align.center(Text(banner, style=f"bold {FOREGROUND_COLOR}"))
+
+        return Align.center(Text(banner, style=f"bold {RICH_FOREGROUND_COLOR}"))
 
     def _input_renderable(self):
         with self._lock:
@@ -134,19 +138,16 @@ class TerminalUI:
             cursor = self._cursor
 
         line = Text()
-        line.append(ANSI_RE.sub("", prompt), style=FOREGROUND_COLOR)
+        line.append(ANSI_RE.sub("", prompt), style=RICH_FOREGROUND_COLOR)
 
         if value:
-            before = value[:cursor]
-            after = value[cursor:]
-            line.append(before, style=USER_COLOR)
-            line.append(" ", style=USER_COLOR)
-            line.append(after, style=USER_COLOR)
+            line.append(value[:cursor], style=RICH_USER_COLOR)
+            line.append("▇", style=RICH_USER_COLOR)
+            line.append(value[cursor:], style=RICH_USER_COLOR)
         else:
-            line.append(" ", style=USER_COLOR)
-
+            line.append("▇", style=RICH_USER_COLOR)
             if placeholder:
-                line.append(placeholder, style=f"italic {DIM_COLOR}")
+                line.append(placeholder, style=f"italic {RICH_DIM_COLOR}")
 
         return line
 
@@ -156,17 +157,17 @@ class TerminalUI:
             levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
 
         if audio_error:
-            value = Text("audio !", style=DIM_COLOR)
+            value = Text("audio !", style=RICH_DIM_COLOR)
         elif any(level >= 0.0625 for level in levels):
             value = Text("".join(" ▁▂▃▄▅▆▇█"[round(level * 8)] for level in levels),
-                style=FOREGROUND_COLOR)
+                style=RICH_FOREGROUND_COLOR)
         else:
             value = Text("")
 
         return Align.right(value, width=width)
 
     def _footer(self, width):
-        return Align.right(Text("↑/↓ · PgUp/PgDn", style=FOREGROUND_COLOR),
+        return Align.right(Text("↑/↓ · PgUp/PgDn", style=RICH_FOREGROUND_COLOR),
                            width=width)
 
     def _output_lines(self, width):
@@ -177,8 +178,9 @@ class TerminalUI:
             return []
 
         text = Text.from_ansi(output)
-        lines = text.wrap(self.console, max(1, width), overflow="fold", no_wrap=False)
-        return lines
+        text.stylize(RICH_DIM_COLOR)
+        return text.wrap(self.console, max(1, width), overflow="fold",
+                         no_wrap=False)
 
     def _viewport(self, lines, height):
         if height <= 0 or not lines:
@@ -200,7 +202,7 @@ class TerminalUI:
 
         with self._lock:
             thinking = self._thinking
-            has_prompt = bool(self._prompt)
+            has_prompt = self._reading_input
             banner = self._banner
 
         bottom_height = (1 if thinking else 0) + (1 if has_prompt else 0) + 2
@@ -245,7 +247,7 @@ class TerminalUI:
         renderables = [self._header(width), *body]
 
         if thinking:
-            renderables.append(Text("Pensando", style=DIM_COLOR))
+            renderables.append(Text("Pensando", style=RICH_DIM_COLOR))
 
         if has_prompt:
             renderables.append(self._input_renderable())
@@ -382,6 +384,7 @@ class TerminalUI:
 
     def read_input(self, prompt, placeholder=""):
         with self._lock:
+            self._reading_input = True
             self._prompt = prompt
             self._placeholder = placeholder
             self._input = ""
@@ -396,6 +399,7 @@ class TerminalUI:
 
         with self._lock:
             result = self._input_result
+            self._reading_input = False
             self._prompt = ""
             self._placeholder = ""
             self._input = ""
@@ -404,7 +408,7 @@ class TerminalUI:
         if result == "" and self._stop.is_set():
             raise EOFError
 
-        self.write(f"\x1b[0m{prompt}\x1b[38;2;166;227;161m{result}\x1b[0m\n")
+        self.write(f"\x1b[0m{prompt}\x1b[32m{result}\x1b[0m\n")
         return result
 
     def _poll_audio(self):
