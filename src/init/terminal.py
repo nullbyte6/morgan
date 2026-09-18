@@ -11,9 +11,7 @@ import warnings
 from contextlib import (
     ExitStack,
     contextmanager,
-    redirect_stderr,
     redirect_stdout)
-
 from datetime import datetime
 
 from rich.console import Console, Group
@@ -317,7 +315,6 @@ class TerminalUI(io.TextIOBase):
                                                   daemon=True)
             self._input_worker.start()
             self._stack.enter_context(redirect_stdout(self))
-            self._stack.enter_context(redirect_stderr(self))
             self._worker = threading.Thread(target=self._poll_media,
                                             daemon=True)
             self._worker.start()

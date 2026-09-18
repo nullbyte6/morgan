@@ -6,6 +6,7 @@ import re
 import sys
 import threading
 import warnings
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 import numpy as np
@@ -15,12 +16,9 @@ from transformers.utils import logging as transformers_logging
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
-logging.getLogger("root").setLevel(logging.WARNING)
 logging.getLogger("cosyvoice").setLevel(logging.ERROR)
 logging.getLogger("transformers").setLevel(logging.ERROR)
 logging.getLogger("onnxruntime").setLevel(logging.ERROR)
-
-transformers_logging.set_verbosity_error()
 transformers_logging.set_verbosity_error()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -104,6 +102,10 @@ class VoiceService:
         self._loader.start()
 
     @staticmethod
+    def _silence_output():
+        return open(os.devnull, "w", encoding="utf-8")
+
+    @staticmethod
     def _clean_text(text: str) -> str:
         """Remove formatting and symbols that should not be spoken."""
 
@@ -145,23 +147,27 @@ class VoiceService:
             try:
                 self._speak_response(response)
             except Exception as error:
-                print(f"VOICE ERROR: {error}")
+                logging.getLogger(__name__).error(
+                    "VOICE ERROR: %s",
+                    error)
             finally:
                 self._response_queue.task_done()
 
     def _load_model(self) -> None:
         try:
-            self.voice = AutoModel(
-                model_dir=str(self.model_path),
-                fp16=True,
-            )
+            with self._silence_output() as sink:
+                with redirect_stdout(sink), redirect_stderr(sink):
+                    self.voice = AutoModel(
+                        model_dir=str(self.model_path),
+                        fp16=True)
 
-            self.sample_rate = self.voice.sample_rate
-            self.voice.add_zero_shot_spk(
-                self.reference_text,
-                str(self.voice_reference),
-                "arlo",
-            )
+                    self.sample_rate = self.voice.sample_rate
+
+                    self.voice.add_zero_shot_spk(
+                        self.reference_text,
+                        str(self.voice_reference),
+                        "arlo",
+                    )
 
             self._audio_stream = sd.OutputStream(
                 samplerate=self.sample_rate,
