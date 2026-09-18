@@ -15,7 +15,6 @@ from transformers.utils import logging as transformers_logging
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-
 def _silence_tts_loggers():
     prefixes = (
         "cosyvoice",
@@ -31,7 +30,7 @@ def _silence_tts_loggers():
         logger.handlers.clear()
         logger.propagate = False
         logger.disabled = True
-
+        logger.disable(logging.CRITICAL)
 
 transformers_logging.set_verbosity_error()
 
