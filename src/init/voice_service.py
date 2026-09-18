@@ -6,6 +6,7 @@ import sys
 import re
 import threading
 import warnings
+import time
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +16,7 @@ from transformers.utils import logging as transformers_logging
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
+logger = logging.getLogger("arlo.tts")
 
 def _silence_tts_loggers():
     prefixes = (
@@ -117,39 +119,57 @@ class VoiceService:
 
     def enqueue(self, text: str) -> None:
         text = _clean_for_speech(text)
+
         if text:
+            logger.debug("Queued: %s", text)
             self._speech_done.clear()
             self._text_queue.put(text)
 
     def _tts_loop(self) -> None:
-        """Generates audio from text to speech and adds it to the queue"""
+        """TTS and TTS worker thread."""
         while True:
             text = self._text_queue.get()
             try:
                 self.speaking = True
+                logger.debug("Synthesizing: %s", text)
+
                 generator = self.voice.inference_zero_shot(
                     text,
                     "",
                     "",
                     zero_shot_spk_id="arlo",
                     stream=True,
-                    speed=self.speed
-                )
+                    speed=self.speed)
+
+                first_chunk = True
                 for chunk in generator:
                     audio = chunk["tts_speech"]
+
+                    if first_chunk:
+                        logger.debug("First audio chunk ready")
+                        first_chunk = False
+
                     if hasattr(audio, "detach"):
                         audio = audio.detach().cpu().numpy()
+
                     samples = np.asarray(audio, dtype=np.float32).squeeze()
+
                     if samples.size:
                         self._audio_queue.put(samples)
-            except Exception as e:
-                logging.error(f"Error en inferencia de voz: {e}")
+
+            except Exception:
+                logger.exception("TTS inference failed")
+
             finally:
                 self._text_queue.task_done()
 
     def _play_loop(self) -> None:
         frame_size = int(self.sample_rate * 0.04)
         prebuffer_samples = int(self.sample_rate * 0.16)
+
+        ui_interval = 0.10
+        last_ui_update = 0.0
+
         with sd.OutputStream(
                 samplerate=self.sample_rate,
                 channels=1,
@@ -179,8 +199,12 @@ class VoiceService:
                     for start in range(0, len(samples), frame_size):
                         frame = samples[start:start + frame_size]
 
-                        if self.audio_callback is not None:
+                        now = time.monotonic()
+
+                        if (self.audio_callback is not None
+                                and now - last_ui_update >= ui_interval):
                             self.audio_callback(frame, self.sample_rate)
+                            last_ui_update = now
 
                         stream.write(frame)
 

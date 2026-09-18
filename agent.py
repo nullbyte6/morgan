@@ -23,6 +23,7 @@ from src.init.identity import register_assistant
 from src.init.terminal import TerminalUI, interactive_terminal
 from src.init.brain import VOICE_MODEL, VOICE_REFERENCE, VOICE_REFERENCE_TEXT
 from src.init.voice_service import VoiceService
+from src.init.console import DebugConsole
 
 if __name__ == "__main__":
     sys.modules["agent"] = sys.modules[__name__]
@@ -36,6 +37,7 @@ class Assistant:
     terminal_ui: TerminalUI
     _instance = None
     _instance_lock = threading.Lock()
+    debug_console = None
 
     def __new__(cls):
         with cls._instance_lock:
@@ -44,6 +46,7 @@ class Assistant:
                 instance.terminal_ui = None
                 instance.agent = None
                 instance.voice = None
+                instance.debug_console = None
                 instance.username = getuser().capitalize()
                 instance.typewriter_delay_seconds = float(
                     os.environ.get("TYPEWRITER_DELAY", "0"))
@@ -76,7 +79,6 @@ class Assistant:
         from pydantic_ai.models.ollama import OllamaModel
         from pydantic_ai.providers.ollama import OllamaProvider
 
-        logging.getLogger().setLevel(logging.WARNING)
         for logger_name in (
                 "httpx",
                 "httpcore",
@@ -271,7 +273,7 @@ class Assistant:
     def printlns(self, content: str) -> None:
         if self.terminal_ui is not None:
             with self.terminal_ui.suspend():
-                print(content)
+                self.debug_console.print_to_ui(content)
         else:
             print(content)
 
@@ -380,6 +382,11 @@ class Assistant:
             user_input = self.read_user_input(prompt, placeholder=greeting)
             greeting = ""
 
+            logging.getLogger("arlo.user").info(
+                "%s: %s",
+                self.username,
+                user_input)
+
             privacy_result = session.handle_command(user_input)
 
             if privacy_result is not None:
@@ -434,6 +441,9 @@ class Assistant:
                 self.terminal_ui.set_thinking(True)
 
             try:
+                logging.getLogger("arlo.llm").debug(
+                    "Processing request"
+                )
                 with self.agent.run_stream_sync(
                         user_input,
                         message_history=history,
@@ -449,6 +459,10 @@ class Assistant:
 
                     if reply:
                         session.write(self.name, reply)
+                        logging.getLogger("arlo.response").info(
+                            "%s: %s",
+                            self.name,
+                            reply)
 
                     self.voice.wait_until_done()
 
@@ -467,13 +481,22 @@ class Assistant:
 
     def run(self):
         try:
+            self.debug_console = DebugConsole()
+            self.debug_console.start()
+            self.debug_console.configure_logging()
+
+            logging.getLogger("arlo").info("Arlo is awake")
+
             if interactive_terminal():
                 with TerminalUI() as ui:
                     self.terminal_ui = ui
                     ui.set_banner(self.banner)
+                    self.debug_console.redirect_streams()
+
                     try:
                         self.run_session()
                     finally:
+                        self.debug_console.restore_streams()
                         self.terminal_ui = None
             else:
                 self._initialize_runtime()

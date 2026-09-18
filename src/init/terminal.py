@@ -157,7 +157,7 @@ class TerminalUI:
         style = RICH_FOREGROUND_COLOR
         activity = max(levels, default=0.0)
         if activity < 0.08:
-            idle = "─" * 31
+            idle = " " * 31
 
             return Group(
                 Align.center(Text(""), width=width),
