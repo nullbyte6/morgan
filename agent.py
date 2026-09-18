@@ -336,8 +336,6 @@ class Assistant:
 
         if self.terminal_ui is not None:
             self.terminal_ui.set_version(version)
-        else:
-            self.stream(version)
 
         greeting = self.startup_greeting
 
@@ -353,7 +351,6 @@ class Assistant:
             privacy_result = session.handle_command(user_input)
 
             if privacy_result is not None:
-                self.stream(privacy_result)
                 continue
 
             if user_input.strip().casefold() not in VOICE_COMMANDS:
@@ -363,19 +360,16 @@ class Assistant:
                 break
 
             if user_input.strip().lower() in ("ref", "reload"):
-                self.stream([refresh()], session=session)
                 continue
 
             directory_result = self.directory_cmd(user_input)
             if directory_result is not None:
-                self.stream(directory_result)
                 session.write(self.name, directory_result)
                 continue
 
             git_result = self.git_cmd(user_input)
 
             if git_result is not None:
-                self.stream(f"{ASSISTANT_COLOR}{git_result}{RESET_COLOR}")
                 session.write(self.name, git_result)
                 history.extend([
                     ModelRequest(parts=[UserPromptPart(user_input)]),
@@ -395,7 +389,6 @@ class Assistant:
                 try:
                     user_input = capture_voice_input()
                 except Exception as error:
-                    self.stream(f"VOICE ERROR: {error}")
                     session.write("System", str(error))
                     continue
                 if not user_input:
@@ -409,47 +402,32 @@ class Assistant:
                 self.terminal_ui.set_thinking(True)
 
             try:
-                with self.agent.run_stream_sync(
-                        user_input,
-                        message_history=history,
-                        model_settings={
-                            "temperature": brain.load_config()["temperature"]
-                        }) as result:
+                result = self.agent.run_sync(
+                    user_input,
+                    message_history=history,
+                    model_settings={"temperature": brain.load_config()["temperature"]})
 
-                    if self.terminal_ui is not None:
-                        self.terminal_ui.set_thinking(False)
+                reply = result.output
+                if self.terminal_ui is not None:
+                    self.terminal_ui.set_thinking(False)
 
-                    reply = self.speak(
-                        result.stream_text(
-                            delta=True,
-                            debounce_by=None))
+                if reply:
+                    session.write(self.name, reply)
+                    self.voice.enqueue(reply)
 
-                    if reply:
-                        session.write(self.name, reply)
+                self.voice.wait_until_done()
 
-                    self.voice.wait_until_done()
-                    if self.terminal_ui is not None:
-                        self.terminal_ui.clear_audio_levels()
-                    history = result.all_messages()
-                    for message in history:
-                        if isinstance(message, ModelResponse):
-                            for part in message.parts:
-                                if isinstance(part, TextPart):
-                                    part.content = "".join(
-                                        chunks_group([part.content])
-                                    )
+                if self.terminal_ui is not None:
+                    self.terminal_ui.clear_audio_levels()
 
-                    refresh_model_keep_alive()
+                history = result.all_messages()
 
             except Exception as error:
                 if self.terminal_ui is not None:
                     self.terminal_ui.set_thinking(False)
-
-                self.stream(f"ERROR: {error}")
                 cause = error.__cause__
                 if cause is not None:
-                    self.stream(f"Detail: {cause}")
-                session.write("System", f"{error}; Detail: {cause}"
+                    session.write("System", f"{error}; Detail: {cause}"
                 if cause is not None else str(error))
 
     def run(self):
