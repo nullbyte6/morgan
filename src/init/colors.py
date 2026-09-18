@@ -1,0 +1,5 @@
+from colorama import Fore, Style
+
+USER_COLOR = Fore.GREEN
+ASSISTANT_COLOR = Fore.LIGHTBLACK_EX
+RESET_COLOR = Style.RESET_ALL
