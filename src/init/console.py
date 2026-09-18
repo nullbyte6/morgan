@@ -53,29 +53,39 @@ class DebugConsole:
 
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.log_path = log_dir / f"{timestamp}.log"
+        self.console_script = log_dir / f"{timestamp}-console.ps1"
         self.original_stdout = sys.stdout
         self.original_stderr = sys.stderr
 
     def start(self):
         self.log_path.touch()
-
-        ps_command = (
-            f"$Host.UI.RawUI.WindowTitle = 'ARLO Console'; "
-            f"Get-Content -Path '{self.log_path}' -Wait"
-        )
-
-        cmd = (
-            'start "" wt.exe -w new new-tab '
-            '--title "ARLO Console" '
-            '--suppressApplicationTitle '
-            'pwsh.exe -NoLogo -NoProfile -Command '
-            f'"{ps_command}"'
-        )
+        self.console_script.write_text(("$Host.UI.RawUI.WindowTitle = 'ARLO Console'\n"
+                f"Get-Content -Path '{self.log_path}' -Wait\n"),encoding="utf-8")
 
         subprocess.Popen(
-            ["sudo", "cmd.exe", "/c", cmd],
+            [
+                "sudo",
+                "cmd.exe",
+                "/c",
+                "start",
+                "",
+                "wt.exe",
+                "-w",
+                "new",
+                "new-tab",
+                "--title",
+                "ARLO Console",
+                "--suppressApplicationTitle",
+                "pwsh.exe",
+                "-NoLogo",
+                "-NoProfile",
+                "-NoExit",
+                "-File",
+                str(self.console_script),
+            ],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL)
+            stderr=subprocess.DEVNULL,
+        )
 
     def configure_logging(self):
         handler = logging.FileHandler(
