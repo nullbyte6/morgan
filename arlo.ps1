@@ -18,16 +18,12 @@ Set-Location -LiteralPath '$root'
 & '$python' '$agent'
 "@
 
-Start-Process `
-    -FilePath "wt.exe" `
-    -ArgumentList @(
-        "-w", "new",
-        "new-tab",
-        "--title", "Arlo",
-        "pwsh.exe",
-        "-NoLogo",
-        "-NoProfile",
-        "-NoExit",
-        "-Command",
-        $command
-    )
+& wt.exe `
+    -w new `
+    new-tab `
+    --title "Arlo" `
+    pwsh.exe `
+    -NoLogo `
+    -NoProfile `
+    -NoExit `
+    -Command $command
