@@ -82,8 +82,7 @@ class Assistant:
                 "httpcore",
                 "httpcore2",
                 "openai",
-                "pydantic_ai",
-        ):
+                "pydantic_ai"):
             logger = logging.getLogger(logger_name)
             logger.setLevel(logging.CRITICAL)
             logger.propagate = False
@@ -128,20 +127,22 @@ class Assistant:
         from src.init.colors import ASSISTANT_COLOR, RESET_COLOR
 
         displayed = []
-
         if self.terminal_ui is not None:
             response_prefix = self.terminal_ui.output_snapshot()
+            last_update_time = 0.0
+
             for chunk in ([chunks] if isinstance(chunks, str) else chunks):
                 displayed.append(chunk)
+                now = time.time()
 
-                rendered = "".join(
-                    chunks_group(["".join(displayed)],
-                        color=True))
+                if now - last_update_time > 0.035:
+                    rendered = "".join(
+                        chunks_group(["".join(displayed)], color=True))
+                    self.terminal_ui.update_response(response_prefix, rendered)
+                    last_update_time = now
 
-                self.terminal_ui.update_response(
-                    response_prefix,
-                    rendered)
-
+            rendered = "".join(chunks_group(["".join(displayed)], color=True))
+            self.terminal_ui.update_response(response_prefix, rendered)
             self.terminal_ui.write("\n")
 
         else:
@@ -170,14 +171,22 @@ class Assistant:
         return reply
 
     def speak(self, chunks):
-        response = []
+        buffer = ""
         for chunk in chunks:
-            response.append(chunk)
             yield chunk
+            buffer += chunk
+            while True:
+                match = re.search(r"(?<=[.!?\n])\s+", buffer)
+                if match is None:
+                    break
 
-        text = "".join(response)
-        if text.strip():
-            self.voice.speak(text)
+                sentence = buffer[:match.end()].strip()
+                buffer = buffer[match.end():]
+                if sentence:
+                    self.voice.enqueue(sentence)
+
+        if buffer.strip():
+            self.voice.enqueue(buffer.strip())
 
     def directory_cmd(self, command: str) -> str | None:
         """Handle standalone cd/chdir commands without a model or shell call."""

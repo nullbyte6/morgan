@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
-import re
+import queue
 import sys
+import threading
 import warnings
 from pathlib import Path
 
@@ -67,98 +68,69 @@ class VoiceService:
     text generation.
     """
 
-    def __init__(self, model_path: str | Path,
-                 voice_reference: str | Path, reference_text: str,
-                 speed: float = 1.0):
+    def __init__(self, model_path, voice_reference, reference_text, speed=1.0):
         self.model_path = Path(model_path)
         self.voice_reference = Path(voice_reference)
         reference_text = reference_text.strip()
         if "<|endofprompt|>" not in reference_text:
-            reference_text = ("You are a helpful assistant.<|endofprompt|>" +
-                              reference_text)
+            reference_text = "You are a helpful assistant.<|endofprompt|>" + reference_text
 
         self.reference_text = reference_text
         self.speed = speed
 
-        if not self.model_path.exists():
-            raise FileNotFoundError(
-                f"CosyVoice model not found: {self.model_path}"
-            )
-
-        if not self.voice_reference.exists():
-            raise FileNotFoundError(
-                f"Voice reference not found: {self.voice_reference}"
-            )
-
-        self.speaking = False
         self.voice = AutoModel(model_dir=str(self.model_path), fp16=True)
         self.sample_rate = self.voice.sample_rate
-        self.voice.add_zero_shot_spk(self.reference_text,
-                                     str(self.voice_reference), "arlo")
+        self.voice.add_zero_shot_spk(self.reference_text, str(self.voice_reference), "arlo")
 
-    @property
-    def error(self):
-        return self._tts_error or self._load_error
+        self._text_queue = queue.Queue()
+        self._audio_queue = queue.Queue()
 
-    @staticmethod
-    def _clean_text(text: str) -> str:
-        """Remove formatting and symbols that should not be spoken."""
-        text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
-        text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
-        text = re.sub(r"\*(.*?)\*", r"\1", text)
-        text = re.sub(r"__(.*?)__", r"\1", text)
-        text = re.sub(r"_(.*?)_", r"\1", text)
-        text = re.sub(r"`([^`]+)`", r"\1", text)
-        text = re.sub(r"https?://\S+", "", text)
+        self.speaking = False
 
-        text = re.sub(
-            "["
-            "\U0001F1E0-\U0001F1FF"
-            "\U0001F300-\U0001F5FF"
-            "\U0001F600-\U0001F64F"
-            "\U0001F680-\U0001F6FF"
-            "\U0001F700-\U0001F77F"
-            "\U0001F780-\U0001F7FF"
-            "\U0001F800-\U0001F8FF"
-            "\U0001F900-\U0001F9FF"
-            "\U0001FA00-\U0001FAFF"
-            "\U00002600-\U000026FF"
-            "\U00002700-\U000027BF"
-            "\U0000FE0F"
-            "\U0000200D"
-            "]+",
-            "",
-            text,
-        )
+        self._tts_worker = threading.Thread(target=self._tts_loop, daemon=True)
+        self._tts_worker.start()
 
-        text = re.sub(r"\s+", " ", text)
-        return text.strip()
+        self._player_worker = threading.Thread(target=self._play_loop, daemon=True)
+        self._player_worker.start()
 
-    def speak(self, text: str) -> None:
-        text = self._clean_text(text)
-        if not text:
-            return
+    def enqueue(self, text: str) -> None:
+        if text:
+            self._text_queue.put(text)
 
-        self.speaking = True
-        try:
-            generator = self.voice.inference_zero_shot(
-                text,
-                self.reference_text,
-                str(self.voice_reference),
-                zero_shot_spk_id="arlo",
-                stream=True,
-                speed=self.speed)
+    def _tts_loop(self) -> None:
+        """Generates audio from text to speech and adds it to the queue"""
+        while True:
+            text = self._text_queue.get()
+            try:
+                self.speaking = True
+                generator = self.voice.inference_zero_shot(
+                    text,
+                    self.reference_text,
+                    str(self.voice_reference),
+                    zero_shot_spk_id="arlo",
+                    stream=True,
+                    speed=self.speed
+                )
+                for chunk in generator:
+                    audio = chunk["tts_speech"]
+                    if hasattr(audio, "detach"):
+                        audio = audio.detach().cpu().numpy()
+                    samples = np.asarray(audio, dtype=np.float32).squeeze()
+                    if samples.size:
+                        self._audio_queue.put(samples)
+            except Exception as e:
+                logging.error(f"Error en inferencia de voz: {e}")
+            finally:
+                self._text_queue.task_done()
+                if self._text_queue.empty():
+                    self.speaking = False
 
-            for chunk in generator:
-                audio = chunk["tts_speech"]
-
-                if hasattr(audio, "detach"):
-                    audio = audio.detach().cpu().numpy()
-
-                samples = np.asarray(audio, dtype=np.float32).squeeze()
-
-                if samples.size:
-                    sd.play(samples, samplerate=self.sample_rate)
-                    sd.wait()
-        finally:
-            self.speaking = False
+    def _play_loop(self) -> None:
+        """Opens continous stream and plays audio until stopped"""
+        with sd.OutputStream(samplerate=self.sample_rate, channels=1, dtype='float32') as stream:
+            while True:
+                samples = self._audio_queue.get()
+                try:
+                    stream.write(samples)
+                finally:
+                    self._audio_queue.task_done()

@@ -16,7 +16,6 @@ from rich.console import Console, Group
 from rich.live import Live
 from rich.text import Text
 
-from src.init import colors
 from src.init.console_input import ConsoleInput
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
