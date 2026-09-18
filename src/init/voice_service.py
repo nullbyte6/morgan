@@ -15,16 +15,23 @@ from transformers.utils import logging as transformers_logging
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
+
 for logger_name in (
+    "asyncio",
+    "cosyvoice",
     "httpx",
     "httpcore",
-    "urllib3",
-    "requests",
-    "asyncio",
+    "modelscope",
     "onnxruntime",
+    "requests",
     "transformers",
-    "cosyvoice"):
-    logging.getLogger(logger_name).setLevel(logging.CRITICAL)
+    "ttsfrd",
+    "urllib3",
+    "wetext"):
+    logger = logging.getLogger(logger_name)
+    logger.handlers.clear()
+    logger.propagate = False
+    logger.disabled = True
 
 transformers_logging.set_verbosity_error()
 
@@ -42,14 +49,16 @@ torch.backends.cuda.enable_flash_sdp(False)
 torch.backends.cuda.enable_mem_efficient_sdp(False)
 torch.backends.cuda.enable_math_sdp(True)
 
-import cosyvoice.cli.cosyvoice as cosyvoice_module
+import tqdm
+_original_tqdm = tqdm.tqdm
+
+def _quiet_tqdm(*args, **kwargs):
+    kwargs["disable"] = True
+    return _original_tqdm(*args, **kwargs)
+
+tqdm.tqdm = _quiet_tqdm
+
 from cosyvoice.cli.cosyvoice import AutoModel
-
-def _silent_tqdm(iterable, *args, **kwargs):
-    return iterable
-
-cosyvoice_module.tqdm = _silent_tqdm
-
 import shutil
 
 if shutil.which("ffmpeg") is None:
@@ -147,7 +156,6 @@ class VoiceService:
         try:
             self._wait_until_ready()
         except Exception:
-            logging.exception("VOICE MODEL LOAD FAILED")
             return
 
         while True:
@@ -155,7 +163,7 @@ class VoiceService:
             try:
                 self._speak_response(response)
             except Exception:
-                logging.exception("VOICE SYNTHESIS FAILED")
+                pass
             finally:
                 self._response_queue.task_done()
 
@@ -182,7 +190,6 @@ class VoiceService:
 
         except Exception as error:
             self._load_error = error
-            logging.exception("CosyVoice initialization failed")
 
         finally:
             self._ready.set()

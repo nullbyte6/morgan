@@ -77,6 +77,8 @@ class TerminalUI(io.TextIOBase):
         self._live = None
         self._suspended = False
         self._thinking = False
+        self._devnull = open(os.devnull, "w", encoding="utf-8")
+        self._stack.callback(self._devnull.close)
 
     def set_thinking(self, thinking: bool) -> None:
         with self._lock:
@@ -315,20 +317,8 @@ class TerminalUI(io.TextIOBase):
             return value
 
     def __enter__(self):
-        class TerminalUIHandler(logging.Handler):
-            def __init__(self, ui):
-                super().__init__()
-                self.ui = ui
-
-            def emit(self, record):
-                try:
-                    msg = self.format(record)
-                    self.ui.write(msg + "\n")
-                except Exception:
-                    self.handleError(record)
-
-        root_logger = logging.getLogger()
-        root_logger.handlers = [TerminalUIHandler(self)]
+        self._devnull = open(os.devnull, "w", encoding="utf-8")
+        self._stack.callback(self._devnull.close)
 
         self._live = Live(
             console=self.console,
@@ -344,8 +334,10 @@ class TerminalUI(io.TextIOBase):
             self._console_input = ConsoleInput()
             self._stack.callback(self._console_input.close)
             self._stack.enter_context(self._live)
+
             self._stack.enter_context(redirect_stdout(self))
-            self._stack.enter_context(redirect_stderr(self))
+            self._stack.enter_context(redirect_stderr(self._devnull))
+
             self._input_worker = threading.Thread(target=self._poll_input,
                                                   daemon=True)
             self._input_worker.start()

@@ -67,6 +67,23 @@ class Assistant:
         from pydantic_ai import Agent, Tool
         from pydantic_ai.models.ollama import OllamaModel
         from pydantic_ai.providers.ollama import OllamaProvider
+
+        import logging
+        import warnings
+
+        warnings.filterwarnings("ignore", message=r".*triton not found.*")
+        logging.getLogger().setLevel(logging.WARNING)
+        for logger_name in (
+                "httpx",
+                "httpcore",
+                "httpcore2",
+                "openai",
+                "pydantic_ai",
+        ):
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.CRITICAL)
+            logger.propagate = False
+
         from src.init.brain import MODEL_NAME
         from src.init.tools import TOOLS
 
