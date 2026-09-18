@@ -59,20 +59,23 @@ class DebugConsole:
     def start(self):
         self.log_path.touch()
 
-        command = (
+        ps_command = (
             f"$Host.UI.RawUI.WindowTitle = 'ARLO Console'; "
-            f"Get-Content -Path '{self.log_path}' -Wait")
+            f"Get-Content -Path '{self.log_path}' -Wait"
+        )
+
+        cmd = (
+            'start "" wt.exe -w new new-tab '
+            '--title "ARLO Console" '
+            '--suppressApplicationTitle '
+            'pwsh.exe -NoLogo -NoProfile -Command '
+            f'"{ps_command}"'
+        )
 
         subprocess.Popen(
-            [
-                "pwsh.exe",
-                "-NoLogo",
-                "-NoProfile",
-                "-Command",
-                command,
-            ],
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
+            ["sudo", "cmd.exe", "/c", cmd],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
 
     def configure_logging(self):
         handler = logging.FileHandler(
