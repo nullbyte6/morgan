@@ -19,10 +19,13 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import (
     BufferControl,
     ConditionalContainer,
+    Dimension,
     FormattedTextControl,
     HSplit,
     Layout,
-    Window)
+    VSplit,
+    Window,
+)
 
 from prompt_toolkit.styles import Style
 
@@ -139,20 +142,22 @@ class TerminalUI:
             "%a %d/%m/%Y · %H:%M:%S"
         )
 
+    def _banner_text(self):
+        with self._lock:
+            banner = self._banner
+        if not banner:
+            return ""
+
+        return FormattedText([
+            ("class:banner", banner)
+        ])
+
     def _body(self):
         with self._lock:
             output = self._output
-            banner = self._banner
-
-        if output:
-            return ANSI(output)
-
-        if banner:
-            return FormattedText([
-                ("class:banner", banner)
-            ])
-
-        return ""
+        if not output:
+            return ""
+        return ANSI(output)
 
     def _thinking_text(self):
         if self._thinking:
@@ -166,17 +171,14 @@ class TerminalUI:
         with self._lock:
             prompt = self._prompt
             placeholder = self._placeholder
-            empty = not self._buffer.text
 
-        if empty and placeholder:
+        if not self._buffer.text and placeholder:
             return FormattedText([
                 ("", prompt),
                 ("class:placeholder", placeholder),
             ])
 
-        return FormattedText([
-            ("", prompt)
-        ])
+        return FormattedText([("", prompt)])
 
     def _meter(self):
         with self._lock:
@@ -198,41 +200,67 @@ class TerminalUI:
         )
 
     def _create_application(self):
+        header = Window(content=FormattedTextControl(
+                text=self._header),
+            height=1, align="RIGHT",)
+
+        banner = Window(
+            content=FormattedTextControl(
+                text=self._banner_text),
+            height=Dimension(
+                min=4,
+                preferred=4,
+                max=4),
+            align="CENTER",
+            dont_extend_height=True)
+
+        upper_spacer = Window()
+        lower_spacer = Window()
+
         body = Window(
             content=FormattedTextControl(
                 text=self._body,
-                focusable=False),
+                focusable=False,
+            ),
             wrap_lines=True,
-            always_hide_cursor=True)
+            always_hide_cursor=True,
+            dont_extend_height=True,
+            height=Dimension(
+                min=0,
+                preferred=1))
 
         thinking = ConditionalContainer(
             content=Window(
-                FormattedTextControl(
+                content=FormattedTextControl(
                     text=self._thinking_text), height=1),
-            filter=Condition(
-                lambda: self._thinking))
+            filter=Condition(lambda: self._thinking))
 
-        prompt = Window(
+        prompt_control = Window(
             content=FormattedTextControl(
                 text=self._prompt_text),
-            height=1)
+            width=lambda: len(
+                ANSI_RE.sub("", self._prompt)) + (
+                              len(self._placeholder)
+                              if not self._buffer.text
+                              else 0), height=1, dont_extend_width=True)
 
         input_window = Window(
             content=BufferControl(
-                buffer=self._buffer),
-            height=1)
+                buffer=self._buffer,
+                focusable=True,
+            ), height=1, style="class:user-input")
+
+        input_row = VSplit([
+            prompt_control,
+            input_window,
+        ])
 
         meter = Window(
             content=FormattedTextControl(
                 text=self._meter),
             height=1,
+            align="RIGHT",
             dont_extend_height=True)
-
-        header = Window(
-            content=FormattedTextControl(
-                text=self._header),
-            height=1,
-            align="RIGHT")
 
         footer = Window(
             content=FormattedTextControl(
@@ -241,10 +269,12 @@ class TerminalUI:
 
         root = HSplit([
             header,
+            upper_spacer,
+            banner,
+            lower_spacer,
             body,
             thinking,
-            prompt,
-            input_window,
+            input_row,
             meter,
             footer,
         ])
@@ -252,14 +282,16 @@ class TerminalUI:
         self.application = Application(
             layout=Layout(
                 root,
-                focused_element=input_window),
+                focused_element=input_window,
+            ),
             key_bindings=self._bindings,
             full_screen=True,
             mouse_support=False,
             style=Style.from_dict({
-                "banner": "fg:#ffffff",
+                "banner": "fg:#ffffff bold",
                 "placeholder": "italic fg:#666666",
                 "dim": "fg:#666666",
+                "user-input": "fg:#00aa00",
             }), refresh_interval=1.0)
 
     def write(self, value):
