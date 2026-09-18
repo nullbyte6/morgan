@@ -7,7 +7,6 @@ import shutil
 import sys
 import threading
 import time
-import warnings
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -22,6 +21,7 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 RICH_FOREGROUND_COLOR = "white"
 RICH_DIM_COLOR = "bright_black"
 RICH_USER_COLOR = "green"
+
 
 async def media_is_playing():
     from winrt.windows.media.control import (
@@ -98,6 +98,13 @@ class TerminalUI:
             except Exception:
                 pass
 
+    def clear_conversation(self):
+        with self._lock:
+            self._output = ""
+            self._scroll_offset = 0
+            self._follow_output = True
+        self._refresh()
+
     @staticmethod
     def _visible_length(value):
         return len(ANSI_RE.sub("", value))
@@ -152,22 +159,13 @@ class TerminalUI:
 
     def _meter_renderable(self, width):
         with self._lock:
-            audio_error = self._audio_error
             levels = self._levels if time.monotonic() - self._levels_at < 0.5 else (0.0,) * 7
 
-        if audio_error:
-            value = Text("audio !", style=RICH_DIM_COLOR)
-        elif any(level >= 0.0625 for level in levels):
-            value = Text("".join(" ▁▂▃▄▅▆▇█"[round(level * 8)] for level in levels),
-                style=RICH_FOREGROUND_COLOR)
-        else:
-            value = Text("")
+        value = Text("".join(" ▁▂▃▄▅▆▇█"[round(level * 8)] for level in levels)
+                     if any(level >= 0.0625 for level in levels) else "",
+                     style=RICH_FOREGROUND_COLOR)
 
-        return Align.right(value, width=width)
-
-    def _footer(self, width):
-        return Align.right(Text("↑/↓ · PgUp/PgDn", style=RICH_FOREGROUND_COLOR),
-                           width=width)
+        return Align.center(value, width=width)
 
     def _output_lines(self, width):
         with self._lock:
@@ -230,6 +228,7 @@ class TerminalUI:
                 body.append(Text())
 
             body.append(self._banner_renderable())
+            body.append(self._meter_renderable(width))
 
             for _ in range(bottom):
                 body.append(Text())
@@ -250,9 +249,6 @@ class TerminalUI:
 
         if has_prompt:
             renderables.append(self._input_renderable())
-
-        renderables.append(self._meter_renderable(width))
-        renderables.append(self._footer(width))
 
         return Group(*renderables)
 
@@ -299,27 +295,6 @@ class TerminalUI:
 
         self._refresh()
 
-    def _scroll(self, amount):
-        terminal = shutil.get_terminal_size((120, 30))
-        page = max(1, terminal.lines - 6)
-
-        with self._lock:
-            lines = self._output_lines(max(20, terminal.columns))
-            maximum = max(0, len(lines) - 1)
-
-            if amount == "page_up":
-                self._scroll_offset = min(maximum, self._scroll_offset + page)
-            elif amount == "page_down":
-                self._scroll_offset = max(0, self._scroll_offset - page)
-            elif amount > 0:
-                self._scroll_offset = min(maximum, self._scroll_offset + amount)
-            else:
-                self._scroll_offset = max(0, self._scroll_offset + amount)
-
-            self._follow_output = self._scroll_offset == 0
-
-        self._refresh()
-
     def _handle_key(self, key):
         with self._lock:
             if key in ("\r", "\n"):
@@ -339,7 +314,8 @@ class TerminalUI:
 
             if key == "\x08":
                 if self._cursor:
-                    self._input = self._input[:self._cursor - 1] + self._input[self._cursor:]
+                    self._input = self._input[:self._cursor - 1] + self._input[
+                        self._cursor:]
                     self._cursor -= 1
 
             elif key == "\xe0K":
@@ -356,30 +332,15 @@ class TerminalUI:
 
             elif key == "\xe0S":
                 if self._cursor < len(self._input):
-                    self._input = self._input[:self._cursor] + self._input[self._cursor + 1:]
+                    self._input = self._input[:self._cursor] + self._input[
+                        self._cursor + 1:]
 
             elif key >= " " and key != "\x7f":
-                self._input = self._input[:self._cursor] + key + self._input[self._cursor:]
+                self._input = self._input[:self._cursor] + key + self._input[
+                    self._cursor:]
                 self._cursor += len(key)
 
         self._refresh()
-
-    def _poll_input(self):
-        while not self._stop.is_set():
-            try:
-                events = self.console_input.poll()
-
-                for event_type, value in events:
-                    if event_type == "scroll":
-                        self._scroll(value)
-                    elif event_type == "key":
-                        self._handle_key(value)
-
-            except Exception:
-                if not self._stop.is_set():
-                    time.sleep(0.05)
-
-            self._stop.wait(0.01)
 
     def read_input(self, prompt, placeholder=""):
         with self._lock:
@@ -407,76 +368,28 @@ class TerminalUI:
         if result == "" and self._stop.is_set():
             raise EOFError
 
-        self.write(f"\x1b[0m{prompt}\x1b[32m{result}\x1b[0m\n")
         return result
 
-    def _poll_audio(self):
-        try:
-            import soundcard as sc
-        except ImportError as error:
-            self._audio_error = str(error)
-            self._refresh()
-            return
+    def update_audio_levels(self, samples, sample_rate):
+        levels = spectrum_levels(samples, sample_rate)
+        with self._lock:
+            self._levels = tuple(max(float(new), old * 0.8) for new, old in
+                                 zip(levels, self._levels))
+            self._levels_at = time.monotonic()
+            self._audio_error = None
+        self._refresh()
 
-        while not self._stop.is_set():
-            try:
-                speaker = sc.default_speaker()
-
-                if speaker is None:
-                    self._stop.wait(1)
-                    continue
-
-                loopback = sc.get_microphone(id=speaker.id, include_loopback=True)
-
-                if not loopback.isloopback:
-                    self._stop.wait(1)
-                    continue
-
-                with loopback.recorder(samplerate=44100, blocksize=8192) as recorder:
-                    next_device_check = time.monotonic() + 2
-
-                    while not self._stop.is_set():
-                        with warnings.catch_warnings():
-                            warnings.filterwarnings("ignore",
-                                message=r"^data discontinuity in recording$",
-                                category=Warning,
-                                module=r"soundcard\.mediafoundation")
-                            audio = recorder.record(numframes=4096)
-
-                        levels = spectrum_levels(audio)
-
-                        with self._lock:
-                            self._audio_error = None
-                            self._levels = tuple(max(float(new), old * 0.8)
-                                                 for new, old in zip(levels, self._levels))
-                            self._levels_at = time.monotonic()
-
-                        self._refresh()
-
-                        if time.monotonic() >= next_device_check:
-                            current = sc.default_speaker()
-
-                            if current is None or current.id != speaker.id:
-                                break
-
-                            next_device_check = time.monotonic() + 2
-
-            except Exception as error:
-                with self._lock:
-                    self._audio_error = str(error)
-
-                self._refresh()
-                self._stop.wait(1)
-
-            finally:
-                with self._lock:
-                    self._levels = (0.0,) * 7
+    def clear_audio_levels(self):
+        with self._lock:
+            self._levels = (0.0,) * 7
+        self._refresh()
 
     def _poll_media(self):
         async def poll():
             while not self._stop.is_set():
                 try:
-                    playing = await asyncio.wait_for(media_is_playing(), timeout=2)
+                    playing = await asyncio.wait_for(media_is_playing(),
+                                                     timeout=2)
                 except Exception:
                     playing = False
 
@@ -504,13 +417,13 @@ class TerminalUI:
 
         self.live.start(refresh=True)
 
-        self._input_worker = threading.Thread(target=self._poll_input, daemon=True)
-        self._media_worker = threading.Thread(target=self._poll_media, daemon=True)
-        self._audio_worker = threading.Thread(target=self._poll_audio, daemon=True)
+        self._input_worker = threading.Thread(target=self._poll_input,
+                                              daemon=True)
+        self._media_worker = threading.Thread(target=self._poll_media,
+                                              daemon=True)
 
         self._input_worker.start()
         self._media_worker.start()
-        self._audio_worker.start()
 
         return self
 
