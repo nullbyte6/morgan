@@ -52,7 +52,7 @@ class SessionLog:
         if directory is None:
             ensure_storage()
         self.directory = (Path(directory) if directory is not None
-                          else HOME_PATH / ".log").resolve()
+                          else HOME_PATH / ".arlo" / "log").resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
         self._start_day(datetime.now().astimezone())
 
