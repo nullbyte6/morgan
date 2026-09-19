@@ -80,18 +80,6 @@ class ArloWindow(QMainWindow):
         self.build_worker()
         self.set_status("Conectando con Arlo...")
 
-        self.scroll = None
-        self.messages = None
-        self.hero = None
-        self.messages_layout = None
-        self.greeting = None
-        self.status = None
-        self.meter = None
-        self.input = None
-        self.send = None
-        self.worker, self.thread = None, None
-
-
     def build_ui(self):
         root = QWidget()
         root.setObjectName("root")
