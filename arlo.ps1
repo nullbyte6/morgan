@@ -26,7 +26,24 @@ if (-not $Run) {
     exit
 }
 
+
 $Host.UI.RawUI.WindowTitle = "ARLO"
 $env:PYTHONPATH = "$root\src;$root\src\third_party\Matcha-TTS"
+$env:ARLO_EXTERNAL_CONSOLE = "1"
 Set-Location -LiteralPath $root
+$client = [System.Net.Sockets.TcpClient]::new()
+
+try {
+    $client.Connect("127.0.0.1", 18765)
+}
+catch {
+    Write-Host ""
+    Write-Host "ARLO services are not running." -ForegroundColor Red
+    Write-Host "Run arlo-services.ps1 first."
+    return
+}
+finally {
+    $client.Dispose()
+}
+
 & $python $agent

@@ -150,6 +150,81 @@ ensure_ollama_server() {
     fail "Ollama did not respond within 30 seconds. Check ${log_file}."
 }
 
+
+configure_arlo_environment() {
+    local repo_windows
+    repo_windows="$(to_windows_path "$SCRIPT_DIR")"
+
+    info "Configuring ARLO_HOME and user PATH..."
+
+    ARLO_INSTALL_ROOT="$repo_windows" \
+        "$POWERSHELL_BIN" -NoProfile -NonInteractive -Command '
+        $ErrorActionPreference = "Stop"
+
+        $root = [System.IO.Path]::GetFullPath(
+            $env:ARLO_INSTALL_ROOT
+        ).TrimEnd([char]92)
+
+        # Persist the repository location for this Windows user.
+        [Environment]::SetEnvironmentVariable(
+            "ARLO_HOME",
+            $root,
+            "User"
+        )
+
+        # Read the persisted user PATH, not the merged process PATH.
+        $userPath = [Environment]::GetEnvironmentVariable(
+            "Path",
+            "User"
+        )
+
+        $entries = @(
+            $userPath -split ";" |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+
+        # Avoid adding the same repository more than once.
+        $alreadyPresent = $false
+
+        foreach ($entry in $entries) {
+            $expanded = [Environment]::ExpandEnvironmentVariables(
+                $entry.Trim().TrimEnd([char]92)
+            )
+
+            if ($expanded -ieq $root) {
+                $alreadyPresent = $true
+                break
+            }
+        }
+
+        if (-not $alreadyPresent) {
+            $entries += "%ARLO_HOME%"
+
+            [Environment]::SetEnvironmentVariable(
+                "Path",
+                ($entries -join ";"),
+                "User"
+            )
+        }
+
+        # Make the values available to child processes of this installer.
+        $env:ARLO_HOME = $root
+
+        if (
+            -not (
+                ($env:Path -split ";") |
+                Where-Object { $_.TrimEnd([char]92) -ieq $root }
+            )
+        ) {
+            $env:Path += ";$root"
+        }
+
+        Write-Host "ARLO_HOME = $root"
+        Write-Host "User PATH configured."
+        ' || fail "Could not configure ARLO_HOME or user PATH."
+}
+
+
 configure_neovim() {
     local nvim_dir="${LOCAL_APP_DATA_UNIX}/nvim"
     local lua_dir="${nvim_dir}/lua/diego"
@@ -363,7 +438,8 @@ snapshot_download(repo_id=os.environ["ARLO_VOICE_MODEL"], local_dir=os.environ["
 
 find_powershell
 [[ -f "${SCRIPT_DIR}/requirements.txt" ]] || fail "${SCRIPT_DIR}/requirements.txt was not found."
-[[ -f "${SCRIPT_DIR}/ARLO.ps1" ]] || fail "${SCRIPT_DIR}/ARLO.ps1 was not found."
+[[ -f "${SCRIPT_DIR}/arlo.ps1" ]] || fail "${SCRIPT_DIR}/arlo.ps1 was not
+found."
 [[ -d "${SCRIPT_DIR}/src" ]] || fail "${SCRIPT_DIR}/src was not found."
 
 readonly LOCAL_APP_DATA_WINDOWS="${LOCALAPPDATA:-$(get_windows_folder LocalApplicationData)}"
@@ -474,7 +550,8 @@ ensure_ollama_server
 info "Downloading/verifying ${ARLO_MODEL} (approximately 9.3 GB)..."
 "$OLLAMA_BIN" pull "$ARLO_MODEL"
 
-readonly ARLO_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/ARLO.ps1")"
+configure_arlo_environment
+readonly ARLO_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/arlo.ps1")"
 
 cleanup_installers
 trap - EXIT

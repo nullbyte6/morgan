@@ -23,7 +23,7 @@ from getpass import getuser
 from src.init.identity import register_assistant
 from src.init.terminal import TerminalUI, interactive_terminal
 from src.init.brain import VOICE_MODEL, VOICE_REFERENCE, VOICE_REFERENCE_TEXT
-from src.init.voice_service import VoiceService
+from src.init.voice_client import VoiceClient
 from src.init.console import DebugConsole
 
 if __name__ == "__main__":
@@ -34,7 +34,7 @@ class Assistant:
     """One shared assistant; reading its identity never
     starts the model or UI."""
     name = "Arlo"
-    voice: VoiceService = None
+    voice: VoiceClient = None
     terminal_ui: TerminalUI
     _instance = None
     _instance_lock = threading.Lock()
@@ -93,17 +93,13 @@ class Assistant:
         from src.init.brain import MODEL_NAME
         from src.init.tools import TOOLS
 
-        self.voice = VoiceService(
-            model_path=VOICE_MODEL,
-            voice_reference=VOICE_REFERENCE,
-            reference_text=VOICE_REFERENCE_TEXT,
-            speed=1.0,
-            audio_callback=self.terminal_ui.update_audio_levels
-            if self.terminal_ui is not None else None)
+        self.voice = VoiceClient(audio_callback=(
+                self.terminal_ui.update_audio_levels
+                if self.terminal_ui is not None
+                else None))
 
         self.MODEL_NAME = MODEL_NAME
         self.model_settings = {
-            "openai_reasoning_effort": "none",
             "temperature": 0.2,
         }
 
@@ -533,6 +529,10 @@ class Assistant:
                         ui.set_banner(self.banner)
                         self.run_session()
                 finally:
+                    if self.voice is not None:
+                        self.voice.close()
+                        self.voice = None
+
                     self.debug_console.restore_streams()
                     self.debug_console.restore_native_streams()
                     self.terminal_ui = None

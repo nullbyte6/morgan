@@ -6,7 +6,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-from datetime import datetime
 from pathlib import Path
 
 
@@ -48,14 +47,15 @@ class LogStream:
         return "utf-8"
 
 
+# noinspection PyBroadException
 class DebugConsole:
     def __init__(self, name: str = "Arlo"):
         log_dir = Path(tempfile.gettempdir()) / "arlo"
         log_dir.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self.log_path = log_dir / f"{timestamp}.log"
-        self.console_script = log_dir / f"{timestamp}-console.ps1"
+        self.log_path = log_dir / "agent.log"
+        self.console_script = log_dir / "console.ps1"
+
         self.original_stdout = sys.stdout
         self.original_stderr = sys.stderr
 
@@ -66,22 +66,21 @@ class DebugConsole:
 
     def start(self):
         self.log_path.touch()
-        self.console_script.write_text(("$Host.UI.RawUI.WindowTitle = 'ARLO Console'\n"
-                f"Get-Content -Path '{self.log_path}' -Wait\n"),encoding="utf-8")
+        if os.environ.get("ARLO_EXTERNAL_CONSOLE") == "1":
+            return
+
+        self.console_script.write_text(
+            "$Host.UI.RawUI.WindowTitle = 'ARLO Console'\n"
+            f"Get-Content -LiteralPath '{self.log_path}' -Tail 30 -Wait\n",
+            encoding="utf-8",
+        )
 
         subprocess.Popen(
             [
-                "sudo",
-                "cmd.exe",
-                "/c",
-                "start",
-                "",
                 "wt.exe",
-                "-w",
-                "new",
+                "-w", "new",
                 "new-tab",
-                "--title",
-                "ARLO Console",
+                "--title", "ARLO Console",
                 "--suppressApplicationTitle",
                 "pwsh.exe",
                 "-NoLogo",
