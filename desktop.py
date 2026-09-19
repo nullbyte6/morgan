@@ -17,16 +17,44 @@ from agent import Assistant
 from src.init.brain import get_version
 
 
+
 class ChatInput(QTextEdit):
     submitted = Signal()
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.min_height = 48
+        self.max_lines = 6
+
+        self.setAcceptRichText(False)
+        self.document().setDocumentMargin(0)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setFixedHeight(self.min_height)
+        self.document().documentLayout().documentSizeChanged.connect(
+            self.adjust_height)
+
+    def adjust_height(self, *_):
+        line_height = self.fontMetrics().lineSpacing()
+        padding = 12
+        content_height = self.document().size().height()
+        max_height = self.max_lines * line_height + padding
+
+        height = max(self.min_height, min(max_height, int(content_height + padding)))
+        self.setFixedHeight(height)
+
+        self.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded if content_height + padding > max_height
+            else Qt.ScrollBarAlwaysOff)
+
     def keyPressEvent(self, event):
-        if event.key() in (Qt.Key_Return,
-                           Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
             event.accept()
             self.submitted.emit()
             return
+
         super().keyPressEvent(event)
+
 
 
 class AssistantWorker(QObject):
@@ -103,16 +131,23 @@ class ArloWindow(QMainWindow):
         header.addWidget(version)
         main.addLayout(header)
 
+        banner_group = QVBoxLayout()
+        banner_group.setSpacing(16)
+        banner_group.setAlignment(Qt.AlignCenter)
 
-        self.hero = QLabel("ARLO")
+        self.hero = QLabel(Assistant().banner.rstrip("\n"))
         self.hero.setObjectName("hero")
+        self.hero.setTextFormat(Qt.PlainText)
         self.hero.setAlignment(Qt.AlignCenter)
-        main.addWidget(self.hero, 1)
+        self.hero.setWordWrap(False)
+        self.hero.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        banner_group.addWidget(self.hero)
 
         self.meter = QLabel("▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁")
         self.meter.setObjectName("meter")
         self.meter.setAlignment(Qt.AlignCenter)
-        main.addWidget(self.meter)
+        banner_group.addWidget(self.meter)
+        main.addLayout(banner_group, 1)
 
         self.subtitles = QLabel(self.startup_greeting)
         self.subtitles.setObjectName("subtitles")
@@ -123,50 +158,44 @@ class ArloWindow(QMainWindow):
         self.subtitles.setFixedHeight(90)
         main.addWidget(self.subtitles)
 
-
         self.status = QLabel()
         self.status.setObjectName("status")
         self.status.setAlignment(Qt.AlignCenter)
         main.addWidget(self.status)
 
+
+        composer = QHBoxLayout()
+        composer.setSpacing(12)
+        composer.setAlignment(Qt.AlignBottom)
+
         input_frame = QFrame()
         input_frame.setObjectName("inputFrame")
-        input_layout = QHBoxLayout(input_frame)
-        input_layout.setContentsMargins(12, 8, 8, 8)
+        input_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        input_layout = QVBoxLayout(input_frame)
+        input_layout.setContentsMargins(16, 6, 16, 6)
+        input_layout.setSpacing(0)
 
         self.input = ChatInput()
-        self.input.setPlaceholderText("Escribe un mensaje...  ")
-        self.input.setFixedHeight(80)
+        self.input.setPlaceholderText("Escribe un mensaje...")
+        self.input.setAlignment(Qt.AlignVCenter)
         self.input.submitted.connect(self.send_message)
-        input_layout.addWidget(self.input, 1)
+        input_layout.addWidget(self.input)
+        composer.addWidget(input_frame, 1)
 
-        self.send = QPushButton("  ")
+        self.send = QPushButton("")
         self.send.setObjectName("send")
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.send_message)
-        input_layout.addWidget(self.send)
-
-        main.addWidget(input_frame)
+        composer.addWidget(self.send, 0, Qt.AlignBottom)
+        main.addLayout(composer)
         self.set_enabled(False)
+        self.load_stylesheet()
 
-        font_family = QApplication.font().family()
-        self.setStyleSheet(f"""
-            QWidget#root {{ background: #1e1e2e; color: #cdd6f4; font-family: "{font_family}"; }}
-            QLabel#title {{ color: #cdd6f4; font-size: 24px; font-weight: 800; letter-spacing: 3px; }}
-            QLabel#hero {{ color: #cdd6f4; font-size: 56px; font-weight: 800; }}
-            QLabel#muted, QLabel#status {{ color: #a6adc8; font-size: 13px; }}
-            QLabel#meter {{ color: #89b4fa; font-size: 16px; }}
-            QScrollArea {{ background: transparent; border: none; }}
-            QScrollArea > QWidget > QWidget {{ background: transparent; }}
-            QFrame#inputFrame {{ background: #313244; border: 1px solid #45475a; border-radius: 16px; }}
-            QTextEdit {{ background: transparent; border: none; color: #cdd6f4; font-size: 16px; selection-background-color: #45475a; }}
-            QPushButton#send {{ background: #89b4fa; color: #1e1e2e; border: none; border-radius: 11px; font-weight: 700; }}
-            QPushButton#send:hover {{ background: #b4befe; }}
-            QPushButton#send:disabled {{ background: #45475a; color: #a6adc8; }}
-            QLabel#userMessage {{ background: #45475a; color: #cdd6f4; padding: 13px; border-radius: 12px; font-size: 12px; }}
-            QLabel#arloMessage {{ background: #313244; color: #cdd6f4; padding: 13px; border-radius: 12px; font-size: 12px; }}
-            QLabel#subtitles {{ color: #cdd6f4; font-size: 12px; font-weight: 500; background: transparent; }}
-        """)
+    def load_stylesheet(self):
+        stylesheet_path = (Path(__file__).resolve().parent / "assets" / "arlo.qss")
+        stylesheet = stylesheet_path.read_text(encoding="utf-8")
+        self.setStyleSheet(stylesheet)
 
     @property
     def startup_greeting(self) -> str:
@@ -209,32 +238,6 @@ class ArloWindow(QMainWindow):
         self.set_enabled(True)
         self.set_status("")
         self.input.setFocus()
-
-    def add_message(self, text, user=False):
-        bubble = QLabel(text)
-        bubble.setObjectName("userMessage" if user else "arloMessage")
-        bubble.setWordWrap(True)
-        bubble.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        bubble.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-        bubble.setMaximumWidth(650)
-
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
-
-        if user:
-            row.addStretch()
-            row.addWidget(bubble)
-        else:
-            row.addWidget(bubble)
-            row.addStretch()
-
-        self.messages_layout.insertLayout(self.messages_layout.count() - 1, row)
-        self.scroll_to_bottom()
-        return bubble
-
-    def scroll_to_bottom(self):
-        bar = self.scroll.verticalScrollBar()
-        bar.setValue(bar.maximum())
 
     def update_subtitles(self, text):
         from PySide6.QtGui import QTextLayout

@@ -1,0 +1,88 @@
+QWidget#root {
+    background-color: #24273a;
+    color: #cad3f5;
+}
+
+QLabel#hero {
+    color: #cad3f5;
+    background: transparent;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+QLabel#muted,
+QLabel#status {
+    color: #a5adcb;
+    font-size: 13px;
+}
+
+QLabel#meter {
+    color: #8aadf4;
+    font-size: 16px;
+}
+
+QLabel#subtitles {
+    color: #cad3f5;
+    background: transparent;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+QFrame#inputFrame {
+    background-color: #363a4f;
+    border: 1px solid #494d64;
+    border-radius: 30px;
+}
+
+QTextEdit {
+    background: transparent;
+    border: none;
+    color: #cad3f5;
+    font-size: 16px;
+    selection-background-color: #494d64;
+}
+
+QPushButton#send {
+    background-color: #8aadf4;
+    color: #24273a;
+    border: none;
+    border-radius: 24px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+QPushButton#send:hover {
+    background-color: #b7bdf8;
+}
+
+QPushButton#send:pressed {
+    background-color: #7dc4e4;
+}
+
+QPushButton#send:disabled {
+    background-color: #494d64;
+    color: #a5adcb;
+}
+
+QTextEdit QScrollBar:vertical {
+    background: transparent;
+    width: 5px;
+    margin: 4px 0;
+}
+
+QTextEdit QScrollBar::handle:vertical {
+    background: #5b6078;
+    border-radius: 2px;
+    min-height: 16px;
+}
+
+QTextEdit QScrollBar::add-line:vertical,
+QTextEdit QScrollBar::sub-line:vertical {
+    height: 0;
+    background: transparent;
+}
+
+QTextEdit QScrollBar::add-page:vertical,
+QTextEdit QScrollBar::sub-page:vertical {
+    background: transparent;
+}
