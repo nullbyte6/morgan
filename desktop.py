@@ -265,7 +265,7 @@ class ArloWindow(QMainWindow):
         icon_path = (Path(__file__).resolve().parent /
                      "assets" / "pwsh.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
-        self.resize(920, 720)
+        self.resize(1280, 720)
         self.setMinimumSize(600, 480)
 
         self.busy = False
