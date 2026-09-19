@@ -294,9 +294,6 @@ class ArloWindow(QMainWindow):
         if self.current_reply is None:
             return
 
-        if self.status.text() == "Pensando...":
-            self.set_status("Respondiendo...")
-
         self.current_reply += chunk
         self.update_subtitles(self.current_reply)
 
