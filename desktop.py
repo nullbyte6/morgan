@@ -472,7 +472,7 @@ class ArloWindow(QMainWindow):
         container_layout.setSpacing(0)
 
         navigation = QHBoxLayout()
-        navigation.setContentsMargins(20, 12, 20, 8)
+        navigation.setContentsMargins(20, 8, 20, 0)
         navigation.setSpacing(8)
 
         self.chat_button = QPushButton("󰭹")

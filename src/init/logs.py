@@ -30,17 +30,16 @@ class LogView(QWidget):
     """What Arlo and the user are talking about."""
     def __init__(self, log_dir: Path, parent=None):
         super().__init__(parent)
-
         self.log_dir = log_dir
         self.current_date = datetime.date.today()
         self.last_content = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(12, 0, 12, 12)
+        layout.setSpacing(8)
         layout.setSpacing(12)
 
         header = QHBoxLayout()
-
         self.title = QLabel(self.current_date.strftime("%Y/%m/%d"))
         self.title.setObjectName("logTitle")
         header.addWidget(self.title)
@@ -51,13 +50,13 @@ class LogView(QWidget):
         self.refresh_button.setFixedSize(48, 48)
         self.refresh_button.clicked.connect(self.refresh)
         header.addWidget(self.refresh_button)
-
+        header.setContentsMargins(-20, 0, -20, 0)
         layout.addLayout(header)
 
         self.viewer = QTextEdit()
         self.viewer.setObjectName("logViewer")
         self.viewer.setReadOnly(True)
-        layout.addWidget(self.viewer, 1)
+        layout.addWidget(self.viewer, 0)
 
         self.timer = QTimer(self)
         self.timer.setInterval(2000)
@@ -74,14 +73,12 @@ class LogView(QWidget):
 
     def refresh(self):
         today = datetime.date.today()
-
         if today != self.current_date:
             self.current_date = today
             self.last_content = None
             self.title.setText(today.strftime("%Y/%m/%d"))
 
         path = self.log_dir / f"{today:%Y-%m-%d}.md"
-
         try:
             content = path.read_text(encoding="utf-8")
         except FileNotFoundError:

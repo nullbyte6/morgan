@@ -76,7 +76,8 @@ QStackedWidget#mainPages {
 }
 
 QPushButton#chatNav,
-QPushButton#logsNav {
+QPushButton#logsNav,
+QPushButton#refresh {
     background-color: transparent;
     color: #a5adcb;
     border: 1px solid transparent;
@@ -85,13 +86,15 @@ QPushButton#logsNav {
 }
 
 QPushButton#chatNav:hover,
-QPushButton#logsNav:hover {
+QPushButton#logsNav:hover,
+QPushButton#refresh:hover {
     background-color: #363a4f;
     color: #cad3f5;
 }
 
 QPushButton#chatNav:checked,
-QPushButton#logsNav:checked {
+QPushButton#logsNav:checked,
+QPushButton#refresh:checked {
     background-color: #494d64;
     color: #cad3f5;
     border: 1px solid #8aadf4;
@@ -100,7 +103,7 @@ QPushButton#logsNav:checked {
 QLabel#logTitle {
     color: #cad3f5;
     font-size: 16px;
-    font-weight: 600;
+    padding-left: 20px
 }
 
 QTextEdit#logViewer {
