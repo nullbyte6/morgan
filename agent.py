@@ -116,8 +116,8 @@ class Assistant:
             tools=[Tool(function, sequential=True) for function in TOOLS])
 
         self.agent.instructions(self.current_instructions)
+        self.agent.instructions(self.current_datetime_instructions)
         self.agent.instructions(self.working_directory_instructions)
-
 
     def suspend_terminal(self):
         if self.terminal_ui is None:
@@ -341,6 +341,10 @@ class Assistant:
     def working_directory_instructions(self) -> str:
         from src.init.brain import get_working_directory
         return f"Current working directory for this turn: {get_working_directory()}"
+
+    def current_datetime_instructions(self) -> str:
+        from src.init.brain import current_datetime_instructions
+        return current_datetime_instructions()
 
     def run_session(self):
         self._initialize_runtime()

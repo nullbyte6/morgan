@@ -209,6 +209,25 @@ def get_current_time(region: str = "") -> str:
         return f"Error getting current time for {region}: {error}"
 
 
+def current_datetime_instructions(self) -> str:
+    """Provide the actual local date and time on every model run."""
+    now = datetime.now().astimezone()
+
+    return (
+        f"Current local date and time: {now.isoformat(timespec='seconds')}\n"
+        f"Current year: {now.year}\n"
+        f"Current timezone: {now.tzname()}\n"
+        "This is the authoritative current date and time for this turn. "
+        "Use it for date-related reasoning. "
+        "Do not assume that your training knowledge is current. "
+        "For events, releases, prices, or other facts that may have changed "
+        "since your training cutoff, use search_web and verify reliable "
+        "sources before answering. "
+        "Never invent events or claim that a future event has already occurred "
+        "without supporting evidence."
+    )
+
+
 def calculate(expression: str) -> str:
     if not set(expression) <= set("0123456789+-*/(). "):
         return "Error: only numbers and arithmetic operators are allowed"
