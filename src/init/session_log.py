@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .config import HOME_PATH, ensure_storage
 from .output import markdown_text
+from .lang import tr
 
 
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}\.md")
@@ -23,7 +24,7 @@ def open_current_session_log() -> str:
     from .brain import open_file
 
     if _current_session_path is None:
-        return "Error: no session log is active"
+        return tr("session.none")
     return open_file(str(_current_session_path))
 
 
@@ -47,11 +48,9 @@ class SessionLog:
             self.private = not self.private
         elif action in ("on", "off"):
             self.private = action == "on"
-        elif action not in "status":
-            return "Uso: /private [on|off|status]"
-        return ("Private Mode, on"
-                if self.private else
-                "Private Mode, off")
+        elif action != "status":
+            return tr("privacy.usage")
+        return tr("privacy.on" if self.private else "privacy.off")
 
     def _start_day(self, started):
         self.path = self.directory / f"{started:%Y-%m-%d}.md"

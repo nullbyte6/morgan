@@ -112,6 +112,19 @@ def normalize_spanish_numbers(text: str) -> str:
 
 
 
+class SpeechBatch:
+    """Lifetime and completion belong to one turn, including in-flight synthesis."""
+
+    def __init__(self, turn_id):
+        self.turn_id = turn_id
+        self.cancelled = threading.Event()
+        self.done = threading.Event()
+        self.done.set()
+        self.pending = 0
+        self.speaking = False
+        self.error = None
+
+
 class VoiceService:
     """
     Arlo's multilingual voice service using Fun-CosyVoice3.
@@ -122,7 +135,7 @@ class VoiceService:
 
     def __init__(self, model_path, voice_reference, reference_text,
                  speed=1.0,
-                 audio_callback=None):
+                 audio_callback=None, speaking_callback=None):
         self.model_path = Path(model_path)
         self.voice_reference = Path(voice_reference)
         reference_text = reference_text.strip()
@@ -140,121 +153,146 @@ class VoiceService:
         self._audio_queue = queue.Queue()
 
         self.speaking = False
+        self.audio_callback = audio_callback
+        self.speaking_callback = speaking_callback
+        self._state_lock = threading.RLock()
+        self._batch = SpeechBatch(None)
 
         self._tts_worker = threading.Thread(target=self._tts_loop, daemon=True)
         self._tts_worker.start()
-
         self._player_worker = threading.Thread(target=self._play_loop, daemon=True)
         self._player_worker.start()
 
-        self._speech_done = threading.Event()
-        self._speech_done.set()
-
-        self.audio_callback = audio_callback
-
-    def enqueue(self, text: str) -> None:
+    def enqueue(self, text: str, turn_id=None) -> None:
         text = _clean_for_speech(text)
         text = normalize_spanish_numbers(text)
+        with self._state_lock:
+            if self._batch.turn_id != turn_id or self._batch.cancelled.is_set():
+                self.stop()
+                self._batch = SpeechBatch(turn_id)
+            if text:
+                batch = self._batch
+                batch.pending += 1
+                batch.done.clear()
+                self._text_queue.put((batch, text))
 
-        if text:
-            logger.debug("Queued: %s", text)
-            self._speech_done.clear()
-            self._text_queue.put(text)
+    def current_batch(self):
+        with self._state_lock:
+            return self._batch
+
+    def _set_speaking(self, batch, speaking):
+        if batch.speaking == speaking:
+            return
+        batch.speaking = speaking
+        self.speaking = speaking
+        if self.speaking_callback is not None:
+            self.speaking_callback(speaking, batch.turn_id)
+
+    def stop(self, turn_id=None) -> None:
+        with self._state_lock:
+            batch = self._batch
+            if turn_id is not None and batch.turn_id != turn_id:
+                return
+            batch.cancelled.set()
+            self._set_speaking(batch, False)
+            batch.done.set()
+
+    def _complete(self, batch):
+        with self._state_lock:
+            batch.pending -= 1
+            if batch.pending == 0:
+                if batch is self._batch:
+                    self._set_speaking(batch, False)
+                batch.done.set()
 
     def _tts_loop(self) -> None:
-        """TTS and TTS worker thread."""
         while True:
-            text = self._text_queue.get()
+            batch, text = self._text_queue.get()
+            generator = None
             try:
-                self.speaking = True
-                logger.debug("Synthesizing: %s", text)
-
+                if batch.cancelled.is_set():
+                    continue
                 generator = self.voice.inference_zero_shot(
-                    text,
-                    "",
-                    "",
-                    zero_shot_spk_id="arlo",
-                    stream=True,
+                    text, "", "", zero_shot_spk_id="arlo", stream=True,
                     speed=self.speed)
-
-                first_chunk = True
                 for chunk in generator:
+                    if batch.cancelled.is_set():
+                        # CosyVoice owns an internal token thread and releases its
+                        # GPU caches only when this phrase's generator finishes.
+                        # Drain it silently; queued phrases are skipped entirely.
+                        continue
                     audio = chunk["tts_speech"]
-
-                    if first_chunk:
-                        logger.debug("First audio chunk ready")
-                        first_chunk = False
-
                     if hasattr(audio, "detach"):
                         audio = audio.detach().cpu().numpy()
-
-                    samples = np.asarray(audio, dtype=np.float32).squeeze()
-
-                    if samples.size:
-                        self._audio_queue.put(samples)
-
-            except Exception:
+                    samples = np.asarray(audio, dtype=np.float32).reshape(-1)
+                    with self._state_lock:
+                        if samples.size and not batch.cancelled.is_set():
+                            batch.pending += 1
+                            self._audio_queue.put((batch, samples))
+            except Exception as error:
+                batch.error = error
                 logger.exception("TTS inference failed")
-
             finally:
-                self._text_queue.task_done()
+                try:
+                    if generator is not None:
+                        generator.close()
+                except Exception as error:
+                    batch.error = error
+                    logger.exception("TTS generator cleanup failed")
+                finally:
+                    self._text_queue.task_done()
+                    self._complete(batch)
 
     def _play_loop(self) -> None:
-        frame_size = int(self.sample_rate * 0.04)
-        prebuffer_samples = int(self.sample_rate * 0.16)
-
-        ui_interval = 0.10
+        # Short writes bound interruption latency; every frame retains its turn.
+        frame_size = max(1, int(self.sample_rate * 0.04))
         last_ui_update = 0.0
+        stream = None
+        while True:
+            batch, samples = self._audio_queue.get()
+            try:
+                if batch.cancelled.is_set():
+                    continue
+                if stream is None:
+                    stream = sd.OutputStream(samplerate=self.sample_rate, channels=1,
+                                             dtype="float32", latency="low", blocksize=0)
+                if not stream.active:
+                    stream.start()
+                for start in range(0, len(samples), frame_size):
+                    with self._state_lock:
+                        if batch.cancelled.is_set():
+                            stream.abort()
+                            break
+                        self._set_speaking(batch, True)
+                    frame = samples[start:start + frame_size]
+                    stream.write(frame)
+                    now = time.monotonic()
+                    if (not batch.cancelled.is_set() and self.audio_callback is not None
+                            and now - last_ui_update >= 0.10):
+                        self.audio_callback(frame, self.sample_rate, batch.turn_id)
+                        last_ui_update = now
+                with self._state_lock:
+                    drained = batch.pending == 1
+                if batch.cancelled.is_set():
+                    stream.abort()
+                elif drained:
+                    # Include device-buffer playback in the completion event.
+                    stream.stop()
+            except Exception as error:
+                batch.error = error
+                logger.exception("Audio playback failed")
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+                    stream = None
+            finally:
+                self._audio_queue.task_done()
+                self._complete(batch)
 
-        with sd.OutputStream(
-                samplerate=self.sample_rate,
-                channels=1,
-                dtype="float32",
-                latency="low",
-                blocksize=0) as stream:
-            buffered = []
-            buffered_size = 0
-            playing = False
-
-            while True:
-                samples = self._audio_queue.get()
-
-                try:
-                    if not playing:
-                        buffered.append(samples)
-                        buffered_size += len(samples)
-
-                        if buffered_size < prebuffer_samples:
-                            continue
-
-                        samples = np.concatenate(buffered)
-                        buffered.clear()
-                        buffered_size = 0
-                        playing = True
-
-                    for start in range(0, len(samples), frame_size):
-                        frame = samples[start:start + frame_size]
-
-                        now = time.monotonic()
-
-                        if (self.audio_callback is not None
-                                and now - last_ui_update >= ui_interval):
-                            self.audio_callback(frame, self.sample_rate)
-                            last_ui_update = now
-
-                        stream.write(frame)
-
-                finally:
-                    self._audio_queue.task_done()
-
-                if (self._text_queue.unfinished_tasks == 0
-                        and self._audio_queue.unfinished_tasks == 0):
-                    playing = False
-                    buffered.clear()
-                    buffered_size = 0
-
-                    self.speaking = False
-                    self._speech_done.set()
-
-    def wait_until_done(self) -> None:
-        self._speech_done.wait()
+    def wait_until_done(self, batch=None) -> None:
+        batch = batch if batch is not None else self.current_batch()
+        batch.done.wait()
+        if batch.error is not None and not batch.cancelled.is_set():
+            raise RuntimeError(str(batch.error)) from batch.error

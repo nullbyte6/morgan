@@ -10,15 +10,16 @@ import subprocess
 from .identity import get_assistant
 
 import ctypes
-import threading
 from collections.abc import Callable
+from contextvars import ContextVar
+from .lang import tr
 
 from .brain import get_working_directory
 
 
-_confirmation = threading.local()
+_confirmation = ContextVar("command_confirmation", default=None)
 def set_confirmation_handler(handler: Callable[[str], bool] | None) -> None:
-    _confirmation.handler = handler
+    _confirmation.set(handler)
 
 
 def is_elevated() -> bool:
@@ -33,7 +34,7 @@ def is_elevated() -> bool:
 
 
 def _confirm(message: str) -> bool:
-    handler = getattr(_confirmation, "handler", None)
+    handler = _confirmation.get()
     if handler is not None:
         try:
             return bool(handler(message))
@@ -41,7 +42,7 @@ def _confirm(message: str) -> bool:
             return False
 
     try:
-        answer = get_assistant().read_user_input(message + " [yes/no]: ")
+        answer = get_assistant().read_user_input(message + tr("command.answer"))
         return answer.strip().casefold() in {"sí", "si", "yes", "y"}
     except (EOFError, KeyboardInterrupt, RuntimeError):
         return False
@@ -55,7 +56,7 @@ def _encoded(script: str) -> str:
 def _shell_command(command: str, shell: str) -> list[str]:
     executable = shutil.which(shell)
     if executable is None:
-        raise ValueError(f"Shell unavailable: {shell}")
+        raise ValueError(tr("command.shell_unavailable", shell=shell))
     if shell in {"powershell", "pwsh"}:
         script = ("$ErrorActionPreference = 'Stop'; $global:LASTEXITCODE = 0; "
                   "try { & {\n" + command + "\n}; "
@@ -71,7 +72,7 @@ def _windows_elevated(argv: list[str], cwd: str) -> subprocess.CompletedProcess:
     """Use Windows sudo in the user's configured mode, without a fallback."""
     sudo = shutil.which("sudo.exe")
     if not sudo:
-        raise ValueError("Windows sudo is unavailable. Enable sudo in Windows Settings.")
+        raise ValueError(tr("command.sudo_unavailable"))
     return subprocess.run(
         [sudo, "--chdir", cwd, "--", *argv], cwd=cwd,
         stdin=subprocess.DEVNULL, capture_output=True, text=True,
@@ -99,9 +100,9 @@ def execute_command(command: str, working_directory: str = ".",
 
     try:
         if not command.strip() or "\x00" in command:
-            raise ValueError("Command must be nonempty and contain no NUL characters")
+            raise ValueError(tr("command.empty"))
         if not 1 <= timeout_seconds <= 86400:
-            raise ValueError("timeout_seconds must be between 1 and 86400")
+            raise ValueError(tr("command.timeout_range"))
 
         if shell == "auto":
             if os.name == "nt":
@@ -110,21 +111,21 @@ def execute_command(command: str, working_directory: str = ".",
                 shell = "sh"
 
         if shell not in {"powershell", "pwsh", "cmd", "sh", "bash"}:
-            raise ValueError("Unsupported shell")
+            raise ValueError(tr("command.unsupported_shell"))
 
         if working_directory == ".":
             working_directory = get_working_directory()
 
         cwd = str(Path(working_directory).expanduser().resolve(strict=True))
         if not Path(cwd).is_dir():
-            raise ValueError("Working directory is not a directory")
+            raise ValueError(tr("command.not_directory"))
         argv = _shell_command(command, shell)
         context.update(working_directory=cwd, shell=shell)
         preview = json.dumps(command, ensure_ascii=False)
-        if not _confirm(f"\nEjecutar en {json.dumps(cwd)} con {shell}:\n{preview}\n¿Autorizar este comando?"):
+        if not _confirm(tr("command.confirm", cwd=json.dumps(cwd), shell=shell, preview=preview)):
             return result("denied")
         if elevated and not is_elevated():
-            if not _confirm("¿Autorizar este mismo comando con permisos de administrador mediante sudo?"):
+            if not _confirm(tr("command.elevated")):
                 return result("denied")
             if os.name == "nt":
                 completed = _windows_elevated(argv, cwd)
@@ -133,10 +134,10 @@ def execute_command(command: str, working_directory: str = ".",
                               stdout=completed.stdout[-32000:], stderr=completed.stderr[-32000:],
                               output_truncated=max(len(completed.stdout), len(completed.stderr)) > 32000,
                               output_may_be_in_separate_window=True,
-                              note="Windows sudo uses the configured mode. In new-window mode, command output is not captured. If sudo is disabled, enable it in Windows Settings before retrying.")
+                              note=tr("command.sudo_note"))
             sudo = shutil.which("sudo")
             if not sudo:
-                raise ValueError("sudo is not installed")
+                raise ValueError(tr("command.sudo_missing"))
             completed = subprocess.run([sudo, "--", *argv], cwd=cwd)
             return result("completed" if completed.returncode == 0 else "failed",
                           exit_code=completed.returncode, output_captured=False)
@@ -149,6 +150,6 @@ def execute_command(command: str, working_directory: str = ".",
                       stdout=completed.stdout[-32000:], stderr=completed.stderr[-32000:],
                       output_truncated=max(len(completed.stdout), len(completed.stderr)) > 32000)
     except subprocess.TimeoutExpired:
-        return result("timeout", note="The shell timed out. Child processes may still be running; inspect before retrying.")
+        return result("timeout", note=tr("command.timeout_note"))
     except (OSError, ValueError) as error:
         return result("error", error=str(error))

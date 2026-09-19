@@ -56,15 +56,10 @@ class Assistant:
 
     @property
     def startup_greeting(self) -> str:
-        greetings = (
-            f"Hola, {self.username}. ¿Qué quieres hacer?",
-            f"Hola, {self.username}. ¿En qué te ayudo?",
-            f"Estoy listo, {self.username}. ¿Qué hacemos?",
-            f"¿Qué necesitas hoy, {self.username}?",
-            f"Todo listo, {self.username}. ¿Por dónde empezamos?",
-            f"{self.name} preparado. Escribe lo que necesites.",
-        )
-        return random.choice(greetings)
+        from src.init.lang import tr
+        return tr(f"greeting.{random.randrange(6)}",
+                  username=self.username, name=self.name)
+
 
     @property
     def banner(self):
@@ -160,67 +155,19 @@ class Assistant:
 
     def speak(self, chunks) -> str:
         """Stream LLM output invisibly and feed complete phrases to TTS."""
-        buffer = ""
+        from src.init.streaming import SpeechBuffer
+        buffer = SpeechBuffer()
         reply = []
-        started = False
-        first_phrase_sent = False
-        min_phrase_length = 20
-
-        def find_split(text, pattern):
-            for match in re.finditer(pattern, text):
-                if match.end() >= min_phrase_length:
-                    return match
-            return None
-
         for chunk in chunks:
             if not chunk:
                 continue
-
-            if not started:
-                started = True
-                if self.terminal_ui is not None:
-                    self.terminal_ui.set_thinking(False)
-
+            if not reply and self.terminal_ui is not None:
+                self.terminal_ui.set_thinking(False)
             reply.append(chunk)
-            buffer += chunk
-
-            while True:
-                if not first_phrase_sent:
-                    match = find_split(buffer, r'(?<=[,.!?;:])["»”’]?\s+')
-
-                    if match is None and len(buffer) >= 60:
-                        split = buffer.rfind(" ", 30, 60)
-
-                        if split != -1:
-                            phrase = buffer[:split].strip()
-                            buffer = buffer[split:].lstrip()
-
-                            if phrase:
-                                self.voice.enqueue(phrase)
-                                first_phrase_sent = True
-
-                        continue
-
-                else:
-                    match = find_split(buffer, r'(?<=[.!?;:])["»”’]?\s+')
-
-                if match is None:
-                    break
-
-                end = match.end()
-                phrase = buffer[:end].strip()
-                if len(phrase) < min_phrase_length:
-                    break
-
-                buffer = buffer[end:]
+            for phrase in buffer.feed(chunk):
                 self.voice.enqueue(phrase)
-                first_phrase_sent = True
-
-        remaining = buffer.strip()
-
-        if remaining:
-            self.voice.enqueue(remaining)
-
+        for phrase in buffer.finish():
+            self.voice.enqueue(phrase)
         return "".join(reply)
 
     def directory_cmd(self, command: str) -> str | None:
@@ -359,28 +306,116 @@ class Assistant:
         )
 
 
-    def run_desktop_turn(self, prompt: str, history: list, on_chunk=None, on_audio=None):
-        """Run one desktop turn without reading from or rendering to TerminalUI."""
+    def run_desktop_turn(self, prompt: str, history: list, on_chunk=None,
+                         on_audio=None, on_speaking=None, cancel_event=None,
+                         event_loop=None):
+        """Cancel the model stream and queued speech before accepting steering."""
+        import asyncio
         from src.init import brain
+        from src.init.streaming import SpeechBuffer
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
         self._initialize_runtime()
         self.voice.audio_callback = on_audio
+        self.voice.speaking_callback = on_speaking
+        self.voice.begin_turn()
+        cancel_event = cancel_event if cancel_event is not None else threading.Event()
+        reply = []
+        completed_history = None
+        stream_result = None
 
-        with self.agent.run_stream_sync(
-            prompt,
-            message_history=history,
-            model_settings={"temperature": brain.load_config()["temperature"]}
-        ) as result:
-            def chunks():
-                for chunk in result.stream_text(delta=True, debounce_by=0.05):
+        async def generate():
+            nonlocal completed_history, stream_result
+            buffer = SpeechBuffer()
+            async with self.agent.run_stream(
+                prompt, message_history=history,
+                model_settings={"temperature": brain.load_config()["temperature"]}
+            ) as result:
+                stream_result = result
+                async for chunk in result.stream_text(delta=True, debounce_by=0.05):
+                    if cancel_event.is_set():
+                        return
                     if chunk:
+                        reply.append(chunk)
                         if on_chunk is not None:
                             on_chunk(chunk)
-                        yield chunk
+                        for phrase in buffer.feed(chunk):
+                            self.voice.enqueue(phrase)
+                for phrase in buffer.finish():
+                    if not cancel_event.is_set():
+                        self.voice.enqueue(phrase)
+                completed_history = result.all_messages()
+            # Keep the loop responsive while the service drains its audio queue.
+            self.voice.request_done()
+            while not self.voice.is_done():
+                await asyncio.sleep(0.02)
 
-            reply = self.speak(chunks())
-            self.voice.wait_until_done()
-            return reply, result.all_messages()
+        async def run():
+            task = asyncio.create_task(generate())
+            try:
+                while not task.done():
+                    if cancel_event.is_set():
+                        self.voice.stop()
+                        task.cancel()
+                        break
+                    await asyncio.sleep(0.02)
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    if not cancel_event.is_set():
+                        raise
+                if cancel_event.is_set():
+                    self.voice.stop()
+            except BaseException:
+                task.cancel()
+                try:
+                    self.voice.stop()
+                except Exception:
+                    pass
+                await asyncio.gather(task, return_exceptions=True)
+                raise
+
+        try:
+            if event_loop is None:
+                asyncio.run(run())
+            else:
+                # Ollama's pooled async connections stay on the worker's loop.
+                event_loop.run_until_complete(run())
+        finally:
+            self.voice.audio_callback = None
+            self.voice.speaking_callback = None
+            if on_speaking is not None:
+                on_speaking(False)
+
+        text = "".join(reply)
+        if cancel_event.is_set():
+            # Keep completed tool exchanges, but never leave orphan tool calls.
+            messages = (stream_result.all_messages() if stream_result is not None
+                        else list(history) + [ModelRequest(parts=[UserPromptPart(prompt)])])
+            safe = list(history)
+            pending = set()
+            segment = []
+            for message in messages[len(history):]:
+                segment.append(message)
+                for part in message.parts:
+                    if part.part_kind == "tool-call":
+                        pending.add(part.tool_call_id)
+                    elif part.part_kind in ("tool-return", "retry-prompt"):
+                        pending.discard(getattr(part, "tool_call_id", None))
+                if not pending:
+                    safe.extend(segment)
+                    segment = []
+            # A streamed final response may already be included in all_messages().
+            if len(safe) > len(history) and isinstance(safe[-1], ModelResponse) and any(
+                    isinstance(part, TextPart) for part in safe[-1].parts):
+                safe.pop()
+            safe.append(ModelResponse(parts=[TextPart(
+                (text + "\n" if text else "") +
+                "[Response interrupted by the user. Speech may have stopped before "
+                "all displayed text was spoken. Tools already started may have completed; "
+                "inspect current state before retrying. Follow the user's next instruction.]")]))
+            return text, safe
+        return text, completed_history
 
     def run_session(self):
         logger = logging.getLogger("arlo.trace")
@@ -397,6 +432,7 @@ class Assistant:
         from src.init.session_log import SessionLog
         from src.init.colors import ASSISTANT_COLOR, RESET_COLOR
         from src.init.voice import VOICE_COMMANDS, capture_voice_input
+        from src.init.lang import tr
 
         session = SessionLog()
         refresh_model_keep_alive()
@@ -423,7 +459,7 @@ class Assistant:
         while True:
             prompt = self.build_user_prompt()
             if session.private:
-                prompt = "[PRIVATE] " + prompt
+                prompt = tr("status.private") + " " + prompt
 
             user_input = self.read_user_input(prompt, placeholder=greeting)
             greeting = ""
@@ -477,8 +513,7 @@ class Assistant:
                     session.write("System", str(error))
                     continue
                 if not user_input:
-                    session.write("System", "A voice transcription "
-                                            "was impossible to obtain.")
+                    session.write("System", tr("voice.transcription_failed"))
                     continue
                 session.write(self.username, json.loads(user_input)[
                     "voice_text"])

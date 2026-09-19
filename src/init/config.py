@@ -11,6 +11,7 @@ HOME_PATH = Path.home() / ".arlo"
 CONFIG_FILE = HOME_PATH / "json" / "config.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
 DEFAULTS = {
+    "lang": "spanish",
     "version": "1.0.2-beta",
     "model_name": "qwen3.5:9b",
     "keep_alive": "30m",
@@ -84,6 +85,8 @@ def validate_config(config):
         raise ValueError("config.json must contain a JSON object")
     result = deepcopy(DEFAULTS)
     result.update(config)
+    if result["lang"] not in ("english", "spanish"):
+        raise ValueError("lang must be 'english' or 'spanish'")
     for key in ("message_service", "whatsapp_phone_number_id",
                 "whatsapp_api_version", "twilio_account_sid",
                 "twilio_auth_token", "twilio_from_number", "email_provider",

@@ -17,6 +17,7 @@ from rich.align import Align
 from rich.layout import Layout
 
 from src.init.console_input import ConsoleInput
+from src.init.lang import tr
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 RICH_FOREGROUND_COLOR = "white"
@@ -130,7 +131,8 @@ class TerminalUI:
                 pass
 
     def _header(self, width):
-        value = datetime.now().astimezone().strftime("%a %d/%m/%Y · %H:%M")
+        now = datetime.now().astimezone()
+        value = tr(f"date.weekday.{now.weekday()}") + now.strftime(" %d/%m/%Y · %H:%M")
         return Align.right(Text(value, style=RICH_FOREGROUND_COLOR),
                            width=width)
 
@@ -250,7 +252,7 @@ class TerminalUI:
             self._meter_renderable(width),
             Text(""),
             Align.center(
-                Text("Pensando...", style=RICH_DIM_COLOR)
+                Text(tr("status.thinking"), style=RICH_DIM_COLOR)
                 if thinking else Text(""),
                 width=width))
 

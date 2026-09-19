@@ -7,6 +7,7 @@ from array import array
 from collections import deque
 
 from .colors import RESET_COLOR, USER_COLOR
+from .lang import tr
 
 VOICE_COMMANDS = {"/voice", "voice"}
 VOICE_MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
@@ -35,12 +36,12 @@ def record_voice() -> tuple[bytes, int] | None:
         import sounddevice as sound
     except ImportError as error:
         raise RuntimeError(
-            "Voice input is not installed; run: pip install -r requirements.txt"
+            tr("voice.input_missing")
         ) from error
 
     device = sound.query_devices(kind="input")
     if int(device.get("max_input_channels", 0)) < 1:
-        raise RuntimeError("No microphone input device is available")
+        raise RuntimeError(tr("voice.no_microphone"))
 
     sample_rate = int(device.get("default_samplerate") or 16000)
     block_size = max(1, int(sample_rate * VOICE_BLOCK_SECONDS))
@@ -95,8 +96,7 @@ def get_voice_model():
             from faster_whisper import WhisperModel
         except ImportError as error:
             raise RuntimeError(
-                "Voice recognition is not installed; run: "
-                "pip install -r requirements.txt"
+                tr("voice.recognition_missing")
             ) from error
         _VOICE_MODEL = WhisperModel(
             VOICE_MODEL_NAME, device="cpu", compute_type="int8")
@@ -133,7 +133,7 @@ def capture_voice_input() -> str | None:
     print("[MIC]", flush=True)
     recording = record_voice()
     if recording is None:
-        print("No se detectó voz.")
+        print(tr("voice.not_detected"))
         return None
 
     try:
@@ -142,7 +142,7 @@ def capture_voice_input() -> str | None:
         pass
 
     if not transcript:
-        print("No se pudo transcribir la voz.")
+        print(tr("voice.not_transcribed"))
         return None
     print(f"{USER_COLOR}[VOICE:{language}] {transcript}{RESET_COLOR}")
     return json.dumps({

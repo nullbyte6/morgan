@@ -37,14 +37,16 @@ class TTSServer:
             voice_reference=VOICE_REFERENCE,
             reference_text=VOICE_REFERENCE_TEXT,
             speed=1.0,
-            audio_callback=self._on_audio)
+            audio_callback=self._on_audio,
+            speaking_callback=self._on_speaking)
         logger.info("CosyVoice ready")
 
-    def _send(self, message: dict) -> None:
+    def _send(self, message: dict, client=None) -> None:
         data = (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")
         with self._send_lock:
             with self._client_lock:
-                client = self._client
+                if client is None:
+                    client = self._client
 
             if client is None:
                 return
@@ -54,7 +56,10 @@ class TTSServer:
             except OSError:
                 logger.warning("Client disconnected")
 
-    def _on_audio(self, samples, sample_rate) -> None:
+    def _on_speaking(self, speaking, turn_id):
+        self._send({"type": "speaking", "speaking": speaking, "turn_id": turn_id})
+
+    def _on_audio(self, samples, sample_rate, turn_id) -> None:
         with self._client_lock:
             if self._client is None:
                 return
@@ -71,20 +76,23 @@ class TTSServer:
 
         self._send({
             "type": "audio",
+            "turn_id": turn_id,
             "samples": samples[indices].tolist(),
             "sample_rate": sample_rate,
         })
 
-    def _wait_for_audio(self) -> None:
+    def _wait_for_audio(self, client, turn_id, batch) -> None:
         try:
-            self.voice.wait_until_done()
-            self._send({"type": "done"})
+            if batch.turn_id == turn_id:
+                self.voice.wait_until_done(batch)
+            self._send({"type": "done", "turn_id": turn_id}, client)
         except Exception as error:
             logger.exception("TTS wait failed")
             self._send({
                 "type": "error",
+                "turn_id": turn_id,
                 "message": str(error),
-            })
+            }, client)
 
     def _handle_client(self, client: socket.socket) -> None:
         with self._client_lock:
@@ -101,15 +109,20 @@ class TTSServer:
                     kind = message.get("type")
                     if kind == "hello":
                         logger.info("Voice client ready")
+                        self._send({"type": "hello", "interruptible": True}, client)
 
                     elif kind == "enqueue":
                         text = message.get("text", "")
                         if text.strip():
-                            self.voice.enqueue(text)
+                            self.voice.enqueue(text, message.get("turn_id"))
+
+                    elif kind == "stop":
+                        self.voice.stop(message.get("turn_id"))
 
                     elif kind == "wait":
                         threading.Thread(
                             target=self._wait_for_audio,
+                            args=(client, message.get("turn_id"), self.voice.current_batch()),
                             name="arlo-tts-wait",
                             daemon=True,
                         ).start()
@@ -127,7 +140,7 @@ class TTSServer:
 
             client.close()
             logger.info("Arlo disconnected")
-            self.voice.wait_until_done()
+            self.voice.stop()
 
     def run(self) -> None:
         with socket.socket(

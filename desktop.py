@@ -6,6 +6,8 @@ import random
 import threading
 import re
 import html
+import json
+import asyncio
 from getpass import getuser
 from pathlib import Path
 
@@ -31,6 +33,7 @@ from src.init.brain import get_version
 from src.init.terminal import spectrum_levels
 from src.init.session_log import SessionLog
 from src.init.commands import execute_command, set_confirmation_handler
+from src.init.lang import get_language, set_language, tr
 
 
 class ChatInput(QTextEdit):
@@ -277,12 +280,13 @@ class ToggleSwitch(QAbstractButton):
 
 
 class AssistantWorker(QObject):
-    chunk = Signal(str)
-    audio = Signal(object)
+    chunk = Signal(int, str)
+    audio = Signal(int, object)
+    speaking = Signal(int, bool)
     finished = Signal(str)
     failed = Signal(str)
     ready = Signal()
-    confirmation_requested = Signal(str)
+    confirmation_requested = Signal(int, str)
 
     def __init__(self):
         super().__init__()
@@ -291,19 +295,29 @@ class AssistantWorker(QObject):
         self.session = SessionLog()
         self.confirmation_event = threading.Event()
         self.confirmation_answer = False
+        self.cancel_event = threading.Event()
+        self.command_reply = False
+        self.event_loop = None
 
     @Slot()
     def initialize(self):
-        set_confirmation_handler(self.confirm_command)
         try:
+            self.event_loop = asyncio.new_event_loop()
             self.assistant._initialize_runtime()
             self.ready.emit()
         except Exception as error:
             self.failed.emit(str(error))
 
-    @Slot(str)
-    def ask(self, prompt):
+    @Slot(int, str)
+    def ask(self, turn_id, prompt):
         try:
+            cancel_event = self.cancel_event
+            set_confirmation_handler(
+                lambda message: self.confirm_command(message, cancel_event, turn_id))
+            self.command_reply = False
+            if cancel_event.is_set():
+                self.finished.emit("")
+                return
             privacy_result = self.session.handle_command(prompt)
             if privacy_result is not None:
                 self.finished.emit(str(privacy_result))
@@ -312,6 +326,7 @@ class AssistantWorker(QObject):
             self.session.write(self.assistant.username, prompt)
 
             if prompt.casefold().startswith("pwsh:"):
+                self.command_reply = True
                 command = prompt[5:].strip()
                 raw_result = execute_command(command)
                 data = json.loads(raw_result)
@@ -319,13 +334,12 @@ class AssistantWorker(QObject):
                 output = data.get("stdout", "")
                 error = data.get("stderr", "")
 
-                reply = (
-                    f"Estado: {data['status']}\n"
-                    f"Código: {data.get('exit_code', 'N/A')}\n\n"
-                    f"{output}")
+                reply = tr("command.result",
+                           status=tr("command.status." + data["status"]),
+                           code=data.get("exit_code", "—"), output=output)
 
                 if error:
-                    reply += f"\n\nSTDERR:\n{error}"
+                    reply += tr("command.stderr", error=error)
 
                 if data["status"] == "error":
                     reply += f"\n\n{data.get('error', '')}"
@@ -337,8 +351,11 @@ class AssistantWorker(QObject):
             reply, self.history = self.assistant.run_desktop_turn(
                 prompt,
                 self.history,
-                on_chunk=self.chunk.emit,
-                on_audio=self.report_audio)
+                on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),
+                on_audio=lambda samples, rate: self.report_audio(turn_id, samples, rate),
+                on_speaking=lambda speaking: self.speaking.emit(turn_id, speaking),
+                cancel_event=cancel_event,
+                event_loop=self.event_loop)
 
             if reply:
                 self.session.write(self.assistant.name, reply)
@@ -347,20 +364,40 @@ class AssistantWorker(QObject):
 
         except Exception as error:
             cause = error.__cause__
-            message = f"{error}; Detail: {cause}" if cause is not None else str(
+            message = tr("ui.error_detail", error=error, cause=cause) if cause is not None else str(
                 error)
             self.session.write("System", message)
             self.failed.emit(message)
 
-    def report_audio(self, samples, sample_rate):
-        self.audio.emit(spectrum_levels(samples, sample_rate).tolist())
+    def report_audio(self, turn_id, samples, sample_rate):
+        if not self.cancel_event.is_set():
+            self.audio.emit(turn_id, spectrum_levels(samples, sample_rate).tolist())
 
-    def confirm_command(self, message: str) -> bool:
+    def interrupt(self):
+        # Called directly: a queued Qt slot cannot run while ask() is busy.
+        self.cancel_event.set()
+        self.resolve_confirmation(False)
+
+    @Slot()
+    def shutdown(self):
+        if self.assistant.voice is not None:
+            self.assistant.voice.close()
+        if self.event_loop is not None:
+            self.event_loop.close()
+
+    def confirm_command(self, message: str, cancel_event=None, turn_id=0) -> bool:
+        cancel_event = self.cancel_event if cancel_event is None else cancel_event
+        if cancel_event.is_set():
+            return False
         self.confirmation_answer = False
         self.confirmation_event.clear()
-        self.confirmation_requested.emit(message)
-        self.confirmation_event.wait()
-        return self.confirmation_answer
+        if cancel_event.is_set():
+            return False
+        self.confirmation_requested.emit(turn_id, message)
+        while not self.confirmation_event.wait(0.05):
+            if cancel_event.is_set():
+                return False
+        return self.confirmation_answer and not cancel_event.is_set()
 
     def resolve_confirmation(self, accepted: bool):
         self.confirmation_answer = accepted
@@ -368,7 +405,7 @@ class AssistantWorker(QObject):
 
 
 class ArloWindow(QMainWindow):
-    request = Signal(str)
+    request = Signal(int, str)
     username = getuser().capitalize()
 
     def __init__(self):
@@ -382,13 +419,24 @@ class ArloWindow(QMainWindow):
 
         self.busy = False
         self.ready = False
+        self.speaking = False
+        self.stopping = False
+        self.pending_prompt = None
+        self.turn_id = 0
+        self.status_key = "status.waking"
+        self.greeting_key = f"greeting.{random.randrange(6)}"
+        self.showing_greeting = True
         self.current_reply = None
         self.subtitle_text = ""
 
         self.settings = QSettings("ARLO", "desktop")
         self.build_ui()
         self.build_worker()
-        self.set_status("Conectando con Arlo...")
+        self.set_status("status.waking")
+        self.language_timer = QTimer(self)
+        self.language_timer.setInterval(500)
+        self.language_timer.timeout.connect(self.refresh_language)
+        self.language_timer.start()
 
     def build_ui(self):
         root = QWidget()
@@ -404,17 +452,29 @@ class ArloWindow(QMainWindow):
         version.setObjectName("muted")
         header.addWidget(version)
         header.addStretch()
-        subtitle_label = QLabel("Subtítulos")
-        subtitle_label.setObjectName("muted")
-        header.addWidget(subtitle_label)
+        switches = QVBoxLayout()
+        subtitle_row = QHBoxLayout()
+        self.subtitle_label = QLabel()
+        self.subtitle_label.setObjectName("muted")
+        subtitle_row.addWidget(self.subtitle_label)
+        subtitle_row.addStretch()
         self.subtitles_switch = ToggleSwitch()
-        self.subtitles_switch.setToolTip("Mostrar u ocultar subtítulos")
-        self.subtitles_switch.setAccessibleName("Subtítulos")
         enabled = self.settings.value("subtitles", True, type=bool)
         self.subtitles_switch.setChecked(enabled)
         self.subtitles_switch.toggled.connect(self.toggle_subtitles)
-        header.addSpacing(8)
-        header.addWidget(self.subtitles_switch)
+        subtitle_row.addWidget(self.subtitles_switch)
+        switches.addLayout(subtitle_row)
+        language_row = QHBoxLayout()
+        self.language_label = QLabel()
+        self.language_label.setObjectName("muted")
+        language_row.addWidget(self.language_label)
+        language_row.addStretch()
+        self.language_switch = ToggleSwitch()
+        self.language_switch.setChecked(get_language() == "spanish")
+        self.language_switch.toggled.connect(self.toggle_language)
+        language_row.addWidget(self.language_switch)
+        switches.addLayout(language_row)
+        header.addLayout(switches)
         main.addLayout(header)
 
         banner_group = QVBoxLayout()
@@ -469,7 +529,6 @@ class ArloWindow(QMainWindow):
         input_layout.setSpacing(0)
 
         self.input = ChatInput()
-        self.input.setPlaceholderText("Escribe un mensaje...")
         self.input.submitted.connect(self.send_message)
         input_layout.addWidget(self.input, 0, Qt.AlignVCenter)
 
@@ -479,12 +538,14 @@ class ArloWindow(QMainWindow):
         self.send = QPushButton("")
         self.send.setObjectName("send")
         self.send.setFixedSize(48, 48)
-        self.send.clicked.connect(self.send_message)
+        self.send.clicked.connect(self.on_send_clicked)
         composer.addWidget(self.send, 0, Qt.AlignVCenter)
         main.addLayout(composer)
 
         self.set_enabled(False)
         self.load_stylesheet()
+        self.active_language = None
+        self.refresh_language()
 
     def load_stylesheet(self):
         stylesheet_path = (Path(__file__).resolve().parent / "assets" / "arlo.qss")
@@ -493,15 +554,7 @@ class ArloWindow(QMainWindow):
 
     @property
     def startup_greeting(self) -> str:
-        greetings = (
-            f"Hola, {self.username}. ¿Qué quieres hacer?",
-            f"Hola, {self.username}. ¿En qué te ayudo?",
-            f"Estoy listo, {self.username}. ¿Qué hacemos?",
-            f"¿Qué necesitas hoy, {self.username}?",
-            f"Todo listo, {self.username}. ¿Por dónde empezamos?",
-            f"Arlo preparado. Escribe lo que necesites.",
-        )
-        return random.choice(greetings)
+        return tr(self.greeting_key, username=self.username, name="Arlo")
 
     def build_worker(self):
         self.thread = QThread(self)
@@ -513,36 +566,86 @@ class ArloWindow(QMainWindow):
         self.worker.ready.connect(self.on_ready)
         self.worker.chunk.connect(self.on_chunk)
         self.worker.audio.connect(self.on_audio)
+        self.worker.speaking.connect(self.on_speaking)
         self.worker.finished.connect(self.on_finished)
         self.worker.failed.connect(self.on_error)
 
+        self.thread.finished.connect(self.worker.shutdown)
         self.thread.finished.connect(self.worker.deleteLater)
         self.thread.start()
 
         self.worker.confirmation_requested.connect(
             self.on_confirmation_requested)
 
-    @Slot(str)
-    def on_confirmation_requested(self, message):
-        self.set_status("Esperando autorización...")
+    @Slot(int, str)
+    def on_confirmation_requested(self, turn_id, message):
+        if turn_id != self.turn_id:
+            return
+        if self.stopping:
+            self.worker.resolve_confirmation(False)
+            return
+        self.set_status("status.authorization")
         dialog = QMessageBox(self)
-        dialog.setWindowTitle("Autorizar comando")
+        dialog.setWindowTitle(tr("command.title"))
         dialog.setIcon(QMessageBox.Question)
-        dialog.setText("Arlo solicita ejecutar un comando.")
+        dialog.setText(tr("command.request"))
         dialog.setInformativeText(message)
         dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        dialog.button(QMessageBox.Yes).setText(tr("command.yes"))
+        dialog.button(QMessageBox.No).setText(tr("command.no"))
         dialog.setDefaultButton(QMessageBox.No)
 
         accepted = dialog.exec() == QMessageBox.Yes
         self.worker.resolve_confirmation(accepted)
-        self.set_status("Pensando..." if accepted else "Comando denegado")
+        self.set_status("status.thinking" if accepted else "status.denied")
 
-    def set_status(self, text):
-        self.status.setText(text)
+    def set_status(self, key):
+        self.status_key = key
+        self.status.setText(tr(key) if key else "")
 
     def set_enabled(self, enabled):
         self.input.setEnabled(enabled)
-        self.send.setEnabled(enabled)
+        self.update_send_button()
+
+    def update_send_button(self):
+        stopping_available = self.busy and self.speaking and not self.stopping
+        self.send.setText("■" if stopping_available else "")
+        self.send.setEnabled(self.ready and (not self.busy or stopping_available))
+        key = "ui.stop" if stopping_available else "ui.send"
+        self.send.setAccessibleName(tr(key))
+        self.send.setToolTip(tr("ui.stop_hint" if stopping_available else key))
+        self.input.setPlaceholderText(tr("ui.steering_input" if self.busy else "ui.input"))
+
+    @Slot(bool)
+    def toggle_language(self, enabled):
+        try:
+            set_language("spanish" if enabled else "english")
+        except (OSError, ValueError) as error:
+            self.language_switch.blockSignals(True)
+            self.language_switch.setChecked(get_language() == "spanish")
+            self.language_switch.blockSignals(False)
+            self.update_subtitles(tr("ui.error", error=error))
+            return
+        self.refresh_language()
+
+    def refresh_language(self):
+        language = get_language()
+        if language == self.active_language:
+            return
+        self.active_language = language
+        self.language_switch.blockSignals(True)
+        self.language_switch.setChecked(language == "spanish")
+        self.language_switch.blockSignals(False)
+        self.subtitle_label.setText(tr("ui.subtitles"))
+        self.subtitles_switch.setAccessibleName(tr("ui.subtitles"))
+        self.subtitles_switch.setToolTip(tr("ui.subtitles_hint"))
+        self.language_label.setText(tr("ui.language"))
+        self.language_switch.setAccessibleName(tr("ui.language"))
+        self.language_switch.setToolTip(tr("ui.language_hint"))
+        self.set_status(self.status_key)
+        self.update_send_button()
+        if self.showing_greeting:
+            self.update_subtitles(self.startup_greeting)
 
     @Slot()
     def on_ready(self):
@@ -595,66 +698,123 @@ class ArloWindow(QMainWindow):
 
     @Slot()
     def send_message(self):
-        if self.busy or not self.ready:
+        if not self.ready:
             return
 
         prompt = self.input.toPlainText().strip()
         if not prompt:
             return
 
+        if self.busy:
+            if self.stopping:
+                return
+            self.pending_prompt = prompt
+            self.input.clear()
+            self.stop_response()
+            return
+
+        self.input.clear()
+        self.start_prompt(prompt)
+
+    def start_prompt(self, prompt):
+        self.turn_id += 1
+        self.showing_greeting = False
+        self.worker.cancel_event = threading.Event()
+        self.stopping = False
+        self.speaking = False
+
         self.command_output.hide()
         self.command_output.clear()
 
-        self.input.clear()
         self.current_reply = ""
         self.update_subtitles(prompt)
 
         self.busy = True
-        self.set_enabled(False)
-        self.set_status("Pensando...")
-        self.request.emit(prompt)
+        self.set_enabled(True)
+        self.set_status("status.thinking")
+        self.request.emit(self.turn_id, prompt)
 
-    @Slot(str)
-    def on_chunk(self, chunk):
-        if self.current_reply is None:
+    @Slot()
+    def on_send_clicked(self):
+        if self.busy:
+            if self.speaking and not self.stopping:
+                self.stop_response()
+        else:
+            self.send_message()
+
+    def stop_response(self):
+        self.stopping = True
+        self.worker.interrupt()
+        self.speaking = False
+        self.meter.clear()
+        self.set_status("status.stopping")
+        self.update_send_button()
+
+    @Slot(int, str)
+    def on_chunk(self, turn_id, chunk):
+        if turn_id != self.turn_id or self.current_reply is None or self.stopping:
             return
 
         self.current_reply += chunk
         self.update_subtitles(self.current_reply)
 
-    @Slot(object)
-    def on_audio(self, levels):
-        self.meter.set_levels(levels)
+    @Slot(int, object)
+    def on_audio(self, turn_id, levels):
+        if turn_id == self.turn_id and self.busy and not self.stopping:
+            self.meter.set_levels(levels)
+
+    @Slot(int, bool)
+    def on_speaking(self, turn_id, speaking):
+        if turn_id != self.turn_id:
+            return
+        self.speaking = speaking and self.busy and not self.stopping
+        if not self.stopping and self.busy:
+            self.set_status("status.speaking" if self.speaking else "status.thinking")
+        self.update_send_button()
 
     @Slot(str)
     def on_finished(self, reply):
-        if reply.startswith("Estado: "):
+        interrupted = self.stopping
+        if self.worker.command_reply:
             self.command_output.setPlainText(reply)
             self.command_output.show()
             self.update_subtitles(reply.splitlines()[0])
         elif not self.current_reply:
-            self.update_subtitles(reply or "(Sin respuesta)")
+            self.update_subtitles(reply or tr("status.stopped" if interrupted else "ui.no_response"))
 
         self.current_reply = None
         self.busy = False
+        self.speaking = False
+        self.stopping = False
         self.meter.clear()
-        self.set_status("[PRIVATE]" if self.worker.session.private else "")
+        self.set_status("status.stopped" if interrupted else
+                        "status.private" if self.worker.session.private else "")
         self.set_enabled(True)
         self.input.setFocus()
+        self.resume_pending_prompt()
+
+    def resume_pending_prompt(self):
+        prompt, self.pending_prompt = self.pending_prompt, None
+        if prompt:
+            self.start_prompt(prompt)
 
     @Slot(str)
     def on_error(self, error):
-        self.update_subtitles(f"Error: {error}")
+        self.showing_greeting = False
+        self.update_subtitles(tr("ui.error", error=error))
         self.current_reply = None
         self.busy = False
+        self.speaking = False
+        self.stopping = False
         self.meter.clear()
-        self.set_status("Error")
+        self.set_status("status.error")
         self.set_enabled(self.ready)
+        self.resume_pending_prompt()
 
     def closeEvent(self, event):
         if self.thread.isRunning() and self.busy:
             self.set_status(
-                "Espera a que Arlo termine de responder antes de cerrar.")
+                "status.close_wait")
             event.ignore()
             return
 
