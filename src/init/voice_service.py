@@ -77,6 +77,41 @@ def _clean_for_speech(text: str) -> str:
     return text
 
 
+from decimal import Decimal, InvalidOperation
+from num2words import num2words
+
+SPANISH_NUMBER = re.compile(
+    r"(?<![\w./\\])"
+    r"-?(?:\d{1,3}(?:\.\d{3})+|\d+)"
+    r"(?:,\d+)?"
+    r"(?![\w./\\])"
+)
+
+
+def normalize_spanish_numbers(text: str) -> str:
+    """Convert Spanish-formatted numbers to spoken Spanish."""
+    def replace(match: re.Match) -> str:
+        original = match.group()
+        try:
+            if "," in original:
+                integer, fractional = original.split(",", 1)
+                integer = integer.replace(".", "")
+                whole = num2words(int(integer), lang="es")
+                decimal_digits = " ".join(
+                    num2words(int(digit), lang="es")
+                    for digit in fractional)
+                return f"{whole} coma {decimal_digits}"
+
+            number = int(original.replace(".", ""))
+            return num2words(number, lang="es")
+
+        except (ValueError, InvalidOperation):
+            return original
+
+    return SPANISH_NUMBER.sub(replace, text)
+
+
+
 class VoiceService:
     """
     Arlo's multilingual voice service using Fun-CosyVoice3.
@@ -119,6 +154,7 @@ class VoiceService:
 
     def enqueue(self, text: str) -> None:
         text = _clean_for_speech(text)
+        text = normalize_spanish_numbers(text)
 
         if text:
             logger.debug("Queued: %s", text)
