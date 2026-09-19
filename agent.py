@@ -358,6 +358,30 @@ class Assistant:
             "without supporting evidence."
         )
 
+
+    def run_desktop_turn(self, prompt: str, history: list, on_chunk=None, on_audio=None):
+        """Run one desktop turn without reading from or rendering to TerminalUI."""
+        from src.init import brain
+
+        self._initialize_runtime()
+        self.voice.audio_callback = on_audio
+
+        with self.agent.run_stream_sync(
+            prompt,
+            message_history=history,
+            model_settings={"temperature": brain.load_config()["temperature"]}
+        ) as result:
+            def chunks():
+                for chunk in result.stream_text(delta=True, debounce_by=0.05):
+                    if chunk:
+                        if on_chunk is not None:
+                            on_chunk(chunk)
+                        yield chunk
+
+            reply = self.speak(chunks())
+            self.voice.wait_until_done()
+            return reply, result.all_messages()
+
     def run_session(self):
         logger = logging.getLogger("arlo.trace")
 
