@@ -7,7 +7,7 @@ QWidget#settingsPage {
 QLabel#hero {
     color: #cad3f5;
     background: transparent;
-    font-size: 24px;
+    font-size: 16px;
 }
 
 QLabel#muted,
@@ -167,34 +167,46 @@ QScrollArea#chatScroll {
     background: transparent;
     border: none;
 }
-QScrollArea#chatScroll QScrollBar:vertical {
+QScrollArea#chatScroll
+QScrollBar:vertical {
     background: transparent;
     width: 16px;
     margin: 0;
 }
-QScrollArea#attachmentTray QScrollBar:horizontal {
+QScrollArea#attachmentTray
+QScrollBar:horizontal {
     background: #24273a;
     height: 8px;
     margin: 0;
 }
-QScrollArea#chatScroll QScrollBar::handle,
-QScrollArea#attachmentTray QScrollBar::handle {
+QScrollArea#chatScroll
+QScrollBar::handle,
+QScrollArea#attachmentTray
+QScrollBar::handle {
     background: transparent;
     border-radius: 4px;
     min-width: 24px;
     min-height: 16px;
 }
-QScrollArea#chatScroll QScrollBar::add-line,
-QScrollArea#chatScroll QScrollBar::sub-line,
-QScrollArea#attachmentTray QScrollBar::add-line,
-QScrollArea#attachmentTray QScrollBar::sub-line {
+QScrollArea#chatScroll
+QScrollBar::add-line,
+QScrollArea#chatScroll
+QScrollBar::sub-line,
+QScrollArea#attachmentTray
+QScrollBar::add-line,
+QScrollArea#attachmentTray
+QScrollBar::sub-line {
     width: 0;
     height: 0;
 }
-QScrollArea#chatScroll QScrollBar::add-page,
-QScrollArea#chatScroll QScrollBar::sub-page,
-QScrollArea#attachmentTray QScrollBar::add-page,
-QScrollArea#attachmentTray QScrollBar::sub-page {
+QScrollArea#chatScroll
+QScrollBar::add-page,
+QScrollArea#chatScroll
+QScrollBar::sub-page,
+QScrollArea#attachmentTray
+QScrollBar::add-page,
+QScrollArea#attachmentTray
+ QScrollBar::sub-page {
     background: transparent;
 }
 QFrame#attachmentChip {
@@ -206,7 +218,8 @@ QFrame#attachmentChip QLabel {
     color: #cad3f5;
     background: transparent;
 }
-QFrame#attachmentChip QLabel#attachmentDetail {
+QFrame#attachmentChip
+QLabel#attachmentDetail {
     color: #a5adcb;
     font-size: 12px;
 }

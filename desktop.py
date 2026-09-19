@@ -366,7 +366,7 @@ class ArloWindow(QMainWindow):
         self.pages = QStackedWidget()
         self.greeting_key = f"greeting.{random.randrange(6)}"
         self.subtitles = QLabel(self.startup_greeting)
-        self.hero = QLabel(Assistant().banner.rstrip("\n"))
+        self.hero = QLabel(Assistant().banner.strip("\n"))
         self.meter = AudioVisualizer()
         self.worker = AssistantWorker()
         self.chat_scroll = QScrollArea()
@@ -527,6 +527,7 @@ class ArloWindow(QMainWindow):
         self.chat_scroll.setObjectName("chatScroll")
         self.chat_scroll.setFrameShape(QFrame.NoFrame)
         self.chat_scroll.setWidgetResizable(True)
+        self.chat_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.chat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.chat_scroll.setWidget(root)
         self.attachment_tray.changed.connect(self.ensure_composer_visible)
@@ -894,6 +895,7 @@ def main():
     nerd_font = load_font("JetBrainsMonoNLNerdFontMono-Medium.ttf")
     app.setFont(QFont(main_font, 11))
     window = ArloWindow()
+    window.log_view.code_font_family = nerd_font
     banner_font = QFont(nerd_font, 11)
     banner_font.setStyleHint(QFont.Monospace)
     window.hero.setFont(banner_font)

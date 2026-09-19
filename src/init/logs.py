@@ -20,10 +20,11 @@
 import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (QHBoxLayout,
-    QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget)
+                               QLabel, QPushButton, QTextEdit, QVBoxLayout,
+                               QWidget)
 
 
 class LogView(QWidget):
@@ -54,6 +55,8 @@ class LogView(QWidget):
         layout.addLayout(header)
 
         self.viewer = QTextEdit()
+        self.viewer.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.viewer.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.viewer.setObjectName("logViewer")
         self.viewer.setReadOnly(True)
         layout.addWidget(self.viewer, 0)
@@ -104,4 +107,3 @@ class LogView(QWidget):
             self.viewer.ensureCursorVisible()
         else:
             scrollbar.setValue(old_position)
-
