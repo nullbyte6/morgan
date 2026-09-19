@@ -12,7 +12,7 @@ $ttsPort = 18765
 $logDir = Join-Path $env:TEMP "arlo"
 $ttsLog = Join-Path $logDir "tts.log"
 $agentLog = Join-Path $logDir "agent.log"
-$consoleScript = Join-Path $logDir "services-console.ps1"
+$consoleScript = Join-Path $logDir "console.ps1"
 
 $env:PYTHONPATH = (
     (Join-Path $root "src") + ";" +
@@ -83,7 +83,6 @@ function Wait-TcpPort {
     return $false
 }
 
-Write-Host ""
 Write-Host "ARLO SERVICES" -ForegroundColor Cyan
 Write-Host "-------------"
 Write-Host "[1/3] Checking Ollama..."
@@ -113,7 +112,7 @@ $modelName = $env:MODEL
 if (-not $modelName) {
     $configPath = $env:ARLO_CONFIG_FILE
     if (-not $configPath) {
-        $configPath = Join-Path $env:USERPROFILE ".arlo\config.json"
+        $configPath = Join-Path $env:USERPROFILE ".arlo\json\config.json"
     }
 
     if (Test-Path -LiteralPath $configPath) {
@@ -310,7 +309,7 @@ while ($true) {
     $existingConsole = Get-CimInstance Win32_Process |
         Where-Object {
             $_.Name -eq "pwsh.exe" -and
-            $_.CommandLine -like "*services-console.ps1*"
+            $_.CommandLine -like "*console.ps1*"
         } |
         Select-Object -First 1
 
