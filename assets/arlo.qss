@@ -13,7 +13,7 @@ QLabel#hero {
 QLabel#muted,
 QLabel#status {
     color: #a5adcb;
-    font-size: 13px;
+    font-size: 16px;
 }
 
 QLabel#meter {
@@ -30,7 +30,7 @@ QLabel#subtitles {
 
 
 QFrame#inputFrame {
-    background-color: #363a4f;
+    background: transparent;
     border: 1px solid #494d64;
     border-radius: 24px;
 }
