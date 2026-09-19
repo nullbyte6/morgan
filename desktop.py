@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
     QApplication, QAbstractButton, QFrame, QHBoxLayout,
     QLabel, QMainWindow, QPushButton, QSizePolicy,
     QTextEdit, QVBoxLayout, QWidget, QMessageBox,
-    QPlainTextEdit)
+    QPlainTextEdit, QStackedWidget)
 
 from agent import Assistant
 from src.init.commands import execute_command, set_confirmation_handler
@@ -51,7 +51,7 @@ from src.init.config import load_dev_file
 from src.init.lang import get_language, set_language, tr
 from src.init.session_log import SessionLog
 from src.init.terminal import spectrum_levels
-
+from src.init.logs import LogView
 
 class ChatInput(QTextEdit):
     submitted = Signal()
