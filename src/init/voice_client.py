@@ -12,13 +12,12 @@ from .lang import tr
 # noinspection PyBroadException
 class VoiceClient:
     """Client for Arlo's persistent TTS service."""
-
     def __init__(self, audio_callback=None, host: str = "127.0.0.1",
             port: int = 18765):
         self.audio_callback = audio_callback
         self.speaking_callback = None
         self._turn_id = uuid.uuid4().hex
-        self._hello = threading.Event()
+        self.supports_interruptions = False
         self._socket = socket.create_connection(
             (host, port), timeout=10)
         self._socket.settimeout(None)
@@ -38,9 +37,6 @@ class VoiceClient:
             daemon=True)
         self._thread.start()
         self._send({"type": "hello"})
-        if not self._hello.wait(5):
-            self.close()
-            raise RuntimeError(tr("voice.restart"))
 
     def _send(self, message: dict) -> None:
         data = (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")
@@ -61,10 +57,10 @@ class VoiceClient:
                 message = json.loads(line)
                 kind = message.get("type")
                 if kind == "hello":
-                    if message.get("interruptible"):
-                        self._hello.set()
+                    self.supports_interruptions = bool(message.get("interruptible"))
                     continue
-                if message.get("turn_id") != self._turn_id:
+                if (message.get("turn_id") != self._turn_id and
+                        (self.supports_interruptions or "turn_id" in message)):
                     continue
 
                 if kind == "audio":
@@ -112,6 +108,10 @@ class VoiceClient:
         self._done.set()
 
     def stop(self) -> None:
+        if not self.supports_interruptions:
+            if not self._done.is_set() and not self._closed:
+                raise RuntimeError(tr("voice.restart"))
+            return
         turn_id = self._turn_id
         self._turn_id = uuid.uuid4().hex
         self._done.set()
