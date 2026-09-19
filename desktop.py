@@ -369,6 +369,7 @@ class ArloWindow(QMainWindow):
         self.hero = QLabel(Assistant().banner.rstrip("\n"))
         self.meter = AudioVisualizer()
         self.worker = AssistantWorker()
+        self.chat_scroll = QScrollArea()
         self.thread = QThread(self)
 
         self.log_dir = Path.home() / ".arlo" / "log"
@@ -523,9 +524,6 @@ class ArloWindow(QMainWindow):
         composer_area.addLayout(composer)
         main.addLayout(composer_area)
 
-        # Keep the composer reachable at the minimum window size, even with
-        # attachments and a multiline draft. The normal-size layout is unchanged.
-        self.chat_scroll = QScrollArea()
         self.chat_scroll.setObjectName("chatScroll")
         self.chat_scroll.setFrameShape(QFrame.NoFrame)
         self.chat_scroll.setWidgetResizable(True)

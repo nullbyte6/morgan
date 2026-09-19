@@ -34,13 +34,12 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from uuid import uuid4
 
-
 DEFAULT_LIMITS = {
     "max_files": 10,
-    "max_file_bytes": 20 * 1024 * 1024,
-    "max_total_bytes": 50 * 1024 * 1024,
-    "chunk_bytes": 4096,
-    "context_bytes": 8192,
+    "max_file_bytes": 20 * 1024 * 1024 * 1024,
+    "max_total_bytes": 50 * 1024 * 1024 * 1024,
+    "chunk_bytes": 16 * 1024,
+    "context_bytes": 64 * 1024,
     "max_image_pixels": 1024 * 1024,
 }
 

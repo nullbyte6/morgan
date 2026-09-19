@@ -320,7 +320,8 @@ def delete_directory(path: str, recursive: bool = False) -> str:
         elif recursive:
             shutil.rmtree(directory_path)
         elif any(directory_path.iterdir()):
-            return (tr('brain.directory_is_not_empty_recursive_deletion_was_not_requested', directory_path=directory_path))
+            return tr('brain.directory_is_not_empty_recursive_deletion_was_not_requested',
+                      directory_path=directory_path)
         else:
             directory_path.rmdir()
         return tr('brain.directory_deleted', directory_path=directory_path)
