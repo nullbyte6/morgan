@@ -61,7 +61,7 @@ class SessionLog:
             pass
         else:
             with log:
-                log.write(f"{SESSION_HEADER} {get_assistant().name} Log — {started:%Y-%m-%d}\n")
+                log.write(f"{SESSION_HEADER} {get_assistant().name} Log — {started:%Y-%m-%d}")
         self._prune()
         global _current_session_path
         _current_session_path = self.path
