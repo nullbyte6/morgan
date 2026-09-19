@@ -1,5 +1,24 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Disk-wide directory discovery and a persistent, ambiguity-preserving cache."""
 
+from src.init.lang import tr
 from collections import deque
 import ctypes
 import json
@@ -21,7 +40,7 @@ def _read():
         return {}
     data = json.loads(FOLDERS_FILE.read_text(encoding="utf-8-sig"))
     if not isinstance(data, dict):
-        raise ValueError("folders.json must contain an object")
+        raise ValueError(tr('folder_search.folders_json_must_contain_an_object'))
     return data
 
 
@@ -108,11 +127,11 @@ def search_folders(name, directory="", partial=False, max_results=100,
                    timeout_seconds=30, refresh=False):
     name = name.strip()
     if not name or name in (".", "..") or any(c in name for c in ("/", "\\", ":", "\x00")):
-        raise ValueError("name must be a folder name, not a path")
+        raise ValueError(tr('folder_search.name_must_be_a_folder_name_not_a_path'))
     if type(max_results) is not int or not 1 <= max_results <= 1000:
-        raise ValueError("max_results must be between 1 and 1000")
+        raise ValueError(tr('folder_search.max_results_must_be_between_1_and_1000'))
     if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 300:
-        raise ValueError("timeout_seconds must be between 1 and 300")
+        raise ValueError(tr('folder_search.timeout_seconds_must_be_between_1_and_300'))
     global_search = not directory.strip()
     if global_search and not partial and not refresh:
         cached = cached_folders(name)
@@ -123,9 +142,9 @@ def search_folders(name, directory="", partial=False, max_results=100,
                         stop_reason="max_results" if len(paths) > max_results else None)
     roots = disk_roots() if global_search else [resolve_directory(directory)]
     if not roots:
-        raise ValueError("No local disks available")
+        raise ValueError(tr('folder_search.no_local_disks_available'))
     if not global_search and not roots[0].is_dir():
-        raise ValueError(f"Search directory does not exist: {roots[0]}")
+        raise ValueError(tr('folder_search.search_directory_does_not_exist', value0=roots[0]))
     queues = deque(deque([root]) for root in roots)
     matches, errors = set(), []
     error_count = skipped_links = 0

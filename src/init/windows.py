@@ -1,5 +1,24 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Read current taskbar-style application windows through Win32."""
 
+from src.init.lang import tr
 import ctypes
 from ctypes import wintypes as wt
 
@@ -81,7 +100,7 @@ def get_open_windows():
         error_code = ctypes.get_last_error()
         if error_code:
             raise ctypes.WinError(error_code)
-        raise OSError("Windows could not enumerate windows in this desktop session")
+        raise OSError(tr('windows.windows_could_not_enumerate_windows_in_this_desktop_session'))
     return windows
 
 
@@ -95,6 +114,6 @@ def request_window_close(hwnd, expected_pid):
     pid = wt.DWORD()
     user.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
     if pid.value != expected_pid:
-        raise OSError("Window no longer belongs to the selected process")
+        raise OSError(tr('windows.window_no_longer_belongs_to_the_selected_process'))
     if not user.PostMessageW(hwnd, 0x0010, 0, 0):
         raise ctypes.WinError(ctypes.get_last_error())

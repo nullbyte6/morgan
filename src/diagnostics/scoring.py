@@ -1,3 +1,22 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 """Deterministic score v1, not a probability of failure or a security guarantee.
 Start at 100 for observed components; deduct bounded category penalties:
 CPU 10, memory 15, storage 40, security 25, Windows 30 (processes add none).
@@ -20,6 +39,7 @@ Critical events warn once; >=20 errors warn once. Device codes except 22
 warn; merely stopped demand-start services or uptime do not penalize.
 """
 
+from src.init.lang import tr
 from datetime import timezone
 
 from .models import HealthIssue, HealthReport
@@ -46,27 +66,27 @@ def evaluate(report: HealthReport) -> HealthReport:
 
     if sustained(report.cpu.samples_percent, 90):
         issue("cpu", "HIGH_CPU_USAGE", "warning",
-              "CPU remained high during the sample window.",
+              tr('scoring.cpu_remained_high_during_the_sample_window'),
               {"samples_percent": report.cpu.samples_percent,
                "window_seconds": report.cpu.sample_window_seconds},
-              "Review the busiest processes and repeat the measurement after the current workload finishes.")
+              tr('scoring.review_the_busiest_processes_and_repeat_the_measurement_after_th'))
     if sustained(report.memory.samples_percent, 90):
         critical = sustained(report.memory.samples_percent, 97)
         issue("memory", "HIGH_MEMORY_USAGE",
               "critical" if critical else "warning",
-              "RAM usage remained high during the sample window.",
+              tr('scoring.ram_usage_remained_high_during_the_sample_window'),
               {"samples_percent": report.memory.samples_percent},
-              "Review memory-heavy applications and save work before deciding whether to close any.")
+              tr('scoring.review_memory_heavy_applications_and_save_work_before_deciding_w'))
     for volume in report.disks.volumes:
         if volume.used_percent is not None and volume.used_percent >= 90:
             critical = volume.used_percent >= 97
             issue("storage",
                   "CRITICAL_DISK_SPACE" if critical else "LOW_DISK_SPACE",
                   "critical" if critical else "warning",
-                  "A volume has little free capacity.",
+                  tr('scoring.a_volume_has_little_free_capacity'),
                   {"drive": volume.drive, "used_percent": volume.used_percent,
                    "free_gib": volume.free_gib},
-                  "Review storage usage and backups; choose any cleanup separately. No files were removed.")
+                  tr('scoring.review_storage_usage_and_backups_choose_any_cleanup_separately_n'))
     for disk in report.disks.physical_disks:
         health = (disk.health_status or "").casefold()
         abnormal = [state for state in disk.operational_status if
@@ -78,11 +98,11 @@ def evaluate(report: HealthReport) -> HealthReport:
                 state.casefold() == "error" for state in abnormal)
             issue("storage", "DISK_HEALTH_WARNING",
                   "critical" if critical else "warning",
-                  "Windows reports an abnormal physical disk state.",
+                  tr('scoring.windows_reports_an_abnormal_physical_disk_state'),
                   {"device_id": disk.device_id,
                    "health_status": disk.health_status,
                    "operational_status": disk.operational_status},
-                  "Verify current backups and consult the disk vendor's diagnostic guidance.")
+                  tr('scoring.verify_current_backups_and_consult_the_disk_vendor_s_diagnostic'))
     security = report.security
     if "third_party_protection_not_verified" not in security.unavailable:
         for field, code in (("antivirus_enabled", "DEFENDER_DISABLED"),
@@ -90,52 +110,51 @@ def evaluate(report: HealthReport) -> HealthReport:
                              "REALTIME_PROTECTION_DISABLED")):
             if getattr(security, field) is False:
                 issue("security", code, "warning",
-                      "A Defender protection flag is disabled.",
+                      tr('scoring.a_defender_protection_flag_is_disabled'),
                       {field: False,
                        "running_mode": security.defender_running_mode},
-                      "Review Windows Security and confirm which antivirus is providing protection.")
+                      tr('scoring.review_windows_security_and_confirm_which_antivirus_is_providing'))
         updated = security.antivirus_signature_last_updated
         if updated is not None and security.antivirus_enabled is True:
             age = (report.timestamp - updated.replace(
                 tzinfo=updated.tzinfo or timezone.utc)).total_seconds() / 86400
             if age > 7:
                 issue("security", "DEFENDER_SIGNATURES_OLD", "warning",
-                      "Defender signatures are over seven days old.",
+                      tr('scoring.defender_signatures_are_over_seven_days_old'),
                       {"age_days": round(age, 1)},
-                      "Review signature updates in Windows Security.")
+                      tr('scoring.review_signature_updates_in_windows_security'))
     windows = report.windows
     if windows.event_critical_count:
         issue("windows", "WINDOWS_CRITICAL_EVENTS", "warning",
-              "Windows logged critical events in the last 24 hours.",
+              tr('scoring.windows_logged_critical_events_in_the_last_24_hours'),
               {"count": windows.event_critical_count,
                "truncated": windows.events_truncated},
-              "Review the grouped event IDs and correlate them with symptoms; "
-              "a past event does not prove an ongoing fault.")
+              tr('scoring.review_the_grouped_event_ids_and_correlate_them_with_symptoms_a'))
     if windows.event_error_count >= 20:
         issue("windows", "WINDOWS_REPEATED_ERRORS", "warning",
-              "Windows logged repeated errors in the last 24 hours.",
+              tr('scoring.windows_logged_repeated_errors_in_the_last_24_hours'),
               {"count": windows.event_error_count,
                "truncated": windows.events_truncated},
-              "Review the most frequent event groups before deciding whether investigation is needed.")
+              tr('scoring.review_the_most_frequent_event_groups_before_deciding_whether_in'))
     problems = [device for device in windows.device_problems if
                 device.error_code not in (0, 22)]
     if problems:
         issue("windows", "DEVICE_REPORTED_ERROR", "warning",
-              "Windows reports device error codes.",
+              tr('scoring.windows_reports_device_error_codes'),
               {"devices": [device.model_dump() for device in problems]},
-              "Inspect the reported device classes in Device Manager; do not change drivers automatically.")
+              tr('scoring.inspect_the_reported_device_classes_in_device_manager_do_not_cha'))
     for service in windows.services:
         if service.name in {"EventLog", "BFE"} and (
                 service.start_mode or "").casefold() == "disabled":
             issue("windows", "CORE_SERVICE_DISABLED", "warning",
-                  "A core service is configured as disabled.",
+                  tr('scoring.a_core_service_is_configured_as_disabled'),
                   service.model_dump(),
-                  "Review the service configuration with the system administrator.")
+                  tr('scoring.review_the_service_configuration_with_the_system_administrator'))
     if windows.updates and windows.updates.recent_failed_count:
         issue("windows", "WINDOWS_UPDATE_HISTORY_FAILURE", "warning",
-              "Recent local update history contains unsuccessful operations.",
+              tr('scoring.recent_local_update_history_contains_unsuccessful_operations'),
               windows.updates.model_dump(mode="json"),
-              "Review Windows Update history; an older unsuccessful operation may already have been resolved.")
+              tr('scoring.review_windows_update_history_an_older_unsuccessful_operation_ma'))
 
     report.issues = sorted(issues, key=lambda item: item.severity != "critical")
     report.recommendations = list(

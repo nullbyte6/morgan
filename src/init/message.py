@@ -1,4 +1,23 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Send messages through the configured provider, resolving contacts on demand."""
+from src.init.lang import tr
 import json
 import os
 import re
@@ -24,7 +43,7 @@ def _phone(value):
         number = '+' + number[2:]
     if not re.fullmatch(r'\+[1-9][0-9]{6,14}', number):
         raise ValueError(
-            'Specify an international phone number including + and country code')
+            tr('message.specify_an_international_phone_number_including_and_country_code'))
     return number[1:]
 
 
@@ -40,13 +59,13 @@ class MessageService:
         """
         if not recipient.strip():
             return _result('needs_input',
-                           question='Who should receive the message: a contact or international phone number?')
+                           question=tr('message.who_should_receive_the_message_a_contact_or_international_phone'))
         if not message.strip():
             return _result('needs_input',
-                           question='What message should I send?')
+                           question=tr('message.what_message_should_i_send'))
         if len(message) > 4096:
             return _result('error',
-                           error='Text messages support at most 4096 characters')
+                           error=tr('message.text_messages_support_at_most_4096_characters'))
         recipient = recipient.strip()
         try:
             if re.match(r'^[+0-9]', recipient):
@@ -57,22 +76,22 @@ class MessageService:
                         CONTACTS_FILE.read_text(encoding='utf-8-sig'))
                 except FileNotFoundError:
                     return _result('needs_input',
-                                   question='No contacts file exists. What international phone number should I use?')
+                                   question=tr('message.no_contacts_file_exists_what_international_phone_number_should_i'))
                 if not isinstance(contacts, list) or any(
                         not isinstance(c, dict) or not isinstance(c.get('name'),
                                                                   str)
                         or not isinstance(c.get('phone'), str) for c in contacts
                 ):
                     raise ValueError(
-                        'contacts.json must be a list of objects with name and phone text fields')
+                        tr('message.contacts_json_must_be_a_list_of_objects_with_name_and_phone_text'))
                 matches = [c for c in contacts if
                            _name(c['name']) == _name(recipient)]
                 if not matches:
                     return _result('needs_input',
-                                   question='Contact not found. Ask for the exact saved name or an international phone number.')
+                                   question=tr('message.contact_not_found_ask_for_the_exact_saved_name_or_an_internation'))
                 if len(matches) > 1:
                     return _result('needs_input',
-                                   question='Several contacts match. Ask the user to choose a phone number.',
+                                   question=tr('message.several_contacts_match_ask_the_user_to_choose_a_phone_number'),
                                    contacts=matches)
                 number = _phone(matches[0]['phone'])
         except (OSError, ValueError) as error:
@@ -83,19 +102,19 @@ class MessageService:
             return self._send_twilio(config, message, number)
         if service != 'whatsapp':
             return _result('error',
-                           error='Unsupported message_service; use whatsapp (Meta) or twilio (WhatsApp)')
+                           error=tr('message.unsupported_message_service_use_whatsapp_meta_or_twilio_whatsapp'))
         phone_id = config['whatsapp_phone_number_id'].strip()
         version = config['whatsapp_api_version'].strip()
         token = os.environ.get('ACCESS_TOKEN', '').strip()
         if not re.fullmatch(r'[0-9]+', phone_id):
             return _result('error',
-                           error="Set whatsapp_phone_number_id to Meta's sender phone number ID, not your telephone number")
+                           error=tr('message.set_whatsapp_phone_number_id_to_meta_s_sender_phone_number_id_no'))
         if not re.fullmatch(r'v[0-9]+\.0', version):
             return _result('error',
-                           error='Set whatsapp_api_version to a supported Meta Graph API version in vNN.0 format')
+                           error=tr('message.set_whatsapp_api_version_to_a_supported_meta_graph_api_version_i'))
         if not token:
             return _result('error',
-                           error='Set the ACCESS_TOKEN environment variable for WhatsApp Cloud API')
+                           error=tr('message.set_the_access_token_environment_variable_for_whatsapp_cloud_api'))
         request = Request(
             f'https://graph.facebook.com/{version}/{phone_id}/messages',
             data=json.dumps({'messaging_product': service, 'to': number,
@@ -110,17 +129,16 @@ class MessageService:
                 payload = json.load(response)
         except HTTPError as error:
             return _result('error',
-                           error=f'WhatsApp API rejected the request (HTTP {error.code})')
+                           error=tr('message.whatsapp_api_rejected_the_request_http', value0=error.code))
         except (URLError, TimeoutError, OSError, ValueError):
             return _result('unknown',
-                           error='Could not confirm API acceptance. '
-                                 'Do not retry automatically; the message may have been submitted.')
+                           error=tr('message.could_not_confirm_api_acceptance_do_not_retry_automatically_the'))
         messages = payload.get('messages') if isinstance(payload,
                                                          dict) else None
         if not isinstance(messages, list) or not messages or not isinstance(
                 messages[0], dict) or not messages[0].get('id'):
             return _result('unknown',
-                           error='API response has no message ID. Do not claim success or retry automatically.')
+                           error=tr('message.api_response_has_no_message_id_do_not_claim_success_or_retry_aut'))
         return _result('submitted', service=service, recipient='+' + number,
                        message_id=messages[0]['id'], delivery_confirmed=False)
 
@@ -132,18 +150,18 @@ class MessageService:
         from_number = config['twilio_from_number'].strip()
         if not re.fullmatch(r'AC[0-9a-fA-F]{32}', account_sid):
             return _result('error',
-                           error='Set twilio_account_sid to a valid Twilio Account SID')
+                           error=tr('message.set_twilio_account_sid_to_a_valid_twilio_account_sid'))
         if not auth_token:
             return _result('error',
-                           error='Set twilio_auth_token to the Twilio Auth Token')
+                           error=tr('message.set_twilio_auth_token_to_the_twilio_auth_token'))
         if not from_number.casefold().startswith('whatsapp:'):
             return _result('error',
-                           error='Set twilio_from_number with the whatsapp: prefix, e.g. whatsapp:+14155238886')
+                           error=tr('message.set_twilio_from_number_with_the_whatsapp_prefix_e_g_whatsapp_141'))
         try:
             sender = _phone(from_number[len('whatsapp:'):])
         except ValueError:
             return _result('error',
-                           error='Set twilio_from_number to a valid Twilio WhatsApp sender, e.g. whatsapp:+14155238886')
+                           error=tr('message.set_twilio_from_number_to_a_valid_twilio_whatsapp_sender_e_g_wha'))
         endpoint = f'https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json'
         body = urlencode({'From': 'whatsapp:+' + sender,
                           'To': 'whatsapp:+' + number,
@@ -158,15 +176,14 @@ class MessageService:
                 payload = json.load(response)
         except HTTPError as error:
             return _result('error',
-                           error=f'Twilio API rejected the request (HTTP {error.code})')
+                           error=tr('message.twilio_api_rejected_the_request_http', value0=error.code))
         except (URLError, TimeoutError, OSError, ValueError):
             return _result('unknown',
-                           error='Could not confirm Twilio API acceptance. '
-                                 'Do not retry automatically; the message may have been submitted.')
+                           error=tr('message.could_not_confirm_twilio_api_acceptance_do_not_retry_automatical'))
         message_id = payload.get('sid') if isinstance(payload, dict) else None
         if not message_id:
             return _result('unknown',
-                           error='Twilio response has no message ID. Do not claim success or retry automatically.')
+                           error=tr('message.twilio_response_has_no_message_id_do_not_claim_success_or_retry'))
         return _result('submitted', service='twilio', recipient='+' + number,
                        message_id=message_id, delivery_confirmed=False)
 

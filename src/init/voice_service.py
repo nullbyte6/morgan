@@ -1,4 +1,23 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
+from src.init.lang import tr
 
 import logging
 import queue
@@ -57,8 +76,7 @@ _silence_tts_loggers()
 import shutil
 
 if shutil.which("ffmpeg") is None:
-    raise RuntimeError("FFmpeg is required by CosyVoice "
-                       "but was not found in PATH.")
+    raise RuntimeError(tr('voice_service.ffmpeg_is_required_by_cosyvoice_but_was_not_found_in_path'))
 
 
 def _clean_for_speech(text: str) -> str:
@@ -228,14 +246,14 @@ class VoiceService:
                             self._audio_queue.put((batch, samples))
             except Exception as error:
                 batch.error = error
-                logger.exception("TTS inference failed")
+                logger.exception(tr('voice_service.tts_inference_failed'))
             finally:
                 try:
                     if generator is not None:
                         generator.close()
                 except Exception as error:
                     batch.error = error
-                    logger.exception("TTS generator cleanup failed")
+                    logger.exception(tr('voice_service.tts_generator_cleanup_failed'))
                 finally:
                     self._text_queue.task_done()
                     self._complete(batch)
@@ -277,7 +295,7 @@ class VoiceService:
                     stream.stop()
             except Exception as error:
                 batch.error = error
-                logger.exception("Audio playback failed")
+                logger.exception(tr('voice_service.audio_playback_failed'))
                 if stream is not None:
                     try:
                         stream.close()

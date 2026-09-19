@@ -1,7 +1,27 @@
 #! /usr/bin/env python3
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 # type: ignore
 """Arlo's main entry to the whole brain, no pun intended
 see how Arlo works and engineers from here"""
+from src.init.lang import tr
 import json
 import logging
 import os
@@ -522,23 +542,23 @@ class Assistant:
                 self.terminal_ui.set_thinking(True)
 
             try:
-                logging.getLogger("arlo.llm").debug("Processing request")
-                logger.warning("TRACE 1: Before run_stream_sync")
+                logging.getLogger("arlo.llm").debug(tr('agent.processing_request'))
+                logger.warning(tr('agent.trace_1_before_run_stream_sync'))
                 with self.agent.run_stream_sync(user_input,
                         message_history=history,
                         model_settings={"temperature": brain.load_config()["temperature"]}) as result:
 
-                    logger.warning("TRACE 2: Stream context opened")
+                    logger.warning(tr('agent.trace_2_stream_context_opened'))
                     def traced_chunks():
-                        logger.warning("TRACE 3: Starting stream_text")
+                        logger.warning(tr('agent.trace_3_starting_stream_text'))
 
                         for chunk in result.stream_text(
                                 delta=True,
                                 debounce_by=0.05):
-                            logger.warning("TRACE 4: Received chunk: %r", chunk[:100])
+                            logger.warning(tr('agent.trace_4_received_chunk_r'), chunk[:100])
                             yield chunk
 
-                        logger.warning("TRACE 5: Stream finished")
+                        logger.warning(tr('agent.trace_5_stream_finished'))
 
                     reply = self.speak(traced_chunks())
 
@@ -551,22 +571,22 @@ class Assistant:
                         logging.getLogger("arlo.response").info(
                             "%s: %s", self.name, reply)
 
-                    logger.warning("TRACE 7: Waiting for TTS")
+                    logger.warning(tr('agent.trace_7_waiting_for_tts'))
                     self.voice.wait_until_done()
-                    logger.warning("TRACE 8: TTS finished")
+                    logger.warning(tr('agent.trace_8_tts_finished'))
 
                     if self.terminal_ui is not None:
                         self.terminal_ui.clear_audio_levels()
 
                     history = result.all_messages()
-                    logger.warning("TRACE 9: History updated")
+                    logger.warning(tr('agent.trace_9_history_updated'))
 
             except Exception as error:
                 if self.terminal_ui is not None:
                     self.terminal_ui.set_thinking(False)
                 cause = error.__cause__
                 if cause is not None:
-                    logger.error("TRACE 10: Exception caught: %s", cause)
+                    logger.error(tr('agent.trace_10_exception_caught_s'), cause)
                     session.write("System", f"{error}; Detail: {cause}"
                 if cause is not None else str(error))
 
@@ -576,7 +596,7 @@ class Assistant:
             self.debug_console.start()
             self.debug_console.configure_logging()
 
-            logging.getLogger("arlo").info("Arlo is awake")
+            logging.getLogger("arlo").info(tr('agent.arlo_is_awake'))
 
             if interactive_terminal():
                 ui = TerminalUI()

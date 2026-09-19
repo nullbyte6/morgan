@@ -1,4 +1,23 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Windows package management and scoped, recoverable application cleanup."""
+from src.init.lang import tr
 import json
 import os
 from pathlib import Path
@@ -26,7 +45,7 @@ def _argument(value):
     if not value.strip() or value.startswith("-") or any(
             ord(c) < 32 for c in value):
         raise ValueError(
-            "Specify a non-empty name or exact package ID, not command options")
+            tr('app_manager.specify_a_non_empty_name_or_exact_package_id_not_command_options'))
     return value.strip()
 
 
@@ -39,20 +58,20 @@ def _winget():
             executable = str(alias)
     if not executable:
         raise ValueError(
-            "WinGet is unavailable. Install/update Microsoft App Installer and restart Arlo")
+            tr('app_manager.winget_is_unavailable_install_update_microsoft_app_installer_and'))
     return executable
 
 
 def _start(arguments, mutation=False):
     if os.name != "nt":
-        return _result("error", error="Application management requires Windows")
+        return _result("error", error=tr('app_manager.application_management_requires_windows'))
     with _lock:
         try:
             if mutation and any(
                     j["mutation"] and j["process"].poll() is None for j in
                     _jobs.values()):
                 return _result("error",
-                               error="An app operation is still running; check its job ID first")
+                               error=tr('app_manager.an_app_operation_is_still_running_check_its_job_id_first'))
             command = [_winget(), *arguments, "--accept-source-agreements",
                        "--disable-interactivity"]
             log = tempfile.TemporaryFile()
@@ -69,7 +88,7 @@ def _start(arguments, mutation=False):
             _jobs[job_id] = {"process": process, "log": log,
                              "mutation": mutation}
             return _result("running", job_id=job_id, command=command,
-                           instruction="Use get_app_operation until finished; do not repeat the operation")
+                           instruction=tr('app_manager.use_get_app_operation_until_finished_do_not_repeat_the_operation'))
         except (OSError, ValueError) as error:
             return _result("error", error=str(error))
 
@@ -79,8 +98,7 @@ def get_app_operation(job_id: str) -> str:
     with _lock:
         job = _jobs.get(job_id)
         if not job:
-            return _result("unknown", error="Unknown job or Arlo restarted. "
-                                            "Inspect installed apps before retrying")
+            return _result("unknown", error=tr('app_manager.unknown_job_or_arlo_restarted_inspect_installed_apps_before_retr'))
         if "result" in job:
             return job["result"]
         code = job["process"].poll()
@@ -95,7 +113,7 @@ def get_app_operation(job_id: str) -> str:
                                 job_id=job_id,
                                 exit_code=code, output=output,
                                 truncated=length > 24000,
-                                instruction="Report winget output; errors or elevation requests require attention")
+                                instruction=tr('app_manager.report_winget_output_errors_or_elevation_requests_require_attent'))
         return job["result"]
 
 
@@ -149,12 +167,12 @@ def _safe(path, root):
     if path.parent != root or path.name.casefold() in _SHARED or path.name.startswith(
             "."):
         raise ValueError(
-            "Only individual app data folders are eligible, never shared parent folders")
+            tr('app_manager.only_individual_app_data_folders_are_eligible_never_shared_paren'))
     for ancestor in (path, *path.parents):
         if _linked(ancestor):
-            raise ValueError("Links and Windows junctions are excluded")
+            raise ValueError(tr('app_manager.links_and_windows_junctions_are_excluded'))
     if path.resolve().parent != root.resolve() or not path.is_dir():
-        raise ValueError("App folder is outside its expected data root")
+        raise ValueError(tr('app_manager.app_folder_is_outside_its_expected_data_root'))
 
 
 def scan_app_residues(app_name: str) -> str:
@@ -163,7 +181,7 @@ def scan_app_residues(app_name: str) -> str:
     if len(term) < 3 or term in _SHARED or not re.fullmatch(r"[\w .+()-]+",
                                                             term):
         return _result("error",
-                       error="Specify a distinctive app name of at least three characters")
+                       error=tr('app_manager.specify_a_distinctive_app_name_of_at_least_three_characters'))
     results, errors = [], []
     for root in _roots():
         try:
@@ -183,8 +201,8 @@ def scan_app_residues(app_name: str) -> str:
         except OSError as error:
             errors.append(str(error))
     return _result("ok", candidates=results, errors=errors,
-                   instruction="Name matches may contain settings or user data of installed apps. Select exact folders before cleanup",
-                   scope="Top-level LocalAppData, Roaming AppData and ProgramData folders only; no registry or system cleanup")
+                   instruction=tr('app_manager.name_matches_may_contain_settings_or_user_data_of_installed_apps'),
+                   scope=tr('app_manager.top_level_localappdata_roaming_appdata_and_programdata_folders_o'))
 
 
 def clean_app_residue(candidate_id: str) -> str:
@@ -193,17 +211,17 @@ def clean_app_residue(candidate_id: str) -> str:
         if any(j["mutation"] and j["process"].poll() is None for j in
                _jobs.values()):
             return _result("error",
-                           error="Wait for the running app operation to finish before cleanup")
+                           error=tr('app_manager.wait_for_the_running_app_operation_to_finish_before_cleanup'))
         candidate = _candidates.get(candidate_id)
         if not candidate:
             return _result("error",
-                           error="Unknown candidate. Scan again and select a folder")
+                           error=tr('app_manager.unknown_candidate_scan_again_and_select_a_folder'))
         path, root, device, inode = candidate
         try:
             _safe(path, root)
             info = path.stat()
             if (info.st_dev, info.st_ino) != (device, inode):
-                raise ValueError("Folder changed since scan; scan again")
+                raise ValueError(tr('app_manager.folder_changed_since_scan_scan_again'))
 
             def fail(error):
                 raise error
@@ -213,15 +231,15 @@ def clean_app_residue(candidate_id: str) -> str:
                 for name in directories + files:
                     if _linked(Path(current) / name):
                         raise ValueError(
-                            "Folder contains links or junctions; cleanup skipped")
+                            tr('app_manager.folder_contains_links_or_junctions_cleanup_skipped'))
             from send2trash import send2trash
             send2trash(str(path))
             del _candidates[candidate_id]
             return _result("recycled", path=str(path),
-                           recovery="Windows Recycle Bin",
+                           recovery=tr('app_manager.windows_recycle_bin'),
                            disk_space_reclaimed=False)
         except ImportError:
             return _result("error",
-                           error="Install Arlo requirements (Send2Trash) to enable recoverable cleanup")
+                           error=tr('app_manager.install_arlo_requirements_send2trash_to_enable_recoverable_clean'))
         except (OSError, ValueError) as error:
             return _result("error", error=str(error))

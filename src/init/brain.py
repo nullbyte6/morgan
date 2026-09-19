@@ -1,4 +1,24 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 #type: ignore
+
+from src.init.lang import tr
 import base64
 import codecs
 import ctypes
@@ -77,7 +97,7 @@ def get_version() -> str:
 def update_version(new_version: str) -> str:
     """Update the assistant's version live, preserving all other configuration settings."""
     if not isinstance(new_version, str) or not new_version.strip():
-        return "Error updating version: new_version must be a non-empty string"
+        return tr('brain.error_updating_version_new_version_must_be_a_non_empty_string')
     new_version = new_version.strip()
     try:
         config = load_config()
@@ -89,9 +109,9 @@ def update_version(new_version: str) -> str:
         )
         global VERSION
         VERSION = new_version
-        return f"Version updated to {new_version} in config.json"
+        return tr('brain.version_updated_to_in_config_json', new_version=new_version)
     except Exception as error:
-        return f"Error updating version: {error}"
+        return tr('brain.error_updating_version', error=error)
 
 
 def refresh() -> str:
@@ -107,9 +127,9 @@ def refresh() -> str:
             if mod_name in sys.modules:
                 importlib.reload(sys.modules[mod_name])
 
-        return "Modules are reloaded"
+        return tr('brain.modules_are_reloaded')
     except Exception as error:
-        return f"Error at refresh attempt: {error}"
+        return tr('brain.error_at_refresh_attempt', error=error)
 
 
 def keep_model_loaded() -> None:
@@ -157,11 +177,11 @@ def change_directory(path: str = "") -> str:
         if len(path) >= 2 and path[0] == path[-1] and path[0] in "\"'":
             path = path[1:-1]
         if not path:
-            return "Error: directory path is empty"
+            return tr('brain.error_directory_path_is_empty')
         destination = resolve_safe_path(os.path.expandvars(path))
         os.chdir(destination)
         _SHOW_WORKING_DIRECTORY = True
-        return f"Current directory: {get_working_directory()}"
+        return tr('brain.current_directory', value0=get_working_directory())
     except (OSError, ValueError) as error:
         return f"Error: {error}"
 
@@ -180,7 +200,7 @@ def get_current_time(region: str = "") -> str:
     IANA zones work offline. The result includes the resolved place and UTC offset.
     """
     if not isinstance(region, str):
-        return "Error: region must be a string"
+        return tr('brain.error_region_must_be_a_string')
     region = region.strip()
     if not region:
         return datetime.now().astimezone().strftime(
@@ -191,27 +211,27 @@ def get_current_time(region: str = "") -> str:
             zone = ZoneInfo(region)
         except ZoneInfoNotFoundError:
             if "/" in region or region.upper() == "UTC":
-                return f"Error: unknown timezone or missing tzdata: {region}"
+                return tr('brain.error_unknown_timezone_or_missing_tzdata', region=region)
             place = geocode_city(region)
             if place is None:
-                return f"Error: location not found: {region}"
+                return tr('brain.error_location_not_found_87fb59', region=region)
             zone_name = _timezone_finder().timezone_at(
                 lat=place["latitude"], lng=place["longitude"])
             if zone_name is None:
-                return f"Error: timezone not found for: {region}"
+                return tr('brain.error_timezone_not_found_for', region=region)
             zone = ZoneInfo(zone_name)
             place_name = place["name"]
         current = datetime.now(zone)
         return f"{place_name}: {current:%Y-%m-%d %H:%M:%S} ({zone.key}, UTC{current:%z})"
     except ImportError:
-        return "Error: timezone dependencies missing; run pip install -r requirements.txt"
+        return tr('brain.error_timezone_dependencies_missing_run_pip_install_r_requiremen')
     except Exception as error:
-        return f"Error getting current time for {region}: {error}"
+        return tr('brain.error_getting_current_time_for', region=region, error=error)
 
 
 def calculate(expression: str) -> str:
     if not set(expression) <= set("0123456789+-*/(). "):
-        return "Error: only numbers and arithmetic operators are allowed"
+        return tr('brain.error_only_numbers_and_arithmetic_operators_are_allowed')
     try:
         return str(eval(expression, {"__builtins__": {}}, {}))
     except Exception as error:
@@ -222,7 +242,7 @@ def save_note(note: str) -> str:
     ensure_storage()
     with NOTES_FILE.open("a", encoding="utf-8") as file:
         file.write(f"{note}\n")
-    return "Note saved"
+    return tr('brain.note_saved')
 
 
 def read_notes() -> str:
@@ -230,21 +250,21 @@ def read_notes() -> str:
     notes = sorted((HOME_PATH / "note").glob("*.txt"))
     return "\n\n".join(
         f"{path.name}\n{path.read_text(encoding='utf-8')}" for path in
-        notes) if notes else "No notes saved yet"
+        notes) if notes else tr('brain.no_notes_saved_yet')
 
 
 def list_files(path: str = ".") -> str:
     try:
         folder = resolve_safe_path(path)
         if not folder.exists():
-            return f"Directory does not exist: {folder}"
+            return tr('brain.directory_does_not_exist', folder=folder)
         if not folder.is_dir():
-            return f"Not a directory: {folder}"
+            return tr('brain.not_a_directory', folder=folder)
         items = []
         for item in folder.iterdir():
             kind = "DIR" if item.is_dir() else "FILE"
             items.append(f"[{kind}] {item.name}")
-        return "\n".join(items) if items else "Directory is empty"
+        return "\n".join(items) if items else tr('brain.directory_is_empty')
     except Exception as error:
         return f"Error: {error}"
 
@@ -263,7 +283,7 @@ def find_directories(name: str, directory: str = "", partial: bool = False,
         return json.dumps(search_folders(name, directory, partial, max_results,
                                          timeout_seconds, refresh), ensure_ascii=False)
     except (OSError, ValueError) as error:
-        return f"Error searching directories: {error}"
+        return tr('brain.error_searching_directories', error=error)
 
 
 def create_directory(path: str, parents: bool = True) -> str:
@@ -272,10 +292,10 @@ def create_directory(path: str, parents: bool = True) -> str:
         directory_path = resolve_safe_path(path)
         if directory_path.exists():
             if directory_path.is_dir():
-                return f"Directory already exists: {directory_path}"
-            return f"A file already exists at: {directory_path}"
+                return tr('brain.directory_already_exists', directory_path=directory_path)
+            return tr('brain.a_file_already_exists_at', directory_path=directory_path)
         directory_path.mkdir(parents=parents, exist_ok=False)
-        return f"Directory created: {directory_path}"
+        return tr('brain.directory_created', directory_path=directory_path)
     except Exception as error:
         return f"Error: {error}"
 
@@ -285,17 +305,17 @@ def rename_directory(path: str, new_name: str) -> str:
     try:
         directory_path = resolve_entry_path(path)
         if not directory_path.exists():
-            return f"Directory does not exist: {directory_path}"
+            return tr('brain.directory_does_not_exist_d689f2', directory_path=directory_path)
         if not directory_path.is_dir():
-            return f"Not a directory: {directory_path}"
+            return tr('brain.not_a_directory_a06036', directory_path=directory_path)
         if (not new_name.strip() or new_name in (".", "..")
                 or Path(new_name).name != new_name):
-            return f"Invalid directory name: {new_name}"
+            return tr('brain.invalid_directory_name', new_name=new_name)
         destination = directory_path.with_name(new_name)
         if destination.exists() or destination.is_symlink():
-            return f"Destination already exists: {destination}"
+            return tr('brain.destination_already_exists', destination=destination)
         directory_path.rename(destination)
-        return f"Directory renamed: {directory_path} -> {destination}"
+        return tr('brain.directory_renamed', directory_path=directory_path, destination=destination)
     except Exception as error:
         return f"Error: {error}"
 
@@ -305,11 +325,11 @@ def delete_directory(path: str, recursive: bool = False) -> str:
     try:
         directory_path = resolve_entry_path(path)
         if not directory_path.exists() and not directory_path.is_symlink():
-            return f"Directory does not exist: {directory_path}"
+            return tr('brain.directory_does_not_exist_d689f2', directory_path=directory_path)
         if not directory_path.is_dir():
-            return f"Not a directory: {directory_path}"
+            return tr('brain.not_a_directory_a06036', directory_path=directory_path)
         if directory_path == Path(directory_path.anchor):
-            return f"Refusing to delete a filesystem root: {directory_path}"
+            return tr('brain.refusing_to_delete_a_filesystem_root', directory_path=directory_path)
 
         is_junction = (hasattr(directory_path, "is_junction")
                        and directory_path.is_junction())
@@ -320,11 +340,10 @@ def delete_directory(path: str, recursive: bool = False) -> str:
         elif recursive:
             shutil.rmtree(directory_path)
         elif any(directory_path.iterdir()):
-            return (f"Directory is not empty: {directory_path}. "
-                    "Recursive deletion was not requested")
+            return (tr('brain.directory_is_not_empty_recursive_deletion_was_not_requested', directory_path=directory_path))
         else:
             directory_path.rmdir()
-        return f"Directory deleted: {directory_path}"
+        return tr('brain.directory_deleted', directory_path=directory_path)
     except Exception as error:
         return f"Error: {error}"
 
@@ -334,9 +353,9 @@ def read_file(path: str) -> str:
     try:
         file_path = resolve_safe_path(path)
         if not file_path.exists():
-            return f"File does not exist: {file_path}"
+            return tr('brain.file_does_not_exist', file_path=file_path)
         if not file_path.is_file():
-            return f"Not a file: {file_path}"
+            return tr('brain.not_a_file', file_path=file_path)
         content, _ = decode_text(file_path.read_bytes())
         return content
     except Exception as error:
@@ -350,9 +369,9 @@ def create_file(path: str, content: str = "", encoding: str = "utf-8") -> str:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("x", encoding=encoding) as file:
             file.write(content)
-        return f"File created: {file_path}"
+        return tr('brain.file_created', file_path=file_path)
     except FileExistsError:
-        return f"File already exists: {resolve_safe_path(path)}"
+        return tr('brain.file_already_exists', value0=resolve_safe_path(path))
     except (LookupError, OSError) as error:
         return f"Error: {error}"
 
@@ -362,7 +381,7 @@ def write_file(path: str, content: str) -> str:
     try:
         file_path = resolve_safe_path(path)
         atomic_write_bytes(file_path, content.encode("utf-8"))
-        return f"File written: {file_path}"
+        return tr('brain.file_written', file_path=file_path)
     except Exception as error:
         return f"Error: {error}"
 
@@ -372,12 +391,12 @@ def edit_file(path: str, content: str) -> str:
     try:
         file_path = resolve_safe_path(path)
         if not file_path.exists():
-            return f"File does not exist: {file_path}"
+            return tr('brain.file_does_not_exist', file_path=file_path)
         if not file_path.is_file():
-            return f"Not a file: {file_path}"
+            return tr('brain.not_a_file', file_path=file_path)
         _, encoding = decode_text(file_path.read_bytes())
         atomic_write_bytes(file_path, content.encode(encoding))
-        return f"File edited: {file_path}"
+        return tr('brain.file_edited', file_path=file_path)
     except Exception as error:
         return f"Error: {error}"
 
@@ -390,11 +409,11 @@ def append_file(path: str, content: str) -> str:
         encoding = "utf-8"
         if file_path.exists():
             if not file_path.is_file():
-                return f"Not a file: {file_path}"
+                return tr('brain.not_a_file', file_path=file_path)
             _, encoding = decode_text(file_path.read_bytes())
         with file_path.open("a", encoding=encoding) as file:
             file.write(content)
-        return f"Content appended to: {file_path}"
+        return tr('brain.content_appended_to', file_path=file_path)
     except Exception as error:
         return f"Error: {error}"
 
@@ -404,16 +423,16 @@ def replace_in_file(path: str, old_text: str, new_text: str) -> str:
     try:
         file_path = resolve_safe_path(path)
         if not file_path.exists():
-            return f"File does not exist: {file_path}"
+            return tr('brain.file_does_not_exist', file_path=file_path)
         if not file_path.is_file():
-            return f"Not a file: {file_path}"
+            return tr('brain.not_a_file', file_path=file_path)
         content, encoding = decode_text(file_path.read_bytes())
         if old_text not in content:
-            return "Text to replace was not found"
+            return tr('brain.text_to_replace_was_not_found')
         occurrences = content.count(old_text)
         updated_content = content.replace(old_text, new_text)
         atomic_write_bytes(file_path, updated_content.encode(encoding))
-        return f"Replaced {occurrences} occurrence(s) in {file_path}"
+        return tr('brain.replaced_occurrence_s_in', occurrences=occurrences, file_path=file_path)
     except Exception as error:
         return f"Error: {error}"
 
@@ -423,11 +442,11 @@ def run_git(repository: str, arguments: list[str]) -> str:
     try:
         repository_path = resolve_safe_path(repository)
         if not repository_path.exists():
-            return f"Error: repository path does not exist: {repository_path}"
+            return tr('brain.error_repository_path_does_not_exist', repository_path=repository_path)
         if not repository_path.is_dir():
-            return f"Error: repository path is not a directory: {repository_path}"
+            return tr('brain.error_repository_path_is_not_a_directory', repository_path=repository_path)
         if shutil.which("git") is None:
-            return "Error: Git is not installed or is not available on PATH"
+            return tr('brain.error_git_is_not_installed_or_is_not_available_on_path')
 
         environment = os.environ.copy()
         environment["GIT_TERMINAL_PROMPT"] = "0"
@@ -444,11 +463,11 @@ def run_git(repository: str, arguments: list[str]) -> str:
             part.strip()
         )
         if result.returncode != 0:
-            detail = output or "Git did not provide an error message"
-            return f"Error: git exited with code {result.returncode}: {detail}"
-        return output or "Git command completed successfully"
+            detail = output or tr('brain.git_did_not_provide_an_error_message')
+            return tr('brain.error_git_exited_with_code', value0=result.returncode, detail=detail)
+        return output or tr('brain.git_command_completed_successfully')
     except subprocess.TimeoutExpired:
-        return f"Error: Git command timed out after {GIT_TIMEOUT_SECONDS} seconds"
+        return tr('brain.error_git_command_timed_out_after_seconds', GIT_TIMEOUT_SECONDS=GIT_TIMEOUT_SECONDS)
     except OSError as error:
         return f"Error: {error}"
 
@@ -456,7 +475,7 @@ def run_git(repository: str, arguments: list[str]) -> str:
 def valid_git_name(value: str, label: str) -> str | None:
     """Reject empty or option-like Git names before passing them to Git."""
     if not value or value.startswith("-") or "\x00" in value:
-        return f"Error: invalid Git {label}: {value!r}"
+        return tr('brain.error_invalid_git', label=label, value=value)
     if label == "branch":
         forbidden_characters = set(" ~^:?*[\\")
         invalid_structure = (
@@ -468,7 +487,7 @@ def valid_git_name(value: str, label: str) -> str | None:
                 or value.endswith(".lock")
         )
         if forbidden_characters.intersection(value) or invalid_structure:
-            return f"Error: invalid Git branch: {value!r}"
+            return tr('brain.error_invalid_git_branch', value=value)
     return None
 
 
@@ -486,22 +505,22 @@ def git_diff(repository: str = ".", staged: bool = False,
     if path:
         arguments.extend(["--", path])
     result = run_git(repository, arguments)
-    if result == "Git command completed successfully":
-        return "No differences found"
+    if result == tr('brain.git_command_completed_successfully'):
+        return tr('brain.no_differences_found')
     return result
 
 
 def git_add(paths: list[str], repository: str = ".") -> str:
     """Stage the exact files or pathspecs supplied in paths for a later commit."""
     if not paths or any(not path or "\x00" in path for path in paths):
-        return "Error: provide at least one valid path to stage"
+        return tr('brain.error_provide_at_least_one_valid_path_to_stage')
     return run_git(repository, ["add", "--", *paths])
 
 
 def git_commit(message: str, repository: str = ".") -> str:
     """Create a commit from staged changes with the supplied commit message."""
     if not message.strip() or "\x00" in message:
-        return "Error: commit message cannot be empty"
+        return tr('brain.error_commit_message_cannot_be_empty')
     return run_git(repository, ["commit", "-m", message])
 
 
@@ -523,7 +542,7 @@ def git_pull(repository: str = ".", remote: str = "", branch: str = "",
              rebase: bool = False) -> str:
     """Fetch and integrate a remote branch into the checked-out local branch."""
     if branch and not remote:
-        return "Error: a remote is required when a branch is supplied"
+        return tr('brain.error_a_remote_is_required_when_a_branch_is_supplied')
     arguments = ["pull"]
     if rebase:
         arguments.append("--rebase")
@@ -540,9 +559,9 @@ def git_push(repository: str = ".", remote: str = "", branch: str = "",
              set_upstream: bool = False) -> str:
     """Publish commits to a configured remote, optionally setting the upstream."""
     if branch and not remote:
-        return "Error: a remote is required when a branch is supplied"
+        return tr('brain.error_a_remote_is_required_when_a_branch_is_supplied')
     if set_upstream and not remote:
-        return "Error: a remote is required when setting the upstream"
+        return tr('brain.error_a_remote_is_required_when_setting_the_upstream')
     arguments = ["push"]
     if set_upstream:
         arguments.append("--set-upstream")
@@ -558,7 +577,7 @@ def git_push(repository: str = ".", remote: str = "", branch: str = "",
 def git_log(repository: str = ".", max_count: int = 10) -> str:
     """Show a concise recent commit history."""
     if isinstance(max_count, bool) or not 1 <= max_count <= 100:
-        return "Error: max_count must be between 1 and 100"
+        return tr('brain.error_max_count_must_be_between_1_and_100')
     return run_git(
         repository,
         ["log", f"--max-count={max_count}", "--oneline", "--decorate"],
@@ -592,9 +611,9 @@ def read_binary_file(path: str) -> str:
     try:
         file_path = resolve_safe_path(path)
         if not file_path.exists():
-            return f"File does not exist: {file_path}"
+            return tr('brain.file_does_not_exist', file_path=file_path)
         if not file_path.is_file():
-            return f"Not a file: {file_path}"
+            return tr('brain.not_a_file', file_path=file_path)
         encoded = base64.b64encode(file_path.read_bytes()).decode("ascii")
         return encoded
     except Exception as error:
@@ -608,11 +627,11 @@ def write_binary_file(path: str, base64_content: str,
         file_path = resolve_safe_path(path)
         already_exists = file_path.exists()
         if already_exists and not overwrite:
-            return f"File already exists: {file_path}"
+            return tr('brain.file_already_exists_e61309', file_path=file_path)
         content = base64.b64decode(base64_content, validate=True)
         atomic_write_bytes(file_path, content)
         action = "edited" if already_exists else "created"
-        return f"Binary file {action}: {file_path}"
+        return tr('brain.binary_file', action=action, file_path=file_path)
     except (ValueError, OSError) as error:
         return f"Error: {error}"
 
@@ -622,11 +641,11 @@ def delete_file(path: str) -> str:
     try:
         file_path = resolve_entry_path(path)
         if not file_path.exists() and not file_path.is_symlink():
-            return f"File does not exist: {file_path}"
+            return tr('brain.file_does_not_exist', file_path=file_path)
         if file_path.is_dir() and not file_path.is_symlink():
-            return f"Refusing to delete a directory: {file_path}"
+            return tr('brain.refusing_to_delete_a_directory', file_path=file_path)
         file_path.unlink()
-        return f"File deleted: {file_path}"
+        return tr('brain.file_deleted', file_path=file_path)
     except Exception as error:
         return f"Error: {error}"
 
@@ -635,14 +654,14 @@ def open_file(path: str) -> str:
     try:
         target = resolve_safe_path(path)
         if not target.exists():
-            return f"Path does not exist: {target}"
+            return tr('brain.path_does_not_exist', target=target)
         if os.name == "nt":
             os.startfile(target)
         elif os.name == "posix":
             opener = "open" if shutil.which("open") else "xdg-open"
             subprocess.Popen([opener, str(target)])
         else:
-            return "Unsupported operating system"
+            return tr('brain.unsupported_operating_system')
         return f"Opened: {target}"
     except Exception as error:
         return f"Error: {error}"
@@ -668,20 +687,20 @@ def open_directory(path: str = ".") -> str:
             if len(matches) != 1 or not result["complete"]:
                 result["status"] = "needs_input" if matches else "not_found"
                 result["question"] = (
-                    "Elige la ruta completa de la carpeta que quieres abrir."
-                    if matches else "No se encontraron carpetas en la búsqueda realizada.")
+                    tr('brain.choose_the_full_path_of_the_folder_you_want_to_open')
+                    if matches else tr('brain.no_folders_were_found_in_the_search'))
                 return json.dumps(result, ensure_ascii=False)
             target = Path(matches[0])
         else:
             target = resolve_directory(path)
         if not target.is_dir():
-            return f"Error: directory does not exist or is not a folder: {target}"
+            return tr('brain.error_directory_does_not_exist_or_is_not_a_folder', target=target)
         opened = open_file(str(target))
         if target.name and opened.startswith("Opened:"):
             remember_folders(target.name, [str(target)], complete=True)
         return opened
     except Exception as error:
-        return f"Error opening directory: {error}"
+        return tr('brain.error_opening_directory', error=error)
 
 
 def open_browser(url: str) -> str:
@@ -690,9 +709,9 @@ def open_browser(url: str) -> str:
             url = "https://" + url
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
-            return "Error: only HTTP and HTTPS URLs are allowed"
+            return tr('brain.error_only_http_and_https_urls_are_allowed')
         webbrowser.open(url)
-        return f"Opened browser: {url}"
+        return tr('brain.opened_browser', url=url)
     except Exception as error:
         return f"Error: {error}"
 
@@ -701,7 +720,7 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
     """Search the web internally, prioritizing Google, without opening a browser."""
     query = query.strip()
     if not query:
-        return "Error: search query is empty"
+        return tr('brain.error_search_query_is_empty')
     try:
         from ddgs import DDGS
 
@@ -713,7 +732,7 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
             max_results=result_limit
         ))
         if not results:
-            return f"No web results found for: {query}"
+            return tr('brain.no_web_results_found_for', query=query)
         formatted_results = []
         for index, result in enumerate(results, start=1):
             formatted_results.append(
@@ -723,16 +742,16 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
             )
         return "\n\n".join(formatted_results)
     except Exception as error:
-        return f"Error searching the web: {error}"
+        return tr('brain.error_searching_the_web', error=error)
 
 
 def read_web_page(url: str, max_characters: int = 12_000) -> str:
     """Fetch readable page text internally without launching a browser."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        return "Error: a valid HTTP or HTTPS URL is required"
+        return tr('brain.error_a_valid_http_or_https_url_is_required')
     if not 1_000 <= max_characters <= 30_000:
-        return "Error: max_characters must be between 1000 and 30000"
+        return tr('brain.error_max_characters_must_be_between_1000_and_30000')
     try:
         from ddgs import DDGS
 
@@ -742,12 +761,12 @@ def read_web_page(url: str, max_characters: int = 12_000) -> str:
             content = content.decode("utf-8", errors="replace")
         content = str(content).strip()
         if not content:
-            return f"No readable content found at: {url}"
+            return tr('brain.no_readable_content_found_at', url=url)
         if len(content) > max_characters:
-            content = content[:max_characters] + "\n[Content truncated]"
-        return f"Source URL: {url}\n\n{content}"
+            content = content[:max_characters] + tr('brain.content_truncated')
+        return tr('brain.source_url', url=url, content=content)
     except Exception as error:
-        return f"Error reading web page: {error}"
+        return tr('brain.error_reading_web_page', error=error)
 
 
 def request_json(url: str, timeout: int = 15):
@@ -826,9 +845,9 @@ def get_city_distance(origin: str, destination: str) -> str:
         origin_place = geocode_city(origin)
         destination_place = geocode_city(destination)
         if origin_place is None:
-            return f"Error: location not found: {origin}"
+            return tr('brain.error_location_not_found', origin=origin)
         if destination_place is None:
-            return f"Error: location not found: {destination}"
+            return tr('brain.error_location_not_found_dee0a3', destination=destination)
 
         straight_line_km = haversine_km(origin_place, destination_place)
         coordinates = (
@@ -847,11 +866,10 @@ def get_city_distance(origin: str, destination: str) -> str:
                 route = route_data["routes"][0]
             else:
                 route_error = (
-                    "OSRM returned status "
-                    f"{route_data.get('code', 'unknown')}"
+                    tr('brain.osrm_returned_status', value0=route_data.get('code', 'unknown'))
                 )
         except Exception as error:
-            route_error = f"Driving route could not be verified: {error}"
+            route_error = tr('brain.driving_route_could_not_be_verified', error=error)
 
         result = {
             "origin_resolved": origin_place["name"],
@@ -866,10 +884,10 @@ def get_city_distance(origin: str, destination: str) -> str:
             "route_error": route_error,
             "distance_notes": {
                 "straight_line": (
-                    "Approximate geodesic distance between the resolved coordinates."
+                    tr('brain.approximate_geodesic_distance_between_the_resolved_coordinates')
                 ),
                 "driving_route": (
-                    "Calculated road-route length; it can vary by route and conditions."
+                    tr('brain.calculated_road_route_length_it_can_vary_by_route_and_conditions')
                 ),
             },
             "sources": [
@@ -879,32 +897,32 @@ def get_city_distance(origin: str, destination: str) -> str:
         }
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as error:
-        return f"Error calculating city distance: {error}"
+        return tr('brain.error_calculating_city_distance', error=error)
 
 
 def kill_process(process: str, force: bool = False,
                  include_children: bool = False) -> str:
     """End a Windows process by exact PID or image name."""
     if os.name != "nt":
-        return "Error: kill_process is only supported on Windows"
+        return tr('brain.error_kill_process_is_only_supported_on_windows')
 
     target = process.strip()
     if not target:
-        return "Error: process PID or image name is required"
+        return tr('brain.error_process_pid_or_image_name_is_required')
 
     command = ["taskkill.exe"]
     if target.isdecimal():
         process_id = int(target)
         if process_id <= 4:
-            return f"Refusing to terminate a critical system PID: {process_id}"
+            return tr('brain.refusing_to_terminate_a_critical_system_pid', process_id=process_id)
         if process_id == os.getpid():
-            return f"Refusing to terminate {get_assistant().name}'s own PID: {process_id}"
+            return tr('brain.refusing_to_terminate_s_own_pid', value0=get_assistant().name, process_id=process_id)
         command.extend(["/PID", str(process_id)])
         description = f"PID {process_id}"
     else:
         forbidden_characters = set('<>:"/\\|?*')
         if forbidden_characters.intersection(target):
-            return f"Error: invalid process image name: {target}"
+            return tr('brain.error_invalid_process_image_name', target=target)
         image_name = target if target.casefold().endswith(
             ".exe") else f"{target}.exe"
         protected_images = {
@@ -923,7 +941,7 @@ def kill_process(process: str, force: bool = False,
             Path(sys.executable).name.casefold(),
         }
         if image_name.casefold() in protected_images:
-            return f"Refusing to terminate a critical or current process: {image_name}"
+            return tr('brain.refusing_to_terminate_a_critical_or_current_process', image_name=image_name)
         command.extend(["/IM", image_name])
         description = image_name
 
@@ -937,8 +955,8 @@ def kill_process(process: str, force: bool = False,
             command, capture_output=True, text=True, errors="replace")
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
-            return f"Error terminating {description}: {detail or 'taskkill failed'}"
-        return f"Process terminated: {description}"
+            return tr('brain.error_terminating', description=description, value1=detail or tr('brain.taskkill_failed'))
+        return tr('brain.process_terminated', description=description)
     except OSError as error:
         return f"Error: {error}"
 
@@ -946,11 +964,11 @@ def kill_process(process: str, force: bool = False,
 def shutdown_computer(delay_seconds: int) -> str:
     """Schedule a Windows shutdown after an exact number of seconds."""
     if os.name != "nt":
-        return "Error: shutdown_computer is only supported on Windows"
+        return tr('brain.error_shutdown_computer_is_only_supported_on_windows')
     if isinstance(delay_seconds, bool) or not isinstance(delay_seconds, int):
-        return "Error: delay_seconds must be an integer"
+        return tr('brain.error_delay_seconds_must_be_an_integer')
     if not 0 <= delay_seconds <= 315_360_000:
-        return "Error: delay_seconds must be between 0 and 315360000"
+        return tr('brain.error_delay_seconds_must_be_between_0_and_315360000')
 
     try:
         result = subprocess.run(
@@ -960,7 +978,7 @@ def shutdown_computer(delay_seconds: int) -> str:
                 "/t",
                 str(delay_seconds),
                 "/c",
-                f"Shutdown scheduled by {get_assistant().name}",
+                tr('brain.shutdown_scheduled_by', value0=get_assistant().name),
             ],
             capture_output=True,
             text=True,
@@ -968,8 +986,8 @@ def shutdown_computer(delay_seconds: int) -> str:
         )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
-            return f"Error scheduling shutdown: {detail or 'shutdown failed'}"
-        return f"Computer shutdown scheduled in {delay_seconds} second(s)"
+            return tr('brain.error_scheduling_shutdown', value0=detail or tr('brain.shutdown_failed'))
+        return tr('brain.computer_shutdown_scheduled_in_second_s', delay_seconds=delay_seconds)
     except OSError as error:
         return f"Error: {error}"
 
@@ -977,7 +995,7 @@ def shutdown_computer(delay_seconds: int) -> str:
 def cancel_shutdown() -> str:
     """Cancel a shutdown that is currently pending on Windows."""
     if os.name != "nt":
-        return "Error: cancel_shutdown is only supported on Windows"
+        return tr('brain.error_cancel_shutdown_is_only_supported_on_windows')
     try:
         result = subprocess.run(
             ["shutdown.exe", "/a"],
@@ -987,8 +1005,8 @@ def cancel_shutdown() -> str:
         )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
-            return f"Error cancelling shutdown: {detail or 'no shutdown is pending'}"
-        return "Pending computer shutdown cancelled"
+            return tr('brain.error_cancelling_shutdown', value0=detail or tr('brain.no_shutdown_is_pending'))
+        return tr('brain.pending_computer_shutdown_cancelled')
     except OSError as error:
         return f"Error: {error}"
 
@@ -1147,7 +1165,7 @@ def list_applications() -> str:
     """List INSTALLED applications available to launch, NOT currently open apps."""
     apps = get_applications()
     if not apps:
-        return "No applications found"
+        return tr('brain.no_applications_found')
     return "\n".join(sorted(app["Name"] for app in apps))
 
 
@@ -1160,14 +1178,14 @@ def list_open_applications() -> str:
     taskbar registration or virtual-desktop settings may differ.
     """
     if os.name != "nt":
-        return "Error: listing open applications is only supported on Windows"
+        return tr('brain.error_listing_open_applications_is_only_supported_on_windows')
     try:
         from src.init.windows import get_open_windows
 
         return json.dumps({"open_windows": get_open_windows()},
                           ensure_ascii=False, indent=2)
     except Exception as error:
-        return f"Error listing open applications: {error}"
+        return tr('brain.error_listing_open_applications', error=error)
 
 
 def _launch_application(app):
@@ -1187,7 +1205,7 @@ def list_steam_games() -> str:
     """List all installed Steam games."""
     games = steam_manager.games()
     if not games:
-        return "No Steam games found"
+        return tr('brain.no_steam_games_found')
 
     return "\n".join(
         sorted((str(game) for game in games), key=str.casefold)
@@ -1197,7 +1215,7 @@ def list_steam_games() -> str:
 def find_steam_game(game: str) -> str:
     """Find an installed Steam game by its name."""
     if steam_manager.find_game(game):
-        return f"Steam game found: {steam_manager.find_game(game)}"
+        return tr('brain.steam_game_found', value0=steam_manager.find_game(game))
     return None
 
 
@@ -1218,21 +1236,21 @@ def open_application(application: str) -> str:
             try:
                 _launch_application(app)
                 remember_app(normalize_application_name(path_candidate.stem), app)
-                return f"Opened application: {path_candidate.stem}"
+                return tr('brain.opened_application_78a6fd', value0=path_candidate.stem)
             except Exception as error:
-                return f"Error opening application path {raw_application}: {error}"
-        return f"Application path not found or is not an executable file: {raw_application}"
+                return tr('brain.error_opening_application_path', raw_application=raw_application, error=error)
+        return tr('brain.application_path_not_found_or_is_not_an_executable_file', raw_application=raw_application)
 
     query = raw_application.casefold()
     normalized_query = normalize_application_name(query)
     if not normalized_query:
-        return "Application name is empty"
+        return tr('brain.application_name_is_empty')
 
     app = cached_app(normalized_query)
     if app:
         try:
             _launch_application(app)
-            return f"Opened application: {app['Name']}"
+            return tr('brain.opened_application_78a6fd', value0=app['Name'])
         except Exception:
             forget_app(normalized_query)
     _APPLICATION_SEARCH_CACHE.pop(normalized_query, None)
@@ -1244,15 +1262,15 @@ def open_application(application: str) -> str:
     ]
     matches = registered + find_applications_on_all_drives(application)
     if not matches:
-        return f"Application not found: {application}"
+        return tr('brain.application_not_found', application=application)
 
     app = min(matches, key=lambda candidate:
     application_rank(candidate, normalized_query))
     try:
         _launch_application(app)
         saved = remember_app(normalized_query, app)
-        note = "" if saved else " (could not update apps.json cache)"
-        return f"Opened application: {app['Name']}{note}"
+        note = "" if saved else tr('brain.could_not_update_apps_json_cache')
+        return tr('brain.opened_application', value0=app['Name'], note=note)
     except Exception as error:
         return f"Error: {error}"
 
@@ -1260,10 +1278,10 @@ def open_application(application: str) -> str:
 def identify_playing_song(seconds: int = 8) -> str:
     """Listen to the computer's current output audio and identify the song."""
     if os.name != "nt":
-        return "Error: system audio recognition is currently only supported on Windows"
+        return tr('brain.error_system_audio_recognition_is_currently_only_supported_on_wi')
 
     if not 5 <= seconds <= 20:
-        return "Error: seconds must be between 5 and 20"
+        return tr('brain.error_seconds_must_be_between_5_and_20')
 
     try:
         import asyncio
@@ -1272,13 +1290,12 @@ def identify_playing_song(seconds: int = 8) -> str:
         from shazamio import Shazam
     except ImportError:
         return (
-            "Error: music recognition dependencies are not installed. "
-            "Run: pip install shazamio soundcard numpy"
+            tr('brain.error_music_recognition_dependencies_are_not_installed_run_pip_i')
         )
 
     speaker = sc.default_speaker()
     if speaker is None:
-        return "Error: no default audio output device was found"
+        return tr('brain.error_no_default_audio_output_device_was_found')
     loopbacks = sc.all_microphones(include_loopback=True)
 
     loopback = next(
@@ -1290,7 +1307,7 @@ def identify_playing_song(seconds: int = 8) -> str:
     )
 
     if loopback is None:
-        return f"Error: no loopback device found for: {speaker.name}"
+        return tr('brain.error_no_loopback_device_found_for', value0=speaker.name)
 
     sample_rate = 44100
     frames = sample_rate * seconds
@@ -1299,10 +1316,10 @@ def identify_playing_song(seconds: int = 8) -> str:
         with loopback.recorder(samplerate=sample_rate) as recorder:
             audio = recorder.record(numframes=frames)
     except Exception as error:
-        return f"Error capturing system audio: {error}"
+        return tr('brain.error_capturing_system_audio', error=error)
 
     if audio.size == 0:
-        return "No system audio was captured"
+        return tr('brain.no_system_audio_was_captured')
 
     audio = np.clip(audio, -1.0, 1.0)
     pcm = (audio * 32767).astype(np.int16)
@@ -1331,7 +1348,7 @@ def identify_playing_song(seconds: int = 8) -> str:
         track = result.get("track")
 
         if not track:
-            return "No song could be identified from the current system audio"
+            return tr('brain.no_song_could_be_identified_from_the_current_system_audio')
 
         response = {
             "title": track.get("title"),
@@ -1347,7 +1364,7 @@ def identify_playing_song(seconds: int = 8) -> str:
         return json.dumps(response, ensure_ascii=False, indent=2)
 
     except Exception as error:
-        return f"Error identifying song: {error}"
+        return tr('brain.error_identifying_song', error=error)
 
     finally:
         if temporary_path is not None:
@@ -1365,7 +1382,7 @@ def get_current_media() -> str:
     a System Media Transport Controls session.
     """
     if os.name != "nt":
-        return "Error: GSMTC media information is only supported on Windows"
+        return tr('brain.error_gsmtc_media_information_is_only_supported_on_windows')
 
     try:
         import asyncio
@@ -1374,8 +1391,7 @@ def get_current_media() -> str:
         )
     except ImportError:
         return (
-            "Error: Windows media control support is not installed. "
-            "Run: pip install winrt-Windows.Media.Control"
+            tr('brain.error_windows_media_control_support_is_not_installed_run_pip_ins')
         )
 
     async def read_media():
@@ -1413,10 +1429,10 @@ def get_current_media() -> str:
     try:
         result = asyncio.run(read_media())
     except Exception as error:
-        return f"Error reading Windows media session: {error}"
+        return tr('brain.error_reading_windows_media_session', error=error)
 
     if result is None:
-        return "No active Windows media session was found"
+        return tr('brain.no_active_windows_media_session_was_found')
 
     return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -1424,7 +1440,7 @@ def get_current_media() -> str:
 def list_media_sessions() -> str:
     """List every media session currently exposed through Windows GSMTC."""
     if os.name != "nt":
-        return "Error: GSMTC media information is only supported on Windows"
+        return tr('brain.error_gsmtc_media_information_is_only_supported_on_windows')
 
     try:
         import asyncio
@@ -1433,8 +1449,7 @@ def list_media_sessions() -> str:
         )
     except ImportError:
         return (
-            "Error: Windows media control support is not installed. "
-            "Run: pip install winrt-Windows.Media.Control"
+            tr('brain.error_windows_media_control_support_is_not_installed_run_pip_ins')
         )
 
     async def read_sessions():
@@ -1466,10 +1481,10 @@ def list_media_sessions() -> str:
     try:
         sessions = asyncio.run(read_sessions())
     except Exception as error:
-        return f"Error reading Windows media sessions: {error}"
+        return tr('brain.error_reading_windows_media_sessions', error=error)
 
     if not sessions:
-        return "No Windows media sessions were found"
+        return tr('brain.no_windows_media_sessions_were_found')
 
     return json.dumps(sessions, ensure_ascii=False, indent=2)
 
@@ -1504,7 +1519,7 @@ def decode_text(data: bytes) -> tuple[str, str]:
         if control_characters <= max(1, len(text) // 100):
             return text, encoding
     raise UnicodeError(
-        "File is binary or uses an unsupported text encoding; use the binary tools"
+        tr('brain.file_is_binary_or_uses_an_unsupported_text_encoding_use_the_bina')
     )
 
 
@@ -1530,7 +1545,7 @@ def learn_pronunciation(word: str, pronunciation: str) -> str:
 
     assistant = get_assistant()
     if assistant.voice is None:
-        return "Voice service is not initialized"
+        return tr('brain.voice_service_is_not_initialized')
 
     return assistant.voice.learn_pronunciation(word, pronunciation)
 
@@ -1544,4 +1559,4 @@ def empty_recycle_bin() -> str:
         winshell.recycle_bin().empty(confirm=False,
         show_progress=False, sound=True)
     except Exception:
-        print("Error: Recycle Bin is already empty!")
+        print(tr('brain.error_recycle_bin_is_already_empty'))

@@ -1,4 +1,23 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Email tools using SMTP for sending and IMAP for reading/deleting."""
+from src.init.lang import tr
 import imaplib
 import json
 import os
@@ -141,9 +160,9 @@ def _settings():
                 "imap_port") if not settings[key]]
     if missing:
         raise ValueError(
-            "Configure email_address, email_password (or EMAIL_PASSWORD) and the email server settings")
+            tr('email_service.configure_email_address_email_password_or_email_password_and_the'))
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", settings["address"]):
-        raise ValueError("email_address must be a valid email address")
+        raise ValueError(tr('email_service.email_address_must_be_a_valid_email_address'))
     return settings
 
 
@@ -196,7 +215,7 @@ def send_email(to: str = "", subject: str = "", body: str = "", cc: str = "",
     """Send an email through the configured SMTP server. Separate multiple recipients with commas."""
     if not to.strip() or not subject.strip() or not body.strip():
         return _result("needs_input",
-                       question="Indica destinatario, asunto y cuerpo del correo")
+                       question=tr('email_service.specify_the_recipient_subject_and_email_body'))
     try:
         settings = _settings()
         message = EmailMessage()
@@ -258,18 +277,18 @@ def read_emails(folder: str = "INBOX", message_id: str = "",
                 unread_only: bool = False, limit: int = 10) -> str:
     """Read recent emails or one IMAP UID from a folder; returns sender, subject, date and text."""
     if not 1 <= limit <= 50:
-        return _result("error", error="limit must be between 1 and 50")
+        return _result("error", error=tr('email_service.limit_must_be_between_1_and_50'))
     if not re.fullmatch(r"[A-Za-z0-9_./ \-\[\]]{1,100}", folder):
-        return _result("error", error="Invalid email folder")
+        return _result("error", error=tr('email_service.invalid_email_folder'))
     if message_id and not message_id.isdigit():
-        return _result("error", error="message_id must be an IMAP numeric UID")
+        return _result("error", error=tr('email_service.message_id_must_be_an_imap_numeric_uid'))
     client = None
     try:
         client = _open_imap(_settings())
         status, _ = client.select(folder, readonly=True)
         if status != "OK":
             return _result("error",
-                           error=f"Could not open email folder: {folder}")
+                           error=tr('email_service.could_not_open_email_folder', folder=folder))
         query = "UNSEEN" if unread_only else "ALL"
         ids = [message_id.encode()] if message_id else (
                     client.uid("search", None, query)[1][0] or b"").split()
@@ -305,20 +324,20 @@ def delete_email(message_id: str = "", folder: str = "INBOX") -> str:
     """Permanently delete one email by its IMAP UID after an explicit user request."""
     if not message_id.isdigit():
         return _result("needs_input",
-                       question="Indica el ID numérico del correo que quieres eliminar")
+                       question=tr('email_service.specify_the_numeric_id_of_the_email_you_want_to_delete'))
     if not re.fullmatch(r"[A-Za-z0-9_./ \-\[\]]{1,100}", folder):
-        return _result("error", error="Invalid email folder")
+        return _result("error", error=tr('email_service.invalid_email_folder'))
     client = None
     try:
         client = _open_imap(_settings())
         status, _ = client.select(folder, readonly=False)
         if status != "OK":
             return _result("error",
-                           error=f"Could not open email folder: {folder}")
+                           error=tr('email_service.could_not_open_email_folder', folder=folder))
         status, _ = client.uid("store", message_id, "+FLAGS", "(\\Deleted)")
         if status != "OK":
             return _result("error",
-                           error="Could not mark the email for deletion")
+                           error=tr('email_service.could_not_mark_the_email_for_deletion'))
         client.expunge()
         return _result("deleted", folder=folder, message_id=message_id)
     except (OSError, imaplib.IMAP4.error, ValueError) as error:

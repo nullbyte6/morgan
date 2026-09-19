@@ -1,5 +1,24 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Local Windows playback control and free YouTube search from Python."""
 
+from src.init.lang import tr
 import asyncio
 import hashlib
 import json
@@ -40,15 +59,13 @@ def _spotify_settings() -> tuple[str, str, str] | None:
 def _spotify_metadata_client():
     settings = _spotify_settings()
     if settings is None:
-        raise ValueError("Spotify is disabled: configure spotify-web-clientid and "
-                         "spotify-web-client_secret in config.json")
+        raise ValueError(tr('media.spotify_is_disabled_configure_spotify_web_clientid_and_spotify_w'))
     try:
         import spotipy
         from spotipy.cache_handler import CacheFileHandler
         from spotipy.oauth2 import SpotifyClientCredentials
     except ImportError as error:
-        raise ValueError("Spotipy is not installed; install requirements.txt "
-                         "and restart Arlo") from error
+        raise ValueError(tr('media.spotipy_is_not_installed_install_requirements_txt_and_restart_ar')) from error
     from .config import HOME_PATH
 
     client_id, client_secret, _ = settings
@@ -65,14 +82,12 @@ def _spotify_player_client():
     """Create an OAuth player client with a cache isolated per Spotify app."""
     settings = _spotify_settings()
     if settings is None:
-        raise ValueError("Spotify is disabled: configure spotify-web-clientid "
-                         "and spotify-web-client_secret in config.json")
+        raise ValueError(tr('media.spotify_is_disabled_configure_spotify_web_clientid_and_spotify_w'))
     try:
         import spotipy
         from spotipy.oauth2 import SpotifyOAuth
     except ImportError as error:
-        raise ValueError("Spotipy is not installed; install requirements.txt "
-                         "and restart Arlo") from error
+        raise ValueError(tr('media.spotipy_is_not_installed_install_requirements_txt_and_restart_ar')) from error
     from .config import HOME_PATH
 
     client_id, client_secret, redirect_uri = settings
@@ -94,9 +109,7 @@ def spotify_is_configured() -> bool:
 
 
 def _spotify_error(action: str, error: Exception) -> str:
-    return (f"Error {action} in Spotify: {error}. Ensure the redirect URI "
-            "in config.json is registered in the Spotify developer dashboard, "
-            "authorize the browser prompt, and use an active Spotify Premium device.")
+    return (tr('media.error_in_spotify_ensure_the_redirect_uri_in_config_json_is_regis', action=action, error=error))
 
 
 def _spotify_target_device(client) -> str:
@@ -113,7 +126,7 @@ def _spotify_target_device(client) -> str:
     if configured:
         if any(device["id"] == configured for device in devices):
             return configured
-        raise ValueError("the configured spotify_device_id is not currently available")
+        raise ValueError(tr('media.the_configured_spotify_device_id_is_not_currently_available'))
     active = [device for device in devices if device.get("is_active")]
     if active:
         return active[0]["id"]
@@ -128,9 +141,8 @@ def _spotify_target_device(client) -> str:
                    "type": device.get("type")}
                   for device in devices]
     if not candidates:
-        raise ValueError("no Spotify Connect devices are available; open Spotify and start a track once")
-    raise ValueError("no active or local Spotify device was found; choose one with "
-                     f"spotify_device_id in config.json: {json.dumps(candidates, ensure_ascii=False)}")
+        raise ValueError(tr('media.no_spotify_connect_devices_are_available_open_spotify_and_start'))
+    raise ValueError(tr('media.no_active_or_local_spotify_device_was_found_choose_one_with_spot', value0=json.dumps(candidates, ensure_ascii=False)))
 
 
 def _spotify_playback_confirmation(client, expected_uri: str | None,
@@ -161,7 +173,7 @@ def _spotify_playback_confirmation(client, expected_uri: str | None,
         "confirmed_context_uri": context_uri,
         "is_playing": playing,
         "device": (state.get("device") or {}).get("name"),
-        "note": "Spotify accepted the command but did not report the requested track as playing.",
+        "note": tr('media.spotify_accepted_the_command_but_did_not_report_the_requested_tr'),
     }
 
 
@@ -213,7 +225,7 @@ def _spotify_control(action: Literal["play", "pause", "next", "previous"],
         return json.dumps(response, ensure_ascii=False)
 
     except Exception as error:
-        return _spotify_error(f"controlling {action}", error)
+        return _spotify_error(tr('media.controlling', action=action), error)
 
 
 def control_media(action: Literal["play", "pause", "next", "previous"],
@@ -226,7 +238,7 @@ def control_media(action: Literal["play", "pause", "next", "previous"],
     if source.strip().casefold() == "spotify":
         return _spotify_control(action)
     if os.name != "nt":
-        return "Error: media control requires Windows"
+        return tr('media.error_media_control_requires_windows')
     operations = {
         "play": ("is_play_enabled", "try_play_async"),
         "pause": ("is_pause_enabled", "try_pause_async"),
@@ -234,7 +246,7 @@ def control_media(action: Literal["play", "pause", "next", "previous"],
         "previous": ("is_previous_enabled", "try_skip_previous_async"),
     }
     if action not in operations:
-        return "Error: choose play, pause, next or previous"
+        return tr('media.error_choose_play_pause_next_or_previous')
 
     async def apply():
         from winrt.windows.media.control import (
@@ -245,7 +257,7 @@ def control_media(action: Literal["play", "pause", "next", "previous"],
             matches = [session for session in manager.get_sessions()
                        if session.source_app_user_model_id == source]
             if len(matches) != 1:
-                return "Error: source is absent or matches multiple sessions; list media sessions again"
+                return tr('media.error_source_is_absent_or_matches_multiple_sessions_list_media_s')
             session = matches[0]
         else:
             session = manager.get_current_session()
@@ -253,11 +265,11 @@ def control_media(action: Literal["play", "pause", "next", "previous"],
             return None
         flag, method = operations[action]
         if not getattr(session.get_playback_info().controls, flag):
-            return f"Error: this media session does not support {action}"
+            return tr('media.error_this_media_session_does_not_support', action=action)
         accepted = await getattr(session, method)()
         return json.dumps({"action": action, "accepted": bool(accepted),
                            "source": session.source_app_user_model_id,
-                           "error": None if accepted else "Application rejected the command"})
+                           "error": None if accepted else tr('media.application_rejected_the_command')})
 
     async def bounded():
         return await asyncio.wait_for(apply(), timeout=10)
@@ -266,9 +278,9 @@ def control_media(action: Literal["play", "pause", "next", "previous"],
         result = asyncio.run(bounded())
         if result is None and not source and spotify_is_configured():
             return _spotify_control(action)
-        return result or "Error: no active media session"
+        return result or tr('media.error_no_active_media_session')
     except Exception as error:
-        return f"Error controlling media: {error or type(error).__name__}"
+        return tr('media.error_controlling_media', value0=error or type(error).__name__)
 
 
 def search_spotify_songs(query: str, max_results: int = 5) -> str:
@@ -278,9 +290,9 @@ def search_spotify_songs(query: str, max_results: int = 5) -> str:
     opens the user OAuth flow only when it is needed.
     """
     if not query.strip():
-        return "Error: specify a song, artist or search phrase"
+        return tr('media.error_specify_a_song_artist_or_search_phrase')
     if type(max_results) is not int or not 1 <= max_results <= 10:
-        return "Error: max_results must be between 1 and 10"
+        return tr('media.error_max_results_must_be_between_1_and_10')
     try:
         items = _spotify_metadata_client().search(
             q=query.strip(), type="track", limit=max_results,
@@ -305,8 +317,7 @@ def search_spotify_songs(query: str, max_results: int = 5) -> str:
             _spotify_tracks.popitem(last=False)
         return json.dumps({"query": query, "service": "spotify",
                            "candidates": candidates,
-                           "instruction": "For ambiguous requests, ask the user to choose; "
-                                          "do not play the first result automatically."},
+                           "instruction": tr('media.for_ambiguous_requests_ask_the_user_to_choose_do_not_play_the_fi')},
                           ensure_ascii=False)
     except Exception as error:
         return _spotify_error("searching", error)
@@ -318,16 +329,16 @@ def play_spotify_song(uri: str) -> str:
     and an active Spotify Connect device are required by Spotify's Player API.
     """
     if uri not in _spotify_tracks:
-        return "Error: uri must come from a recent search_spotify_songs result; search again"
+        return tr('media.error_uri_must_come_from_a_recent_search_spotify_songs_result_se')
     return _spotify_control("play", uri)
 
 
 def search_spotify_playlists(query: str, max_results: int = 10) -> str:
     """Search public Spotify playlists by name without reading their tracks."""
     if not query.strip():
-        return "Error: specify a playlist name or search phrase"
+        return tr('media.error_specify_a_playlist_name_or_search_phrase')
     if type(max_results) is not int or not 1 <= max_results <= 10:
-        return "Error: max_results must be between 1 and 10"
+        return tr('media.error_max_results_must_be_between_1_and_10')
     try:
         items = _spotify_player_client().search(
             q=query.strip(), type="playlist", limit=max_results,
@@ -354,18 +365,18 @@ def search_spotify_playlists(query: str, max_results: int = 10) -> str:
             _spotify_playlists.move_to_end(uri)
         return json.dumps({"service": "spotify", "query": query,
                            "playlists": candidates,
-                           "instruction": "Choose a numbered result when ambiguous, then use its exact uri with play_spotify_playlist. Do not read tracks merely to play a public playlist."},
+                           "instruction": tr('media.choose_a_numbered_result_when_ambiguous_then_use_its_exact_uri_w')},
                           ensure_ascii=False)
     except Exception as error:
-        return _spotify_error("searching playlists", error)
+        return _spotify_error(tr('media.searching_playlists'), error)
 
 
 def search_spotify_albums(query: str, max_results: int = 10) -> str:
     """Search Spotify albums and cache their context URIs for playback."""
     if not query.strip():
-        return "Error: specify an album, artist or search phrase"
+        return tr('media.error_specify_an_album_artist_or_search_phrase')
     if type(max_results) is not int or not 1 <= max_results <= 10:
-        return "Error: max_results must be between 1 and 10"
+        return tr('media.error_max_results_must_be_between_1_and_10')
     try:
         items = _spotify_metadata_client().search(
             q=query.strip(), type="album", limit=max_results,
@@ -388,16 +399,16 @@ def search_spotify_albums(query: str, max_results: int = 10) -> str:
             _spotify_albums.move_to_end(uri)
         return json.dumps({"service": "spotify", "query": query,
                            "albums": candidates,
-                           "instruction": "Choose a numbered result when ambiguous, then use its exact uri with play_spotify_album."},
+                           "instruction": tr('media.choose_a_numbered_result_when_ambiguous_then_use_its_exact_uri_w_88125e')},
                           ensure_ascii=False)
     except Exception as error:
-        return _spotify_error("searching albums", error)
+        return _spotify_error(tr('media.searching_albums'), error)
 
 
 def play_spotify_album(uri: str) -> str:
     """Start an album returned by search_spotify_albums."""
     if uri not in _spotify_albums:
-        return "Error: uri must come from a recent search_spotify_albums result; search again"
+        return tr('media.error_uri_must_come_from_a_recent_search_spotify_albums_result_s')
     return _spotify_control("play", uri, context=True)
 
 
@@ -407,7 +418,7 @@ def list_spotify_playlists(max_results: int = 50) -> str:
     cached by URI so a later play_spotify_playlist call cannot guess an ID.
     """
     if type(max_results) is not int or not 1 <= max_results <= 500:
-        return "Error: max_results must be between 1 and 500"
+        return tr('media.error_max_results_must_be_between_1_and_500')
     try:
         client = _spotify_player_client()
         page = client.current_user_playlists(limit=min(max_results, 50))
@@ -440,19 +451,18 @@ def list_spotify_playlists(max_results: int = 50) -> str:
         return json.dumps({
             "service": "spotify",
             "playlists": candidates,
-            "instruction": "For ambiguous playlist requests, ask the user to choose a "
-                           "numbered playlist; then use its exact uri.",
+            "instruction": tr('media.for_ambiguous_playlist_requests_ask_the_user_to_choose_a_numbere'),
         }, ensure_ascii=False)
     except Exception as error:
-        return _spotify_error("listing playlists", error)
+        return _spotify_error(tr('media.listing_playlists'), error)
 
 
 def get_spotify_playlist_tracks(uri: str, max_results: int = 100) -> str:
     """Read tracks from a playlist returned by list_spotify_playlists."""
     if uri not in _spotify_playlists:
-        return "Error: uri must come from a recent list_spotify_playlists result; list playlists again"
+        return tr('media.error_uri_must_come_from_a_recent_list_spotify_playlists_result')
     if type(max_results) is not int or not 1 <= max_results <= 500:
-        return "Error: max_results must be between 1 and 500"
+        return tr('media.error_max_results_must_be_between_1_and_500')
     playlist_id = uri.rsplit(":", 1)[-1]
     try:
         client = _spotify_player_client()
@@ -478,13 +488,13 @@ def get_spotify_playlist_tracks(uri: str, max_results: int = 100) -> str:
         return json.dumps({"playlist_uri": uri, "playlist": _spotify_playlists[uri].get("name"),
                            "tracks": tracks}, ensure_ascii=False)
     except Exception as error:
-        return _spotify_error("reading playlist tracks", error)
+        return _spotify_error(tr('media.reading_playlist_tracks'), error)
 
 
 def play_spotify_playlist(uri: str) -> str:
     """Start a playlist returned by list_spotify_playlists on Spotify."""
     if uri not in _spotify_playlists:
-        return "Error: uri must come from a recent list_spotify_playlists result; list playlists again"
+        return tr('media.error_uri_must_come_from_a_recent_list_spotify_playlists_result')
     return _spotify_control("play", uri, context=True)
 
 
@@ -496,9 +506,9 @@ def search_youtube_songs(query: str, max_results: int = 5) -> str:
     Uses local yt-dlp; requires Internet but no API key or paid service.
     """
     if not query.strip():
-        return "Error: specify a song, artist or search phrase"
+        return tr('media.error_specify_a_song_artist_or_search_phrase')
     if type(max_results) is not int or not 1 <= max_results <= 10:
-        return "Error: max_results must be between 1 and 10"
+        return tr('media.error_max_results_must_be_between_1_and_10')
     try:
         command = [sys.executable, "-m", "yt_dlp", "--ignore-config",
                    "--flat-playlist", "--dump-single-json", "--skip-download",
@@ -510,8 +520,7 @@ def search_youtube_songs(query: str, max_results: int = 5) -> str:
             timeout=45, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
         if result.returncode:
-            return (f"Error searching YouTube: {result.stderr.strip() or 'yt-dlp failed'}. "
-                    f"Ensure yt-dlp is installed.")
+            return (tr('media.error_searching_youtube_ensure_yt_dlp_is_installed', value0=result.stderr.strip() or tr('media.yt_dlp_failed')))
         entries = json.loads(result.stdout).get("entries") or []
         candidates = []
         for entry in entries:
@@ -527,13 +536,12 @@ def search_youtube_songs(query: str, max_results: int = 5) -> str:
         while len(_videos) > 100:
             _videos.popitem(last=False)
         return json.dumps({"query": query, "candidates": candidates,
-                           "instruction": "For ambiguous requests, ask the user to choose; "
-                                          "do not play the first result automatically."},
+                           "instruction": tr('media.for_ambiguous_requests_ask_the_user_to_choose_do_not_play_the_fi')},
                           ensure_ascii=False)
     except subprocess.TimeoutExpired:
-        return "Error: YouTube search timed out; try again"
+        return tr('media.error_youtube_search_timed_out_try_again')
     except (OSError, ValueError) as error:
-        return f"Error searching YouTube: {error}"
+        return tr('media.error_searching_youtube', error=error)
 
 
 def play_youtube_song(video_id: str) -> str:
@@ -543,15 +551,14 @@ def play_youtube_song(video_id: str) -> str:
     """
     candidate = _videos.get(video_id)
     if candidate is None:
-        return "Error: video_id must come from a recent search_youtube_songs result; search again"
+        return tr('media.error_video_id_must_come_from_a_recent_search_youtube_songs_resu')
     url = candidate["url"] + "&autoplay=1"
     try:
         if not webbrowser.open(url, new=2):
-            return "Error: the browser did not accept the YouTube URL"
+            return tr('media.error_the_browser_did_not_accept_the_youtube_url')
         return json.dumps({"opened": True, "title": candidate["title"], "url": url,
                            "playback_confirmed": False,
-                           "note": "Check get_current_media before claiming playback;"
-                                   " browser autoplay may require a click."},
+                           "note": tr('media.check_get_current_media_before_claiming_playback_browser_autopla')},
                           ensure_ascii=False)
     except OSError as error:
-        return f"Error opening YouTube: {error}"
+        return tr('media.error_opening_youtube', error=error)

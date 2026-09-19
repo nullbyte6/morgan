@@ -1,5 +1,24 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Resolve user-facing app names against running processes before closing."""
 
+from src.init.lang import tr
 import json
 import os
 from pathlib import Path
@@ -29,10 +48,10 @@ def close_application(application: str, force: bool = False) -> str:
         return json.dumps(dict(status=status, **values), ensure_ascii=False)
 
     if os.name != "nt":
-        return result("error", error="Closing applications is supported on Windows only")
+        return result("error", error=tr('app_close.closing_applications_is_supported_on_windows_only'))
     query = _normalize(application)
     if not query:
-        return result("error", error="An application name is required")
+        return result("error", error=tr('app_close.an_application_name_is_required'))
     try:
         from .brain import kill_process, normalize_application_name
         app = cached_app(normalize_application_name(application))
@@ -58,8 +77,7 @@ def close_application(application: str, force: bool = False) -> str:
         groups = sorted({p["executable"] for p in matches})
         if len(groups) > 1:
             return result("needs_input", candidates=matches,
-                          question="Which app do you want to close? Tell me "
-                                   "the PID or the executable")
+                          question=tr('app_close.which_app_do_you_want_to_close_tell_me_the_pid_or_the_executable'))
         windows = get_open_windows()
         outcomes = []
         for match in matches:
@@ -84,12 +102,12 @@ def close_application(application: str, force: bool = False) -> str:
                 else:
                     message = kill_process(str(pid), force=force)
                     outcomes.append(dict(pid=pid, status="terminated" if message.startswith(
-                        "Process terminated:") else "failed", detail=message))
+                        tr('app_close.process_terminated')) else "failed", detail=message))
             except psutil.NoSuchProcess:
                 outcomes.append(dict(pid=pid, status="already_closed"))
             except (OSError, psutil.AccessDenied) as error:
                 outcomes.append(dict(pid=pid, status="failed", error=str(error)))
         return result("results", application=application, outcomes=outcomes,
-                      note="close_requested means a normal close request, not confirmed termination. Save dialogs or tray processes may remain.")
+                      note=tr('app_close.close_requested_means_a_normal_close_request_not_confirmed_termi'))
     except (OSError, psutil.Error) as error:
         return result("error", error=str(error))

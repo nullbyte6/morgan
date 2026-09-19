@@ -1,4 +1,24 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations
+from src.init.lang import tr
 
 import json
 import logging
@@ -30,7 +50,7 @@ class TTSServer:
         self._client = None
         self._client_lock = threading.Lock()
         self._send_lock = threading.Lock()
-        logger.info("Loading CosyVoice...")
+        logger.info(tr('tts_server.loading_cosyvoice'))
 
         self.voice = VoiceService(
             model_path=VOICE_MODEL,
@@ -39,7 +59,7 @@ class TTSServer:
             speed=1.0,
             audio_callback=self._on_audio,
             speaking_callback=self._on_speaking)
-        logger.info("CosyVoice ready")
+        logger.info(tr('tts_server.cosyvoice_ready'))
 
     def _send(self, message: dict, client=None) -> None:
         data = (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")
@@ -54,7 +74,7 @@ class TTSServer:
             try:
                 client.sendall(data)
             except OSError:
-                logger.warning("Client disconnected")
+                logger.warning(tr('tts_server.client_disconnected'))
 
     def _on_speaking(self, speaking, turn_id):
         self._send({"type": "speaking", "speaking": speaking, "turn_id": turn_id})
@@ -87,7 +107,7 @@ class TTSServer:
                 self.voice.wait_until_done(batch)
             self._send({"type": "done", "turn_id": turn_id}, client)
         except Exception as error:
-            logger.exception("TTS wait failed")
+            logger.exception(tr('tts_server.tts_wait_failed'))
             self._send({
                 "type": "error",
                 "turn_id": turn_id,
@@ -98,7 +118,7 @@ class TTSServer:
         with self._client_lock:
             self._client = client
 
-        logger.info("Arlo connected")
+        logger.info(tr('tts_server.arlo_connected'))
 
         try:
             with client.makefile(
@@ -108,7 +128,7 @@ class TTSServer:
                     message = json.loads(line)
                     kind = message.get("type")
                     if kind == "hello":
-                        logger.info("Voice client ready")
+                        logger.info(tr('tts_server.voice_client_ready'))
                         self._send({"type": "hello", "interruptible": True}, client)
 
                     elif kind == "enqueue":
@@ -128,10 +148,10 @@ class TTSServer:
                         ).start()
 
                     else:
-                        logger.warning("Unknown message: %s", kind)
+                        logger.warning(tr('tts_server.unknown_message_s'), kind)
 
         except (OSError, ValueError) as error:
-            logger.warning("Client error: %s", error)
+            logger.warning(tr('tts_server.client_error_s'), error)
 
         finally:
             with self._client_lock:
@@ -139,7 +159,7 @@ class TTSServer:
                     self._client = None
 
             client.close()
-            logger.info("Arlo disconnected")
+            logger.info(tr('tts_server.arlo_disconnected'))
             self.voice.stop()
 
     def run(self) -> None:
@@ -153,7 +173,7 @@ class TTSServer:
             server.bind((HOST, PORT))
             server.listen(1)
 
-            logger.info("TTS listening on %s:%s", HOST, PORT)
+            logger.info(tr('tts_server.tts_listening_on_s_s'), HOST, PORT)
             while True:
                 client, address = server.accept()
                 self._handle_client(client)
@@ -165,7 +185,7 @@ def main():
     try:
         server.run()
     except KeyboardInterrupt:
-        logger.info("Stopping TTS service")
+        logger.info(tr('tts_server.stopping_tts_service'))
 
 
 if __name__ == "__main__":

@@ -1,3 +1,21 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Streaming terminal formatting, separate from the original Markdown."""
 
 import re
@@ -27,8 +45,7 @@ JAVA_TYPES = frozenset("""
     System Math Exception RuntimeException Throwable
     Iterable Iterator Comparable Comparator Runnable AutoCloseable
     Collection Collections List ArrayList LinkedList Set HashSet TreeSet
-    Map HashMap TreeMap Queue Deque Optional Stream Arrays
-""".split())
+    Map HashMap TreeMap Queue Deque Optional Stream Arrays""".split())
 
 
 def token_color(kind, value, lexer):
@@ -64,7 +81,6 @@ def markdown_text(text):
 
 def chunks_group(chunks, *, color=False):
     """Render prose bold in blue and optionally highlight fenced source code.
-
     Retokenize the current code block so multiline strings and comments retain
     their language context even when the model splits tokens between chunks.
     Unknown or unlabeled languages remain plain code.

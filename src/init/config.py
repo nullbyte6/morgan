@@ -1,5 +1,24 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """User configuration and storage, independent of the working directory."""
 
+from src.init.lang import tr
 import json
 import os
 import tempfile
@@ -82,11 +101,11 @@ def ensure_storage():
 
 def validate_config(config):
     if not isinstance(config, dict):
-        raise ValueError("config.json must contain a JSON object")
+        raise ValueError(tr('config.config_json_must_contain_a_json_object'))
     result = deepcopy(DEFAULTS)
     result.update(config)
     if result["lang"] not in ("english", "spanish"):
-        raise ValueError("lang must be 'english' or 'spanish'")
+        raise ValueError(tr('config.lang_must_be_english_or_spanish'))
     for key in ("message_service", "whatsapp_phone_number_id",
                 "whatsapp_api_version", "twilio_account_sid",
                 "twilio_auth_token", "twilio_from_number", "email_provider",
@@ -95,37 +114,37 @@ def validate_config(config):
                 "spotify-web-client_secret", "spotify_redirect_uri",
                 "spotify_device_id"):
         if not isinstance(result[key], str):
-            raise ValueError(f"{key} must be text")
+            raise ValueError(tr('config.must_be_text', key=key))
     for key in ("email_smtp_port", "email_imap_port"):
         if isinstance(result[key], bool) or not isinstance(result[key], int) or not 0 <= result[key] <= 65535:
-            raise ValueError(f"{key} must be an integer between 0 and 65535")
+            raise ValueError(tr('config.must_be_an_integer_between_0_and_65535', key=key))
     for key in ("email_smtp_use_ssl", "email_smtp_starttls",
                 "email_imap_use_ssl", "email_imap_starttls"):
         if not isinstance(result[key], bool):
-            raise ValueError(f"{key} must be boolean")
+            raise ValueError(tr('config.must_be_boolean', key=key))
     if not isinstance(result["weather_location"], str):
-        raise ValueError("weather_location must be text")
+        raise ValueError(tr('config.weather_location_must_be_text'))
     for key in ("version", "model_name", "keep_alive"):
         if not isinstance(result[key], str) or not result[key].strip():
-            raise ValueError(f"{key} must be a non-empty string")
+            raise ValueError(tr('config.must_be_a_non_empty_string', key=key))
     temperature = result["temperature"]
     if isinstance(temperature, bool) or not isinstance(temperature, (int,
                                                                      float)) or not 0 <= temperature <= 2:
-        raise ValueError("temperature must be a number between 0 and 2")
+        raise ValueError(tr('config.temperature_must_be_a_number_between_0_and_2'))
     personality = config.get("personality", {})
     if not isinstance(personality, dict):
-        raise ValueError("personality must be an object")
+        raise ValueError(tr('config.personality_must_be_an_object'))
     result["personality"] = {**DEFAULTS["personality"], **personality}
     for key, value in result["personality"].items():
         if not isinstance(value, str):
-            raise ValueError(f"personality.{key} must be text")
+            raise ValueError(tr('config.personality_must_be_text', key=key))
     instructions = config.get("instructions", {})
     if not isinstance(instructions, dict):
-        raise ValueError("instructions must be an object")
+        raise ValueError(tr('config.instructions_must_be_an_object'))
     result["instructions"] = {**DEFAULTS["instructions"], **instructions}
     for key, value in result["instructions"].items():
         if not isinstance(key, str) or not isinstance(value, str):
-            raise ValueError("instruction sections must have text names and values")
+            raise ValueError(tr('config.instruction_sections_must_have_text_names_and_values'))
     return result
 
 
@@ -160,7 +179,7 @@ def load_config():
         _last_error = None
     except (OSError, ValueError) as error:
         if str(error) != _last_error:
-            warnings.warn(f"Application config: {error}; keeping last valid settings",
+            warnings.warn(tr('config.application_config_keeping_last_valid_settings', error=error),
                           RuntimeWarning)
             _last_error = str(error)
     return deepcopy(_last_valid)
@@ -173,18 +192,18 @@ def update_config(updates: dict) -> str:
     instructions are merged, so their unspecified fields are preserved.
     """
     if not isinstance(updates, dict) or not updates:
-        return "Error updating configuration: updates must be a non-empty object"
+        return tr('config.error_updating_configuration_updates_must_be_a_non_empty_object')
     try:
         current = load_config()
         for key, value in updates.items():
             if key not in DEFAULTS:
-                return f"Error updating configuration: unknown setting '{key}'"
+                return tr('config.error_updating_configuration_unknown_setting', key=key)
             if isinstance(current.get(key), dict) and isinstance(value, dict):
                 current[key] = {**current[key], **value}
             else:
                 current[key] = value
         save_config(current)
         changed = ", ".join(updates)
-        return f"Configuration updated immediately: {changed}"
+        return tr('config.configuration_updated_immediately', changed=changed)
     except (OSError, ValueError) as error:
-        return f"Error updating configuration: {error}"
+        return tr('config.error_updating_configuration', error=error)

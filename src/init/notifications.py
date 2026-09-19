@@ -1,5 +1,24 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Session-local timers and Windows notifications, without blocking input."""
 
+from src.init.lang import tr
 from .identity import get_assistant
 
 
@@ -41,12 +60,12 @@ _timers = {}
 def _validate(title, message):
     for name, value, limit in (("title", title, 63), ("message", message, 255)):
         if not isinstance(value, str) or not value.strip() or len(value) > limit:
-            raise ValueError(f"{name} must contain 1 to {limit} characters")
+            raise ValueError(tr('notifications.must_contain_1_to_characters', name=name, limit=limit))
 
 
 def _deliver(title, message):
     if os.name != "nt":
-        raise OSError("Notifications are only supported on Windows")
+        raise OSError(tr('notifications.notifications_are_only_supported_on_windows'))
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-STA",
          "-WindowStyle", "Hidden", "-EncodedCommand",
@@ -57,7 +76,7 @@ def _deliver(title, message):
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     if result.returncode:
-        raise OSError((result.stderr or result.stdout).strip() or "Notification failed")
+        raise OSError((result.stderr or result.stdout).strip() or tr('notifications.notification_failed'))
 
 
 def send_notification(message: str, title: str | None = None) -> str:
@@ -66,9 +85,9 @@ def send_notification(message: str, title: str | None = None) -> str:
         title = get_assistant().name if title is None else title
         _validate(title, message)
         _deliver(title, message)
-        return "Notification submitted to Windows"
+        return tr('notifications.notification_submitted_to_windows')
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
-        return f"Error sending notification: {error}"
+        return tr('notifications.error_sending_notification', error=error)
 
 
 def _fire(timer_id):
@@ -94,11 +113,11 @@ def schedule_notification(delay_seconds: int, message: str, title: str | None = 
     """
     try:
         if os.name != "nt":
-            raise ValueError("Notifications are only supported on Windows")
+            raise ValueError(tr('notifications.notifications_are_only_supported_on_windows'))
         title = get_assistant().name if title is None else title
         _validate(title, message)
         if type(delay_seconds) is not int or not 0 <= delay_seconds <= 31_536_000:
-            raise ValueError("delay_seconds must be an integer between 0 and 31536000")
+            raise ValueError(tr('notifications.delay_seconds_must_be_an_integer_between_0_and_31536000'))
         timer_id = uuid4().hex
         timer = threading.Timer(delay_seconds, _fire, args=(timer_id,))
         timer.daemon = True
@@ -117,14 +136,14 @@ def schedule_notification(delay_seconds: int, message: str, title: str | None = 
         return json.dumps({"id": timer_id, "status": "pending", "delay_seconds": delay_seconds,
                            "requires_arlo_running": True})
     except (OSError, ValueError, RuntimeError) as error:
-        return f"Error scheduling notification: {error}"
+        return tr('notifications.error_scheduling_notification', error=error)
 
 
 def start_timer(duration_seconds: int, label: str = "Timer") -> str:
     """Start an internal countdown and notify Windows when it expires."""
     if type(duration_seconds) is not int or duration_seconds <= 0:
-        return "Error: duration_seconds must be a positive integer"
-    return schedule_notification(duration_seconds, label, f"{get_assistant().name} — Timer finished")
+        return tr('notifications.error_duration_seconds_must_be_a_positive_integer')
+    return schedule_notification(duration_seconds, label, tr('notifications.timer_finished', value0=get_assistant().name))
 
 
 def list_timers() -> str:
@@ -143,9 +162,9 @@ def cancel_timer(timer_id: str) -> str:
     with _lock:
         entry = _timers.get(timer_id)
         if entry is None:
-            return "Error: timer ID not found"
+            return tr('notifications.error_timer_id_not_found')
         if entry["status"] != "pending":
-            return f"Timer is already {entry['status']}; cannot cancel"
+            return tr('notifications.timer_is_already_cannot_cancel', value0=entry['status'])
         entry["status"] = "cancelled"
         entry["timer"].cancel()
-    return f"Timer {timer_id} cancelled"
+    return tr('notifications.timer_cancelled', timer_id=timer_id)
