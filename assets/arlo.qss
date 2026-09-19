@@ -12,18 +12,12 @@ QLabel#hero {
 }
 
 QLabel#muted,
-QLabel#status {
-    color: #a5adcb;
-    font-size: 16px;
-}
-
+QLabel#status,
 QLabel#subtitles {
-    color: #cad3f5;
     background: transparent;
-    font-size: 16px;
-    font-weight: 200;
+    color: #cad3f5;
+    font-size: 20px;
 }
-
 
 QFrame#inputFrame {
     background: transparent;
@@ -35,7 +29,7 @@ QTextEdit {
     background: transparent;
     border: none;
     color: #cad3f5;
-    font-size: 16px;
+    font-size: 20px;
     selection-background-color: #494d64;
 }
 
@@ -44,7 +38,7 @@ QPushButton#send {
     color: #24273a;
     border: none;
     border-radius: 24px;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 600;
 }
 
@@ -84,7 +78,7 @@ QPushButton#refresh {
     color: #a5adcb;
     border: 1px solid transparent;
     border-radius: 10px;
-    font-size: 22px;
+    font-size: 24px;
 }
 
 QPushButton#settingsNav:hover,
@@ -104,9 +98,10 @@ QPushButton#refresh:checked {
     border: 1px solid #8aadf4;
 }
 
-QLabel#logTitle {
+QLabel#logTitle,
+QLabel#settingsTitle {
     color: #cad3f5;
-    font-size: 16px;
+    font-size: 20px;
     padding-left: 20px
 }
 
@@ -118,21 +113,13 @@ QTextEdit#logViewer {
     padding: 12px;
 }
 
-
-
-QLabel#settingsTitle {
-    color: #cad3f5;
-    font-size: 20px;
-    font-weight: 600;
-}
-
 QComboBox#languageDropdown {
     background-color: #363a4f;
     color: #cad3f5;
     border: 1px solid #494d64;
     border-radius: 8px;
     padding: 10px 32px 10px 16px;
-    font-size: 16px;
+    font-size: 18px;
 }
 
 QComboBox#languageDropdown:hover,
