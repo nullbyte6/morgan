@@ -3,6 +3,7 @@
 
 import sys
 import random
+import threading
 from getpass import getuser
 from pathlib import Path
 
@@ -15,13 +16,15 @@ from PySide6.QtGui import (
 
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow,
-    QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget)
+    QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget,
+    QMessageBox, QPlainTextEdit)
 
 from agent import Assistant
-from init.config import load_config
+from src.init.config import load_config
 from src.init.brain import get_version
 from src.init.terminal import spectrum_levels
 from src.init.session_log import SessionLog
+from src.init.commands import execute_command, set_confirmation_handler
 
 
 class ChatInput(QTextEdit):
@@ -165,15 +168,19 @@ class AssistantWorker(QObject):
     finished = Signal(str)
     failed = Signal(str)
     ready = Signal()
+    confirmation_requested = Signal(str)
 
     def __init__(self):
         super().__init__()
         self.assistant = Assistant()
         self.history = []
         self.session = SessionLog()
+        self.confirmation_event = threading.Event()
+        self.confirmation_answer = False
 
     @Slot()
     def initialize(self):
+        set_confirmation_handler(self.confirm_command)
         try:
             self.assistant._initialize_runtime()
             self.ready.emit()
@@ -189,6 +196,30 @@ class AssistantWorker(QObject):
                 return
 
             self.session.write(self.assistant.username, prompt)
+
+            if prompt.casefold().startswith("pwsh:"):
+                command = prompt[5:].strip()
+                raw_result = execute_command(command)
+                data = json.loads(raw_result)
+
+                output = data.get("stdout", "")
+                error = data.get("stderr", "")
+
+                reply = (
+                    f"Estado: {data['status']}\n"
+                    f"Código: {data.get('exit_code', 'N/A')}\n\n"
+                    f"{output}")
+
+                if error:
+                    reply += f"\n\nSTDERR:\n{error}"
+
+                if data["status"] == "error":
+                    reply += f"\n\n{data.get('error', '')}"
+
+                self.session.write(self.assistant.name, reply)
+                self.finished.emit(reply)
+                return
+
             reply, self.history = self.assistant.run_desktop_turn(
                 prompt,
                 self.history,
@@ -209,6 +240,18 @@ class AssistantWorker(QObject):
 
     def report_audio(self, samples, sample_rate):
         self.audio.emit(spectrum_levels(samples, sample_rate).tolist())
+
+    def confirm_command(self, message: str) -> bool:
+        self.confirmation_answer = False
+        self.confirmation_event.clear()
+        self.confirmation_requested.emit(message)
+        self.confirmation_event.wait()
+        return self.confirmation_answer
+
+    def resolve_confirmation(self, accepted: bool):
+        self.confirmation_answer = accepted
+        self.confirmation_event.set()
+
 
 class ArloWindow(QMainWindow):
     request = Signal(str)
@@ -277,6 +320,13 @@ class ArloWindow(QMainWindow):
         self.status.setAlignment(Qt.AlignCenter)
         main.addWidget(self.status)
 
+        self.command_output = QPlainTextEdit()
+        self.command_output.setObjectName("commandOutput")
+        self.command_output.setReadOnly(True)
+        self.command_output.setMinimumHeight(110)
+        self.command_output.setMaximumHeight(220)
+        self.command_output.hide()
+        main.addWidget(self.command_output)
 
         composer = QHBoxLayout()
         composer.setSpacing(12)
@@ -342,6 +392,24 @@ class ArloWindow(QMainWindow):
         self.thread.finished.connect(self.worker.deleteLater)
         self.thread.start()
 
+        self.worker.confirmation_requested.connect(
+            self.on_confirmation_requested)
+
+    @Slot(str)
+    def on_confirmation_requested(self, message):
+        self.set_status("Esperando autorización...")
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Autorizar comando")
+        dialog.setIcon(QMessageBox.Question)
+        dialog.setText("Arlo solicita ejecutar un comando.")
+        dialog.setInformativeText(message)
+        dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        dialog.setDefaultButton(QMessageBox.No)
+
+        accepted = dialog.exec() == QMessageBox.Yes
+        self.worker.resolve_confirmation(accepted)
+        self.set_status("Pensando..." if accepted else "Comando denegado")
+
     def set_status(self, text):
         self.status.setText(text)
 
@@ -395,6 +463,9 @@ class ArloWindow(QMainWindow):
         if not prompt:
             return
 
+        self.command_output.hide()
+        self.command_output.clear()
+
         self.input.clear()
         self.current_reply = ""
         self.update_subtitles(prompt)
@@ -418,7 +489,11 @@ class ArloWindow(QMainWindow):
 
     @Slot(str)
     def on_finished(self, reply):
-        if not self.current_reply:
+        if reply.startswith("Estado: "):
+            self.command_output.setPlainText(reply)
+            self.command_output.show()
+            self.update_subtitles(reply.splitlines()[0])
+        elif not self.current_reply:
             self.update_subtitles(reply or "(Sin respuesta)")
 
         self.current_reply = None

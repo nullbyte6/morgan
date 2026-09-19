@@ -9,13 +9,43 @@ import subprocess
 
 from .identity import get_assistant
 
+import ctypes
+import threading
+from collections.abc import Callable
+
+from .brain import get_working_directory
+
+
+_confirmation = threading.local()
+def set_confirmation_handler(handler: Callable[[str], bool] | None) -> None:
+    _confirmation.handler = handler
+
+
+def is_elevated() -> bool:
+    if os.name != "nt":
+        return hasattr(os, "geteuid") and os.geteuid() == 0
+
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except (AttributeError, OSError):
+        return False
+
+
 
 def _confirm(message: str) -> bool:
+    handler = getattr(_confirmation, "handler", None)
+    if handler is not None:
+        try:
+            return bool(handler(message))
+        except Exception:
+            return False
+
     try:
         answer = get_assistant().read_user_input(message + " [yes/no]: ")
         return answer.strip().casefold() in {"sí", "si", "yes", "y"}
     except (EOFError, KeyboardInterrupt, RuntimeError):
         return False
+
 
 
 def _encoded(script: str) -> str:
@@ -53,9 +83,8 @@ def execute_command(command: str, working_directory: str = ".",
                     shell: str = "auto", elevated: bool = False,
                     timeout_seconds: int = 120) -> str:
     """Run any local shell command after direct terminal consent.
-
     Supports pipelines, scripts, shell builtins and installed executables.
-    shell: auto, powershell, pwsh, cmd, sh or bash. On Windows auto is
+    shell: auto, PowerShell, pwsh, cmd, sh or bash. On Windows auto is
     PowerShell. elevated asks separately for sudo (Windows and POSIX).
     Never retry failed commands automatically: they may have partially run.
     Windows sudo must be enabled and uses the user's configured mode.
@@ -73,10 +102,19 @@ def execute_command(command: str, working_directory: str = ".",
             raise ValueError("Command must be nonempty and contain no NUL characters")
         if not 1 <= timeout_seconds <= 86400:
             raise ValueError("timeout_seconds must be between 1 and 86400")
+
         if shell == "auto":
-            shell = "powershell" if os.name == "nt" else "sh"
+            if os.name == "nt":
+                shell = "pwsh" if shutil.which("pwsh") else "powershell"
+            else:
+                shell = "sh"
+
         if shell not in {"powershell", "pwsh", "cmd", "sh", "bash"}:
             raise ValueError("Unsupported shell")
+
+        if working_directory == ".":
+            working_directory = get_working_directory()
+
         cwd = str(Path(working_directory).expanduser().resolve(strict=True))
         if not Path(cwd).is_dir():
             raise ValueError("Working directory is not a directory")
@@ -85,7 +123,7 @@ def execute_command(command: str, working_directory: str = ".",
         preview = json.dumps(command, ensure_ascii=False)
         if not _confirm(f"\nEjecutar en {json.dumps(cwd)} con {shell}:\n{preview}\n¿Autorizar este comando?"):
             return result("denied")
-        if elevated:
+        if elevated and not is_elevated():
             if not _confirm("¿Autorizar este mismo comando con permisos de administrador mediante sudo?"):
                 return result("denied")
             if os.name == "nt":
