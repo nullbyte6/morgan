@@ -440,6 +440,28 @@ class ArloWindow(QMainWindow):
         self.resize(900, 720)
         self.setMinimumSize(600, 480)
 
+        self.chat_button = QPushButton("󰭹")
+        self.logs_button = QPushButton("󰋚")
+        self.send = QPushButton("")
+        self.input = ChatInput()
+        self.status = QLabel()
+        self.command_output = QPlainTextEdit()
+        self.active_language = None
+        self.pages = QStackedWidget()
+        self.greeting_key = f"greeting.{random.randrange(6)}"
+        self.subtitles = QLabel(self.startup_greeting)
+        self.subtitle_label = QLabel()
+        self.language_switch = ToggleSwitch()
+        self.language_label = QLabel()
+        self.subtitles_switch = ToggleSwitch()
+        self.hero = QLabel(Assistant().banner.rstrip("\n"))
+        self.meter = AudioVisualizer()
+        self.worker = AssistantWorker()
+        self.thread = QThread(self)
+
+        self.log_dir = Path.home() / ".arlo" / "log"
+        self.log_view = LogView(self.log_dir, self)
+
         self.busy = False
         self.ready = False
         self.speaking = False
@@ -447,7 +469,6 @@ class ArloWindow(QMainWindow):
         self.pending_prompt = None
         self.turn_id = 0
         self.status_key = "status.waking"
-        self.greeting_key = f"greeting.{random.randrange(6)}"
         self.showing_greeting = True
         self.current_reply = None
         self.subtitle_text = ""
@@ -475,14 +496,12 @@ class ArloWindow(QMainWindow):
         navigation.setContentsMargins(20, 8, 20, 0)
         navigation.setSpacing(8)
 
-        self.chat_button = QPushButton("󰭹")
         self.chat_button.setObjectName("chatNav")
         self.chat_button.setCheckable(True)
         self.chat_button.setChecked(True)
         self.chat_button.setFixedSize(48, 48)
         self.chat_button.setToolTip("Chat")
 
-        self.logs_button = QPushButton("󰋚")
         self.logs_button.setObjectName("logsNav")
         self.logs_button.setCheckable(True)
         self.logs_button.setFixedSize(48, 48)
@@ -493,7 +512,6 @@ class ArloWindow(QMainWindow):
         navigation.addStretch()
 
         container_layout.addLayout(navigation)
-        self.pages = QStackedWidget()
         self.pages.setObjectName("mainPages")
         container_layout.addWidget(self.pages, 1)
 
@@ -510,29 +528,32 @@ class ArloWindow(QMainWindow):
 
         label_spacing: int = 200
         subtitle_row = QHBoxLayout()
-        self.subtitle_label = QLabel()
+
         self.subtitle_label.setObjectName("muted")
         self.subtitle_label.setFixedWidth(label_spacing)
+
         subtitle_row.setSpacing(8)
         self.subtitle_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
         subtitle_row.addWidget(self.subtitle_label)
-        self.subtitles_switch = ToggleSwitch()
         enabled = self.settings.value("subtitles", True, type=bool)
+
         self.subtitles_switch.setChecked(enabled)
         self.subtitles_switch.toggled.connect(self.toggle_subtitles)
         subtitle_row.addWidget(self.subtitles_switch)
         switches.addLayout(subtitle_row)
         language_row = QHBoxLayout()
-        self.language_label = QLabel()
+
         self.language_label.setObjectName("muted")
         self.language_label.setFixedWidth(label_spacing)
+
         language_row.setSpacing(8)
         self.language_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         language_row.addWidget(self.language_label)
-        self.language_switch = ToggleSwitch()
         self.language_switch.setChecked(get_language() == "spanish")
         self.language_switch.toggled.connect(self.toggle_language)
         language_row.addWidget(self.language_switch)
+
         switches.addLayout(language_row)
         header.addLayout(switches)
         main.addLayout(header)
@@ -541,7 +562,6 @@ class ArloWindow(QMainWindow):
         banner_group.setSpacing(16)
         banner_group.setAlignment(Qt.AlignCenter)
 
-        self.hero = QLabel(Assistant().banner.rstrip("\n"))
         self.hero.setObjectName("hero")
         self.hero.setTextFormat(Qt.PlainText)
         self.hero.setAlignment(Qt.AlignCenter)
@@ -549,11 +569,9 @@ class ArloWindow(QMainWindow):
         self.hero.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         banner_group.addWidget(self.hero)
 
-        self.meter = AudioVisualizer()
         banner_group.addWidget(self.meter)
         main.addLayout(banner_group, 1)
 
-        self.subtitles = QLabel(self.startup_greeting)
         self.subtitles.setObjectName("subtitles")
         self.subtitles.setAlignment(Qt.AlignCenter)
         self.subtitles.setWordWrap(True)
@@ -563,12 +581,10 @@ class ArloWindow(QMainWindow):
         self.subtitles.setVisible(self.subtitles_switch.isChecked())
         main.addWidget(self.subtitles)
 
-        self.status = QLabel()
         self.status.setObjectName("status")
         self.status.setAlignment(Qt.AlignCenter)
         main.addWidget(self.status)
 
-        self.command_output = QPlainTextEdit()
         self.command_output.setObjectName("commandOutput")
         self.command_output.setReadOnly(True)
         self.command_output.setMinimumHeight(110)
@@ -583,28 +599,27 @@ class ArloWindow(QMainWindow):
         input_frame = QFrame()
         input_frame.setObjectName("inputFrame")
         input_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        input_frame.setMaximumWidth(600)
 
         input_layout = QVBoxLayout(input_frame)
         input_layout.setContentsMargins(16, 0, 16, 0)
         input_layout.setSpacing(0)
 
-        self.input = ChatInput()
         self.input.submitted.connect(self.send_message)
         input_layout.addWidget(self.input, 0, Qt.AlignVCenter)
-
         input_frame.setMinimumHeight(48)
+
+        composer.addStretch()
         composer.addWidget(input_frame, 1)
 
-        self.send = QPushButton("")
         self.send.setObjectName("send")
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
         composer.addWidget(self.send, 0, Qt.AlignVCenter)
+        composer.addStretch()
         main.addLayout(composer)
 
         self.pages.addWidget(root)
-        log_dir = Path.home() / ".arlo" / "log"
-        self.log_view = LogView(log_dir, self)
         self.pages.addWidget(self.log_view)
         self.chat_button.clicked.connect(lambda: self.show_page(0))
         self.logs_button.clicked.connect(lambda: self.show_page(1))
@@ -613,7 +628,6 @@ class ArloWindow(QMainWindow):
 
         self.set_enabled(False)
         self.load_stylesheet()
-        self.active_language = None
         self.refresh_language()
 
 
@@ -637,8 +651,6 @@ class ArloWindow(QMainWindow):
         return tr(self.greeting_key, username=self.username, name="Arlo")
 
     def build_worker(self):
-        self.thread = QThread(self)
-        self.worker = AssistantWorker()
         self.worker.moveToThread(self.thread)
 
         self.thread.started.connect(self.worker.initialize)
