@@ -217,9 +217,6 @@ class VoiceService:
                     speed=self.speed)
                 for chunk in generator:
                     if batch.cancelled.is_set():
-                        # CosyVoice owns an internal token thread and releases its
-                        # GPU caches only when this phrase's generator finishes.
-                        # Drain it silently; queued phrases are skipped entirely.
                         continue
                     audio = chunk["tts_speech"]
                     if hasattr(audio, "detach"):
