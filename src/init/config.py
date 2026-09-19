@@ -31,7 +31,7 @@ CONFIG_FILE = HOME_PATH / "json" / "config.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
 DEFAULTS = {
     "lang": "spanish",
-    "version": "1.0.2-beta",
+    "version": "1.0.5-beta",
     "model_name": "qwen3.5:9b",
     "keep_alive": "30m",
     "temperature": 0.2,
