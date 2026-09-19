@@ -34,9 +34,11 @@ from pathlib import Path
 from PySide6.QtCore import (
     Qt, QObject, QThread, QTimer, Signal, Slot,
     Property, QPropertyAnimation, QSettings)
+
 from PySide6.QtGui import (
     QColor, QFont, QFontDatabase,
     QIcon, QPainter, QPainterPath, QPen)
+
 from PySide6.QtWidgets import (
     QApplication, QAbstractButton, QFrame, QHBoxLayout,
     QLabel, QMainWindow, QPushButton, QSizePolicy,
@@ -459,14 +461,49 @@ class ArloWindow(QMainWindow):
         self.language_timer.timeout.connect(self.refresh_language)
         self.language_timer.start()
 
+
     def build_ui(self):
+        container = QWidget()
+        container.setObjectName("windowContainer")
+        self.setCentralWidget(container)
+
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+
+        navigation = QHBoxLayout()
+        navigation.setContentsMargins(20, 12, 20, 8)
+        navigation.setSpacing(8)
+
+        self.chat_button = QPushButton("󰭹")
+        self.chat_button.setObjectName("chatNav")
+        self.chat_button.setCheckable(True)
+        self.chat_button.setChecked(True)
+        self.chat_button.setFixedSize(44, 40)
+        self.chat_button.setToolTip("Chat")
+
+        self.logs_button = QPushButton("󰋚")
+        self.logs_button.setObjectName("logsNav")
+        self.logs_button.setCheckable(True)
+        self.logs_button.setFixedSize(44, 40)
+        self.logs_button.setToolTip("Logs")
+
+        navigation.addWidget(self.chat_button)
+        navigation.addWidget(self.logs_button)
+        navigation.addStretch()
+
+        container_layout.addLayout(navigation)
+        self.pages = QStackedWidget()
+        self.pages.setObjectName("mainPages")
+        container_layout.addWidget(self.pages, 1)
+
         root = QWidget()
         root.setObjectName("root")
-        self.setCentralWidget(root)
 
         main = QVBoxLayout(root)
-        main.setContentsMargins(20, 20, 20, 20)
+        main.setContentsMargins(20, 12, 20, 20)
         main.setSpacing(16)
+
         header = QHBoxLayout()
         header.addStretch()
         switches = QVBoxLayout()
@@ -565,10 +602,29 @@ class ArloWindow(QMainWindow):
         composer.addWidget(self.send, 0, Qt.AlignVCenter)
         main.addLayout(composer)
 
+        self.pages.addWidget(root)
+        log_dir = Path.home() / ".arlo" / "log"
+        self.log_view = LogView(log_dir, self)
+        self.pages.addWidget(self.log_view)
+        self.chat_button.clicked.connect(lambda: self.show_page(0))
+        self.logs_button.clicked.connect(lambda: self.show_page(1))
+        self.pages.setCurrentIndex(0)
+
+
         self.set_enabled(False)
         self.load_stylesheet()
         self.active_language = None
         self.refresh_language()
+
+
+    def show_page(self, index: int):
+        self.pages.setCurrentIndex(index)
+        self.chat_button.setChecked(index == 0)
+        self.logs_button.setChecked(index == 1)
+
+        if index == 0 and self.ready:
+            self.input.setFocus()
+
 
     def load_stylesheet(self):
         stylesheet_path = (

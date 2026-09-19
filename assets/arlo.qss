@@ -60,33 +60,55 @@ QPushButton#send:disabled {
     color: #a5adcb;
 }
 
-QTextEdit QScrollBar:vertical {
-    background: transparent;
-    width: 5px;
-    margin: 4px 0;
-}
-
-QTextEdit QScrollBar::handle:vertical {
-    background: #5b6078;
-    border-radius: 2px;
-    min-height: 16px;
-}
-
-QTextEdit QScrollBar::add-line:vertical,
-QTextEdit QScrollBar::sub-line:vertical {
-    height: 0;
-    background: transparent;
-}
-
-QTextEdit QScrollBar::add-page:vertical,
-QTextEdit QScrollBar::sub-page:vertical {
-    background: transparent;
-}
-
-
 ToggleSwitch {
     qproperty-trackOff: #24273a;
     qproperty-trackOn: #8aadf4;
     qproperty-thumbColor: #cad3f5;
 }
+
+QWidget#windowContainer {
+    background-color: #24273a;
+}
+
+QStackedWidget#mainPages {
+    background-color: #24273a;
+    border: none;
+}
+
+QPushButton#chatNav,
+QPushButton#logsNav {
+    background-color: transparent;
+    color: #a5adcb;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    font-size: 22px;
+}
+
+QPushButton#chatNav:hover,
+QPushButton#logsNav:hover {
+    background-color: #363a4f;
+    color: #cad3f5;
+}
+
+QPushButton#chatNav:checked,
+QPushButton#logsNav:checked {
+    background-color: #494d64;
+    color: #cad3f5;
+    border: 1px solid #8aadf4;
+}
+
+QLabel#logTitle {
+    color: #cad3f5;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+QTextEdit#logViewer {
+    background-color: #1e2030;
+    color: #cad3f5;
+    border: 1px solid #494d64;
+    border-radius: 12px;
+    padding: 12px;
+}
+
 
