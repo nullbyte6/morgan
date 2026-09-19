@@ -16,11 +16,6 @@ QLabel#status {
     font-size: 16px;
 }
 
-QLabel#meter {
-    color: #8aadf4;
-    font-size: 16px;
-}
-
 QLabel#subtitles {
     color: #cad3f5;
     background: transparent;

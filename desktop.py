@@ -6,8 +6,10 @@ import random
 from getpass import getuser
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QObject, QThread, Signal, Slot
-from PySide6.QtGui import QFont, QFontDatabase
+
+import math
+from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal, Slot
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow,
     QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
@@ -15,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from agent import Assistant
 from src.init.brain import get_version
+from src.init.terminal import spectrum_levels
 
 
 class ChatInput(QTextEdit):
@@ -56,9 +59,106 @@ class ChatInput(QTextEdit):
         super().keyPressEvent(event)
 
 
+
+class AudioVisualizer(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(100)
+        self.setMinimumWidth(300)
+
+        self.levels = [0.0] * 15
+        self.smoothed = [0.0] * 15
+        self.amplitude = 0.0
+        self.phase = 0.0
+
+        self.timer = QTimer(self)
+        self.timer.setInterval(16)
+        self.timer.timeout.connect(self.animate)
+        self.timer.start()
+
+    def set_levels(self, levels):
+        self.levels = [max(0.0, min(1.0, float(level))) for level in levels[:15]]
+        self.levels.extend([0.0] * (15 - len(self.levels)))
+
+    def clear(self):
+        self.levels = [0.0] * 15
+
+    def animate(self):
+        for i, level in enumerate(self.levels):
+            speed = 0.70 if level > self.smoothed[i] else 0.12
+            self.smoothed[i] += (level - self.smoothed[i]) * speed
+
+        target = max(self.smoothed)
+        speed = 0.2 if target > self.amplitude else 0.08
+        self.amplitude += (target - self.amplitude) * speed
+
+        if self.amplitude < 0.001:
+            self.amplitude = 0.0
+
+        self.phase += 0.055 + self.amplitude * 0.045
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        width = self.width()
+        height = self.height()
+        center = height / 2
+
+        colors = (
+            QColor(245, 247, 255, 240),
+            QColor(165, 181, 255, 150),
+            QColor(116, 133, 240, 95),
+            QColor(96, 113, 205, 55))
+
+        for layer, color in enumerate(colors):
+            path = QPainterPath()
+            points = max(120, width // 3)
+
+            for i in range(points + 1):
+                t = i / points
+                x = t * width
+
+                envelope = max(0.0, 1.0 - ((t - 0.5) * 2.0) ** 2) ** 1.8
+
+                band_position = t * 14
+                band_index = min(13, int(band_position))
+                fraction = band_position - band_index
+
+                level = (self.smoothed[band_index] * (1.0 - fraction) +
+                    self.smoothed[band_index + 1] * fraction)
+
+                energy = self.amplitude * 0.45 + level * 0.55
+                amplitude = (12.0 + layer * 7.0) * envelope * energy * 2.2
+
+                wave = math.sin(
+                    t * 26.0 - self.phase * (0.8 + layer * 0.08) + layer * 0.55
+                )
+
+                detail = math.sin(t * 43.0 + self.phase * 0.45) * 0.22
+
+                y = center + (wave + detail) * amplitude
+
+                if i == 0:
+                    path.moveTo(x, y)
+                else:
+                    path.lineTo(x, y)
+
+            pen = QPen(color)
+            pen.setWidthF(2.0 if layer == 0 else 1.5)
+            pen.setCapStyle(Qt.RoundCap)
+            pen.setJoinStyle(Qt.RoundJoin)
+
+            painter.setPen(pen)
+            painter.drawPath(path)
+
+        painter.end()
+
+
 class AssistantWorker(QObject):
     chunk = Signal(str)
-    audio = Signal(float)
+    audio = Signal(object)
     finished = Signal(str)
     failed = Signal(str)
     ready = Signal()
@@ -90,11 +190,7 @@ class AssistantWorker(QObject):
             self.failed.emit(str(error))
 
     def report_audio(self, samples, sample_rate):
-        import numpy as np
-        level = float(
-            np.sqrt(np.mean(np.square(samples)))) if samples.size else 0.0
-        self.audio.emit(min(1.0, level * 4))
-
+        self.audio.emit(spectrum_levels(samples, sample_rate).tolist())
 
 class ArloWindow(QMainWindow):
     request = Signal(str)
@@ -142,9 +238,7 @@ class ArloWindow(QMainWindow):
         self.hero.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         banner_group.addWidget(self.hero)
 
-        self.meter = QLabel("▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁")
-        self.meter.setObjectName("meter")
-        self.meter.setAlignment(Qt.AlignCenter)
+        self.meter = AudioVisualizer()
         banner_group.addWidget(self.meter)
         main.addLayout(banner_group, 1)
 
@@ -297,13 +391,9 @@ class ArloWindow(QMainWindow):
         self.current_reply += chunk
         self.update_subtitles(self.current_reply)
 
-    @Slot(float)
-    def on_audio(self, level):
-        heights = "▁▂▃▄▅▆▇█"
-        position = min(7, max(0, int(level * 7)))
-        pattern = [max(0, position - abs(7 - index) // 2) for index in
-                   range(15)]
-        self.meter.setText(" ".join(heights[value] for value in pattern))
+    @Slot(object)
+    def on_audio(self, levels):
+        self.meter.set_levels(levels)
 
     @Slot(str)
     def on_finished(self, reply):
@@ -312,7 +402,7 @@ class ArloWindow(QMainWindow):
 
         self.current_reply = None
         self.busy = False
-        self.meter.setText("▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁")
+        self.meter.clear()
         self.set_status("")
         self.set_enabled(True)
         self.input.setFocus()
@@ -322,7 +412,7 @@ class ArloWindow(QMainWindow):
         self.update_subtitles(f"Error: {error}")
         self.current_reply = None
         self.busy = False
-        self.meter.setText("▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁")
+        self.meter.clear()
         self.set_status("Error")
         self.set_enabled(self.ready)
 
