@@ -1,6 +1,5 @@
 @echo off
 setlocal
-
 if not defined ARLO_HOME (
     for /f "usebackq delims=" %%I in (`
         powershell.exe -NoProfile -Command ^

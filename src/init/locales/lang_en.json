@@ -1,8 +1,8 @@
 {
   "ui.subtitles": "Subtitles",
-  "ui.subtitles_hint": "Show or hide subtitles",
-  "ui.language": "Language: English",
-  "ui.language_hint": "Interface language: off = English, on = Spanish",
+  "ui.subtitles_hint": "Toggle Subtitles",
+  "ui.language": "English",
+  "ui.language_hint": "Interface Language: off = English, on = Spanish",
   "ui.input": "Write a message...",
   "ui.steering_input": "Write a correction and press Enter to interrupt...",
   "ui.send": "Send",

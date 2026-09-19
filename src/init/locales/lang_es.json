@@ -1,8 +1,8 @@
 {
   "ui.subtitles": "Subtítulos",
-  "ui.subtitles_hint": "Mostrar u ocultar subtítulos",
-  "ui.language": "Idioma: Español",
-  "ui.language_hint": "Idioma de interfaz: desactivado = inglés, activado = español",
+  "ui.subtitles_hint": "Mostrar u ocultar Subtítulos",
+  "ui.language": "Español",
+  "ui.language_hint": "Idioma de Interfaz: desactivado = inglés, activado = español",
   "ui.input": "Escribe un mensaje...",
   "ui.steering_input": "Escribe una corrección y pulsa Enter para interrumpir...",
   "ui.send": "Enviar",

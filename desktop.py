@@ -20,7 +20,6 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 """Arlo desktop interface using PySide6."""
-
 import sys
 import random
 import threading
@@ -30,7 +29,6 @@ import json
 import asyncio
 from getpass import getuser
 from pathlib import Path
-
 
 import math
 from PySide6.QtCore import (
@@ -48,7 +46,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit)
 
 from agent import Assistant
-from init.config import load_dev_file
+from src.init.config import load_dev_file
 from src.init.brain import get_version
 from src.init.terminal import spectrum_levels
 from src.init.session_log import SessionLog
@@ -112,7 +110,8 @@ class AudioVisualizer(QWidget):
         self.timer.start()
 
     def set_levels(self, levels):
-        self.levels = [max(0.0, min(1.0, float(level))) for level in levels[:15]]
+        self.levels = [max(0.0, min(1.0, float(level))) for level in
+                       levels[:15]]
         self.levels.extend([0.0] * (15 - len(self.levels)))
 
     def clear(self):
@@ -162,7 +161,7 @@ class AudioVisualizer(QWidget):
                 fraction = band_position - band_index
 
                 level = (self.smoothed[band_index] * (1.0 - fraction) +
-                    self.smoothed[band_index + 1] * fraction)
+                         self.smoothed[band_index + 1] * fraction)
 
                 energy = self.amplitude * 0.45 + level * 0.55
                 amplitude = (12.0 + layer * 7.0) * envelope * energy * 2.2
@@ -333,7 +332,8 @@ class AssistantWorker(QObject):
         try:
             cancel_event = self.cancel_event
             set_confirmation_handler(
-                lambda message: self.confirm_command(message, cancel_event, turn_id))
+                lambda message: self.confirm_command(message, cancel_event,
+                                                     turn_id))
             self.command_reply = False
             if cancel_event.is_set():
                 self.finished.emit("")
@@ -372,8 +372,10 @@ class AssistantWorker(QObject):
                 prompt,
                 self.history,
                 on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),
-                on_audio=lambda samples, rate: self.report_audio(turn_id, samples, rate),
-                on_speaking=lambda speaking: self.speaking.emit(turn_id, speaking),
+                on_audio=lambda samples, rate: self.report_audio(turn_id,
+                                                                 samples, rate),
+                on_speaking=lambda speaking: self.speaking.emit(turn_id,
+                                                                speaking),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop)
 
@@ -384,17 +386,18 @@ class AssistantWorker(QObject):
 
         except Exception as error:
             cause = error.__cause__
-            message = tr("ui.error_detail", error=error, cause=cause) if cause is not None else str(
+            message = tr("ui.error_detail", error=error,
+                         cause=cause) if cause is not None else str(
                 error)
             self.session.write("System", message)
             self.failed.emit(message)
 
     def report_audio(self, turn_id, samples, sample_rate):
         if not self.cancel_event.is_set():
-            self.audio.emit(turn_id, spectrum_levels(samples, sample_rate).tolist())
+            self.audio.emit(turn_id,
+                            spectrum_levels(samples, sample_rate).tolist())
 
     def interrupt(self):
-        # Called directly: a queued Qt slot cannot run while ask() is busy.
         self.cancel_event.set()
         self.resolve_confirmation(False)
 
@@ -405,7 +408,8 @@ class AssistantWorker(QObject):
         if self.event_loop is not None:
             self.event_loop.close()
 
-    def confirm_command(self, message: str, cancel_event=None, turn_id=0) -> bool:
+    def confirm_command(self, message: str, cancel_event=None,
+                        turn_id=0) -> bool:
         cancel_event = self.cancel_event if cancel_event is None else cancel_event
         if cancel_event.is_set():
             return False
@@ -466,18 +470,21 @@ class ArloWindow(QMainWindow):
         main = QVBoxLayout(root)
         main.setContentsMargins(28, 22, 28, 22)
         main.setSpacing(16)
-
         header = QHBoxLayout()
         version = QLabel(get_version())
         version.setObjectName("muted")
         header.addWidget(version)
         header.addStretch()
         switches = QVBoxLayout()
+
+        label_spacing: int = 200
         subtitle_row = QHBoxLayout()
         self.subtitle_label = QLabel()
         self.subtitle_label.setObjectName("muted")
+        self.subtitle_label.setFixedWidth(label_spacing)
+        subtitle_row.setSpacing(8)
+        self.subtitle_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         subtitle_row.addWidget(self.subtitle_label)
-        subtitle_row.addStretch()
         self.subtitles_switch = ToggleSwitch()
         enabled = self.settings.value("subtitles", True, type=bool)
         self.subtitles_switch.setChecked(enabled)
@@ -487,8 +494,10 @@ class ArloWindow(QMainWindow):
         language_row = QHBoxLayout()
         self.language_label = QLabel()
         self.language_label.setObjectName("muted")
+        self.language_label.setFixedWidth(label_spacing)
+        language_row.setSpacing(8)
+        self.language_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         language_row.addWidget(self.language_label)
-        language_row.addStretch()
         self.language_switch = ToggleSwitch()
         self.language_switch.setChecked(get_language() == "spanish")
         self.language_switch.toggled.connect(self.toggle_language)
@@ -568,7 +577,8 @@ class ArloWindow(QMainWindow):
         self.refresh_language()
 
     def load_stylesheet(self):
-        stylesheet_path = (Path(__file__).resolve().parent / "assets" / "arlo.qss")
+        stylesheet_path = (
+                    Path(__file__).resolve().parent / "assets" / "arlo.qss")
         stylesheet = stylesheet_path.read_text(encoding="utf-8")
         self.setStyleSheet(stylesheet)
 
@@ -630,11 +640,13 @@ class ArloWindow(QMainWindow):
     def update_send_button(self):
         stopping_available = self.busy and self.speaking and not self.stopping
         self.send.setText("■" if stopping_available else "")
-        self.send.setEnabled(self.ready and (not self.busy or stopping_available))
+        self.send.setEnabled(
+            self.ready and (not self.busy or stopping_available))
         key = "ui.stop" if stopping_available else "ui.send"
         self.send.setAccessibleName(tr(key))
         self.send.setToolTip(tr("ui.stop_hint" if stopping_available else key))
-        self.input.setPlaceholderText(tr("ui.steering_input" if self.busy else "ui.input"))
+        self.input.setPlaceholderText(
+            tr("ui.steering_input" if self.busy else "ui.input"))
 
     @Slot(bool)
     def toggle_language(self, enabled):
@@ -708,7 +720,7 @@ class ArloWindow(QMainWindow):
         """Renderiza **negrita** sin interpretar HTML del modelo."""
         escaped = html.escape(text)
         return (re.sub(r"\*\*(.+?)\*\*",
-            r"<b>\1</b>", escaped, flags=re.DOTALL,)
+                       r"<b>\1</b>", escaped, flags=re.DOTALL, )
                 .replace("\n", "<br>"))
 
     def resizeEvent(self, event):
@@ -789,7 +801,8 @@ class ArloWindow(QMainWindow):
             return
         self.speaking = speaking and self.busy and not self.stopping
         if not self.stopping and self.busy:
-            self.set_status("status.speaking" if self.speaking else "status.thinking")
+            self.set_status(
+                "status.speaking" if self.speaking else "status.thinking")
         self.update_send_button()
 
     @Slot(str)
@@ -800,7 +813,8 @@ class ArloWindow(QMainWindow):
             self.command_output.show()
             self.update_subtitles(reply.splitlines()[0])
         elif not self.current_reply:
-            self.update_subtitles(reply or tr("status.stopped" if interrupted else "ui.no_response"))
+            self.update_subtitles(reply or tr(
+                "status.stopped" if interrupted else "ui.no_response"))
 
         self.current_reply = None
         self.busy = False
