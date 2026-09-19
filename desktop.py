@@ -569,7 +569,7 @@ class ArloWindow(QMainWindow):
 
     def update_send_button(self):
         stopping_available = self.busy and self.speaking and not self.stopping
-        self.send.setText("■" if stopping_available else "")
+        self.send.setText("" if stopping_available else "")
         self.send.setEnabled(
             self.ready and (not self.busy or stopping_available))
         key = "ui.stop" if stopping_available else "ui.send"
