@@ -345,9 +345,9 @@ def main():
     app.setStyle("Fusion")
 
     font_path = (Path(
-        __file__).resolve().parent / "assets" / "fonts" / "JetBrainsMonoNL-SemiBold.ttf")
+        __file__).resolve().parent / "assets" / "fonts" /
+                 "JetBrainsMonoNL-Regular.ttf")
     font_id = QFontDatabase.addApplicationFont(str(font_path))
-
     if font_id == -1:
         pass
     else:
@@ -356,7 +356,6 @@ def main():
 
     window = ArloWindow()
     window.show()
-
     sys.exit(app.exec())
 
 
