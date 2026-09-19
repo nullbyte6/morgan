@@ -479,13 +479,13 @@ class ArloWindow(QMainWindow):
         self.chat_button.setObjectName("chatNav")
         self.chat_button.setCheckable(True)
         self.chat_button.setChecked(True)
-        self.chat_button.setFixedSize(44, 40)
+        self.chat_button.setFixedSize(48, 48)
         self.chat_button.setToolTip("Chat")
 
         self.logs_button = QPushButton("󰋚")
         self.logs_button.setObjectName("logsNav")
         self.logs_button.setCheckable(True)
-        self.logs_button.setFixedSize(44, 40)
+        self.logs_button.setFixedSize(48, 48)
         self.logs_button.setToolTip("Logs")
 
         navigation.addWidget(self.chat_button)
