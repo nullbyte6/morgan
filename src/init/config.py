@@ -28,11 +28,10 @@ from pathlib import Path
 
 HOME_PATH = Path.home() / ".arlo"
 CONFIG_FILE = HOME_PATH / "json" / "config.json"
+DEV_FILE = Path(__file__).resolve().parents[2] / "dev" / "core.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
 DEFAULTS = {
     "lang": "spanish",
-    "version": "1.0.5-beta",
-    "model_name": "qwen3.5:9b",
     "keep_alive": "30m",
     "temperature": 0.2,
     "weather_location": "",
@@ -124,9 +123,6 @@ def validate_config(config):
             raise ValueError(tr('config.must_be_boolean', key=key))
     if not isinstance(result["weather_location"], str):
         raise ValueError(tr('config.weather_location_must_be_text'))
-    for key in ("version", "model_name", "keep_alive"):
-        if not isinstance(result[key], str) or not result[key].strip():
-            raise ValueError(tr('config.must_be_a_non_empty_string', key=key))
     temperature = result["temperature"]
     if isinstance(temperature, bool) or not isinstance(temperature, (int,
                                                                      float)) or not 0 <= temperature <= 2:
@@ -165,7 +161,7 @@ def save_config(config):
             temporary.unlink(missing_ok=True)
 
 
-def load_config():
+def load_config() -> dict:
     """Read fresh settings; retain the last valid settings during invalid edits."""
     global _last_valid, _last_error
     try:
@@ -183,7 +179,6 @@ def load_config():
                           RuntimeWarning)
             _last_error = str(error)
     return deepcopy(_last_valid)
-
 
 def update_config(updates: dict) -> str:
     """Apply partial settings to config.json immediately and atomically.
@@ -207,3 +202,23 @@ def update_config(updates: dict) -> str:
         return tr('config.configuration_updated_immediately', changed=changed)
     except (OSError, ValueError) as error:
         return tr('config.error_updating_configuration', error=error)
+
+
+def load_dev_file() -> dict:
+    """Read developer settings file; Non-editable."""
+    global _last_valid, _last_error
+    try:
+        ensure_storage()
+        if not DEV_FILE.exists():
+            initial = json.loads(LEGACY_CONFIG.read_text(
+                encoding="utf-8-sig")) if LEGACY_CONFIG.exists() else DEFAULTS
+            save_config(initial)
+        _last_valid = validate_config(
+            json.loads(DEV_FILE.read_text(encoding="utf-8-sig")))
+        _last_error = None
+    except (OSError, ValueError) as error:
+        if str(error) != _last_error:
+            warnings.warn(tr('config.application_config_keeping_last_valid_settings', error=error),
+                          RuntimeWarning)
+            _last_error = str(error)
+    return deepcopy(_last_valid)

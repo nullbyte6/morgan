@@ -1,7 +1,6 @@
 from .brain import (
     load_config,
     get_version,
-    update_version,
     refresh,
     empty_recycle_bin,
     get_working_directory,
@@ -136,7 +135,6 @@ TOOLS = [
     load_config,
     update_config,
     get_version,
-    update_version,
     refresh,
     empty_recycle_bin,
     get_working_directory,

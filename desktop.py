@@ -48,7 +48,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit)
 
 from agent import Assistant
-from src.init.config import load_config
+from init.config import load_dev_file
 from src.init.brain import get_version
 from src.init.terminal import spectrum_levels
 from src.init.session_log import SessionLog
@@ -430,7 +430,7 @@ class ArloWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"ARLO {load_config()["version"]}")
+        self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
         icon_path = (Path(__file__).resolve().parent /
                      "assets" / "pwsh.ico")
         self.setWindowIcon(QIcon(str(icon_path)))

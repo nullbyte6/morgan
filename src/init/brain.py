@@ -53,13 +53,14 @@ try:
 except ImportError:
     winreg = None
 
-from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config, save_config)
+from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
+                     save_config, load_dev_file)
 from .app_cache import cached_app, remember_app, forget_app
 from .steam import steam_manager
 
-VERSION = "v1.0.1-alpha"
+VERSION = "no-version-found"
 
-MODEL_NAME = os.environ.get("MODEL", load_config().get("model_name"))
+MODEL_NAME = os.environ.get("MODEL", load_dev_file()["model_name"])
 OLLAMA_KEEP_ALIVE = os.environ.get("KEEP_ALIVE",
                                    load_config().get("keep_alive"))
 GIT_TIMEOUT_SECONDS = int(os.environ.get("GIT_TIMEOUT", "120"))
@@ -88,30 +89,9 @@ VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
 def get_version() -> str:
     """Return the assistant's current version from its application configuration."""
     try:
-        config = load_config()
-        return config.get("version", VERSION)
+        return load_dev_file()["version"]
     except (OSError, ValueError):
         return VERSION
-
-
-def update_version(new_version: str) -> str:
-    """Update the assistant's version live, preserving all other configuration settings."""
-    if not isinstance(new_version, str) or not new_version.strip():
-        return tr('brain.error_updating_version_new_version_must_be_a_non_empty_string')
-    new_version = new_version.strip()
-    try:
-        config = load_config()
-        config["version"] = new_version
-        config["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        atomic_write_bytes(
-            CONFIG_FILE,
-            json.dumps(config, indent=2, ensure_ascii=False).encode("utf-8"),
-        )
-        global VERSION
-        VERSION = new_version
-        return tr('brain.version_updated_to_in_config_json', new_version=new_version)
-    except Exception as error:
-        return tr('brain.error_updating_version', error=error)
 
 
 def refresh() -> str:
