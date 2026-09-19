@@ -82,3 +82,11 @@ QTextEdit QScrollBar::add-page:vertical,
 QTextEdit QScrollBar::sub-page:vertical {
     background: transparent;
 }
+
+
+ToggleSwitch {
+    qproperty-trackOff: #24273a;
+    qproperty-trackOn: #8aadf4;
+    qproperty-thumbColor: #cad3f5;
+}
+

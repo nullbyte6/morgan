@@ -11,15 +11,19 @@ from pathlib import Path
 
 
 import math
-from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal, Slot
+from PySide6.QtCore import (
+    Qt, QObject, QThread, QTimer, Signal, Slot,
+    Property, QPropertyAnimation, QSettings)
+
 from PySide6.QtGui import (
     QColor, QFont, QFontDatabase,
     QIcon, QPainter, QPainterPath, QPen)
 
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow,
-    QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget,
-    QMessageBox, QPlainTextEdit)
+    QApplication, QAbstractButton, QFrame, QHBoxLayout,
+    QLabel, QMainWindow, QPushButton, QSizePolicy,
+    QTextEdit, QVBoxLayout, QWidget, QMessageBox,
+    QPlainTextEdit)
 
 from agent import Assistant
 from src.init.config import load_config
@@ -164,6 +168,114 @@ class AudioVisualizer(QWidget):
         painter.end()
 
 
+class ToggleSwitch(QAbstractButton):
+    """Interruptor animado para Qt Widgets."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(48, 26)
+
+        self._offset = 0.0
+
+        self._animation = QPropertyAnimation(self, b"offset", self)
+        self._animation.setDuration(160)
+
+        self.toggled.connect(self._animate)
+
+        self._track_off = QColor("#555965")
+        self._track_on = QColor("#7486F5")
+        self._thumb_color = QColor("#FFFFFF")
+
+    def get_offset(self) -> float:
+        return self._offset
+
+    def set_offset(self, value: float):
+        self._offset = value
+        self.update()
+
+    offset = Property(float, get_offset, set_offset)
+
+    def get_track_off(self):
+        return self._track_off
+
+    def set_track_off(self, color):
+        self._track_off = QColor(color)
+        self.update()
+
+    trackOff = Property(QColor, get_track_off, set_track_off)
+
+    def get_track_on(self):
+        return self._track_on
+
+    def set_track_on(self, color):
+        self._track_on = QColor(color)
+        self.update()
+
+    trackOn = Property(QColor, get_track_on, set_track_on)
+
+    def get_thumb_color(self):
+        return self._thumb_color
+
+    def set_thumb_color(self, color):
+        self._thumb_color = QColor(color)
+        self.update()
+
+    thumbColor = Property(QColor, get_thumb_color, set_thumb_color)
+
+    def _animate(self, checked: bool):
+        self._animation.stop()
+
+        self._animation.setStartValue(self._offset)
+        self._animation.setEndValue(1.0 if checked else 0.0)
+
+        self._animation.start()
+
+    def setChecked(self, checked: bool):
+        super().setChecked(checked)
+        if not self.isVisible():
+            self._animation.stop()
+            self.set_offset(1.0 if checked else 0.0)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        width = self.width()
+        height = self.height()
+
+        margin = 3
+        diameter = height - margin * 2
+        inactive = self._track_off
+        active = self._track_on
+        t = self._offset
+        track_color = QColor(
+            round(inactive.red() + (active.red() - inactive.red()) * t),
+            round(inactive.green() + (active.green() - inactive.green()) * t),
+            round(inactive.blue() + (active.blue() - inactive.blue()) * t),
+        )
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(track_color)
+
+        painter.drawRoundedRect(
+            0, 0, width, height,
+            height / 2, height / 2,
+        )
+
+        x = margin + (width - diameter - margin * 2) * t
+        painter.setBrush(self._thumb_color)
+        painter.drawEllipse(
+            round(x),
+            margin,
+            diameter,
+            diameter)
+
+        painter.end()
+
+
 class AssistantWorker(QObject):
     chunk = Signal(str)
     audio = Signal(object)
@@ -273,6 +385,7 @@ class ArloWindow(QMainWindow):
         self.current_reply = None
         self.subtitle_text = ""
 
+        self.settings = QSettings("ARLO", "desktop")
         self.build_ui()
         self.build_worker()
         self.set_status("Conectando con Arlo...")
@@ -290,6 +403,18 @@ class ArloWindow(QMainWindow):
         version = QLabel(get_version())
         version.setObjectName("muted")
         header.addWidget(version)
+        header.addStretch()
+        subtitle_label = QLabel("Subtítulos")
+        subtitle_label.setObjectName("muted")
+        header.addWidget(subtitle_label)
+        self.subtitles_switch = ToggleSwitch()
+        self.subtitles_switch.setToolTip("Mostrar u ocultar subtítulos")
+        self.subtitles_switch.setAccessibleName("Subtítulos")
+        enabled = self.settings.value("subtitles", True, type=bool)
+        self.subtitles_switch.setChecked(enabled)
+        self.subtitles_switch.toggled.connect(self.toggle_subtitles)
+        header.addSpacing(8)
+        header.addWidget(self.subtitles_switch)
         main.addLayout(header)
 
         banner_group = QVBoxLayout()
@@ -315,6 +440,7 @@ class ArloWindow(QMainWindow):
         self.subtitles.setTextFormat(Qt.RichText)
         self.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.subtitles.setFixedHeight(90)
+        self.subtitles.setVisible(self.subtitles_switch.isChecked())
         main.addWidget(self.subtitles)
 
         self.status = QLabel()
@@ -361,8 +487,7 @@ class ArloWindow(QMainWindow):
         self.load_stylesheet()
 
     def load_stylesheet(self):
-        stylesheet_path = (
-                    Path(__file__).resolve().parent / "assets" / "arlo.qss")
+        stylesheet_path = (Path(__file__).resolve().parent / "assets" / "arlo.qss")
         stylesheet = stylesheet_path.read_text(encoding="utf-8")
         self.setStyleSheet(stylesheet)
 
@@ -425,6 +550,11 @@ class ArloWindow(QMainWindow):
         self.set_enabled(True)
         self.set_status("")
         self.input.setFocus()
+
+    @Slot(bool)
+    def toggle_subtitles(self, enabled: bool):
+        self.subtitles.setVisible(enabled)
+        self.settings.setValue("subtitles", enabled)
 
     def update_subtitles(self, text):
         from PySide6.QtGui import QTextLayout
