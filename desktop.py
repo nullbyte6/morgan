@@ -921,26 +921,40 @@ class ArloWindow(QMainWindow):
         event.accept()
 
 
+
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    icon_path = (Path(__file__).resolve().parent
-                 / "assets" / "pwsh.ico")
+    assets = Path(__file__).resolve().parent / "assets"
+    fonts = assets / "fonts"
+    app.setWindowIcon(QIcon(str(assets / "pwsh.ico")))
 
-    app.setWindowIcon(QIcon(str(icon_path)))
-    font_path = (Path(__file__).resolve().parent
-                 / "assets" / "fonts" /
-                 "JetBrainsMonoNL-Regular.ttf")
-    font_id = QFontDatabase.addApplicationFont(str(font_path))
-    if font_id == -1:
-        pass
-    else:
-        family = QFontDatabase.applicationFontFamilies(font_id)[0]
-        app.setFont(QFont(family, 11))
+    def load_font(filename: str) -> str:
+        path = fonts / filename
+        font_id = QFontDatabase.addApplicationFont(str(path))
+        if font_id == -1:
+            raise RuntimeError(f"No se pudo cargar la fuente: {path}")
 
+        families = QFontDatabase.applicationFontFamilies(font_id)
+        if not families:
+            raise RuntimeError(f"La fuente no tiene familias: {path}")
+
+        return families[0]
+
+    arimo_family = load_font("ArimoNerdFont-Regular.ttf")
+    jetbrains_family = load_font("JetBrainsMonoNL-Regular.ttf")
+    app.setFont(QFont(arimo_family, 11))
     window = ArloWindow()
+    banner_font = QFont(jetbrains_family, 11)
+    banner_font.setStyleHint(QFont.Monospace)
+    window.hero.setFont(banner_font)
     window.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
+
 
 
 if __name__ == "__main__":
