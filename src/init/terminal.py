@@ -245,21 +245,27 @@ class TerminalUI:
         input_height = self._input_height(width) if has_prompt else 1
 
         header = self._header(width)
-        center = Group(self._banner_renderable() if banner else Text(""), Text(""),
-            self._meter_renderable(width))
 
-        bottom = Group(Text("Pensando" if thinking else "",
-                style=RICH_DIM_COLOR), self._input_renderable()
-                if has_prompt else Text(""),
-                Text(version, style=RICH_DIM_COLOR))
+        center = Group(
+            self._banner_renderable() if banner else Text(""),
+            Text(""),
+            self._meter_renderable(width),
+            Text(""),
+            Align.center(
+                Text("Pensando...", style=RICH_DIM_COLOR)
+                if thinking else Text(""),
+                width=width))
+
+        bottom = Group(
+            Text(""),
+            self._input_renderable() if has_prompt else Text(""),
+            Text(version, style=RICH_DIM_COLOR))
 
         layout = Layout(size=height - 1)
         layout.split_column(
             Layout(header, name="header", size=1),
             Layout(name="main"),
-            Layout(bottom,
-                name="bottom",
-                size=input_height + 2))
+            Layout(bottom, name="bottom", size=input_height + 2))
 
         layout["main"].update(
             Align.center(center,
