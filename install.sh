@@ -555,6 +555,3 @@ readonly ARLO_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/arlo.ps1")"
 
 cleanup_installers
 trap - EXIT
-
-info "Installation complete. Starting ${ASSISTANT_NAME}..."
-exec "$POWERSHELL_BIN" -NoProfile -ExecutionPolicy Bypass -File "$ARLO_SCRIPT"
