@@ -111,13 +111,24 @@ Write-Host "Ollama ready." -ForegroundColor Green
 $modelName = $env:MODEL
 if (-not $modelName) {
     $configPath = $env:ARLO_CONFIG_FILE
+    $corePath = $env:ARLO_CORE_FILE
     if (-not $configPath) {
         $configPath = Join-Path $env:USERPROFILE ".arlo\json\config.json"
     }
 
-    if (Test-Path -LiteralPath $configPath) {
-        $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
-        $modelName = $config.model_name
+    if (-not $corePath) {
+        $arloHome = $env:ARLO_HOME
+
+        if (-not $arloHome) {
+            $arloHome = $root
+        }
+
+        $corePath = Join-Path $arloHome "dev\core.json"
+    }
+
+    if (Test-Path -LiteralPath $corePath) {
+        $core = Get-Content -LiteralPath $corePath -Raw | ConvertFrom-Json
+        $modelName = $core.model_name
     }
 }
 
@@ -314,21 +325,29 @@ while ($true) {
         Select-Object -First 1
 
     if (-not $existingConsole) {
+        $pwsh = (Get-Command "pwsh.exe" -ErrorAction Stop).Source
+        $wt = (Get-Command "wt.exe" -ErrorAction Stop).Source
+        if (-not (Test-Path -LiteralPath $consoleScript -PathType Leaf)) {
+            throw "Debug console script not found: $consoleScript"
+        }
+
         $wtArguments = @(
-            '-w new'
-            'new-tab'
-            '--title "ARLO Console"'
-            '--suppressApplicationTitle'
-            'pwsh.exe'
-            '-NoLogo'
-            '-NoProfile'
-            '-NoExit'
-            "-File `"$consoleScript`""
+            "-w", "new",
+            "new-tab",
+            "--title", "ARLO Console",
+            "--suppressApplicationTitle",
+            "`"$pwsh`"",
+            "-NoLogo",
+            "-NoProfile",
+            "-NoExit",
+            "-File",
+            "`"$consoleScript`""
         ) -join ' '
 
         Start-Process `
-            -FilePath "wt.exe" `
+            -FilePath $wt `
             -ArgumentList $wtArguments
+        Write-Host "Debug console started." -ForegroundColor Green
         Write-Host "Debug console started." -ForegroundColor Green
     }
     else {
