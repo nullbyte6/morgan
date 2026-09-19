@@ -32,7 +32,7 @@ DEV_FILE = Path(__file__).resolve().parents[2] / "dev" / "core.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
 DEFAULTS = {
     "lang": "spanish",
-    "keep_alive": "30m",
+    "keep_alive": "24h",
     "temperature": 0.2,
     "weather_location": "",
     "message_service": "whatsapp",

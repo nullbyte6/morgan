@@ -442,6 +442,7 @@ class ArloWindow(QMainWindow):
 
         self.chat_button = QPushButton("󰭹")
         self.logs_button = QPushButton("󰋚")
+        self.settings = QPushButton("")
         self.send = QPushButton("")
         self.input = ChatInput()
         self.status = QLabel()
@@ -941,11 +942,11 @@ def main():
 
         return families[0]
 
-    arimo_family = load_font("ArimoNerdFont-Regular.ttf")
-    jetbrains_family = load_font("JetBrainsMonoNL-Regular.ttf")
-    app.setFont(QFont(arimo_family, 11))
+    main_font_family = load_font("UbuntuNerdFont-Regular.ttf")
+    secondary_font_family = load_font("JetBrainsMonoNL-Regular.ttf")
+    app.setFont(QFont(main_font_family, 11))
     window = ArloWindow()
-    banner_font = QFont(jetbrains_family, 11)
+    banner_font = QFont(secondary_font_family, 11)
     banner_font.setStyleHint(QFont.Monospace)
     window.hero.setFont(banner_font)
     window.show()
