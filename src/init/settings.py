@@ -20,14 +20,13 @@
 from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QComboBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget)
+    QAbstractButton, QComboBox, QHBoxLayout, QLabel, QListView, QVBoxLayout, QWidget)
 
 from .lang import get_language, tr
 
 
 class ToggleSwitch(QAbstractButton):
-    """Interruptor animado para Qt Widgets."""
-
+    """Animated toggle for Qt Widgets."""
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -135,7 +134,6 @@ class ToggleSwitch(QAbstractButton):
 
 class SettingsView(QWidget):
     """Desktop subtitle and interface language preferences."""
-
     subtitles_changed = Signal(bool)
     language_changed = Signal(str)
 
@@ -165,6 +163,18 @@ class SettingsView(QWidget):
         self.language_label.setObjectName("muted")
         self.language_dropdown = QComboBox()
         self.language_dropdown.setObjectName("languageDropdown")
+        arrow = QLabel("\uf0d7", self.language_dropdown)
+        arrow.setObjectName("languageDropdownArrow")
+        arrow.setAttribute(Qt.WA_TransparentForMouseEvents)
+        arrow.setAlignment(Qt.AlignCenter)
+        arrow.setFixedWidth(28)
+        arrow_layout = QHBoxLayout(self.language_dropdown)
+        arrow_layout.setContentsMargins(0, 0, 1, 0)
+        arrow_layout.addStretch()
+        arrow_layout.addWidget(arrow)
+        language_options = QListView(self.language_dropdown)
+        language_options.setMouseTracking(True)
+        self.language_dropdown.setView(language_options)
         self.language_dropdown.addItem("English", "english")
         self.language_dropdown.addItem("Español", "spanish")
         self.language_dropdown.setMinimumWidth(180)
