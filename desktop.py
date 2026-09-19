@@ -890,13 +890,24 @@ def main():
 
         return families[0]
 
-    main_font_family = load_font("UbuntuNerdFont-Regular.ttf")
-    secondary_font_family = load_font("JetBrainsMonoNL-Regular.ttf")
-    app.setFont(QFont(main_font_family, 11))
+    main_font = load_font("Inter_24pt-Regular.ttf")
+    nerd_font = load_font("JetBrainsMonoNLNerdFontMono-Medium.ttf")
+    app.setFont(QFont(main_font, 11))
     window = ArloWindow()
-    banner_font = QFont(secondary_font_family, 11)
+    banner_font = QFont(nerd_font, 11)
     banner_font.setStyleHint(QFont.Monospace)
     window.hero.setFont(banner_font)
+    icon_font = QFont(nerd_font, 18)
+
+    for button in (
+            window.settings_button,
+            window.chat_button,
+            window.logs_button,
+            window.send,
+            window.attach,
+            window.log_view.refresh_button,):
+        button.setFont(icon_font)
+
     window.show()
     sys.exit(app.exec())
 

@@ -7,8 +7,7 @@ QWidget#settingsPage {
 QLabel#hero {
     color: #cad3f5;
     background: transparent;
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 24px;
 }
 
 QLabel#muted,
@@ -16,7 +15,7 @@ QLabel#status,
 QLabel#subtitles {
     background: transparent;
     color: #cad3f5;
-    font-size: 20px;
+    font-size: 16px;
 }
 
 QFrame#inputFrame {
@@ -29,7 +28,7 @@ QTextEdit {
     background: transparent;
     border: none;
     color: #cad3f5;
-    font-size: 20px;
+    font-size: 16px;
     selection-background-color: #494d64;
 }
 
@@ -39,8 +38,7 @@ QPushButton#send {
     color: #24273a;
     border: none;
     border-radius: 24px;
-    font-size: 20px;
-    font-weight: 600;
+    font-size: 32px;
 }
 
 QPushButton#attach:hover,
@@ -82,7 +80,7 @@ QPushButton#refresh {
     color: #a5adcb;
     border: 1px solid transparent;
     border-radius: 10px;
-    font-size: 24px;
+    font-size: 32px;
 }
 
 QPushButton#settingsNav:hover,
@@ -102,10 +100,9 @@ QPushButton#refresh:checked {
     border: 1px solid #8aadf4;
 }
 
-QLabel#logTitle,
-QLabel#settingsTitle {
+QLabel#logTitle {
     color: #cad3f5;
-    font-size: 20px;
+    font-size: 24px;
     padding-left: 20px
 }
 
@@ -124,7 +121,7 @@ QComboBox#languageDropdown {
     border: 1px solid #494d64;
     border-radius: 8px;
     padding: 10px 32px 10px 16px;
-    font-size: 18px;
+    font-size: 24px;
 }
 
 QComboBox#languageDropdown:hover,
@@ -152,7 +149,7 @@ QComboBox#languageDropdown QAbstractItemView {
 
 QComboBox#languageDropdown QAbstractItemView::item {
     padding: 8px 12px;
-    min-height: 28px;
+    min-height: 24px;
 }
 
 QComboBox#languageDropdown QAbstractItemView::item:hover,
@@ -167,12 +164,12 @@ QScrollArea#attachmentTray, QScrollArea#attachmentTray > QWidget > QWidget {
     border: none;
 }
 QScrollArea#chatScroll {
-    background-color: #24273a;
+    background: transparent;
     border: none;
 }
 QScrollArea#chatScroll QScrollBar:vertical {
-    background: #24273a;
-    width: 10px;
+    background: transparent;
+    width: 16px;
     margin: 0;
 }
 QScrollArea#attachmentTray QScrollBar:horizontal {
@@ -182,10 +179,10 @@ QScrollArea#attachmentTray QScrollBar:horizontal {
 }
 QScrollArea#chatScroll QScrollBar::handle,
 QScrollArea#attachmentTray QScrollBar::handle {
-    background: #494d64;
+    background: transparent;
     border-radius: 4px;
     min-width: 24px;
-    min-height: 24px;
+    min-height: 16px;
 }
 QScrollArea#chatScroll QScrollBar::add-line,
 QScrollArea#chatScroll QScrollBar::sub-line,
@@ -203,7 +200,7 @@ QScrollArea#attachmentTray QScrollBar::sub-page {
 QFrame#attachmentChip {
     background-color: #363a4f;
     border: 1px solid #494d64;
-    border-radius: 10px;
+    border-radius: 12px;
 }
 QFrame#attachmentChip QLabel {
     color: #cad3f5;
@@ -211,14 +208,14 @@ QFrame#attachmentChip QLabel {
 }
 QFrame#attachmentChip QLabel#attachmentDetail {
     color: #a5adcb;
-    font-size: 11px;
+    font-size: 12px;
 }
 QPushButton#removeAttachment {
     background: transparent;
     color: #a5adcb;
     border: none;
     border-radius: 12px;
-    font-size: 18px;
+    font-size: 12px;
 }
 QPushButton#removeAttachment:hover {
     background-color: #494d64;

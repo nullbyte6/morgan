@@ -144,10 +144,6 @@ class SettingsView(QWidget):
         layout.setContentsMargins(32, 12, 32, 20)
         layout.setSpacing(24)
 
-        self.title = QLabel()
-        self.title.setObjectName("settingsTitle")
-        layout.addWidget(self.title)
-
         self.subtitle_label = QLabel()
         self.subtitle_label.setObjectName("muted")
         self.subtitles_switch = ToggleSwitch()
@@ -200,7 +196,6 @@ class SettingsView(QWidget):
         self.language_dropdown.setCurrentIndex(
             self.language_dropdown.findData(get_language()))
         self.language_dropdown.blockSignals(False)
-        self.title.setText(tr("ui.settings"))
         self.subtitle_label.setText(tr("ui.subtitles"))
         self.subtitles_switch.setAccessibleName(tr("ui.subtitles"))
         self.subtitles_switch.setToolTip(tr("ui.subtitles_hint"))
