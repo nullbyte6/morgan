@@ -442,7 +442,7 @@ class ArloWindow(QMainWindow):
 
         self.chat_button = QPushButton("󰭹")
         self.logs_button = QPushButton("󰋚")
-        self.settings = QPushButton("")
+        self.settings_button = QPushButton("")
         self.send = QPushButton("")
         self.input = ChatInput()
         self.status = QLabel()
@@ -497,17 +497,24 @@ class ArloWindow(QMainWindow):
         navigation.setContentsMargins(20, 8, 20, 0)
         navigation.setSpacing(8)
 
+        self.settings_button.setObjectName("settingsNav")
+        self.settings_button.setCheckable(True)
+        self.settings_button.setChecked(True)
+        self.settings_button.setFixedSize(48, 48)
+        self.settings_button.setToolTip(tr("ui.settings"))
+
         self.chat_button.setObjectName("chatNav")
         self.chat_button.setCheckable(True)
         self.chat_button.setChecked(True)
         self.chat_button.setFixedSize(48, 48)
-        self.chat_button.setToolTip("Chat")
+        self.chat_button.setToolTip("Arlo")
 
         self.logs_button.setObjectName("logsNav")
         self.logs_button.setCheckable(True)
         self.logs_button.setFixedSize(48, 48)
         self.logs_button.setToolTip("Logs")
 
+        navigation.addWidget(self.settings_button)
         navigation.addWidget(self.chat_button)
         navigation.addWidget(self.logs_button)
         navigation.addStretch()
@@ -622,6 +629,7 @@ class ArloWindow(QMainWindow):
 
         self.pages.addWidget(root)
         self.pages.addWidget(self.log_view)
+        self.pages.addWidget(self.settings_view)
         self.chat_button.clicked.connect(lambda: self.show_page(0))
         self.logs_button.clicked.connect(lambda: self.show_page(1))
         self.pages.setCurrentIndex(0)
@@ -951,11 +959,6 @@ def main():
     window.hero.setFont(banner_font)
     window.show()
     sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
-
 
 
 if __name__ == "__main__":
