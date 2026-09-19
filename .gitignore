@@ -5,5 +5,6 @@
 /__pycache__/
 .cache
 *.txt
+!src/models/.gitkeep
 src/models/
 !requirements.txt
