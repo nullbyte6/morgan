@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget)
 
 from agent import Assistant
+from init.config import load_config
 from src.init.brain import get_version
 from src.init.terminal import spectrum_levels
 from src.init.session_log import SessionLog
@@ -215,7 +216,7 @@ class ArloWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Arlo")
+        self.setWindowTitle(f"ARLO {load_config()['version']}")
         icon_path = (Path(__file__).resolve().parent /
                      "assets" / "pwsh.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
