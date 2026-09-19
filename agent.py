@@ -16,6 +16,7 @@ import sys
 import threading
 import warnings
 import time
+from datetime import datetime
 from contextlib import nullcontext
 from getpass import getuser
 
@@ -343,10 +344,26 @@ class Assistant:
         return f"Current working directory for this turn: {get_working_directory()}"
 
     def current_datetime_instructions(self) -> str:
-        from src.init.brain import current_datetime_instructions
-        return current_datetime_instructions()
+        """Provide the actual local date and time on every model run."""
+        now = datetime.now().astimezone()
+
+        return (
+            f"Current local date and time: {now.isoformat(timespec='seconds')}\n"
+            f"Current year: {now.year}\n"
+            f"Current timezone: {now.tzname()}\n"
+            "This is the authoritative current date and time for this turn. "
+            "Use it for date-related reasoning. "
+            "Do not assume that your training knowledge is current. "
+            "For events, releases, prices, or other facts that may have changed "
+            "since your training cutoff, use search_web and verify reliable "
+            "sources before answering. "
+            "Never invent events or claim that a future event has already occurred "
+            "without supporting evidence."
+        )
 
     def run_session(self):
+        logger = logging.getLogger("arlo.trace")
+
         self._initialize_runtime()
         from pydantic_ai.messages import (
             ModelRequest, ModelResponse, TextPart, UserPromptPart)
@@ -449,41 +466,51 @@ class Assistant:
                 self.terminal_ui.set_thinking(True)
 
             try:
-                logging.getLogger("arlo.llm").debug(
-                    "Processing request"
-                )
-                with self.agent.run_stream_sync(
-                        user_input,
+                logging.getLogger("arlo.llm").debug("Processing request")
+                logger.warning("TRACE 1: Before run_stream_sync")
+                with self.agent.run_stream_sync(user_input,
                         message_history=history,
-                        model_settings={
-                            "temperature": brain.load_config()["temperature"]
-                        }) as result:
+                        model_settings={"temperature": brain.load_config()["temperature"]}) as result:
 
-                    reply = self.speak(
-                        result.stream_text(delta=True, debounce_by=0.05))
+                    logger.warning("TRACE 2: Stream context opened")
+                    def traced_chunks():
+                        logger.warning("TRACE 3: Starting stream_text")
 
+                        for chunk in result.stream_text(
+                                delta=True,
+                                debounce_by=0.05):
+                            logger.warning("TRACE 4: Received chunk: %r", chunk[:100])
+                            yield chunk
+
+                        logger.warning("TRACE 5: Stream finished")
+
+                    reply = self.speak(traced_chunks())
+
+                    logger.warning("TRACE 6: speak() returned")
                     if self.terminal_ui is not None:
                         self.terminal_ui.set_thinking(False)
 
                     if reply:
                         session.write(self.name, reply)
                         logging.getLogger("arlo.response").info(
-                            "%s: %s",
-                            self.name,
-                            reply)
+                            "%s: %s", self.name, reply)
 
+                    logger.warning("TRACE 7: Waiting for TTS")
                     self.voice.wait_until_done()
+                    logger.warning("TRACE 8: TTS finished")
 
                     if self.terminal_ui is not None:
                         self.terminal_ui.clear_audio_levels()
 
                     history = result.all_messages()
+                    logger.warning("TRACE 9: History updated")
 
             except Exception as error:
                 if self.terminal_ui is not None:
                     self.terminal_ui.set_thinking(False)
                 cause = error.__cause__
                 if cause is not None:
+                    logger.error("TRACE 10: Exception caught: %s", cause)
                     session.write("System", f"{error}; Detail: {cause}"
                 if cause is not None else str(error))
 
