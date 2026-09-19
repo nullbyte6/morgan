@@ -163,6 +163,10 @@ class SettingsView(QWidget):
         self.language_label.setObjectName("muted")
         self.language_dropdown = QComboBox()
         self.language_dropdown.setObjectName("languageDropdown")
+
+        self.language_dropdown.view().setAutoFillBackground(True)
+        self.language_dropdown.view().viewport().setAutoFillBackground(True)
+
         arrow = QLabel("\uf0d7", self.language_dropdown)
         arrow.setObjectName("languageDropdownArrow")
         arrow.setAttribute(Qt.WA_TransparentForMouseEvents)

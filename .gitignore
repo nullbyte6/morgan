@@ -7,4 +7,5 @@
 *.txt
 !src/models/.gitkeep
 src/models/
+/dev/*.py
 !requirements.txt

@@ -114,7 +114,8 @@ QTextEdit#logViewer {
 }
 
 QComboBox#languageDropdown {
-    background-color: #363a4f;
+    combobox-popup: 0;
+    background-color: #24273a;
     color: #cad3f5;
     border: 1px solid #494d64;
     border-radius: 8px;
@@ -135,21 +136,8 @@ QComboBox#languageDropdown::drop-down {
     border: none;
 }
 
-QComboBox#languageDropdown::down-arrow {
-    image: none;
-    width: 0;
-    height: 0;
-}
-
-QLabel#languageDropdownArrow {
-    background: transparent;
-    color: #cad3f5;
-    font-family: "Ubuntu Nerd Font";
-    font-size: 18px;
-}
-
 QComboBox#languageDropdown QAbstractItemView {
-    background-color: #363a4f;
+    background-color: #24273a;
     color: #cad3f5;
     border: 1px solid #494d64;
     selection-background-color: #494d64;
@@ -165,7 +153,7 @@ QComboBox#languageDropdown QAbstractItemView::item {
 
 QComboBox#languageDropdown QAbstractItemView::item:hover,
 QComboBox#languageDropdown QAbstractItemView::item:selected {
-    background-color: #8aadf4;
-    color: #24273a;
-    border-radius: 4px;
+    background-color: #494d64;
+    color: #cad3f5;
 }
+
