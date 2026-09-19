@@ -17,44 +17,43 @@ from agent import Assistant
 from src.init.brain import get_version
 
 
-
 class ChatInput(QTextEdit):
     submitted = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.min_height = 48
         self.max_lines = 6
-
         self.setAcceptRichText(False)
         self.document().setDocumentMargin(0)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setFixedHeight(self.min_height)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
         self.document().documentLayout().documentSizeChanged.connect(
             self.adjust_height)
+        self.adjust_height()
 
     def adjust_height(self, *_):
         line_height = self.fontMetrics().lineSpacing()
-        padding = 12
         content_height = self.document().size().height()
-        max_height = self.max_lines * line_height + padding
+        max_height = self.max_lines * line_height
 
-        height = max(self.min_height, min(max_height, int(content_height + padding)))
+        height = max(line_height, min(max_height, int(content_height)))
         self.setFixedHeight(height)
 
         self.setVerticalScrollBarPolicy(
-            Qt.ScrollBarAsNeeded if content_height + padding > max_height
-            else Qt.ScrollBarAlwaysOff)
+            Qt.ScrollBarAsNeeded if content_height > max_height
+            else Qt.ScrollBarAlwaysOff
+        )
 
     def keyPressEvent(self, event):
-        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
+        if event.key() in (Qt.Key_Return,
+                           Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
             event.accept()
             self.submitted.emit()
             return
 
         super().keyPressEvent(event)
-
 
 
 class AssistantWorker(QObject):
@@ -173,27 +172,30 @@ class ArloWindow(QMainWindow):
         input_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         input_layout = QVBoxLayout(input_frame)
-        input_layout.setContentsMargins(16, 6, 16, 6)
+        input_layout.setContentsMargins(16, 0, 16, 0)
         input_layout.setSpacing(0)
 
         self.input = ChatInput()
         self.input.setPlaceholderText("Escribe un mensaje...")
-        self.input.setAlignment(Qt.AlignVCenter)
         self.input.submitted.connect(self.send_message)
-        input_layout.addWidget(self.input)
+        input_layout.addWidget(self.input, 0, Qt.AlignVCenter)
+
+        input_frame.setMinimumHeight(48)
         composer.addWidget(input_frame, 1)
 
         self.send = QPushButton("")
         self.send.setObjectName("send")
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.send_message)
-        composer.addWidget(self.send, 0, Qt.AlignBottom)
+        composer.addWidget(self.send, 0, Qt.AlignVCenter)
         main.addLayout(composer)
+
         self.set_enabled(False)
         self.load_stylesheet()
 
     def load_stylesheet(self):
-        stylesheet_path = (Path(__file__).resolve().parent / "assets" / "arlo.qss")
+        stylesheet_path = (
+                    Path(__file__).resolve().parent / "assets" / "arlo.qss")
         stylesheet = stylesheet_path.read_text(encoding="utf-8")
         self.setStyleSheet(stylesheet)
 

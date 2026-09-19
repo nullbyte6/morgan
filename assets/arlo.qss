@@ -28,10 +28,11 @@ QLabel#subtitles {
     font-weight: 600;
 }
 
+
 QFrame#inputFrame {
     background-color: #363a4f;
     border: 1px solid #494d64;
-    border-radius: 30px;
+    border-radius: 24px;
 }
 
 QTextEdit {
