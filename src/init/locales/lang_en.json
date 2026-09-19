@@ -1,4 +1,13 @@
 {
+  "voice.timeout": "The voice service has produced no audio for 120 seconds. Restart Arlo's TTS service.",
+  "ui.attach_files": "Attach files",
+  "ui.remove_attachment": "Remove attachment: {name}",
+  "ui.attachment_count": "You can attach up to {count} files.",
+  "ui.attachment_checking": "Checking…",
+  "ui.attachment_error": "Unavailable",
+  "ui.attachment_total": "The total attachment size limit was exceeded.",
+  "ui.worker_unavailable": "The assistant is unavailable. Your draft has been preserved.",
+
   "ui.settings": "Settings",
   "ui.subtitles": "Subtitles",
   "ui.subtitles_hint": "Toggle Subtitles",

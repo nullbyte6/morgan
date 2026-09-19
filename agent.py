@@ -176,6 +176,7 @@ class Assistant:
     def speak(self, chunks) -> str:
         """Stream LLM output invisibly and feed complete phrases to TTS."""
         from src.init.streaming import SpeechBuffer
+        self.voice.begin_turn()
         buffer = SpeechBuffer()
         reply = []
         for chunk in chunks:
@@ -328,7 +329,7 @@ class Assistant:
 
     def run_desktop_turn(self, prompt: str, history: list, on_chunk=None,
                          on_audio=None, on_speaking=None, cancel_event=None,
-                         event_loop=None):
+                         event_loop=None, attachments=None):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
@@ -344,11 +345,16 @@ class Assistant:
         completed_history = None
         stream_result = None
 
+        if attachments:
+            attachments.reserve_history(history)
+        model_prompt = attachments.prompt() if attachments else prompt
+        attachment_tools = [attachments.toolset()] if attachments else []
+
         async def generate():
             nonlocal completed_history, stream_result
             buffer = SpeechBuffer()
             async with self.agent.run_stream(
-                prompt, message_history=history,
+                model_prompt, message_history=history, toolsets=attachment_tools,
                 model_settings={"temperature": brain.load_config()["temperature"]}
             ) as result:
                 stream_result = result
@@ -365,7 +371,6 @@ class Assistant:
                     if not cancel_event.is_set():
                         self.voice.enqueue(phrase)
                 completed_history = result.all_messages()
-            # Keep the loop responsive while the service drains its audio queue.
             self.voice.request_done()
             while not self.voice.is_done():
                 await asyncio.sleep(0.02)
@@ -395,13 +400,15 @@ class Assistant:
                 await asyncio.gather(task, return_exceptions=True)
                 raise
 
+        from src.init.attachments import active_attachments
+        attachment_token = active_attachments.set(attachments)
         try:
             if event_loop is None:
                 asyncio.run(run())
             else:
-                # Ollama's pooled async connections stay on the worker's loop.
                 event_loop.run_until_complete(run())
         finally:
+            active_attachments.reset(attachment_token)
             self.voice.audio_callback = None
             self.voice.speaking_callback = None
             if on_speaking is not None:
@@ -409,9 +416,8 @@ class Assistant:
 
         text = "".join(reply)
         if cancel_event.is_set():
-            # Keep completed tool exchanges, but never leave orphan tool calls.
             messages = (stream_result.all_messages() if stream_result is not None
-                        else list(history) + [ModelRequest(parts=[UserPromptPart(prompt)])])
+                        else list(history) + [ModelRequest(parts=[UserPromptPart(model_prompt)])])
             safe = list(history)
             pending = set()
             segment = []
@@ -425,7 +431,6 @@ class Assistant:
                 if not pending:
                     safe.extend(segment)
                     segment = []
-            # A streamed final response may already be included in all_messages().
             if len(safe) > len(history) and isinstance(safe[-1], ModelResponse) and any(
                     isinstance(part, TextPart) for part in safe[-1].parts):
                 safe.pop()

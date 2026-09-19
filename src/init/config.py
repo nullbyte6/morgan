@@ -25,12 +25,15 @@ import tempfile
 import warnings
 from copy import deepcopy
 from pathlib import Path
+from .attachments import DEFAULT_LIMITS
 
 HOME_PATH = Path.home() / ".arlo"
 CONFIG_FILE = HOME_PATH / "json" / "config.json"
 DEV_FILE = Path(__file__).resolve().parents[2] / "dev" / "core.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
+
 DEFAULTS = {
+    "attachments": dict(DEFAULT_LIMITS),
     "lang": "spanish",
     "keep_alive": "24h",
     "temperature": 0.2,
@@ -127,6 +130,13 @@ def validate_config(config):
     if isinstance(temperature, bool) or not isinstance(temperature, (int,
                                                                      float)) or not 0 <= temperature <= 2:
         raise ValueError(tr('config.temperature_must_be_a_number_between_0_and_2'))
+    attachment_limits = config.get("attachments", {})
+    if not isinstance(attachment_limits, dict):
+        raise ValueError("attachments must be an object")
+    result["attachments"] = {**DEFAULT_LIMITS, **attachment_limits}
+    for key, value in result["attachments"].items():
+        if key not in DEFAULT_LIMITS or isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(f"Invalid attachment limit: {key}")
     personality = config.get("personality", {})
     if not isinstance(personality, dict):
         raise ValueError(tr('config.personality_must_be_an_object'))

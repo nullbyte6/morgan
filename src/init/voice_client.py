@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import time
 import uuid
 
 import numpy as np
@@ -48,6 +49,8 @@ class VoiceClient:
 
         self._error = None
         self._closed = False
+        self._last_progress = time.monotonic()
+        self._progress_timeout = 120.0
 
         self._thread = threading.Thread(
             target=self._listen,
@@ -80,6 +83,8 @@ class VoiceClient:
                 if (message.get("turn_id") != self._turn_id and
                         (self.supports_interruptions or "turn_id" in message)):
                     continue
+
+                self._last_progress = time.monotonic()
 
                 if kind == "audio":
                     callback = self.audio_callback
@@ -121,8 +126,11 @@ class VoiceClient:
             self._reader.close()
 
     def begin_turn(self) -> None:
+        if self._closed:
+            raise RuntimeError(tr("voice.disconnected"))
         self._turn_id = uuid.uuid4().hex
         self._error = None
+        self._last_progress = time.monotonic()
         self._done.set()
 
     def stop(self) -> None:
@@ -140,22 +148,35 @@ class VoiceClient:
         if not text or not text.strip():
             return
 
-        self._error = None
+        # Do not erase an asynchronous synthesis error when another phrase arrives.
+        if self._error is not None:
+            self.is_done()
+        if self._done.is_set():
+            self._last_progress = time.monotonic()
         self._done.clear()
         self._send({"type": "enqueue", "text": text, "turn_id": self._turn_id})
 
     def request_done(self) -> None:
+        if self._error is not None:
+            self.is_done()
+        if self._done.is_set():
+            self._last_progress = time.monotonic()
         self._done.clear()
         self._send({"type": "wait", "turn_id": self._turn_id})
 
     def is_done(self) -> bool:
+        if (not self._done.is_set() and self._error is None and
+                time.monotonic() - self._last_progress > self._progress_timeout):
+            self._error = RuntimeError(tr("voice.timeout"))
+            self._done.set()
         if self._error is not None:
             raise RuntimeError(tr("voice.failed", error=self._error)) from self._error
         return self._done.is_set()
 
     def wait_until_done(self) -> None:
         self.request_done()
-        self._done.wait()
+        while not self._done.wait(0.1):
+            self.is_done()
 
         self.is_done()
 

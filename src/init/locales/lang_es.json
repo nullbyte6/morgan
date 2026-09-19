@@ -1,4 +1,13 @@
 {
+  "voice.timeout": "El servicio de voz no ha producido audio durante 120 segundos. Reinicia el servicio TTS de Arlo.",
+  "ui.attach_files": "Adjuntar archivos",
+  "ui.remove_attachment": "Eliminar adjunto: {name}",
+  "ui.attachment_count": "Puedes adjuntar un máximo de {count} archivos.",
+  "ui.attachment_checking": "Comprobando…",
+  "ui.attachment_error": "No disponible",
+  "ui.attachment_total": "Se ha superado el tamaño total permitido.",
+  "ui.worker_unavailable": "El asistente no está disponible. El borrador se ha conservado.",
+
   "ui.settings": "Ajustes",
   "ui.subtitles": "Subtítulos",
   "ui.subtitles_hint": "Mostrar u ocultar Subtítulos",

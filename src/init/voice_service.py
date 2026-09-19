@@ -184,6 +184,8 @@ class VoiceService:
     def enqueue(self, text: str, turn_id=None) -> None:
         text = _clean_for_speech(text)
         text = normalize_spanish_numbers(text)
+        if not any(character.isalnum() for character in text):
+            return
         with self._state_lock:
             if self._batch.turn_id != turn_id or self._batch.cancelled.is_set():
                 self.stop()

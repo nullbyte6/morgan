@@ -43,16 +43,18 @@ from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout,
     QLabel, QMainWindow, QPushButton, QSizePolicy,
     QTextEdit, QVBoxLayout, QWidget, QMessageBox,
-    QPlainTextEdit, QStackedWidget)
+    QPlainTextEdit, QScrollArea, QStackedWidget)
 
 from agent import Assistant
 from src.init.commands import execute_command, set_confirmation_handler
-from src.init.config import load_dev_file
+from src.init.config import load_dev_file, load_config
 from src.init.lang import get_language, set_language, tr
 from src.init.session_log import SessionLog
 from src.init.terminal import spectrum_levels
 from src.init.logs import LogView
 from src.init.settings import SettingsView
+from src.init.attachments import DesktopMessage, AttachmentSession, ollama_capabilities
+from src.init.attachment_widgets import AttachmentTray
 
 class ChatInput(QTextEdit):
     submitted = Signal()
@@ -198,6 +200,8 @@ class AssistantWorker(QObject):
     failed = Signal(str)
     ready = Signal()
     confirmation_requested = Signal(int, str)
+    accepted = Signal(int)
+    rejected = Signal(int, str)
 
     def __init__(self):
         super().__init__()
@@ -219,8 +223,21 @@ class AssistantWorker(QObject):
         except Exception as error:
             self.failed.emit(str(error))
 
-    @Slot(int, str)
-    def ask(self, turn_id, prompt):
+    @Slot(int, object)
+    def ask(self, turn_id, message):
+        message = DesktopMessage(message) if isinstance(message, str) else message
+        attachment_session = None
+        try:
+            if message.attachments:
+                vision, context = ollama_capabilities(self.assistant.MODEL_NAME)
+                attachment_session = AttachmentSession(
+                    message, load_config()["attachments"], vision=vision,
+                    context_tokens=context)
+        except Exception as error:
+            self.rejected.emit(turn_id, str(error))
+            return
+        self.accepted.emit(turn_id)
+        prompt = message.text
         try:
             cancel_event = self.cancel_event
             set_confirmation_handler(
@@ -230,14 +247,15 @@ class AssistantWorker(QObject):
             if cancel_event.is_set():
                 self.finished.emit("")
                 return
-            privacy_result = self.session.handle_command(prompt)
+            privacy_result = (self.session.handle_command(prompt)
+                              if not message.attachments else None)
             if privacy_result is not None:
                 self.finished.emit(str(privacy_result))
                 return
 
-            self.session.write(self.assistant.username, prompt)
+            self.session.write(self.assistant.username, message.log_text())
 
-            if prompt.casefold().startswith("pwsh:"):
+            if not message.attachments and prompt.casefold().startswith("pwsh:"):
                 self.command_reply = True
                 command = prompt[5:].strip()
                 raw_result = execute_command(command)
@@ -269,7 +287,8 @@ class AssistantWorker(QObject):
                 on_speaking=lambda speaking: self.speaking.emit(turn_id,
                                                                 speaking),
                 cancel_event=cancel_event,
-                event_loop=self.event_loop)
+                event_loop=self.event_loop,
+                attachments=attachment_session)
 
             if reply:
                 self.session.write(self.assistant.name, reply)
@@ -321,7 +340,7 @@ class AssistantWorker(QObject):
 
 
 class ArloWindow(QMainWindow):
-    request = Signal(int, str)
+    request = Signal(int, object)
     username = getuser().capitalize()
 
     def __init__(self):
@@ -337,6 +356,9 @@ class ArloWindow(QMainWindow):
         self.logs_button = QPushButton("󰋚")
         self.settings_button = QPushButton("")
         self.send = QPushButton("")
+        self.attach = QPushButton("\uf0c6")
+        self.attachment_tray = AttachmentTray(load_config()["attachments"])
+        self.submitting = None
         self.input = ChatInput()
         self.status = QLabel()
         self.command_output = QPlainTextEdit()
@@ -457,6 +479,10 @@ class ArloWindow(QMainWindow):
         self.command_output.hide()
         main.addWidget(self.command_output)
 
+        composer_area = QVBoxLayout()
+        composer_area.setSpacing(8)
+        composer_area.addWidget(self.attachment_tray)
+        self.attachment_tray.changed.connect(self.update_send_button)
         composer = QHBoxLayout()
         composer.setSpacing(12)
         composer.setAlignment(Qt.AlignBottom)
@@ -475,16 +501,39 @@ class ArloWindow(QMainWindow):
         input_frame.setMinimumHeight(48)
 
         composer.addStretch()
-        composer.addWidget(input_frame, 1)
+        input_group = QWidget()
+        input_group.setMaximumWidth(600)
+        input_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        input_row = QHBoxLayout(input_group)
+        input_row.setContentsMargins(0, 0, 0, 0)
+        input_row.setSpacing(12)
+        input_row.addWidget(input_frame, 1)
+        composer.addWidget(input_group, 1)
+
+        self.attach.setObjectName("attach")
+        self.attach.setFixedSize(48, 48)
+        self.attach.clicked.connect(self.attachment_tray.choose_files)
+        input_row.addWidget(self.attach, 0, Qt.AlignVCenter)
 
         self.send.setObjectName("send")
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
         composer.addWidget(self.send, 0, Qt.AlignVCenter)
         composer.addStretch()
-        main.addLayout(composer)
+        composer_area.addLayout(composer)
+        main.addLayout(composer_area)
 
-        self.pages.addWidget(root)
+        # Keep the composer reachable at the minimum window size, even with
+        # attachments and a multiline draft. The normal-size layout is unchanged.
+        self.chat_scroll = QScrollArea()
+        self.chat_scroll.setObjectName("chatScroll")
+        self.chat_scroll.setFrameShape(QFrame.NoFrame)
+        self.chat_scroll.setWidgetResizable(True)
+        self.chat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.chat_scroll.setWidget(root)
+        self.attachment_tray.changed.connect(self.ensure_composer_visible)
+        self.input.textChanged.connect(self.ensure_composer_visible)
+        self.pages.addWidget(self.chat_scroll)
         self.pages.addWidget(self.log_view)
         self.pages.addWidget(self.settings_view)
         self.chat_button.clicked.connect(lambda: self.show_page(0))
@@ -497,6 +546,9 @@ class ArloWindow(QMainWindow):
         self.load_stylesheet()
         self.refresh_language()
 
+
+    def ensure_composer_visible(self):
+        QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(self.input))
 
     def show_page(self, index: int):
         self.pages.setCurrentIndex(index)
@@ -524,6 +576,8 @@ class ArloWindow(QMainWindow):
         self.thread.started.connect(self.worker.initialize)
         self.request.connect(self.worker.ask)
         self.worker.ready.connect(self.on_ready)
+        self.worker.accepted.connect(self.on_request_accepted)
+        self.worker.rejected.connect(self.on_request_rejected)
         self.worker.chunk.connect(self.on_chunk)
         self.worker.audio.connect(self.on_audio)
         self.worker.speaking.connect(self.on_speaking)
@@ -564,14 +618,21 @@ class ArloWindow(QMainWindow):
         self.status.setText(tr(key) if key else "")
 
     def set_enabled(self, enabled):
-        self.input.setEnabled(enabled)
+        self.input.setEnabled(enabled and self.submitting is None)
         self.update_send_button()
 
     def update_send_button(self):
         stopping_available = self.busy and self.speaking and not self.stopping
         self.send.setText("" if stopping_available else "")
         self.send.setEnabled(
-            self.ready and (not self.busy or stopping_available))
+            self.ready and (stopping_available or (not self.busy and
+                self.submitting is None and self.attachment_tray.can_send)))
+        editable = self.ready and self.submitting is None
+        self.attach.setEnabled(editable)
+        self.attachment_tray.setEnabled(editable)
+        self.input.setEnabled(editable)
+        self.attach.setToolTip(tr("ui.attach_files"))
+        self.attach.setAccessibleName(tr("ui.attach_files"))
         key = "ui.stop" if stopping_available else "ui.send"
         self.send.setAccessibleName(tr(key))
         self.send.setToolTip(tr("ui.stop_hint" if stopping_available else key))
@@ -594,6 +655,7 @@ class ArloWindow(QMainWindow):
             return
         self.active_language = language
         self.settings_view.refresh_language()
+        self.attachment_tray.refresh()
         self.settings_button.setToolTip(tr("ui.settings"))
         self.settings_button.setAccessibleName(tr("ui.settings"))
         self.set_status(self.status_key)
@@ -655,20 +717,41 @@ class ArloWindow(QMainWindow):
         if not self.ready:
             return
 
-        prompt = self.input.toPlainText().strip()
-        if not prompt:
+        if self.submitting is not None or not self.attachment_tray.can_send:
             return
-
+        message = DesktopMessage(self.input.toPlainText().strip(),
+                                 self.attachment_tray.snapshot())
+        if not message.text and not message.attachments:
+            return
+        if self.busy and self.stopping:
+            return
+        self.submitting = message
+        self.update_send_button()
         if self.busy:
-            if self.stopping:
-                return
-            self.pending_prompt = prompt
-            self.input.clear()
+            self.pending_prompt = message
             self.stop_response()
             return
+        self.start_prompt(message)
 
+    @Slot(int)
+    def on_request_accepted(self, turn_id):
+        if turn_id != self.turn_id or self.submitting is None:
+            return
         self.input.clear()
-        self.start_prompt(prompt)
+        self.attachment_tray.clear()
+        self.submitting = None
+        self.update_send_button()
+
+    @Slot(int, str)
+    def on_request_rejected(self, turn_id, error):
+        if turn_id != self.turn_id:
+            return
+        self.submitting = None
+        self.busy = False
+        self.current_reply = None
+        self.set_status("status.error")
+        self.update_send_button()
+        QMessageBox.warning(self, tr("ui.attach_files"), error)
 
     def start_prompt(self, prompt):
         self.turn_id += 1
@@ -681,12 +764,17 @@ class ArloWindow(QMainWindow):
         self.command_output.clear()
 
         self.current_reply = ""
-        self.update_subtitles(prompt)
+        self.update_subtitles(prompt.display_text)
 
         self.busy = True
         self.set_enabled(True)
         self.set_status("status.thinking")
-        self.request.emit(self.turn_id, prompt)
+        try:
+            if not self.thread.isRunning():
+                raise RuntimeError(tr("ui.worker_unavailable"))
+            self.request.emit(self.turn_id, prompt)
+        except Exception as error:
+            self.on_request_rejected(self.turn_id, str(error))
 
     @Slot()
     def on_send_clicked(self):
