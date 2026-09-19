@@ -332,6 +332,12 @@ def read_file(path: str) -> str:
     """Read a text file while detecting UTF-8, UTF-16 or Windows-1252."""
     try:
         file_path = resolve_safe_path(path)
+        from .attachments import active_attachments
+        attachments = active_attachments.get()
+        if attachments is not None:
+            result = attachments.read_path(str(file_path))
+            if result is not None:
+                return result
         if not file_path.exists():
             return tr('brain.file_does_not_exist', file_path=file_path)
         if not file_path.is_file():
