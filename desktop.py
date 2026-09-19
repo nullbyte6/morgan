@@ -33,14 +33,14 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     Qt, QObject, QThread, QTimer, Signal, Slot,
-    Property, QPropertyAnimation, QSettings)
+    QSettings)
 
 from PySide6.QtGui import (
     QColor, QFont, QFontDatabase,
     QIcon, QPainter, QPainterPath, QPen)
 
 from PySide6.QtWidgets import (
-    QApplication, QAbstractButton, QFrame, QHBoxLayout,
+    QApplication, QFrame, QHBoxLayout,
     QLabel, QMainWindow, QPushButton, QSizePolicy,
     QTextEdit, QVBoxLayout, QWidget, QMessageBox,
     QPlainTextEdit, QStackedWidget)
@@ -52,6 +52,7 @@ from src.init.lang import get_language, set_language, tr
 from src.init.session_log import SessionLog
 from src.init.terminal import spectrum_levels
 from src.init.logs import LogView
+from src.init.settings import SettingsView
 
 class ChatInput(QTextEdit):
     submitted = Signal()
@@ -185,114 +186,6 @@ class AudioVisualizer(QWidget):
 
             painter.setPen(pen)
             painter.drawPath(path)
-
-        painter.end()
-
-
-class ToggleSwitch(QAbstractButton):
-    """Interruptor animado para Qt Widgets."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        self.setCheckable(True)
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(48, 26)
-
-        self._offset = 0.0
-
-        self._animation = QPropertyAnimation(self, b"offset", self)
-        self._animation.setDuration(160)
-
-        self.toggled.connect(self._animate)
-
-        self._track_off = QColor("#555965")
-        self._track_on = QColor("#7486F5")
-        self._thumb_color = QColor("#FFFFFF")
-
-    def get_offset(self) -> float:
-        return self._offset
-
-    def set_offset(self, value: float):
-        self._offset = value
-        self.update()
-
-    offset = Property(float, get_offset, set_offset)
-
-    def get_track_off(self):
-        return self._track_off
-
-    def set_track_off(self, color):
-        self._track_off = QColor(color)
-        self.update()
-
-    trackOff = Property(QColor, get_track_off, set_track_off)
-
-    def get_track_on(self):
-        return self._track_on
-
-    def set_track_on(self, color):
-        self._track_on = QColor(color)
-        self.update()
-
-    trackOn = Property(QColor, get_track_on, set_track_on)
-
-    def get_thumb_color(self):
-        return self._thumb_color
-
-    def set_thumb_color(self, color):
-        self._thumb_color = QColor(color)
-        self.update()
-
-    thumbColor = Property(QColor, get_thumb_color, set_thumb_color)
-
-    def _animate(self, checked: bool):
-        self._animation.stop()
-
-        self._animation.setStartValue(self._offset)
-        self._animation.setEndValue(1.0 if checked else 0.0)
-
-        self._animation.start()
-
-    def setChecked(self, checked: bool):
-        super().setChecked(checked)
-        if not self.isVisible():
-            self._animation.stop()
-            self.set_offset(1.0 if checked else 0.0)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        width = self.width()
-        height = self.height()
-
-        margin = 3
-        diameter = height - margin * 2
-        inactive = self._track_off
-        active = self._track_on
-        t = self._offset
-        track_color = QColor(
-            round(inactive.red() + (active.red() - inactive.red()) * t),
-            round(inactive.green() + (active.green() - inactive.green()) * t),
-            round(inactive.blue() + (active.blue() - inactive.blue()) * t),
-        )
-
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(track_color)
-
-        painter.drawRoundedRect(
-            0, 0, width, height,
-            height / 2, height / 2,
-        )
-
-        x = margin + (width - diameter - margin * 2) * t
-        painter.setBrush(self._thumb_color)
-        painter.drawEllipse(
-            round(x),
-            margin,
-            diameter,
-            diameter)
 
         painter.end()
 
@@ -451,10 +344,6 @@ class ArloWindow(QMainWindow):
         self.pages = QStackedWidget()
         self.greeting_key = f"greeting.{random.randrange(6)}"
         self.subtitles = QLabel(self.startup_greeting)
-        self.subtitle_label = QLabel()
-        self.language_switch = ToggleSwitch()
-        self.language_label = QLabel()
-        self.subtitles_switch = ToggleSwitch()
         self.hero = QLabel(Assistant().banner.rstrip("\n"))
         self.meter = AudioVisualizer()
         self.worker = AssistantWorker()
@@ -475,6 +364,10 @@ class ArloWindow(QMainWindow):
         self.subtitle_text = ""
 
         self.settings = QSettings("ARLO", "desktop")
+        self.settings_view = SettingsView(
+            self.settings.value("subtitles", True, type=bool), self)
+        self.settings_view.subtitles_changed.connect(self.toggle_subtitles)
+        self.settings_view.language_changed.connect(self.change_language)
         self.build_ui()
         self.build_worker()
         self.set_status("status.waking")
@@ -499,7 +392,7 @@ class ArloWindow(QMainWindow):
 
         self.settings_button.setObjectName("settingsNav")
         self.settings_button.setCheckable(True)
-        self.settings_button.setChecked(True)
+        self.settings_button.setChecked(False)
         self.settings_button.setFixedSize(48, 48)
         self.settings_button.setToolTip(tr("ui.settings"))
 
@@ -530,42 +423,6 @@ class ArloWindow(QMainWindow):
         main.setContentsMargins(20, 12, 20, 20)
         main.setSpacing(16)
 
-        header = QHBoxLayout()
-        header.addStretch()
-        switches = QVBoxLayout()
-
-        label_spacing: int = 200
-        subtitle_row = QHBoxLayout()
-
-        self.subtitle_label.setObjectName("muted")
-        self.subtitle_label.setFixedWidth(label_spacing)
-
-        subtitle_row.setSpacing(8)
-        self.subtitle_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-        subtitle_row.addWidget(self.subtitle_label)
-        enabled = self.settings.value("subtitles", True, type=bool)
-
-        self.subtitles_switch.setChecked(enabled)
-        self.subtitles_switch.toggled.connect(self.toggle_subtitles)
-        subtitle_row.addWidget(self.subtitles_switch)
-        switches.addLayout(subtitle_row)
-        language_row = QHBoxLayout()
-
-        self.language_label.setObjectName("muted")
-        self.language_label.setFixedWidth(label_spacing)
-
-        language_row.setSpacing(8)
-        self.language_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        language_row.addWidget(self.language_label)
-        self.language_switch.setChecked(get_language() == "spanish")
-        self.language_switch.toggled.connect(self.toggle_language)
-        language_row.addWidget(self.language_switch)
-
-        switches.addLayout(language_row)
-        header.addLayout(switches)
-        main.addLayout(header)
-
         banner_group = QVBoxLayout()
         banner_group.setSpacing(16)
         banner_group.setAlignment(Qt.AlignCenter)
@@ -586,7 +443,7 @@ class ArloWindow(QMainWindow):
         self.subtitles.setTextFormat(Qt.RichText)
         self.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.subtitles.setFixedHeight(90)
-        self.subtitles.setVisible(self.subtitles_switch.isChecked())
+        self.subtitles.setVisible(self.settings_view.subtitles_switch.isChecked())
         main.addWidget(self.subtitles)
 
         self.status.setObjectName("status")
@@ -632,7 +489,8 @@ class ArloWindow(QMainWindow):
         self.pages.addWidget(self.settings_view)
         self.chat_button.clicked.connect(lambda: self.show_page(0))
         self.logs_button.clicked.connect(lambda: self.show_page(1))
-        self.pages.setCurrentIndex(0)
+        self.settings_button.clicked.connect(lambda: self.show_page(2))
+        self.show_page(0)
 
 
         self.set_enabled(False)
@@ -644,6 +502,7 @@ class ArloWindow(QMainWindow):
         self.pages.setCurrentIndex(index)
         self.chat_button.setChecked(index == 0)
         self.logs_button.setChecked(index == 1)
+        self.settings_button.setChecked(index == 2)
 
         if index == 0 and self.ready:
             self.input.setFocus()
@@ -719,15 +578,13 @@ class ArloWindow(QMainWindow):
         self.input.setPlaceholderText(
             tr("ui.steering_input" if self.busy else "ui.input"))
 
-    @Slot(bool)
-    def toggle_language(self, enabled):
+    @Slot(str)
+    def change_language(self, language):
         try:
-            set_language("spanish" if enabled else "english")
+            set_language(language)
         except (OSError, ValueError) as error:
-            self.language_switch.blockSignals(True)
-            self.language_switch.setChecked(get_language() == "spanish")
-            self.language_switch.blockSignals(False)
-            self.update_subtitles(tr("ui.error", error=error))
+            self.settings_view.refresh_language()
+            QMessageBox.warning(self, tr("ui.settings"), tr("ui.error", error=error))
             return
         self.refresh_language()
 
@@ -736,15 +593,9 @@ class ArloWindow(QMainWindow):
         if language == self.active_language:
             return
         self.active_language = language
-        self.language_switch.blockSignals(True)
-        self.language_switch.setChecked(language == "spanish")
-        self.language_switch.blockSignals(False)
-        self.subtitle_label.setText(tr("ui.subtitles"))
-        self.subtitles_switch.setAccessibleName(tr("ui.subtitles"))
-        self.subtitles_switch.setToolTip(tr("ui.subtitles_hint"))
-        self.language_label.setText(tr("ui.language"))
-        self.language_switch.setAccessibleName(tr("ui.language"))
-        self.language_switch.setToolTip(tr("ui.language_hint"))
+        self.settings_view.refresh_language()
+        self.settings_button.setToolTip(tr("ui.settings"))
+        self.settings_button.setAccessibleName(tr("ui.settings"))
         self.set_status(self.status_key)
         self.update_send_button()
         if self.showing_greeting:
