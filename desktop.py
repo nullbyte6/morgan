@@ -216,7 +216,7 @@ class ArloWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"ARLO {load_config()['version']}")
+        self.setWindowTitle(f"ARLO {load_config()["version"]}")
         icon_path = (Path(__file__).resolve().parent /
                      "assets" / "pwsh.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
