@@ -2,11 +2,15 @@
 """Arlo desktop interface using PySide6."""
 
 import sys
+import random
+from getpass import getuser
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QObject, QThread, Signal, Slot
+from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow,
-    QPushButton, QScrollArea, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
+    QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
 )
 
 from agent import Assistant
@@ -17,7 +21,8 @@ class ChatInput(QTextEdit):
     submitted = Signal()
 
     def keyPressEvent(self, event):
-        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
+        if event.key() in (Qt.Key_Return,
+                           Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
             event.accept()
             self.submitted.emit()
             return
@@ -59,12 +64,14 @@ class AssistantWorker(QObject):
 
     def report_audio(self, samples, sample_rate):
         import numpy as np
-        level = float(np.sqrt(np.mean(np.square(samples)))) if samples.size else 0.0
+        level = float(
+            np.sqrt(np.mean(np.square(samples)))) if samples.size else 0.0
         self.audio.emit(min(1.0, level * 4))
 
 
 class ArloWindow(QMainWindow):
     request = Signal(str)
+    username = getuser().capitalize()
 
     def __init__(self):
         super().__init__()
@@ -75,6 +82,7 @@ class ArloWindow(QMainWindow):
         self.busy = False
         self.ready = False
         self.current_reply = None
+        self.subtitle_text = ""
 
         self.build_ui()
         self.build_worker()
@@ -90,49 +98,36 @@ class ArloWindow(QMainWindow):
         main.setSpacing(16)
 
         header = QHBoxLayout()
-        # title = QLabel("ARLO")
-        # title.setObjectName("title")
-        # header.addWidget(title)
-        # header.addStretch()
-
         version = QLabel(get_version())
         version.setObjectName("muted")
         header.addWidget(version)
         main.addLayout(header)
 
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        self.messages = QWidget()
-        self.messages_layout = QVBoxLayout(self.messages)
-        self.messages_layout.setContentsMargins(6, 12, 6, 12)
-        self.messages_layout.setSpacing(12)
 
         self.hero = QLabel("ARLO")
         self.hero.setObjectName("hero")
         self.hero.setAlignment(Qt.AlignCenter)
-        self.messages_layout.addWidget(self.hero)
-
-        self.greeting = QLabel("¿En qué puedo ayudarte?")
-        self.greeting.setObjectName("muted")
-        self.greeting.setAlignment(Qt.AlignCenter)
-        self.messages_layout.addWidget(self.greeting)
-        self.messages_layout.addStretch()
-
-        self.scroll.setWidget(self.messages)
-        main.addWidget(self.scroll, 1)
-
-        self.status = QLabel()
-        self.status.setObjectName("status")
-        self.status.setAlignment(Qt.AlignCenter)
-        main.addWidget(self.status)
+        main.addWidget(self.hero, 1)
 
         self.meter = QLabel("▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁")
         self.meter.setObjectName("meter")
         self.meter.setAlignment(Qt.AlignCenter)
         main.addWidget(self.meter)
+
+        self.subtitles = QLabel(self.startup_greeting)
+        self.subtitles.setObjectName("subtitles")
+        self.subtitles.setAlignment(Qt.AlignCenter)
+        self.subtitles.setWordWrap(True)
+        self.subtitles.setTextFormat(Qt.PlainText)
+        self.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.subtitles.setFixedHeight(90)
+        main.addWidget(self.subtitles)
+
+
+        self.status = QLabel()
+        self.status.setObjectName("status")
+        self.status.setAlignment(Qt.AlignCenter)
+        main.addWidget(self.status)
 
         input_frame = QFrame()
         input_frame.setObjectName("inputFrame")
@@ -140,36 +135,50 @@ class ArloWindow(QMainWindow):
         input_layout.setContentsMargins(12, 8, 8, 8)
 
         self.input = ChatInput()
-        self.input.setPlaceholderText("Escribe un mensaje...  (Shift + Enter para nueva línea)")
-        self.input.setFixedHeight(76)
+        self.input.setPlaceholderText("Escribe un mensaje...  ")
+        self.input.setFixedHeight(80)
         self.input.submitted.connect(self.send_message)
         input_layout.addWidget(self.input, 1)
 
-        self.send = QPushButton("Enviar")
+        self.send = QPushButton("  ")
         self.send.setObjectName("send")
-        self.send.setFixedSize(82, 42)
+        self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.send_message)
         input_layout.addWidget(self.send)
 
         main.addWidget(input_frame)
         self.set_enabled(False)
 
-        self.setStyleSheet("""
-            QWidget#root { background: #1e1e2e; color: #cdd6f4; }
-            QLabel#title { color: #cdd6f4; font-size: 23px; font-weight: 800; letter-spacing: 3px; }
-            QLabel#hero { color: #cdd6f4; font-size: 52px; font-weight: 800; margin-top: 35px; }
-            QLabel#muted, QLabel#status { color: #a6adc8; font-size: 13px; }
-            QLabel#meter { color: #89b4fa; font-size: 16px; }
-            QScrollArea { background: transparent; border: none; }
-            QScrollArea > QWidget > QWidget { background: transparent; }
-            QFrame#inputFrame { background: #313244; border: 1px solid #45475a; border-radius: 16px; }
-            QTextEdit { background: transparent; border: none; color: #cdd6f4; font-size: 14px; selection-background-color: #45475a; }
-            QPushButton#send { background: #89b4fa; color: #1e1e2e; border: none; border-radius: 11px; font-weight: 700; }
-            QPushButton#send:hover { background: #b4befe; }
-            QPushButton#send:disabled { background: #45475a; color: #a6adc8; }
-            QLabel#userMessage { background: #45475a; color: #cdd6f4; padding: 13px; border-radius: 12px; font-size: 14px; }
-            QLabel#arloMessage { background: #313244; color: #cdd6f4; padding: 13px; border-radius: 12px; font-size: 14px; }
+        font_family = QApplication.font().family()
+        self.setStyleSheet(f"""
+            QWidget#root {{ background: #1e1e2e; color: #cdd6f4; font-family: "{font_family}"; }}
+            QLabel#title {{ color: #cdd6f4; font-size: 24px; font-weight: 800; letter-spacing: 3px; }}
+            QLabel#hero {{ color: #cdd6f4; font-size: 56px; font-weight: 800; }}
+            QLabel#muted, QLabel#status {{ color: #a6adc8; font-size: 13px; }}
+            QLabel#meter {{ color: #89b4fa; font-size: 16px; }}
+            QScrollArea {{ background: transparent; border: none; }}
+            QScrollArea > QWidget > QWidget {{ background: transparent; }}
+            QFrame#inputFrame {{ background: #313244; border: 1px solid #45475a; border-radius: 16px; }}
+            QTextEdit {{ background: transparent; border: none; color: #cdd6f4; font-size: 16px; selection-background-color: #45475a; }}
+            QPushButton#send {{ background: #89b4fa; color: #1e1e2e; border: none; border-radius: 11px; font-weight: 700; }}
+            QPushButton#send:hover {{ background: #b4befe; }}
+            QPushButton#send:disabled {{ background: #45475a; color: #a6adc8; }}
+            QLabel#userMessage {{ background: #45475a; color: #cdd6f4; padding: 13px; border-radius: 12px; font-size: 12px; }}
+            QLabel#arloMessage {{ background: #313244; color: #cdd6f4; padding: 13px; border-radius: 12px; font-size: 12px; }}
+            QLabel#subtitles {{ color: #cdd6f4; font-size: 12px; font-weight: 500; background: transparent; }}
         """)
+
+    @property
+    def startup_greeting(self) -> str:
+        greetings = (
+            f"Hola, {self.username}. ¿Qué quieres hacer?",
+            f"Hola, {self.username}. ¿En qué te ayudo?",
+            f"Estoy listo, {self.username}. ¿Qué hacemos?",
+            f"¿Qué necesitas hoy, {self.username}?",
+            f"Todo listo, {self.username}. ¿Por dónde empezamos?",
+            f"Arlo preparado. Escribe lo que necesites.",
+        )
+        return random.choice(greetings)
 
     def build_worker(self):
         self.thread = QThread(self)
@@ -227,6 +236,36 @@ class ArloWindow(QMainWindow):
         bar = self.scroll.verticalScrollBar()
         bar.setValue(bar.maximum())
 
+    def update_subtitles(self, text):
+        from PySide6.QtGui import QTextLayout
+
+        self.subtitle_text = text
+        font = self.subtitles.font()
+        width = max(1, self.subtitles.contentsRect().width() - 12)
+
+        layout = QTextLayout(text, font)
+        layout.beginLayout()
+
+        lines = []
+        while True:
+            line = layout.createLine()
+            if not line.isValid():
+                break
+
+            line.setLineWidth(width)
+            start = line.textStart()
+            end = start + line.textLength()
+            lines.append(text[start:end])
+
+        layout.endLayout()
+
+        self.subtitles.setText("\n".join(lines[-3:]))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "subtitle_text"):
+            self.update_subtitles(self.subtitle_text)
+
     @Slot()
     def send_message(self):
         if self.busy or not self.ready:
@@ -236,12 +275,9 @@ class ArloWindow(QMainWindow):
         if not prompt:
             return
 
-        self.hero.hide()
-        self.greeting.hide()
         self.input.clear()
-
-        self.add_message(prompt, user=True)
-        self.current_reply = self.add_message("")
+        self.current_reply = ""
+        self.update_subtitles(prompt)
 
         self.busy = True
         self.set_enabled(False)
@@ -256,37 +292,33 @@ class ArloWindow(QMainWindow):
         if self.status.text() == "Pensando...":
             self.set_status("Respondiendo...")
 
-        self.current_reply.setText(self.current_reply.text() + chunk)
-        self.scroll_to_bottom()
+        self.current_reply += chunk
+        self.update_subtitles(self.current_reply)
 
     @Slot(float)
     def on_audio(self, level):
         heights = "▁▂▃▄▅▆▇█"
         position = min(7, max(0, int(level * 7)))
-        pattern = [max(0, position - abs(7 - index) // 2) for index in range(15)]
+        pattern = [max(0, position - abs(7 - index) // 2) for index in
+                   range(15)]
         self.meter.setText(" ".join(heights[value] for value in pattern))
 
     @Slot(str)
     def on_finished(self, reply):
-        if self.current_reply is not None and not self.current_reply.text():
-            self.current_reply.setText(reply or "(Sin respuesta)")
+        if not self.current_reply:
+            self.update_subtitles(reply or "(Sin respuesta)")
 
         self.current_reply = None
         self.busy = False
         self.meter.setText("▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁")
-        self.set_status("Listo")
+        self.set_status("")
         self.set_enabled(True)
         self.input.setFocus()
-        self.scroll_to_bottom()
 
     @Slot(str)
     def on_error(self, error):
-        if self.current_reply is not None:
-            self.current_reply.setText(f"Error: {error}")
-            self.current_reply = None
-        else:
-            self.add_message(f"Error: {error}")
-
+        self.update_subtitles(f"Error: {error}")
+        self.current_reply = None
         self.busy = False
         self.meter.setText("▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁ ▁")
         self.set_status("Error")
@@ -294,7 +326,8 @@ class ArloWindow(QMainWindow):
 
     def closeEvent(self, event):
         if self.thread.isRunning() and self.busy:
-            self.set_status("Espera a que Arlo termine de responder antes de cerrar.")
+            self.set_status(
+                "Espera a que Arlo termine de responder antes de cerrar.")
             event.ignore()
             return
 
@@ -308,6 +341,16 @@ class ArloWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+
+    font_path = (Path(
+        __file__).resolve().parent / "assets" / "fonts" / "JetBrainsMonoNL-SemiBold.ttf")
+    font_id = QFontDatabase.addApplicationFont(str(font_path))
+
+    if font_id == -1:
+        pass
+    else:
+        family = QFontDatabase.applicationFontFamilies(font_id)[0]
+        app.setFont(QFont(family, 11))
 
     window = ArloWindow()
     window.show()

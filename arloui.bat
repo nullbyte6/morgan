@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-".\.venv\Scripts\python.exe" ".\desktop.py"
-exit
+start "" /D "%~dp0" "%~dp0.venv\Scripts\pythonw.exe" "%~dp0desktop.py"
+exit /b
