@@ -243,9 +243,7 @@ class TerminalUI:
             version = self._version
 
         input_height = self._input_height(width) if has_prompt else 1
-
         header = self._header(width)
-
         center = Group(
             self._banner_renderable() if banner else Text(""),
             Text(""),
