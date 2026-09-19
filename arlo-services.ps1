@@ -314,22 +314,21 @@ while ($true) {
         Select-Object -First 1
 
     if (-not $existingConsole) {
+        $wtArguments = @(
+            '-w new'
+            'new-tab'
+            '--title "ARLO Console"'
+            '--suppressApplicationTitle'
+            'pwsh.exe'
+            '-NoLogo'
+            '-NoProfile'
+            '-NoExit'
+            "-File `"$consoleScript`""
+        ) -join ' '
 
         Start-Process `
             -FilePath "wt.exe" `
-            -ArgumentList @(
-                "-w", "new",
-                "new-tab",
-                "--title", "ARLO Console",
-                "--suppressApplicationTitle",
-                "pwsh.exe",
-                "-NoLogo",
-                "-NoProfile",
-                "-NoExit",
-                "-File",
-                "`"$consoleScript`""
-            )
-
+            -ArgumentList $wtArguments
         Write-Host "Debug console started." -ForegroundColor Green
     }
     else {
