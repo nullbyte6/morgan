@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from agent import Assistant
 from src.init.brain import get_version
 from src.init.terminal import spectrum_levels
+from src.init.session_log import SessionLog
 
 
 class ChatInput(QTextEdit):
@@ -59,7 +60,6 @@ class ChatInput(QTextEdit):
         super().keyPressEvent(event)
 
 
-
 class AudioVisualizer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -85,11 +85,11 @@ class AudioVisualizer(QWidget):
 
     def animate(self):
         for i, level in enumerate(self.levels):
-            speed = 0.70 if level > self.smoothed[i] else 0.12
+            speed = 1.40 if level > self.smoothed[i] else 0.75
             self.smoothed[i] += (level - self.smoothed[i]) * speed
 
         target = max(self.smoothed)
-        speed = 0.2 if target > self.amplitude else 0.08
+        speed = 1.20 if target > self.amplitude else 0.60
         self.amplitude += (target - self.amplitude) * speed
 
         if self.amplitude < 0.001:
@@ -167,6 +167,7 @@ class AssistantWorker(QObject):
         super().__init__()
         self.assistant = Assistant()
         self.history = []
+        self.session = SessionLog()
 
     @Slot()
     def initialize(self):
@@ -179,15 +180,29 @@ class AssistantWorker(QObject):
     @Slot(str)
     def ask(self, prompt):
         try:
+            privacy_result = self.session.handle_command(prompt)
+            if privacy_result is not None:
+                self.finished.emit(str(privacy_result))
+                return
+
+            self.session.write(self.assistant.username, prompt)
             reply, self.history = self.assistant.run_desktop_turn(
                 prompt,
                 self.history,
                 on_chunk=self.chunk.emit,
-                on_audio=self.report_audio
-            )
+                on_audio=self.report_audio)
+
+            if reply:
+                self.session.write(self.assistant.name, reply)
+
             self.finished.emit(reply)
+
         except Exception as error:
-            self.failed.emit(str(error))
+            cause = error.__cause__
+            message = f"{error}; Detail: {cause}" if cause is not None else str(
+                error)
+            self.session.write("System", message)
+            self.failed.emit(message)
 
     def report_audio(self, samples, sample_rate):
         self.audio.emit(spectrum_levels(samples, sample_rate).tolist())
@@ -403,7 +418,7 @@ class ArloWindow(QMainWindow):
         self.current_reply = None
         self.busy = False
         self.meter.clear()
-        self.set_status("")
+        self.set_status("[PRIVATE]" if self.worker.session.private else "")
         self.set_enabled(True)
         self.input.setFocus()
 
