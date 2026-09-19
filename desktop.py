@@ -4,6 +4,8 @@
 import sys
 import random
 import threading
+import re
+import html
 from getpass import getuser
 from pathlib import Path
 
@@ -310,7 +312,7 @@ class ArloWindow(QMainWindow):
         self.subtitles.setObjectName("subtitles")
         self.subtitles.setAlignment(Qt.AlignCenter)
         self.subtitles.setWordWrap(True)
-        self.subtitles.setTextFormat(Qt.PlainText)
+        self.subtitles.setTextFormat(Qt.RichText)
         self.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.subtitles.setFixedHeight(90)
         main.addWidget(self.subtitles)
@@ -446,8 +448,15 @@ class ArloWindow(QMainWindow):
             lines.append(text[start:end])
 
         layout.endLayout()
+        self.subtitles.setText(self.render_subtitle("\n".join(lines[-3:])))
 
-        self.subtitles.setText("\n".join(lines[-3:]))
+    @staticmethod
+    def render_subtitle(text: str) -> str:
+        """Renderiza **negrita** sin interpretar HTML del modelo."""
+        escaped = html.escape(text)
+        return (re.sub(r"\*\*(.+?)\*\*",
+            r"<b>\1</b>", escaped, flags=re.DOTALL,)
+                .replace("\n", "<br>"))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
