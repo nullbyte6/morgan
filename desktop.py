@@ -20,25 +20,23 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 """Arlo desktop interface using PySide6."""
-import sys
-import random
-import threading
-import re
+import asyncio
 import html
 import json
-import asyncio
+import math
+import random
+import re
+import sys
+import threading
 from getpass import getuser
 from pathlib import Path
 
-import math
 from PySide6.QtCore import (
     Qt, QObject, QThread, QTimer, Signal, Slot,
     Property, QPropertyAnimation, QSettings)
-
 from PySide6.QtGui import (
     QColor, QFont, QFontDatabase,
     QIcon, QPainter, QPainterPath, QPen)
-
 from PySide6.QtWidgets import (
     QApplication, QAbstractButton, QFrame, QHBoxLayout,
     QLabel, QMainWindow, QPushButton, QSizePolicy,
@@ -46,12 +44,11 @@ from PySide6.QtWidgets import (
     QPlainTextEdit)
 
 from agent import Assistant
-from src.init.config import load_dev_file
-from src.init.brain import get_version
-from src.init.terminal import spectrum_levels
-from src.init.session_log import SessionLog
 from src.init.commands import execute_command, set_confirmation_handler
+from src.init.config import load_dev_file
 from src.init.lang import get_language, set_language, tr
+from src.init.session_log import SessionLog
+from src.init.terminal import spectrum_levels
 
 
 class ChatInput(QTextEdit):
@@ -438,7 +435,7 @@ class ArloWindow(QMainWindow):
         icon_path = (Path(__file__).resolve().parent /
                      "assets" / "pwsh.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
-        self.resize(1280, 720)
+        self.resize(900, 720)
         self.setMinimumSize(600, 480)
 
         self.busy = False
@@ -468,12 +465,9 @@ class ArloWindow(QMainWindow):
         self.setCentralWidget(root)
 
         main = QVBoxLayout(root)
-        main.setContentsMargins(28, 22, 28, 22)
+        main.setContentsMargins(20, 20, 20, 20)
         main.setSpacing(16)
         header = QHBoxLayout()
-        version = QLabel(get_version())
-        version.setObjectName("muted")
-        header.addWidget(version)
         header.addStretch()
         switches = QVBoxLayout()
 
