@@ -100,6 +100,7 @@ class Assistant:
 
         self.MODEL_NAME = MODEL_NAME
         self.model_settings = {
+            "openai_reasoning_effort": "none",
             "temperature": 0.2,
         }
 
