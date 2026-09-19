@@ -9,11 +9,13 @@ from pathlib import Path
 
 import math
 from PySide6.QtCore import Qt, QObject, QThread, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QPainter, QPainterPath, QPen
+from PySide6.QtGui import (
+    QColor, QFont, QFontDatabase,
+    QIcon, QPainter, QPainterPath, QPen)
+
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow,
-    QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
-)
+    QPushButton, QSizePolicy, QTextEdit, QVBoxLayout, QWidget)
 
 from agent import Assistant
 from src.init.brain import get_version
@@ -214,6 +216,9 @@ class ArloWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Arlo")
+        icon_path = (Path(__file__).resolve().parent /
+                     "assets" / "pwsh.ico")
+        self.setWindowIcon(QIcon(str(icon_path)))
         self.resize(920, 720)
         self.setMinimumSize(600, 480)
 
@@ -448,9 +453,12 @@ class ArloWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    icon_path = (Path(__file__).resolve().parent
+                 / "assets" / "pwsh.ico")
 
-    font_path = (Path(
-        __file__).resolve().parent / "assets" / "fonts" /
+    app.setWindowIcon(QIcon(str(icon_path)))
+    font_path = (Path(__file__).resolve().parent
+                 / "assets" / "fonts" /
                  "JetBrainsMonoNL-Regular.ttf")
     font_id = QFontDatabase.addApplicationFont(str(font_path))
     if font_id == -1:
