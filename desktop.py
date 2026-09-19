@@ -372,7 +372,7 @@ class ArloWindow(QMainWindow):
         self.chat_scroll = QScrollArea()
         self.thread = QThread(self)
 
-        self.log_dir = Path.home() / ".arlo" / "log"
+        self.log_dir = Path.home() / ".arlo" / ".log"
         self.log_view = LogView(self.log_dir, self)
 
         self.busy = False
@@ -553,6 +553,9 @@ class ArloWindow(QMainWindow):
         self.chat_button.setChecked(index == 0)
         self.logs_button.setChecked(index == 1)
         self.settings_button.setChecked(index == 2)
+
+        if index == 1:
+            self.log_view.refresh()
 
         if index == 0 and self.ready:
             self.input.setFocus()
