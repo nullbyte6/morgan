@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import logging
 import subprocess
 import sys
@@ -28,6 +29,7 @@ from pathlib import Path
 import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
+
 from src.init.lang import tr
 
 ROOT = Path(__file__).resolve().parent
@@ -36,7 +38,6 @@ LAUNCHER = ROOT / "arlo.bat"
 SAMPLE_RATE = 16000
 CHUNK_SECONDS = 2.0
 COOLDOWN_SECONDS = 10
-
 TRIGGERS = ("holaarlo", "hola arlo", "arlo", "ARLO")
 
 logging.basicConfig(
@@ -63,10 +64,37 @@ def normalize(text: str) -> str:
 
 
 def is_arlo_running() -> bool:
-    """Temp method, checks whether Arlo is running already.
-    Needs implementation from agent.py + desktop.py block logic."""
-    return False
+    """Check whether an Arlo desktop instance is running."""
+    if sys.platform != "win32":
+        return False
 
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenMutexW.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_wchar_p,
+    ]
+    kernel32.OpenMutexW.restype = ctypes.c_void_p
+
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_int
+
+    SYNCHRONIZE = 0x00100000
+    ERROR_ACCESS_DENIED = 5
+
+    handle = kernel32.OpenMutexW(
+        SYNCHRONIZE,
+        False, r"Local\Diego.Arlo.Desktop",)
+
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+
+    error = ctypes.get_last_error()
+    if error == ERROR_ACCESS_DENIED:
+        return True
+
+    return False
 
 def launch_arlo() -> None:
     if not LAUNCHER.is_file():
