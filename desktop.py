@@ -356,7 +356,7 @@ class ArloWindow(QMainWindow):
         self.logs_button = QPushButton("󰋚")
         self.settings_button = QPushButton("")
         self.send = QPushButton("")
-        self.attach = QPushButton("\uf0c6")
+        self.attach = QPushButton("")
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
         self.submitting = None
         self.input = ChatInput()
