@@ -21,13 +21,15 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QRect, QSize, QTimer, Signal
+from PySide6.QtCore import Qt, QRect, QSize, QTimer
 
 from PySide6.QtGui import (
     QColor, QFont, QPainter, QPainterPath, QPen,
     QTextFormat)
 
 from PySide6.QtWidgets import *
+
+from src.init.editor.highlighter import PythonHighlighter
 
 class CodeEditor(QPlainTextEdit):
     """Native code editor with line numbers and file operations."""
@@ -43,6 +45,7 @@ class CodeEditor(QPlainTextEdit):
             self.fontMetrics().horizontalAdvance(" ") * 4)
 
         self.setObjectName("codeEditor")
+        self.highlighter: PythonHighlighter | None = None
 
         self.line_area = LineNumberArea(self)
         self.blockCountChanged.connect(
@@ -54,6 +57,19 @@ class CodeEditor(QPlainTextEdit):
 
         self.update_line_area_width()
         self.highlight_current_line()
+
+    def configure_highlighter(self):
+        """Configure syntax highlighting for the current file."""
+        if self.highlighter is not None:
+            self.highlighter.setDocument(None)
+            self.highlighter = None
+
+        if self.file_path is None:
+            return
+
+        suffix = self.file_path.suffix.lower()
+        if suffix in {".py", ".pyw"}:
+            self.highlighter = PythonHighlighter(self.document())
 
     def line_area_width(self):
         digits = len(str(max(1, self.blockCount())))
@@ -126,13 +142,13 @@ class CodeEditor(QPlainTextEdit):
 
     def open_file(self, path: str | Path):
         path = Path(path).expanduser().resolve()
-
         if not path.is_file():
             raise FileNotFoundError(path)
 
         content = path.read_text(encoding="utf-8-sig")
         self.setPlainText(content)
         self.file_path = path
+        self.configure_highlighter()
         self.document().setModified(False)
 
     def save_file(self, path: str | Path | None = None):
@@ -141,15 +157,12 @@ class CodeEditor(QPlainTextEdit):
             raise ValueError("No file selected")
 
         target = target.expanduser().resolve()
-
         if not target.parent.is_dir():
             raise FileNotFoundError(target.parent)
 
         import os
         import tempfile
-
         temporary = None
-
         try:
             with tempfile.NamedTemporaryFile(
                 mode="w",
@@ -169,8 +182,9 @@ class CodeEditor(QPlainTextEdit):
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
-
+        
         self.file_path = target
+        self.configure_highlighter()
         self.document().setModified(False)
 
 
