@@ -5,7 +5,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
-$python = Join-Path $root ".venv\Scripts\python.exe"
+$pythonExecutable = if ($Mode -eq "Tui") { "python.exe" } else { "pythonw.exe" }
+$python = Join-Path $root ".venv\Scripts\$pythonExecutable"
 $entryPoint = if ($Mode -eq "Tui") { "agent.py" } else { "desktop.py" }
 $application = Join-Path $root $entryPoint
 $services = Join-Path $root "arlo-services.ps1"
@@ -40,5 +41,8 @@ $env:ARLO_EXTERNAL_CONSOLE = "0"
 Set-Location -LiteralPath $root
 
 & $services
-& $python $application
-exit $LASTEXITCODE
+# Give the application its own process/console, independent of this services window.
+Start-Process -FilePath $python `
+    -ArgumentList ('"{0}"' -f $application) `
+    -WorkingDirectory $root
+exit 0
