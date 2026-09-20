@@ -293,7 +293,6 @@ QTabWidget#editorTabs QTabBar {
     background-color: transparent;
 }
 
-
 QTabWidget#editorTabs QTabBar::tab {
     background-color: #363a4f;
     color: #a5adcb;
@@ -304,12 +303,13 @@ QTabWidget#editorTabs QTabBar::tab {
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
 
-    padding: 8px 10px;
-    margin-right: 3px;
+    padding: 8px 16px;
+    margin-right: 4px;
 
-    min-width: 0px;
+    min-width: 200px;
     font-size: 16px;
 }
+
 
 QTabWidget#editorTabs QTabBar::tab:hover {
     background-color: #494d64;
