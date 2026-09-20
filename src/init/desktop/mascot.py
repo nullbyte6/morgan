@@ -59,6 +59,13 @@ class ArloMascot(QWidget):
         self.phase = 0.0
         self.speaking = False
 
+        self.click_pulse = 0.0
+        self.double_pulse = 0.0
+
+        self.click_timer = QTimer(self)
+        self.click_timer.setSingleShot(True)
+        self.click_timer.timeout.connect(self._confirm_single_click)
+
         self.timer = QTimer(self)
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.animate)
@@ -96,6 +103,16 @@ class ArloMascot(QWidget):
             self.amplitude = 0.0
 
         self.phase += (0.025 + self.amplitude * 0.045)
+
+        self.click_pulse *= 0.88
+        self.double_pulse *= 0.93
+
+        if self.click_pulse < 0.001:
+            self.click_pulse = 0.0
+
+        if self.double_pulse < 0.001:
+            self.double_pulse = 0.0
+
         self.update()
 
     def paintEvent(self, event):
@@ -152,10 +169,33 @@ class ArloMascot(QWidget):
                     * energy
                     * (10.0 + layer * 1.8))
 
-                radius = (
-                    base_radius
-                    + deformation
-                    + idle)
+                click_wave = math.sin(
+                    angle * 3.0
+                    - self.phase * 2.5
+                    - layer * 0.65)
+
+                click_effect = (
+                        click_wave
+                        * self.click_pulse
+                        * (3.0 + layer * 0.8))
+
+                double_wave = math.sin(
+                    angle * 2.0
+                    + self.phase * 3.0
+                    - layer * 0.9)
+
+                double_effect = (
+                        double_wave
+                        * self.double_pulse
+                        * (5.0 + layer * 1.2))
+
+                expansion = (
+                        self.click_pulse * 1.5
+                        + self.double_pulse * 4.0)
+
+                radius = (base_radius + deformation + idle + click_effect +
+                        double_effect +
+                        expansion)
 
                 x = center_x + math.cos(angle) * radius
                 y = center_y + math.sin(angle) * radius
@@ -169,8 +209,7 @@ class ArloMascot(QWidget):
 
             pen = QPen(color)
             pen.setWidthF(
-                2.2 if layer == 0 else 1.5
-            )
+                2.2 if layer == 0 else 1.5)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
 
@@ -195,18 +234,30 @@ class ArloMascot(QWidget):
             area.right() - self.width() - margin + 1,
             area.bottom() - self.height() - margin + 1)
 
-    def mouseDoubleClickEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.restore_requested.emit()
-            event.accept()
-            return
-
-        super().mouseDoubleClickEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.record_requested.emit()
+            self.click_timer.start(
+                QApplication.doubleClickInterval()
+            )
             event.accept()
             return
 
         super().mousePressEvent(event)
+
+    def _confirm_single_click(self):
+        """Trigger a visual pulse and request recording."""
+        self.click_pulse = 1.0
+        self.record_requested.emit()
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.click_timer.stop()
+
+            self.double_pulse = 1.0
+            QTimer.singleShot(220,
+                self.restore_requested.emit)
+
+            event.accept()
+            return
+
+        super().mouseDoubleClickEvent(event)

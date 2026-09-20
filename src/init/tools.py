@@ -50,7 +50,8 @@ from .brain import (
     list_media_sessions,
     identify_playing_song,
     get_current_media,
-    learn_pronunciation)
+    learn_pronunciation,
+    take_screenshot)
 
 from .config import update_config
 from .notifications import (send_notification, schedule_notification,
@@ -185,5 +186,6 @@ TOOLS = [
     list_media_sessions,
     identify_playing_song,
     get_current_media,
-    learn_pronunciation
+    learn_pronunciation,
+    take_screenshot
 ]

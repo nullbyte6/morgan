@@ -16,3 +16,85 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
+
+import threading
+from dataclasses import dataclass, field
+
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication
+
+
+@dataclass
+class CaptureRequest:
+    """One screenshot request and its completion state."""
+
+    completed: threading.Event = field(default_factory=threading.Event)
+    success: bool = False
+    error: str = ""
+
+_bridge_lock = threading.Lock()
+_bridge_handler = None
+
+
+def register_capture_handler(handler):
+    """Register the desktop GUI's screenshot request handler."""
+    global _bridge_handler
+    with _bridge_lock:
+        _bridge_handler = handler
+
+
+def unregister_capture_handler(handler):
+    """Remove a handler without affecting a newer desktop instance."""
+    global _bridge_handler
+    with _bridge_lock:
+        if _bridge_handler == handler:
+            _bridge_handler = None
+
+
+def request_screenshot(timeout: float = 10.0) -> str:
+    """Request a screenshot from the Qt GUI and wait for its result."""
+    with _bridge_lock:
+        handler = _bridge_handler
+
+    if handler is None:
+        return None
+
+    request = CaptureRequest()
+
+    try:
+        handler(request)
+    except Exception as error:
+        return f"{error}"
+
+    if not request.completed.wait(timeout):
+        return None
+
+    if not request.success:
+        return f"{request.error}"
+
+    return "Clip!"
+
+
+def capture_to_clipboard() -> bool:
+    """Capture the primary screen and copy it to the clipboard.
+    Must be called from the Qt GUI thread.
+    """
+    app = QApplication.instance()
+    if app is None:
+        raise RuntimeError("QApplication is not running.")
+
+    screen = QGuiApplication.primaryScreen()
+    if screen is None:
+        raise RuntimeError("No screen is available.")
+
+    pixmap = screen.grabWindow(0)
+    if pixmap.isNull():
+        return False
+
+    image = pixmap.toImage()
+    if image.isNull():
+        return False
+
+    app.clipboard().setImage(image)
+    return True

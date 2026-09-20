@@ -57,6 +57,7 @@ from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
                      save_config, load_dev_file)
 from .app_cache import cached_app, remember_app, forget_app
 from .steam import steam_manager
+from .desktop.capture import request_screenshot
 
 VERSION = "no-version-found"
 
@@ -1548,6 +1549,15 @@ def learn_pronunciation(word: str, pronunciation: str) -> str:
 def should_show_working_directory() -> bool:
     """Whether a successful cd has enabled the location in the prompt."""
     return _SHOW_WORKING_DIRECTORY
+
+
+def take_screenshot() -> str:
+    """Take a screenshot of the primary monitor and copy it to the clipboard.
+    Use when the user explicitly asks to capture the screen, take a screenshot,
+    or copy an image of the desktop to the clipboard.
+    """
+    return request_screenshot()
+
 
 def empty_recycle_bin() -> str:
     """Empty the recycle bin directory"""

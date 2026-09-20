@@ -225,7 +225,6 @@ class ArloRing(QWidget):
 
         self.amplitude = 0.0
         self.phase = 0.0
-        self.speaking = None
 
         self.timer = QTimer(self)
         self.timer.setInterval(16)
@@ -239,11 +238,6 @@ class ArloRing(QWidget):
                        for value in values]
 
         self.levels.extend([0.0] * (15 - len(self.levels)))
-
-    def set_speaking(self, speaking: bool):
-        self.speaking = speaking
-        if not speaking:
-            self.clear()
 
     def clear(self):
         self.levels = [0.0] * 15

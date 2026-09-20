@@ -52,6 +52,13 @@ from src.init.session_log import SessionLog
 from src.init.settings import SettingsView
 from src.init.terminal import spectrum_levels
 
+from src.init.desktop.capture import (
+    CaptureRequest,
+    capture_to_clipboard,
+    register_capture_handler,
+    unregister_capture_handler,
+)
+
 ARLO_MUTEX = r"Local\Diego.Arlo.Desktop"
 _mutex_handle = None
 
@@ -257,6 +264,7 @@ class AssistantWorker(QObject):
     confirmation_requested = Signal(int, str)
     accepted = Signal(int)
     rejected = Signal(int, str)
+    screenshot_requested = Signal(object)
     exit_requested = Signal()
 
     def __init__(self):
@@ -458,6 +466,8 @@ class ArloWindow(QMainWindow):
         self.hero = QLabel(Assistant().banner.strip("\n"))
         self.meter = AudioVisualizer()
         self.worker = AssistantWorker()
+        self.capture_handler = self.worker.screenshot_requested.emit
+        register_capture_handler(self.capture_handler)
         self.chat_scroll = QScrollArea()
         self.thread = QThread(self)
 
@@ -737,6 +747,7 @@ class ArloWindow(QMainWindow):
         self.worker.speaking.connect(self.on_speaking)
         self.worker.finished.connect(self.on_finished)
         self.worker.failed.connect(self.on_error)
+        self.worker.screenshot_requested.connect(self.on_screenshot_requested)
         self.worker.exit_requested.connect(self.close)
 
         self.thread.finished.connect(self.worker.shutdown)
@@ -745,6 +756,38 @@ class ArloWindow(QMainWindow):
 
         self.worker.confirmation_requested.connect(
             self.on_confirmation_requested)
+
+    @Slot(object)
+    def on_screenshot_requested(self, request: CaptureRequest):
+        """Run a screenshot request on the GUI thread."""
+        if request.completed.is_set():
+            return
+
+        mascot_visible = self.mascot.isVisible()
+        if mascot_visible:
+            self.mascot.hide()
+
+        QTimer.singleShot(180,
+            lambda: self.finish_screenshot(request, mascot_visible))
+
+    def finish_screenshot(self, request: CaptureRequest, mascot_visible: bool):
+        """Capture the screen, restore the mascot and report the result."""
+        try:
+            if request.completed.is_set():
+                return
+
+            request.success = capture_to_clipboard()
+            if not request.success:
+                request.error = "ERROR"
+
+        except Exception as error:
+            request.error = str(error)
+
+        finally:
+            if mascot_visible and not self.mascot.isVisible():
+                self.mascot.show()
+
+            request.completed.set()
 
     @Slot(int, str)
     def on_confirmation_requested(self, turn_id, message):
@@ -829,7 +872,7 @@ class ArloWindow(QMainWindow):
         self.ready = True
         self.set_enabled(True)
         self.set_status("")
-        
+
         if self.isVisible():
             self.input.setFocus()
 
@@ -1042,6 +1085,18 @@ class ArloWindow(QMainWindow):
         self.set_status("status.stopping")
         self.update_send_button()
 
+    @Slot()
+    def capture_screen(self):
+        try:
+            success = capture_to_clipboard(mascot=self.mascot)
+            if success:
+                self.mascot.setToolTip("Check!")
+            else:
+                self.mascot.setToolTip(":(")
+
+        except Exception as error:
+            self.mascot.setToolTip(f"{error}")
+
     @Slot(int, str)
     def on_chunk(self, turn_id, chunk):
         if turn_id != self.turn_id or self.current_reply is None or self.stopping:
@@ -1121,6 +1176,7 @@ class ArloWindow(QMainWindow):
         self.resume_pending_prompt()
 
     def closeEvent(self, event):
+        unregister_capture_handler(self.capture_handler)
         if self.voice_thread is not None:
             self.closing_after_voice = True
             self.voice_thread.requestInterruption()
