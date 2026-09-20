@@ -21,6 +21,7 @@
 
 """Arlo desktop interface using PySide6."""
 import asyncio
+import ctypes
 import html
 import json
 import math
@@ -32,25 +33,27 @@ import threading
 from getpass import getuser
 from pathlib import Path
 
-from PySide6.QtCore import (
-    Qt, QObject, QThread, QTimer, Signal, Slot,
-    QSettings)
-
+from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
 from agent import Assistant
+from src.init.attachment_widgets import AttachmentTray
+from src.init.attachments import DesktopMessage, AttachmentSession, \
+    ollama_capabilities
 from src.init.brain import kill_self
 from src.init.commands import execute_command, set_confirmation_handler
 from src.init.config import load_dev_file, load_config
-from src.init.lang import get_language, set_language, tr
-from src.init.session_log import SessionLog
-from src.init.terminal import spectrum_levels
-from src.init.logs import LogView
-from src.init.settings import SettingsView
-from src.init.attachments import DesktopMessage, AttachmentSession, ollama_capabilities
-from src.init.attachment_widgets import AttachmentTray
+from src.init.desktop.mascot import ArloMascot
 from src.init.editor.live import EditorView, ArloRing
+from src.init.lang import get_language, set_language, tr
+from src.init.logs import LogView
+from src.init.session_log import SessionLog
+from src.init.settings import SettingsView
+from src.init.terminal import spectrum_levels
+
+ARLO_MUTEX = r"Local\Diego.Arlo.Desktop"
+_mutex_handle = None
 
 class ChatInput(QTextEdit):
     submitted = Signal()
@@ -416,6 +419,14 @@ class ArloWindow(QMainWindow):
         self.setWindowIcon(QIcon(str(icon_path)))
         self.resize(900, 720)
         self.setMinimumSize(600, 480)
+
+        self.mascot = ArloMascot()
+        self.mascot.hide()
+
+        self.mascot.record_requested.connect(self.on_mascot_record)
+        self.mascot.restore_requested.connect(self.restore_from_mascot)
+        self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
+        self.mascot_shortcut.activated.connect(self.show_mascot)
 
         self.arlo_ring = ArloRing(self)
         self.arlo_ring.hide()
@@ -818,7 +829,9 @@ class ArloWindow(QMainWindow):
         self.ready = True
         self.set_enabled(True)
         self.set_status("")
-        self.input.setFocus()
+        
+        if self.isVisible():
+            self.input.setFocus()
 
     @Slot(bool)
     def toggle_subtitles(self, enabled: bool):
@@ -904,6 +917,32 @@ class ArloWindow(QMainWindow):
         self.update_send_button()
         QMessageBox.warning(self, tr("ui.attach_files"), error)
 
+    @Slot()
+    def on_mascot_record(self):
+        """Start or stop microphone recording from compact mode."""
+        if self.recording:
+            self.on_send_clicked()
+            return
+
+        if (not self.ready or self.busy or
+                self.voice_thread is not None):
+            return
+
+        self.start_recording()
+
+    def show_mascot(self):
+        """Switch to compact desktop mode."""
+        self.mascot.move_to_corner()
+        self.mascot.show()
+        self.hide()
+
+    def restore_from_mascot(self):
+        """Restore the full Arlo interface."""
+        self.mascot.hide()
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
     def start_prompt(self, prompt):
         self.turn_id += 1
         self.showing_greeting = False
@@ -949,6 +988,7 @@ class ArloWindow(QMainWindow):
         self.voice_thread = VoiceInputWorker(self)
         self.voice_thread.levels.connect(self.input_meter.set_levels)
         self.voice_thread.levels.connect(self.editor_view.set_audio_levels)
+        self.voice_thread.levels.connect(self.mascot.set_levels)
         self.voice_thread.transcribing.connect(self.on_voice_transcribing)
         self.voice_thread.finished.connect(self.on_voice_finished)
         self.recording = True
@@ -963,6 +1003,7 @@ class ArloWindow(QMainWindow):
     def on_voice_transcribing(self):
         self.recording = False
         self.input_meter.hide()
+        self.mascot.clear()
         self.input.show()
         self.set_status("voice.transcribing")
         self.update_send_button()
@@ -974,6 +1015,7 @@ class ArloWindow(QMainWindow):
         self.recording = False
         self.input_meter.hide()
         self.input_meter.clear()
+        self.mascot.clear()
         self.input.show()
         worker.deleteLater()
         self.update_send_button()
@@ -986,7 +1028,9 @@ class ArloWindow(QMainWindow):
         elif worker.transcript:
             self.input.setPlainText(worker.transcript)
             self.send_message()
-        self.input.setFocus()
+
+        if self.isVisible():
+            self.input.setFocus()
 
     def stop_response(self):
         self.stopping = True
@@ -994,6 +1038,7 @@ class ArloWindow(QMainWindow):
         self.speaking = False
         self.meter.clear()
         self.arlo_ring.clear()
+        self.mascot.set_speaking(False)
         self.set_status("status.stopping")
         self.update_send_button()
 
@@ -1011,15 +1056,19 @@ class ArloWindow(QMainWindow):
         if turn_id == self.turn_id and self.busy and not self.stopping:
             self.meter.set_levels(levels)
             self.arlo_ring.set_levels(levels)
+            self.mascot.set_levels(levels)
 
     @Slot(int, bool)
     def on_speaking(self, turn_id, speaking):
         if turn_id != self.turn_id:
             return
         self.speaking = speaking and self.busy and not self.stopping
+        self.mascot.set_speaking(self.speaking)
+
         if not self.stopping and self.busy:
             self.set_status(
                 "status.speaking" if self.speaking else "status.thinking")
+
         self.update_send_button()
 
     @Slot(str)
@@ -1039,10 +1088,13 @@ class ArloWindow(QMainWindow):
         self.stopping = False
         self.meter.clear()
         self.arlo_ring.clear()
+        self.mascot.set_speaking(False)
         self.set_status("status.stopped" if interrupted else
                         "status.private" if self.worker.session.private else "")
         self.set_enabled(True)
-        self.input.setFocus()
+        if self.isVisible():
+            self.input.setFocus()
+
         self.resume_pending_prompt()
 
     def resume_pending_prompt(self):
@@ -1063,6 +1115,7 @@ class ArloWindow(QMainWindow):
         self.stopping = False
         self.meter.clear()
         self.arlo_ring.clear()
+        self.mascot.set_speaking(False)
         self.set_status("status.error")
         self.set_enabled(self.ready)
         self.resume_pending_prompt()
@@ -1085,6 +1138,7 @@ class ArloWindow(QMainWindow):
             self.thread.quit()
             self.thread.wait()
 
+        self.mascot.close()
         event.accept()
 
 
@@ -1097,50 +1151,98 @@ def set_windows_app_id():
             "Diego.Arlo.Desktop")
 
 
+def acquire_instance_lock() -> bool:
+    """Acquire the single-instance lock for Arlo."""
+    global _mutex_handle
+    if sys.platform != "win32":
+        return True
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_wchar_p,
+    ]
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_int
+    ERROR_ALREADY_EXISTS = 183
+
+    handle = kernel32.CreateMutexW(
+        None,
+        False,
+        ARLO_MUTEX,
+    )
+
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
+        kernel32.CloseHandle(handle)
+        return False
+
+    _mutex_handle = handle
+    return True
+
+
+def release_instance_lock():
+    """Release the lock when Arlo exits."""
+    global _mutex_handle
+    if _mutex_handle is not None:
+        ctypes.windll.kernel32.CloseHandle(_mutex_handle)
+        _mutex_handle = None
+
+
 def main():
-    set_windows_app_id()
-    os.chdir(Path.home())
-    app = QApplication(sys.argv)
-    app.setStyle("Fusion")
-    assets = Path(__file__).resolve().parent / "assets"
-    app.setWindowIcon(QIcon(str(assets / "pwsh.ico")))
-    fonts = assets / "fonts"
+    if not acquire_instance_lock():
+        return
 
-    def load_font(filename: str) -> str:
-        path = fonts / filename
-        font_id = QFontDatabase.addApplicationFont(str(path))
-        if font_id == -1:
-            raise RuntimeError(f"Invalid font: {path}")
+    try:
+        set_windows_app_id()
+        os.chdir(Path.home())
+        app = QApplication(sys.argv)
+        app.setStyle("Fusion")
+        assets = Path(__file__).resolve().parent / "assets"
+        app.setWindowIcon(QIcon(str(assets / "pwsh.ico")))
+        fonts = assets / "fonts"
 
-        families = QFontDatabase.applicationFontFamilies(font_id)
-        if not families:
-            raise RuntimeError(f"Font has no fam: {path}")
+        def load_font(filename: str) -> str:
+            path = fonts / filename
+            font_id = QFontDatabase.addApplicationFont(str(path))
+            if font_id == -1:
+                raise RuntimeError(f"Invalid font: {path}")
 
-        return families[0]
+            families = QFontDatabase.applicationFontFamilies(font_id)
+            if not families:
+                raise RuntimeError(f"Font has no fam: {path}")
 
-    main_font = load_font("Inter_24pt-Regular.ttf")
-    nerd_font = load_font("JetBrainsMonoNLNerdFontMono-Medium.ttf")
-    app.setFont(QFont(main_font, 11))
-    window = ArloWindow()
-    window.log_view.code_font_family = nerd_font
-    banner_font = QFont(nerd_font, 11)
-    banner_font.setStyleHint(QFont.Monospace)
-    window.hero.setFont(banner_font)
-    icon_font = QFont(nerd_font, 18)
+            return families[0]
 
-    for button in (
-            window.settings_button,
-            window.chat_button,
-            window.logs_button,
-            window.editor_button,
-            window.send,
-            window.attach,
-            window.log_view.refresh_button,):
-        button.setFont(icon_font)
+        main_font = load_font("Inter_24pt-Regular.ttf")
+        nerd_font = load_font("JetBrainsMonoNLNerdFontMono-Medium.ttf")
+        app.setFont(QFont(main_font, 11))
+        window = ArloWindow()
+        window.log_view.code_font_family = nerd_font
+        banner_font = QFont(nerd_font, 11)
+        banner_font.setStyleHint(QFont.Monospace)
+        window.hero.setFont(banner_font)
+        icon_font = QFont(nerd_font, 18)
 
-    window.show()
-    sys.exit(app.exec())
+        for button in (
+                window.settings_button,
+                window.chat_button,
+                window.logs_button,
+                window.editor_button,
+                window.send,
+                window.attach,
+                window.log_view.refresh_button,):
+            button.setFont(icon_font)
 
+        window.show()
+        sys.exit(app.exec())
+    finally:
+        release_instance_lock()
 
 if __name__ == "__main__":
     main()

@@ -21,12 +21,8 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QRect, QSize, QTimer
-
-from PySide6.QtGui import (
-    QColor, QFont, QPainter, QPainterPath, QPen,
-    QTextFormat)
-
+from PySide6.QtCore import *
+from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
 from src.init.editor.highlighter import (
@@ -214,9 +210,9 @@ class ArloRing(QWidget):
     """
     COLORS = (
         QColor(245, 247, 255, 240),
-        QColor(165, 181, 255, 150),
-        QColor(116, 133, 240, 95),
-        QColor(96, 113, 205, 55),
+        QColor(165, 181, 255, 165),
+        QColor(116, 133, 240, 110),
+        QColor(96, 113, 205, 65),
     )
 
     def __init__(self, parent=None):
@@ -229,6 +225,7 @@ class ArloRing(QWidget):
 
         self.amplitude = 0.0
         self.phase = 0.0
+        self.speaking = None
 
         self.timer = QTimer(self)
         self.timer.setInterval(16)
@@ -237,72 +234,96 @@ class ArloRing(QWidget):
 
     def set_levels(self, levels):
         values = list(levels)[:15]
-        self.levels = [
-            max(0.0, min(1.0, float(level)))
-            for level in values]
 
-        self.levels.extend(
-            [0.0] * (15 - len(self.levels)))
+        self.levels = [max(0.0, min(1.0, float(value)))
+                       for value in values]
+
+        self.levels.extend([0.0] * (15 - len(self.levels)))
+
+    def set_speaking(self, speaking: bool):
+        self.speaking = speaking
+        if not speaking:
+            self.clear()
 
     def clear(self):
         self.levels = [0.0] * 15
 
     def animate(self):
-        for index, level in enumerate(self.levels):
-            speed = 1.40 if level > self.smoothed[index] else 0.75
-
-            self.smoothed[index] += (
-                level - self.smoothed[index]) * speed
+        for index, target in enumerate(self.levels):
+            current = self.smoothed[index]
+            factor = 0.38 if target > current else 0.12
+            self.smoothed[index] += (target - current) * factor
 
         target = max(self.smoothed)
-        speed = 1.20 if target > self.amplitude else 0.60
-        self.amplitude += (
-            target - self.amplitude) * speed
+        factor = (0.30 if target > self.amplitude
+                  else 0.10)
 
-        if self.amplitude < 0.001:
+        self.amplitude += (target - self.amplitude) * factor
+        if self.amplitude < 0.0005:
             self.amplitude = 0.0
 
-        self.phase += 0.035 + self.amplitude * 0.045
+        self.phase += (0.025 + self.amplitude * 0.045)
         self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(
+            QPainter.RenderHint.Antialiasing)
+
         center_x = self.width() / 2
         center_y = self.height() / 2
-        points = 180
-
+        points = 240
         for layer, color in enumerate(self.COLORS):
             path = QPainterPath()
-            base_radius = 24.0 + layer * 2.8
+            base_radius = 23.0 + layer * 3.0
             for index in range(points + 1):
                 t = index / points
                 angle = t * math.tau
+
                 position = t * 15
-                band = min(14, int(position))
+                band = int(position) % 15
                 next_band = (band + 1) % 15
-                fraction = position - band
+                fraction = position - int(position)
+
+                fraction = (
+                        fraction * fraction
+                        * (3.0 - 2.0 * fraction))
 
                 level = (
-                    self.smoothed[band] * (1.0 - fraction)
-                    + self.smoothed[next_band] * fraction)
+                        self.smoothed[band] * (1.0 - fraction)
+                        + self.smoothed[next_band] * fraction)
 
-                wave = math.sin(
-                    angle * 5.0
-                    - self.phase * (1.0 + layer * 0.08)
-                    + layer * 0.5)
+                primary = math.sin(
+                    angle * 4.0
+                    - self.phase * (1.0 + layer * 0.07)
+                    + layer * 0.45)
+
+                secondary = math.sin(
+                    angle * 7.0
+                    + self.phase * 0.63
+                    + layer * 0.32) * 0.35
 
                 detail = math.sin(
-                    angle * 9.0 + self.phase * 0.65) * 0.25
+                    angle * 11.0
+                    - self.phase * 0.37) * 0.12
 
                 energy = (
-                    self.amplitude * 0.4
-                    + level * 0.6)
+                        self.amplitude * 0.45
+                        + level * 0.55)
+
+                idle = math.sin(
+                    angle * 3.0 - self.phase * 0.5) * 0.45
 
                 deformation = (
-                    wave + detail) * energy * (5.0 + layer * 1.2)
+                        (primary + secondary + detail)
+                        * energy
+                        * (10.0 + layer * 1.8))
 
-                radius = base_radius + deformation
+                radius = (
+                        base_radius
+                        + deformation
+                        + idle)
+
                 x = center_x + math.cos(angle) * radius
                 y = center_y + math.sin(angle) * radius
 
@@ -312,12 +333,16 @@ class ArloRing(QWidget):
                     path.lineTo(x, y)
 
             path.closeSubpath()
+
             pen = QPen(color)
-            pen.setWidthF(2.0 if layer == 0 else 1.5)
-            pen.setCapStyle(Qt.RoundCap)
-            pen.setJoinStyle(Qt.RoundJoin)
+            pen.setWidthF(
+                2.2 if layer == 0 else 1.5
+            )
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+
             painter.setPen(pen)
-            painter.setBrush(Qt.NoBrush)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(path)
 
         painter.end()
