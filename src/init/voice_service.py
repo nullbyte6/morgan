@@ -33,7 +33,7 @@ import torch
 from transformers.utils import logging as transformers_logging
 
 from src.init.lang import tr
-from .voice_profiles import selected_voice
+from .voice_profiles import selected_voice, resolve_voice
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -184,13 +184,18 @@ class VoiceService:
         self._player_worker = threading.Thread(target=self._play_loop, daemon=True)
         self._player_worker.start()
 
-    def enqueue(self, text: str, turn_id=None) -> None:
+    def enqueue(self, text: str, turn_id=None, voice_reference=None) -> None:
         text = _clean_for_speech(text)
         text = normalize_spanish_numbers(text)
         spoken_chars = sum(char.isalnum() for char in text)
 
         if spoken_chars < 4:
             return
+
+        reference = (resolve_voice(voice_reference) if voice_reference is not None
+                     else selected_voice())
+        if reference is None:
+            raise ValueError("No WAV voice references available")
 
         with self._state_lock:
             if self._batch.turn_id != turn_id or self._batch.cancelled.is_set():
@@ -200,7 +205,7 @@ class VoiceService:
             batch = self._batch
             batch.pending += 1
             batch.done.clear()
-            self._text_queue.put((batch, text, selected_voice()))
+            self._text_queue.put((batch, text, reference))
 
     def _select_reference(self, reference):
         """Only the synthesis worker replaces speaker conditioning after startup."""
@@ -218,6 +223,7 @@ class VoiceService:
         self.voice.add_zero_shot_spk(text, str(reference), "arlo")
         self.voice_reference = reference
         self._reference_key = key
+        logger.info("Voice reference applied: %s", reference.name)
 
     def current_batch(self):
         with self._state_lock:
@@ -285,7 +291,6 @@ class VoiceService:
                     self._complete(batch)
 
     def _play_loop(self) -> None:
-        # Short writes bound interruption latency; every frame retains its turn.
         frame_size = max(1, int(self.sample_rate * 0.04))
         last_ui_update = 0.0
         stream = None
@@ -317,7 +322,6 @@ class VoiceService:
                 if batch.cancelled.is_set():
                     stream.abort()
                 elif drained:
-                    # Include device-buffer playback in the completion event.
                     stream.stop()
             except Exception as error:
                 batch.error = error

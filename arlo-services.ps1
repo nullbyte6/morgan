@@ -165,6 +165,33 @@ catch {
 
 Write-Host "[2/3] Checking CosyVoice..."
 
+$voiceSources = @(
+    "src\init\tts_server.py", "src\init\voice_service.py",
+    "src\init\voice_profiles.py", "src\init\voice_client.py"
+)
+$latestVoiceChange = ($voiceSources | ForEach-Object {
+    (Get-Item -LiteralPath (Join-Path $root $_)).LastWriteTime
+} | Sort-Object -Descending | Select-Object -First 1)
+$pythonProcesses = @(Get-CimInstance Win32_Process -Filter "Name = 'python.exe'")
+$ownedTts = @($pythonProcesses | Where-Object {
+    $_.ExecutablePath -eq $python -and
+    $_.CommandLine -match '\s-m\s+src\.init\.tts_server(?:\s|$)' -and
+    $_.CreationDate -lt $latestVoiceChange
+})
+foreach ($ttsOwner in $ownedTts) {
+    Write-Host "Reloading the updated Arlo voice service..."
+    $ttsChildren = @($pythonProcesses | Where-Object {
+        $_.ParentProcessId -eq $ttsOwner.ProcessId -and
+        $_.CommandLine -match '\s-m\s+src\.init\.tts_server(?:\s|$)'
+    })
+    foreach ($ttsChild in $ttsChildren) {
+        Stop-Process -Id $ttsChild.ProcessId -ErrorAction SilentlyContinue
+        Wait-Process -Id $ttsChild.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
+    }
+    Stop-Process -Id $ttsOwner.ProcessId -ErrorAction SilentlyContinue
+    Wait-Process -Id $ttsOwner.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
+}
+
 if (Test-TcpPort -Address $ttsHost -Port $ttsPort) {
 
     Write-Host "TTS port already in use." -ForegroundColor Yellow

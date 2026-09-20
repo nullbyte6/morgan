@@ -26,6 +26,7 @@ import uuid
 
 import numpy as np
 from .lang import tr
+from .voice_profiles import selected_voice
 
 
 # noinspection PyBroadException
@@ -37,6 +38,8 @@ class VoiceClient:
         self.speaking_callback = None
         self._turn_id = uuid.uuid4().hex
         self.supports_interruptions = False
+        self.supports_voice_selection = False
+        self._hello = threading.Event()
         self._socket = socket.create_connection(
             (host, port), timeout=10)
         self._socket.settimeout(None)
@@ -58,6 +61,9 @@ class VoiceClient:
             daemon=True)
         self._thread.start()
         self._send({"type": "hello"})
+        if not self._hello.wait(10) or not self.supports_voice_selection:
+            self.close()
+            raise RuntimeError(tr("voice.selection_restart"))
 
     def _send(self, message: dict) -> None:
         data = (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")
@@ -79,6 +85,8 @@ class VoiceClient:
                 kind = message.get("type")
                 if kind == "hello":
                     self.supports_interruptions = bool(message.get("interruptible"))
+                    self.supports_voice_selection = bool(message.get("voice_selection"))
+                    self._hello.set()
                     continue
                 if (message.get("turn_id") != self._turn_id and
                         (self.supports_interruptions or "turn_id" in message)):
@@ -122,6 +130,7 @@ class VoiceClient:
             if not self._closed and self._error is None:
                 self._error = RuntimeError(tr("voice.disconnected"))
             self._closed = True
+            self._hello.set()
             self._done.set()
             self._reader.close()
 
@@ -153,8 +162,12 @@ class VoiceClient:
             self.is_done()
         if self._done.is_set():
             self._last_progress = time.monotonic()
+        reference = selected_voice()
+        if reference is None:
+            raise RuntimeError("No WAV voice references available")
         self._done.clear()
-        self._send({"type": "enqueue", "text": text, "turn_id": self._turn_id})
+        self._send({"type": "enqueue", "text": text, "turn_id": self._turn_id,
+                    "voice_reference": reference.name})
 
     def request_done(self) -> None:
         if self._error is not None:

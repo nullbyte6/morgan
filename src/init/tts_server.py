@@ -129,12 +129,18 @@ class TTSServer:
                     kind = message.get("type")
                     if kind == "hello":
                         logger.info(tr('tts_server.voice_client_ready'))
-                        self._send({"type": "hello", "interruptible": True}, client)
+                        self._send({"type": "hello", "interruptible": True,
+                                    "voice_selection": True}, client)
 
                     elif kind == "enqueue":
                         text = message.get("text", "")
                         if text.strip():
-                            self.voice.enqueue(text, message.get("turn_id"))
+                            try:
+                                self.voice.enqueue(text, message.get("turn_id"),
+                                                   message.get("voice_reference"))
+                            except (OSError, ValueError) as error:
+                                self._send({"type": "error", "message": str(error),
+                                            "turn_id": message.get("turn_id")}, client)
 
                     elif kind == "stop":
                         self.voice.stop(message.get("turn_id"))
