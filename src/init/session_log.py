@@ -18,21 +18,18 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Daily Markdown conversation logs shared by all sessions."""
 
-from .identity import get_assistant
-
-
 import re
+import uuid
 from datetime import datetime
 from pathlib import Path
 
-
 from .config import HOME_PATH, ensure_storage
-from .output import markdown_text
+from .identity import get_assistant
 from .lang import tr
-
+from .output import markdown_text
 
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}\.md")
-SESSION_HEADER = "###"
+session_header = ""
 MAX_DAYS = 24
 _current_session_path: Path | None = None
 
@@ -44,6 +41,90 @@ def open_current_session_log() -> str:
     if _current_session_path is None:
         return tr("session.none")
     return open_file(str(_current_session_path))
+
+
+CODE_FENCE = re.compile(
+    r"(?P<indent>^[ \t]{0,3})(?P<fence>`{3,})[ \t]*"
+    r"(?P<language>[A-Za-z0-9_+#.-]+)[^\n]*\n"
+    r"(?P<code>.*?)"
+    r"^[ \t]{0,3}(?P<closing>`{3,})[ \t]*(?:\n|$)",
+    re.MULTILINE | re.DOTALL,
+)
+
+CODE_EXTENSIONS = {
+    "python": ".py",
+    "py": ".py",
+    "javascript": ".js",
+    "js": ".js",
+    "typescript": ".ts",
+    "ts": ".ts",
+    "json": ".json",
+    "html": ".html",
+    "css": ".css",
+    "bash": ".sh",
+    "shell": ".sh",
+    "sh": ".sh",
+    "powershell": ".ps1",
+    "ps1": ".ps1",
+    "batch": ".bat",
+    "bat": ".bat",
+    "cmd": ".cmd",
+    "c": ".c",
+    "cpp": ".cpp",
+    "c++": ".cpp",
+    "h": ".h",
+    "hpp": ".hpp",
+    "java": ".java",
+    "rust": ".rs",
+    "rs": ".rs",
+    "sql": ".sql",
+    "yaml": ".yaml",
+    "yml": ".yml",
+    "xml": ".xml",
+    "toml": ".toml",
+}
+
+def extract_code(text: str, log_path: Path) -> str:
+    """Archive fenced code blocks and replace them with Markdown links."""
+    if not text or "```" not in text:
+        return text
+
+    code_dir = log_path.parent / log_path.stem
+    counter = 0
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal counter
+
+        if len(match.group("closing")) < len(match.group("fence")):
+            return match.group(0)
+
+        language = match.group("language").casefold()
+        extension = CODE_EXTENSIONS.get(language)
+
+        if extension is None:
+            return match.group(0)
+
+        code = match.group("code")
+
+        if not code.strip():
+            return match.group(0)
+
+        counter += 1
+        filename = f"{counter:02d}-{uuid.uuid4().hex[:8]}{extension}"
+        destination = code_dir / filename
+
+        try:
+            code_dir.mkdir(parents=True, exist_ok=True)
+            with destination.open("x", encoding="utf-8", newline="\n") as file:
+                file.write(code)
+
+        except OSError:
+            return match.group(0)
+
+        relative_path = f"{log_path.stem}/{filename}"
+        return f"**({language}):** [{filename}]({relative_path})\n"
+
+    return CODE_FENCE.sub(replace, text)
 
 
 class SessionLog:
@@ -78,7 +159,8 @@ class SessionLog:
             pass
         else:
             with log:
-                log.write(f"{SESSION_HEADER} {get_assistant().name} Log — {started:%Y-%m-%d}")
+                session_header = f"{get_assistant().name} Log — {started:%Y-%m-%d}"
+                log.write(session_header)
         self._prune()
         global _current_session_path
         _current_session_path = self.path
@@ -89,7 +171,7 @@ class SessionLog:
             if (SESSION_NAME.fullmatch(path.name) and not path.is_symlink()
                     and path.is_file()):
                 with path.open(encoding="utf-8") as log:
-                    if log.read(256).lstrip().startswith(SESSION_HEADER):
+                    if log.read(256).lstrip().startswith(session_header):
                         logs.append(path)
         oldest = sorted((path for path in logs if path != self.path),
                         key=lambda path: path.name)
@@ -99,15 +181,20 @@ class SessionLog:
             path.unlink()
 
     def write(self, role, text):
-        """Append Markdown with intact code fences, newlines and indentation."""
+        """Append Markdown, archiving supported fenced code blocks."""
         if self.private:
             return
+
         text = markdown_text(text) if text else ""
         if not text.strip():
             return
+
         role = " ".join(str(role).splitlines()).strip()
         now = datetime.now().astimezone()
         if self.path.name != f"{now:%Y-%m-%d}.md":
             self._start_day(now)
+
+        text = extract_code(text, self.path)
         with self.path.open("a", encoding="utf-8") as log:
             log.write(f"\n\n[{now:%H:%M:%S %z}] \n{role}: {text}")
+
