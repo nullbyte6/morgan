@@ -36,7 +36,6 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-
 """Arlo desktop interface using PySide6."""
 import asyncio
 import ctypes
@@ -52,14 +51,16 @@ import threading
 from getpass import getuser
 from pathlib import Path
 
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
-from .agent import Assistant
+from entry.agent import Assistant
 from src.init.attachment_widgets import AttachmentTray
-from src.init.attachments import DesktopMessage, AttachmentSession, \
-    ollama_capabilities
+from src.init.attachments import DesktopMessage, AttachmentSession,ollama_capabilities
 from src.init.brain import kill_self
 from src.init.commands import execute_command, set_confirmation_handler
 from src.init.config import load_dev_file, load_config

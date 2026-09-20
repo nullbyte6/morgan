@@ -27,7 +27,7 @@ import threading
 
 import numpy as np
 
-from .brain import (
+from .voice_profiles import (
     VOICE_MODEL,
     VOICE_REFERENCE,
     VOICE_REFERENCE_TEXT)

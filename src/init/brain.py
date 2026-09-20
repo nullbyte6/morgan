@@ -57,6 +57,8 @@ from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
                      save_config, load_dev_file)
 from .app_cache import cached_app, remember_app, forget_app
 from .steam import steam_manager
+from .voice_profiles import (VOICE_DIR, MODEL_DIR, VOICE_MODEL,
+                             VOICE_REFERENCE, VOICE_REFERENCE_TEXT)
 from .desktop.capture import request_screenshot
 
 VERSION = "no-version-found"
@@ -79,12 +81,6 @@ _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 _SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
 
-VOICE_DIR = Path(__file__).resolve().parents[1] / "voices"
-MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
-VOICE_REFERENCE = VOICE_DIR / "arlo-01.wav"
-VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy preparado para ayudarte "
-    "con lo que necesites.")
-VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
 
 
 def kill_self() -> str:

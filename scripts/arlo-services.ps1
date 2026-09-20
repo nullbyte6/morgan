@@ -1,7 +1,8 @@
 param([switch]$NoConsole)
+
 $ErrorActionPreference = "Stop"
 
-$root = $PSScriptRoot
+$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $ttsModule = "src.init.tts_server"
 
@@ -14,10 +15,11 @@ $ttsLog = Join-Path $logDir "tts.log"
 $agentLog = Join-Path $logDir "agent.log"
 $consoleScript = Join-Path $logDir "console.ps1"
 
-$env:PYTHONPATH = (
-    (Join-Path $root "src") + ";" +
+$env:PYTHONPATH = @(
+    $root
+    (Join-Path $root "src")
     (Join-Path $root "src\third_party\Matcha-TTS")
-)
+) -join [IO.Path]::PathSeparator
 
 $env:TORCH_CPP_LOG_LEVEL = "ERROR"
 $env:TORCH_LOGS = "-all"
@@ -368,7 +370,6 @@ while ($true) {
             -FilePath $pwsh `
             -ArgumentList $pwshArguments `
             -WorkingDirectory $root
-        Write-Host "Debug console started." -ForegroundColor Green
         Write-Host "Debug console started." -ForegroundColor Green
     }
     else {

@@ -17,15 +17,4 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-from entry.agent import Assistant
-from entry.desktop import *
-
-__all__ = [
-    "Assistant",
-    "ChatInput",
-    "WorkingDirectory",
-    "AudioVisualizer",
-    "VoiceInputWorker",
-    "AssistantWorker",
-    "ArloWindow"
-]
+"""Application entry points. Import each interface only when it is launched."""

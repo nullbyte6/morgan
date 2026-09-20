@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-#
 #  Copyright (c) 2026 Diego.
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
@@ -39,6 +38,13 @@
 # type: ignore
 """Arlo's main entry to the whole brain, no pun intended
 see how Arlo works and engineers from here"""
+import sys
+from pathlib import Path
+
+# Also support direct execution from shortcuts and unrelated working directories.
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from src.init.lang import tr
 import json
 import logging
@@ -50,7 +56,6 @@ os.environ["TORCH_LOGS"] = "-all"
 import random
 import re
 import subprocess
-import sys
 import threading
 import warnings
 import time
@@ -60,7 +65,6 @@ from getpass import getuser
 
 from src.init.identity import register_assistant
 from src.init.terminal import TerminalUI, interactive_terminal
-from src.init.brain import VOICE_MODEL, VOICE_REFERENCE, VOICE_REFERENCE_TEXT
 from src.init.voice_client import VoiceClient
 from src.init.console import DebugConsole
 
