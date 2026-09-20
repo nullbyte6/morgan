@@ -22,7 +22,7 @@ from src.init.lang import tr
 import subprocess
 from pathlib import Path
 
-from agent import Assistant
+from entry.agent import Assistant
 
 
 def open_in_editor(path: str) -> str:

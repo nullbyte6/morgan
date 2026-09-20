@@ -37,7 +37,7 @@ from src.init.voice import transcribe_voice
 from src.init.voice_ipc import ProcessLock, WakeInbox, audio_requested, voice_directory
 from src.init.wake_capture import BLOCK_SECONDS, SAMPLE_RATE, WakeCapture, WakeSettings
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER = ROOT / "arlo.bat"
 
 logging.basicConfig(
