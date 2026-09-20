@@ -316,7 +316,7 @@ class EditorView(QWidget):
         self.tabs = QTabWidget()
         self.tabs.setObjectName("editorTabs")
         self.tabs.setTabsClosable(False)
-        self.tabs.setDocumentMode(True)
+        self.tabs.setDocumentMode(False)
         self.tabs.tabCloseRequested.connect(self.close_tab)
 
         self.open_button = QPushButton("Open")
