@@ -110,17 +110,14 @@ QPushButton#refresh:checked {
 QToolButton#directory {
     background-color: transparent;
     border: 1px solid #494d64;
-    border-radius: 12px;
+    border-radius: 16px;
     color: #cad3f5;
     padding: 4px;
 }
 
 QToolButton#directory:hover,
 QToolButton#directory:pressed {
-    background-color: transparent;
     border: 1px solid #8aadf4;
-    border-radius: 12px;
-    padding: 4px;
 }
 
 QLabel#logTitle {

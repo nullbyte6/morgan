@@ -108,7 +108,7 @@ class WorkingDirectory(QToolButton):
 
     def set_directory(self, directory: Path | str):
         path = Path(directory).resolve()
-        self.setText(f"  {path.name or str(path)}  ")
+        self.setText(f" {path.name or str(path)} ")
         self.setToolTip(str(path))
 
 
