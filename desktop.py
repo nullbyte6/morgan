@@ -24,6 +24,7 @@ import asyncio
 import html
 import json
 import math
+import os
 import random
 import re
 import sys
@@ -39,11 +40,7 @@ from PySide6.QtGui import (
     QColor, QFont, QFontDatabase,
     QIcon, QPainter, QPainterPath, QPen)
 
-from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout,
-    QLabel, QMainWindow, QPushButton, QSizePolicy,
-    QTextEdit, QVBoxLayout, QWidget, QMessageBox,
-    QPlainTextEdit, QScrollArea, QStackedWidget)
+from PySide6.QtWidgets import *
 
 from agent import Assistant
 from src.init.commands import execute_command, set_confirmation_handler
@@ -93,6 +90,26 @@ class ChatInput(QTextEdit):
             return
 
         super().keyPressEvent(event)
+
+
+def get_stylesheet():
+    """Returns the global stylesheet"""
+    stylesheet_path = (Path(__file__).resolve().parent / "assets" / "arlo.qss")
+    stylesheet = stylesheet_path.read_text(encoding="utf-8")
+    return stylesheet
+
+class WorkingDirectory(QToolButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("directory")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAutoRaise(True)
+        self.set_directory(Path.cwd())
+
+    def set_directory(self, directory: Path | str):
+        path = Path(directory).resolve()
+        self.setText(f"  {path.name or str(path)}  ")
+        self.setToolTip(str(path))
 
 
 class AudioVisualizer(QWidget):
@@ -195,6 +212,7 @@ class AudioVisualizer(QWidget):
 class AssistantWorker(QObject):
     chunk = Signal(int, str)
     audio = Signal(int, object)
+    directory = Signal(str)
     speaking = Signal(int, bool)
     finished = Signal(str)
     failed = Signal(str)
@@ -219,6 +237,7 @@ class AssistantWorker(QObject):
         try:
             self.event_loop = asyncio.new_event_loop()
             self.assistant._initialize_runtime()
+            self.directory.emit(str(Path.cwd()))
             self.ready.emit()
         except Exception as error:
             self.failed.emit(str(error))
@@ -357,6 +376,7 @@ class ArloWindow(QMainWindow):
         self.settings_button = QPushButton("")
         self.send = QPushButton("")
         self.attach = QPushButton("")
+        self.directory_indicator = WorkingDirectory(self)
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
         self.submitting = None
         self.input = ChatInput()
@@ -510,6 +530,7 @@ class ArloWindow(QMainWindow):
         )
 
         input_column.addWidget(self.attachment_tray)
+        input_column.addWidget(self.directory_indicator)
         input_column.addWidget(input_frame)
 
         input_group = QWidget()
@@ -554,12 +575,9 @@ class ArloWindow(QMainWindow):
         self.logs_button.clicked.connect(lambda: self.show_page(1))
         self.settings_button.clicked.connect(lambda: self.show_page(2))
         self.show_page(0)
-
-
         self.set_enabled(False)
         self.load_stylesheet()
         self.refresh_language()
-
 
     def ensure_composer_visible(self):
         QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(self.input))
@@ -578,10 +596,7 @@ class ArloWindow(QMainWindow):
 
 
     def load_stylesheet(self):
-        stylesheet_path = (
-                    Path(__file__).resolve().parent / "assets" / "arlo.qss")
-        stylesheet = stylesheet_path.read_text(encoding="utf-8")
-        self.setStyleSheet(stylesheet)
+        self.setStyleSheet(get_stylesheet())
 
     @property
     def startup_greeting(self) -> str:
@@ -593,6 +608,10 @@ class ArloWindow(QMainWindow):
         self.thread.started.connect(self.worker.initialize)
         self.request.connect(self.worker.ask)
         self.worker.ready.connect(self.on_ready)
+        self.worker.directory.connect(
+            self.directory_indicator.set_directory
+        )
+
         self.worker.accepted.connect(self.on_request_accepted)
         self.worker.rejected.connect(self.on_request_rejected)
         self.worker.chunk.connect(self.on_chunk)
@@ -888,6 +907,7 @@ class ArloWindow(QMainWindow):
 
 
 def main():
+    os.chdir(Path.home())
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     assets = Path(__file__).resolve().parent / "assets"
