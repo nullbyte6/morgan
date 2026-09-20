@@ -7,7 +7,6 @@
   "ui.attachment_error": "No disponible",
   "ui.attachment_total": "Se ha superado el tamaño total permitido.",
   "ui.worker_unavailable": "El asistente no está disponible. El borrador se ha conservado.",
-
   "ui.settings": "Ajustes",
   "ui.subtitles": "Subtítulos",
   "ui.subtitles_hint": "Mostrar u ocultar Subtítulos",
@@ -18,6 +17,8 @@
   "ui.send": "Enviar",
   "ui.stop": "Detener respuesta",
   "ui.stop_hint": "Detén a Arlo. Para redirigir la respuesta, escribe un mensaje y pulsa Enter.",
+  "console.error_pwsh_not_found": "PowerShell 7 (pwsh.exe) no fue encontrado",
+  "console.error_wt_not_found": "Windows Terminal (wt.exe) no fue encontrado",
   "status.waking": "Despertando",
   "status.thinking": "Pensando",
   "status.speaking": "Hablando",

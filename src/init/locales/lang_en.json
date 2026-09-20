@@ -7,7 +7,6 @@
   "ui.attachment_error": "Unavailable",
   "ui.attachment_total": "The total attachment size limit was exceeded.",
   "ui.worker_unavailable": "The assistant is unavailable. Your draft has been preserved.",
-
   "ui.settings": "Settings",
   "ui.subtitles": "Subtitles",
   "ui.subtitles_hint": "Toggle Subtitles",
@@ -18,6 +17,8 @@
   "ui.send": "Send",
   "ui.stop": "Stop speaking",
   "ui.stop_hint": "Stop Arlo. To redirect the response, type a message and press Enter.",
+  "console.error_pwsh_not_found": "PowerShell 7 (pwsh.exe) was not found.",
+  "console.error_wt_not_found": "Windows Terminal (wt.exe) not found",
   "status.waking": "Waking up",
   "status.thinking": "Thinking",
   "status.speaking": "Speaking",

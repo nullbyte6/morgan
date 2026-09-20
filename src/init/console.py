@@ -18,7 +18,6 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 from src.init.lang import tr
-
 import logging
 import os
 import subprocess
@@ -26,6 +25,8 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
+
+import shutil
 
 
 class LogStream:
@@ -84,33 +85,44 @@ class DebugConsole:
         self._native_read_fds = []
 
     def start(self):
-        self.log_path.touch()
+        self.log_path.touch(exist_ok=True)
+
         if os.environ.get("ARLO_EXTERNAL_CONSOLE") == "1":
             return
 
+        log_path = str(self.log_path).replace("'", "''")
         self.console_script.write_text(
             "$Host.UI.RawUI.WindowTitle = 'ARLO Console'\n"
-            f"Get-Content -LiteralPath '{self.log_path}' -Tail 30 -Wait\n",
-            encoding="utf-8",
-        )
+            f"Get-Content -LiteralPath '{log_path}' -Tail 30 -Wait\n",
+            encoding="utf-8")
+
+        pwsh = shutil.which("pwsh.exe")
+        wt = shutil.which("wt.exe")
+
+        if not pwsh:
+            raise FileNotFoundError(tr("console.error_pwsh_not_found"))
+
+        if not wt:
+            raise FileNotFoundError(tr("console.error_wt_not_found"))
+
+        command = [
+            wt,
+            "-w", "new",
+            "new-tab",
+            "--title", "ARLO Console",
+            "--",
+            pwsh,
+            "-NoLogo",
+            "-NoProfile",
+            "-NoExit",
+            "-File", str(self.console_script),
+        ]
 
         subprocess.Popen(
-            [
-                "wt.exe",
-                "-w", "new",
-                "new-tab",
-                "--title", tr('console.arlo_console'),
-                "--suppressApplicationTitle",
-                "pwsh.exe",
-                "-NoLogo",
-                "-NoProfile",
-                "-NoExit",
-                "-File",
-                str(self.console_script),
-            ],
+            command,
+            cwd=str(self.console_script.parent),
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+            stderr=subprocess.DEVNULL)
 
     def configure_logging(self):
         handler = logging.FileHandler(
