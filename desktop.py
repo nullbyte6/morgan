@@ -530,7 +530,13 @@ class ArloWindow(QMainWindow):
         composer.addWidget(self.attach, 0, Qt.AlignBottom)
         composer.addWidget(self.send, 0, Qt.AlignBottom)
 
-        composer_area.addLayout(composer)
+        composer_row = QHBoxLayout()
+        composer_row.setContentsMargins(0, 0, 0, 0)
+        composer_row.setSpacing(0)
+        composer_row.addStretch(1)
+        composer_row.addLayout(composer, 2)
+        composer_row.addStretch(1)
+        composer_area.addLayout(composer_row)
         main.addLayout(composer_area)
 
         self.chat_scroll.setObjectName("chatScroll")
