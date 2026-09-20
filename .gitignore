@@ -7,5 +7,7 @@
 *.txt
 !src/models/.gitkeep
 src/models/
+src/init/__pycache__
+src/init/editor/__pycache__
 /dev/*.py
 !requirements.txt
