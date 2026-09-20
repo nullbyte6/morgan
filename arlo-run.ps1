@@ -25,7 +25,7 @@ if (-not $Run) {
     }
 
     $pwshArguments = @(
-        '-NoLogo', '-NoProfile', '-NoExit',
+        '-NoLogo', '-NoProfile',
         '-ExecutionPolicy', 'Bypass',
         '-File', ('"{0}"' -f $PSCommandPath),
         '-Mode', $Mode, '-Run'
@@ -41,7 +41,6 @@ $env:ARLO_EXTERNAL_CONSOLE = "0"
 Set-Location -LiteralPath $root
 
 & $services
-# Give the application its own process/console, independent of this services window.
 Start-Process -FilePath $python `
     -ArgumentList ('"{0}"' -f $application) `
     -WorkingDirectory $root

@@ -333,7 +333,6 @@ while ($true) {
         $pwshArguments = @(
             "-NoLogo",
             "-NoProfile",
-            "-NoExit",
             "-File",
             "`"$consoleScript`""
         ) -join ' '

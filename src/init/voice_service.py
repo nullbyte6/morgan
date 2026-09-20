@@ -17,21 +17,22 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
-from src.init.lang import tr
 
 import logging
 import queue
-import sys
 import re
+import sys
 import threading
-import warnings
 import time
+import warnings
 from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
 import torch
 from transformers.utils import logging as transformers_logging
+
+from src.init.lang import tr
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -83,8 +84,8 @@ def _clean_for_speech(text: str) -> str:
     """Remove Markdown/formatting that should not be spoken."""
     text = re.sub(r"```[\s\S]*?```", " ", text)
     text = re.sub(r"`([^`]+)`", r"\1", text)
-    text = re.sub(r"!\[([^\]]*)]\([^)]+\)", r"\1", text)
-    text = re.sub(r"\[([^\]]+)]\([^)]+\)", r"\1", text)
+    text = re.sub(r"!\[([^]]*)]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\[([^]]+)]\([^)]+\)", r"\1", text)
     text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
     text = re.sub(r"(?m)^\s*>\s?", "", text)
     text = re.sub(r"(?m)^\s*[-+*]\s+", "", text)
@@ -95,7 +96,7 @@ def _clean_for_speech(text: str) -> str:
     return text
 
 
-from decimal import Decimal, InvalidOperation
+from decimal import InvalidOperation
 from num2words import num2words
 
 SPANISH_NUMBER = re.compile(
@@ -184,17 +185,20 @@ class VoiceService:
     def enqueue(self, text: str, turn_id=None) -> None:
         text = _clean_for_speech(text)
         text = normalize_spanish_numbers(text)
-        if not any(character.isalnum() for character in text):
+        spoken_chars = sum(char.isalnum() for char in text)
+
+        if spoken_chars < 4:
             return
+
         with self._state_lock:
             if self._batch.turn_id != turn_id or self._batch.cancelled.is_set():
                 self.stop()
                 self._batch = SpeechBatch(turn_id)
-            if text:
-                batch = self._batch
-                batch.pending += 1
-                batch.done.clear()
-                self._text_queue.put((batch, text))
+
+            batch = self._batch
+            batch.pending += 1
+            batch.done.clear()
+            self._text_queue.put((batch, text))
 
     def current_batch(self):
         with self._state_lock:
@@ -237,7 +241,7 @@ class VoiceService:
                     speed=self.speed)
                 for chunk in generator:
                     if batch.cancelled.is_set():
-                        continue
+                        break
                     audio = chunk["tts_speech"]
                     if hasattr(audio, "detach"):
                         audio = audio.detach().cpu().numpy()
