@@ -132,6 +132,8 @@ class Assistant:
         self.agent.instructions(self.current_instructions)
         self.agent.instructions(self.current_datetime_instructions)
         self.agent.instructions(self.working_directory_instructions)
+        from src.init.memory.integration import memory_instructions
+        self.agent.instructions(memory_instructions)
 
     def suspend_terminal(self):
         if self.terminal_ui is None:
@@ -330,7 +332,7 @@ class Assistant:
 
     def run_desktop_turn(self, prompt: str, history: list, on_chunk=None,
                          on_audio=None, on_speaking=None, cancel_event=None,
-                         event_loop=None, attachments=None):
+                         event_loop=None, attachments=None, session=None):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
@@ -414,10 +416,11 @@ class Assistant:
         from src.init.attachments import active_attachments
         attachment_token = active_attachments.set(attachments)
         try:
-            if event_loop is None:
-                asyncio.run(run())
-            else:
-                event_loop.run_until_complete(run())
+            with session.memory_scope() if session is not None else nullcontext():
+                if event_loop is None:
+                    asyncio.run(run())
+                else:
+                    event_loop.run_until_complete(run())
         finally:
             active_attachments.reset(attachment_token)
             self.voice.audio_callback = None
@@ -560,6 +563,7 @@ class Assistant:
                 logging.getLogger("arlo.llm").debug(tr('agent.processing_request'))
                 reply, history = self.run_desktop_turn(
                     user_input, history,
+                    session=session,
                     on_audio=(self.terminal_ui.update_audio_levels
                               if self.terminal_ui is not None else None))
                 if reply:
@@ -576,6 +580,8 @@ class Assistant:
                     logger.error(tr('agent.trace_10_exception_caught_s'), cause)
                     session.write("System", f"{error}; Detail: {cause}"
                 if cause is not None else str(error))
+
+        session.close()
 
     def run(self):
         try:

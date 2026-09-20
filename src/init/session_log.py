@@ -20,6 +20,8 @@
 
 import re
 import uuid
+import logging
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -128,8 +130,15 @@ def extract_code(text: str, log_path: Path) -> str:
 
 
 class SessionLog:
-    def __init__(self, directory=None):
+    def __init__(self, directory=None, *, memory_service=None):
         self.private = False
+        self.session_id = uuid.uuid4().hex
+        self.started_at = datetime.now().astimezone().isoformat()
+        self.last_user_message_id = None
+        self.last_user_text = ""
+        self.memory_error = None
+        self._memory_service = memory_service
+        self._use_configured_memory = directory is None
         if directory is None:
             ensure_storage()
         self.directory = (Path(directory) if directory is not None
@@ -180,7 +189,7 @@ class SessionLog:
                 raise OSError(tr('session_log.session_log_resolved_outside_the_log_directory'))
             path.unlink()
 
-    def write(self, role, text):
+    def write(self, role, text, *, status="completed"):
         """Append Markdown, archiving supported fenced code blocks."""
         if self.private:
             return
@@ -194,7 +203,68 @@ class SessionLog:
         if self.path.name != f"{now:%Y-%m-%d}.md":
             self._start_day(now)
 
+        original = text
         text = extract_code(text, self.path)
         with self.path.open("a", encoding="utf-8") as log:
-            log.write(f"\n\n[{now:%H:%M:%S %z}] \n{role}: {text}")
+            log.write("\n\n")
+            source_ref = str(self.path) + "#byte=" + str(log.tell())
+            log.write(f"[{now:%H:%M:%S %z}] \n{role}: {text}")
+        assistant = get_assistant()
+        canonical_role = ("assistant" if role == assistant.name else
+                          "system" if role == "System" else "user")
+        if canonical_role == "user":
+            self.last_user_text = original
+            self.last_user_message_id = None
+        try:
+            service = self._get_memory_service()
+            if service is None:
+                return
+            if self._use_configured_memory:
+                from .config import load_config
+                if not load_config()["memory"]["store_history"]:
+                    return
+            service.start_session(session_id=self.session_id, started_at=self.started_at,
+                                  metadata={"log_directory": str(self.directory)})
+            message_id = service.record_message(self.session_id, canonical_role, original,
+                                                created_at=now.isoformat(), status=status,
+                                                source_ref=source_ref)
+            if canonical_role == "user":
+                self.last_user_message_id = message_id
+            self.memory_error = None
+        except Exception as error:
+            self.memory_error = str(error)
+            logging.getLogger("arlo.memory").exception("Conversation retained in Markdown; database persistence failed")
+
+    def _get_memory_service(self):
+        if self._use_configured_memory:
+            from .memory.integration import configured_service
+            return configured_service()
+        return self._memory_service
+
+    @contextmanager
+    def memory_scope(self):
+        from .memory.integration import MemoryTurn, active_memory
+        service = None
+        if not self.private:
+            try:
+                service = self._get_memory_service()
+            except Exception as error:
+                self.memory_error = str(error)
+                logging.getLogger("arlo.memory").exception("Memory tools unavailable")
+        token = active_memory.set(MemoryTurn(service, self.session_id,
+                                            self.last_user_message_id, self.last_user_text,
+                                            self.private, self.memory_error))
+        try:
+            yield
+        finally:
+            active_memory.reset(token)
+
+    def close(self):
+        try:
+            service = self._get_memory_service()
+            if service is not None:
+                service.end_session(self.session_id)
+        except Exception as error:
+            self.memory_error = str(error)
+            logging.getLogger("arlo.memory").exception("Memory session could not be closed")
 

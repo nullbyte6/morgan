@@ -33,6 +33,14 @@ DEV_FILE = Path(__file__).resolve().parents[2] / "dev" / "core.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
 
 DEFAULTS = {
+    "memory": {
+        "enabled": True,
+        "store_history": True,
+        "database": "memory/memory.sqlite3",
+        "max_results": 8,
+        "context_chars": 4000,
+        "recall_chars": 8000,
+    },
     "attachments": dict(DEFAULT_LIMITS),
     "lang": "spanish",
     "keep_alive": "24h",
@@ -108,6 +116,22 @@ def validate_config(config):
         raise ValueError(tr('config.config_json_must_contain_a_json_object'))
     result = deepcopy(DEFAULTS)
     result.update(config)
+    memory = config.get("memory", {})
+    if not isinstance(memory, dict) or memory.keys() - DEFAULTS["memory"].keys():
+        raise ValueError("Invalid memory configuration")
+    result["memory"] = {**DEFAULTS["memory"], **memory}
+    memory = result["memory"]
+    for key in ("enabled", "store_history"):
+        if not isinstance(memory[key], bool):
+            raise ValueError(f"memory.{key} must be boolean")
+    path = memory["database"]
+    if (not isinstance(path, str) or not path.strip() or path.startswith(("\\\\", "//"))
+            or (not Path(path).is_absolute() and ".." in Path(path).parts)):
+        raise ValueError("memory.database must be a local absolute path or a path inside .arlo")
+    for key, lower, upper in (("max_results", 1, 50), ("context_chars", 512, 32000),
+                              ("recall_chars", 1024, 64000)):
+        if isinstance(memory[key], bool) or not isinstance(memory[key], int) or not lower <= memory[key] <= upper:
+            raise ValueError(f"memory.{key} must be an integer between {lower} and {upper}")
     reference = result["voice_reference"]
     if (not isinstance(reference, str) or not reference
             or Path(reference).name != reference

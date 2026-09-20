@@ -371,10 +371,11 @@ class AssistantWorker(QObject):
                                                                 speaking),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
-                attachments=attachment_session)
+                attachments=attachment_session, session=self.session)
 
             if reply:
-                self.session.write(self.assistant.name, reply)
+                self.session.write(self.assistant.name, reply,
+                                   status="interrupted" if cancel_event.is_set() else "completed")
 
             self.finished.emit(reply)
 
@@ -402,6 +403,7 @@ class AssistantWorker(QObject):
 
     @Slot()
     def shutdown(self):
+        self.session.close()
         if self.assistant.voice is not None:
             self.assistant.voice.close()
         if self.event_loop is not None:
