@@ -80,7 +80,7 @@ _LAST_GEOCODE_REQUEST_AT = 0.0
 
 VOICE_DIR = Path(__file__).resolve().parents[1] / "voices"
 MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
-VOICE_REFERENCE = VOICE_DIR / "arlo.wav"
+VOICE_REFERENCE = VOICE_DIR / "arlo-01.wav"
 VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy preparado para ayudarte "
     "con lo que necesites.")
 VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
@@ -88,7 +88,6 @@ VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
 
 def kill_self() -> str:
     """Close Arlo itself gracefully, only when the user explicitly asks to exit.
-
     Requests shutdown after the current turn; never shuts down Windows or
     terminates another application or the shared model/voice services.
     """

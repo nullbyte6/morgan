@@ -14,6 +14,8 @@
   "ui.subtitles": "Subtitles",
   "ui.subtitles_hint": "Toggle Subtitles",
   "ui.language": "Interface language",
+  "ui.voice": "Voice",
+  "ui.voice_hint": "Applies to upcoming phrases. Add WAV files to src/voices to include more voices.",
   "ui.language_hint": "Select the interface language",
   "ui.input": "Write a message...",
   "ui.steering_input": "Write a correction and press Enter to interrupt...",

@@ -17,12 +17,13 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation
+from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation, QTimer
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QComboBox, QHBoxLayout, QLabel, QListView, QVBoxLayout, QWidget)
+    QAbstractButton, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QVBoxLayout, QWidget)
 
 from .lang import get_language, tr
+from .voice_profiles import available_voices, selected_voice, select_voice, VOICE_NAMES
 
 
 class ToggleSwitch(QAbstractButton):
@@ -136,6 +137,7 @@ class SettingsView(QWidget):
     """Desktop subtitle and interface language preferences."""
     subtitles_changed = Signal(bool)
     language_changed = Signal(str)
+    model_changed = Signal(str)
 
     def __init__(self, subtitles_enabled: bool, parent=None):
         super().__init__(parent)
@@ -177,19 +179,87 @@ class SettingsView(QWidget):
         self.language_dropdown.setView(language_options)
         self.language_dropdown.addItem("English", "english")
         self.language_dropdown.addItem("Español", "spanish")
-        self.language_dropdown.setMinimumWidth(180)
+        self.language_dropdown.setMinimumWidth(90)
         self.language_label.setBuddy(self.language_dropdown)
         language_row = QHBoxLayout()
         language_row.addWidget(self.language_label)
         language_row.addStretch()
         language_row.addWidget(self.language_dropdown)
         layout.addLayout(language_row)
-        layout.addStretch()
 
         self.refresh_language()
         self.subtitles_switch.toggled.connect(self.subtitles_changed.emit)
         self.language_dropdown.currentIndexChanged.connect(
-            lambda _: self.language_changed.emit(self.language_dropdown.currentData()))
+            lambda: self.language_changed.emit(self.language_dropdown.currentData()))
+
+        self.model_dropdown = QComboBox()
+        self.model_dropdown.setObjectName("modelDropdown")
+        self.model_dropdown.view().setAutoFillBackground(True)
+        self.model_dropdown.view().viewport().setAutoFillBackground(True)
+
+        arrow = QLabel("\uf0d7", self.model_dropdown)
+        arrow.setObjectName("languageDropdownArrow")
+        arrow.setAttribute(Qt.WA_TransparentForMouseEvents)
+        arrow.setAlignment(Qt.AlignCenter)
+        arrow.setFixedWidth(28)
+        arrow_layout = QHBoxLayout(self.model_dropdown)
+        arrow_layout.setContentsMargins(0, 0, 1, 0)
+        arrow_layout.addStretch()
+        arrow_layout.addWidget(arrow)
+
+        self.model_label = QLabel()
+        self.model_label.setObjectName("muted")
+        model_options = QListView(self.model_dropdown)
+        model_options.setMouseTracking(True)
+        self.model_dropdown.setView(model_options)
+
+        self.model_dropdown.setMinimumWidth(90)
+        self.model_label.setBuddy(self.model_dropdown)
+        language_row = QHBoxLayout()
+        language_row.addWidget(self.model_label)
+        language_row.addStretch()
+        language_row.addWidget(self.model_dropdown)
+        layout.addLayout(language_row)
+        layout.addStretch()
+
+        self.model_dropdown.activated.connect(self.change_voice)
+        self.refresh_voices()
+        self.refresh_language()
+        self.voice_timer = QTimer(self)
+        self.voice_timer.setInterval(1000)
+        self.voice_timer.timeout.connect(self.refresh_voices)
+        self.voice_timer.start()
+
+    def refresh_voices(self):
+        voices = available_voices()
+        names = [path.name for path in voices]
+        selected = selected_voice()
+        self.model_dropdown.blockSignals(True)
+        try:
+            current = [self.model_dropdown.itemData(i)
+                       for i in range(self.model_dropdown.count())]
+            if current != names:
+                self.model_dropdown.clear()
+                for path in voices:
+                    label = VOICE_NAMES.get(path.name, path.stem)
+                    self.model_dropdown.addItem(label, path.name)
+            self.model_dropdown.setCurrentIndex(
+                self.model_dropdown.findData(selected.name) if selected else -1)
+            self.model_dropdown.setEnabled(bool(voices))
+        finally:
+            self.model_dropdown.blockSignals(False)
+
+    def change_voice(self, index):
+        name = self.model_dropdown.itemData(index)
+        if not name:
+            return
+        try:
+            select_voice(name)
+        except (OSError, ValueError) as error:
+            QMessageBox.warning(self, tr("ui.voice"), str(error))
+            self.refresh_voices()
+            return
+        self.model_changed.emit(name)
 
     def refresh_language(self):
         self.language_dropdown.blockSignals(True)
@@ -202,3 +272,7 @@ class SettingsView(QWidget):
         self.language_label.setText(tr("ui.language"))
         self.language_dropdown.setAccessibleName(tr("ui.language"))
         self.language_dropdown.setToolTip(tr("ui.language_hint"))
+        if hasattr(self, "model_label"):
+            self.model_label.setText(tr("ui.voice"))
+            self.model_dropdown.setAccessibleName(tr("ui.voice"))
+            self.model_dropdown.setToolTip(tr("ui.voice_hint"))

@@ -14,6 +14,8 @@
   "ui.subtitles": "Subtítulos",
   "ui.subtitles_hint": "Mostrar u ocultar Subtítulos",
   "ui.language": "Idioma de la interfaz",
+  "ui.voice": "Voz",
+  "ui.voice_hint": "Se aplica a las siguientes frases. Añade archivos WAV a src/voices para incorporar voces.",
   "ui.language_hint": "Seleccionar el idioma de la interfaz",
   "ui.input": "Escribe un mensaje...",
   "ui.steering_input": "Escribe una corrección y pulsa Enter para interrumpir...",

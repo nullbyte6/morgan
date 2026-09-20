@@ -33,6 +33,7 @@ import torch
 from transformers.utils import logging as transformers_logging
 
 from src.init.lang import tr
+from .voice_profiles import selected_voice
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -156,7 +157,7 @@ class VoiceService:
                  speed=1.0,
                  audio_callback=None, speaking_callback=None):
         self.model_path = Path(model_path)
-        self.voice_reference = Path(voice_reference)
+        self.voice_reference = selected_voice() or Path(voice_reference)
         reference_text = reference_text.strip()
         if "<|endofprompt|>" not in reference_text:
             reference_text = "You are a helpful assistant.<|endofprompt|>" + reference_text
@@ -166,7 +167,8 @@ class VoiceService:
 
         self.voice = AutoModel(model_dir=str(self.model_path), fp16=True)
         self.sample_rate = self.voice.sample_rate
-        self.voice.add_zero_shot_spk(self.reference_text, str(self.voice_reference), "arlo")
+        self._reference_key = None
+        self._select_reference(self.voice_reference)
 
         self._text_queue = queue.Queue()
         self._audio_queue = queue.Queue()
@@ -198,7 +200,24 @@ class VoiceService:
             batch = self._batch
             batch.pending += 1
             batch.done.clear()
-            self._text_queue.put((batch, text))
+            self._text_queue.put((batch, text, selected_voice()))
+
+    def _select_reference(self, reference):
+        """Only the synthesis worker replaces speaker conditioning after startup."""
+        if reference is None:
+            raise FileNotFoundError("No WAV voice references available")
+        transcript = reference.with_suffix(".txt")
+        key = (str(reference), reference.stat().st_mtime_ns,
+               transcript.stat().st_mtime_ns if transcript.is_file() else None)
+        if key == self._reference_key:
+            return
+        text = (transcript.read_text(encoding="utf-8-sig").strip()
+                if transcript.is_file() else self.reference_text)
+        if "<|endofprompt|>" not in text:
+            text = "You are a helpful assistant.<|endofprompt|>" + text
+        self.voice.add_zero_shot_spk(text, str(reference), "arlo")
+        self.voice_reference = reference
+        self._reference_key = key
 
     def current_batch(self):
         with self._state_lock:
@@ -231,11 +250,12 @@ class VoiceService:
 
     def _tts_loop(self) -> None:
         while True:
-            batch, text = self._text_queue.get()
+            batch, text, reference = self._text_queue.get()
             generator = None
             try:
                 if batch.cancelled.is_set():
                     continue
+                self._select_reference(reference)
                 generator = self.voice.inference_zero_shot(
                     text, "", "", zero_shot_spk_id="arlo", stream=True,
                     speed=self.speed)

@@ -37,6 +37,7 @@ DEFAULTS = {
     "lang": "spanish",
     "keep_alive": "24h",
     "temperature": 0.2,
+    "voice_reference": "arlo-01.wav",
     "weather_location": "",
     "message_service": "whatsapp",
     "whatsapp_phone_number_id": "",
@@ -107,6 +108,12 @@ def validate_config(config):
         raise ValueError(tr('config.config_json_must_contain_a_json_object'))
     result = deepcopy(DEFAULTS)
     result.update(config)
+    reference = result["voice_reference"]
+    if (not isinstance(reference, str) or not reference
+            or Path(reference).name != reference
+            or "/" in reference or "\\" in reference
+            or Path(reference).suffix.casefold() != ".wav"):
+        raise ValueError("voice_reference must be a WAV filename")
     if result["lang"] not in ("english", "spanish"):
         raise ValueError(tr('config.lang_must_be_english_or_spanish'))
     for key in ("message_service", "whatsapp_phone_number_id",
