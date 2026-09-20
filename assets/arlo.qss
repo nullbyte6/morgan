@@ -110,7 +110,7 @@ QPushButton#refresh:checked {
 QLabel#logTitle {
     color: #cad3f5;
     font-size: 24px;
-    padding-left: 20px
+    padding-left: 16px
 }
 
 QTextEdit#logViewer {
