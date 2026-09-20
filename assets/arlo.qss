@@ -82,6 +82,7 @@ QStackedWidget#mainPages {
 QPushButton#settingsNav,
 QPushButton#chatNav,
 QPushButton#logsNav,
+QPushButton#editorNav,
 QPushButton#refresh {
     background-color: transparent;
     color: #a5adcb;
@@ -93,6 +94,7 @@ QPushButton#refresh {
 QPushButton#settingsNav:hover,
 QPushButton#chatNav:hover,
 QPushButton#logsNav:hover,
+QPushButton#editorNav:hover,
 QPushButton#refresh:hover {
     background-color: #363a4f;
     color: #cad3f5;
@@ -101,6 +103,7 @@ QPushButton#refresh:hover {
 QPushButton#settingsNav:checked,
 QPushButton#chatNav:checked,
 QPushButton#logsNav:checked,
+QPushButton#editorNav:checked,
 QPushButton#refresh:checked {
     background-color: #494d64;
     color: #cad3f5;
@@ -267,4 +270,193 @@ QPushButton#removeAttachment:pressed {
     background-color: #363a4f;
     color: #cad3f5;
 }
+
+
+QWidget#editorPage {
+    background-color: #24273a;
+    color: #cad3f5;
+}
+
+QTabWidget#editorTabs {
+    background-color: transparent;
+    border: none;
+}
+
+QTabWidget#editorTabs::pane {
+    background-color: #1e2030;
+    border: 1px solid #494d64;
+    border-radius: 12px;
+    top: -1px;
+}
+
+QTabWidget#editorTabs QTabBar {
+    background-color: transparent;
+}
+
+
+QTabWidget#editorTabs QTabBar::tab {
+    background-color: #363a4f;
+    color: #a5adcb;
+
+    border: 1px solid #494d64;
+    border-bottom: none;
+
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+
+    padding: 8px 10px;
+    margin-right: 3px;
+
+    min-width: 0px;
+    font-size: 16px;
+}
+
+QTabWidget#editorTabs QTabBar::tab:hover {
+    background-color: #494d64;
+    color: #cad3f5;
+}
+
+QTabWidget#editorTabs QTabBar::tab:selected {
+    background-color: #1e2030;
+    color: #cad3f5;
+    border-color: #494d64;
+}
+
+QTabWidget#editorTabs QTabBar::close-button {
+    background: transparent;
+    border-radius: 4px;
+    margin-left: 6px;
+}
+
+QTabWidget#editorTabs QTabBar::close-button:hover {
+    background-color: #494d64;
+}
+
+QPlainTextEdit#codeEditor {
+    background-color: #1e2030;
+    color: #cad3f5;
+    border: none;
+    border-radius: 10px;
+    selection-background-color: #494d64;
+    selection-color: #cad3f5;
+}
+
+
+QToolButton#editorTabClose {
+    background-color: transparent;
+    color: #cad3f5;
+    border: none;
+    border-radius: 4px;
+    padding: 0;
+    font-size: 16px;
+}
+
+QToolButton#editorTabClose:hover {
+    background-color: #494d64;
+    color: #f4dbd6;
+}
+
+QToolButton#editorTabClose:pressed {
+    background-color: #6e738d;
+}
+
+
+QPlainTextEdit#codeEditor QScrollBar:vertical {
+    background-color: #1e2030;
+    width: 10px;
+    margin: 0;
+}
+
+QPlainTextEdit#codeEditor QScrollBar::handle:vertical {
+    background-color: #494d64;
+    border-radius: 5px;
+    min-height: 28px;
+}
+
+QPlainTextEdit#codeEditor QScrollBar::handle:vertical:hover {
+    background-color: #6e738d;
+}
+
+QPlainTextEdit#codeEditor QScrollBar::add-line:vertical,
+QPlainTextEdit#codeEditor QScrollBar::sub-line:vertical {
+    height: 0;
+    border: none;
+    background: transparent;
+}
+
+QPlainTextEdit#codeEditor QScrollBar::add-page:vertical,
+QPlainTextEdit#codeEditor QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+QPlainTextEdit#codeEditor QScrollBar:horizontal {
+    background-color: #1e2030;
+    height: 10px;
+    margin: 0;
+}
+
+QPlainTextEdit#codeEditor QScrollBar::handle:horizontal {
+    background-color: #494d64;
+    border-radius: 5px;
+    min-width: 28px;
+}
+
+QPlainTextEdit#codeEditor QScrollBar::handle:horizontal:hover {
+    background-color: #6e738d;
+}
+
+QPlainTextEdit#codeEditor QScrollBar::add-line:horizontal,
+QPlainTextEdit#codeEditor QScrollBar::sub-line:horizontal {
+    width: 0;
+    border: none;
+    background: transparent;
+}
+
+QPlainTextEdit#codeEditor QScrollBar::add-page:horizontal,
+QPlainTextEdit#codeEditor QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+
+QWidget#editorPage QPushButton {
+    background-color: #363a4f;
+    color: #cad3f5;
+    border: 1px solid #494d64;
+    border-radius: 9px;
+    padding: 8px 16px;
+}
+
+QWidget#editorPage QPushButton:hover {
+    background-color: #494d64;
+    border-color: #8aadf4;
+}
+
+QWidget#editorPage QPushButton:pressed {
+    background-color: #8aadf4;
+    color: #24273a;
+}
+
+QWidget#editorPage QPushButton:disabled {
+    background-color: #363a4f;
+    color: #6e738d;
+    border-color: #494d64;
+}
+
+QLabel#editorStatus {
+    background: transparent;
+    color: #a5adcb;
+    font-size: 16px;
+    padding: 0 4px;
+}
+
+QFileDialog,
+QMessageBox {
+    background-color: #24273a;
+    color: #cad3f5;
+}
+
+QMessageBox QLabel {
+    color: #cad3f5;
+    background: transparent;
+}
+
 

@@ -53,6 +53,7 @@ from src.init.logs import LogView
 from src.init.settings import SettingsView
 from src.init.attachments import DesktopMessage, AttachmentSession, ollama_capabilities
 from src.init.attachment_widgets import AttachmentTray
+from src.init.editor.live import EditorView, ArloRing
 
 class ChatInput(QTextEdit):
     submitted = Signal()
@@ -419,9 +420,12 @@ class ArloWindow(QMainWindow):
         self.resize(900, 720)
         self.setMinimumSize(600, 480)
 
+        self.arlo_ring = ArloRing(self)
+        self.arlo_ring.hide()
         self.chat_button = QPushButton("󰭹")
-        self.logs_button = QPushButton("󰋚")
+        self.logs_button = QPushButton("")
         self.settings_button = QPushButton("")
+        self.editor_button = QPushButton("󰨞")
         self.has_text = False
         self.recording = False
         self.voice_thread = None
@@ -432,6 +436,7 @@ class ArloWindow(QMainWindow):
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
         self.submitting = None
         self.input = ChatInput()
+        self.composer_widget = QWidget()
         self.input_meter = AudioVisualizer()
         self.input_meter.setMinimumWidth(0)
         self.input_meter.setFixedHeight(48)
@@ -450,6 +455,7 @@ class ArloWindow(QMainWindow):
 
         self.log_dir = Path.home() / ".arlo" / ".log"
         self.log_view = LogView(self.log_dir, self)
+        self.editor_view = EditorView(self)
 
         self.busy = False
         self.ready = False
@@ -511,14 +517,19 @@ class ArloWindow(QMainWindow):
         self.logs_button.setFixedSize(48, 48)
         self.logs_button.setToolTip("Logs")
 
+        self.editor_button.setObjectName("editorNav")
+        self.editor_button.setCheckable(True)
+        self.editor_button.setFixedSize(48, 48)
+        self.editor_button.setToolTip("Editor")
+
         navigation.addWidget(self.settings_button)
         navigation.addWidget(self.chat_button)
         navigation.addWidget(self.logs_button)
+        navigation.addWidget(self.editor_button)
         navigation.addStretch()
 
         container_layout.addLayout(navigation)
         self.pages.setObjectName("mainPages")
-        container_layout.addWidget(self.pages, 1)
 
         root = QWidget()
         root.setObjectName("root")
@@ -609,6 +620,7 @@ class ArloWindow(QMainWindow):
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
 
+        composer.addWidget(self.arlo_ring, 0, Qt.AlignBottom)
         composer.addWidget(input_group, 1)
         composer.addWidget(self.attach, 0, Qt.AlignBottom)
         composer.addWidget(self.send, 0, Qt.AlignBottom)
@@ -616,11 +628,10 @@ class ArloWindow(QMainWindow):
         composer_row = QHBoxLayout()
         composer_row.setContentsMargins(0, 0, 0, 0)
         composer_row.setSpacing(0)
-        composer_row.addStretch(1)
-        composer_row.addLayout(composer, 2)
-        composer_row.addStretch(1)
+        composer_row.setContentsMargins(20, 0, 20, 12)
+        composer_row.addLayout(composer, 1)
         composer_area.addLayout(composer_row)
-        main.addLayout(composer_area)
+        self.composer_widget.setLayout(composer_area)
 
         self.chat_scroll.setObjectName("chatScroll")
         self.chat_scroll.setFrameShape(QFrame.NoFrame)
@@ -634,9 +645,15 @@ class ArloWindow(QMainWindow):
         self.pages.addWidget(self.chat_scroll)
         self.pages.addWidget(self.log_view)
         self.pages.addWidget(self.settings_view)
+        self.pages.addWidget(self.editor_view)
+
+        container_layout.addWidget(self.pages, 1)
+        container_layout.addWidget(self.composer_widget)
+
         self.chat_button.clicked.connect(lambda: self.show_page(0))
         self.logs_button.clicked.connect(lambda: self.show_page(1))
         self.settings_button.clicked.connect(lambda: self.show_page(2))
+        self.editor_button.clicked.connect(lambda: self.show_page(3))
         self.show_page(0)
         self.set_enabled(False)
         self.load_stylesheet()
@@ -647,9 +664,11 @@ class ArloWindow(QMainWindow):
 
     def show_page(self, index: int):
         self.pages.setCurrentIndex(index)
+        self.arlo_ring.setVisible(index != 0)
         self.chat_button.setChecked(index == 0)
         self.logs_button.setChecked(index == 1)
         self.settings_button.setChecked(index == 2)
+        self.editor_button.setChecked(index == 3)
 
         if index == 1:
             self.log_view.refresh()
@@ -843,6 +862,7 @@ class ArloWindow(QMainWindow):
     def on_request_accepted(self, turn_id):
         if turn_id != self.turn_id or self.submitting is None:
             return
+
         self.input.clear()
         self.attachment_tray.clear()
         self.submitting = None
@@ -903,6 +923,7 @@ class ArloWindow(QMainWindow):
             return
         self.voice_thread = VoiceInputWorker(self)
         self.voice_thread.levels.connect(self.input_meter.set_levels)
+        self.voice_thread.levels.connect(self.editor_view.set_audio_levels)
         self.voice_thread.transcribing.connect(self.on_voice_transcribing)
         self.voice_thread.finished.connect(self.on_voice_finished)
         self.recording = True
@@ -947,6 +968,7 @@ class ArloWindow(QMainWindow):
         self.worker.interrupt()
         self.speaking = False
         self.meter.clear()
+        self.arlo_ring.clear()
         self.set_status("status.stopping")
         self.update_send_button()
 
@@ -957,11 +979,13 @@ class ArloWindow(QMainWindow):
 
         self.current_reply += chunk
         self.update_subtitles(self.current_reply)
+        self.arlo_ring.setToolTip(self.current_reply)
 
     @Slot(int, object)
     def on_audio(self, turn_id, levels):
         if turn_id == self.turn_id and self.busy and not self.stopping:
             self.meter.set_levels(levels)
+            self.arlo_ring.set_levels(levels)
 
     @Slot(int, bool)
     def on_speaking(self, turn_id, speaking):
@@ -989,6 +1013,7 @@ class ArloWindow(QMainWindow):
         self.speaking = False
         self.stopping = False
         self.meter.clear()
+        self.arlo_ring.clear()
         self.set_status("status.stopped" if interrupted else
                         "status.private" if self.worker.session.private else "")
         self.set_enabled(True)
@@ -1012,6 +1037,7 @@ class ArloWindow(QMainWindow):
         self.speaking = False
         self.stopping = False
         self.meter.clear()
+        self.arlo_ring.clear()
         self.set_status("status.error")
         self.set_enabled(self.ready)
         self.resume_pending_prompt()
@@ -1072,6 +1098,7 @@ def main():
             window.settings_button,
             window.chat_button,
             window.logs_button,
+            window.editor_button,
             window.send,
             window.attach,
             window.log_view.refresh_button,):
