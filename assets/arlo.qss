@@ -283,10 +283,9 @@ QTabWidget#editorTabs {
 }
 
 QTabWidget#editorTabs::pane {
-    background-color: #1e2030;
-    border: 1px solid #494d64;
-    border-radius: 12px;
-    top: -1px;
+    background-color: transparent;
+    border: 0px;
+    border-radius: 0px;
 }
 
 QTabWidget#editorTabs QTabBar {
@@ -297,7 +296,6 @@ QTabWidget#editorTabs QTabBar::tab {
     background-color: #363a4f;
     color: #a5adcb;
 
-    border: 1px solid #494d64;
     border-bottom: none;
 
     border-top-left-radius: 8px;
@@ -306,7 +304,7 @@ QTabWidget#editorTabs QTabBar::tab {
     padding: 8px 16px;
     margin-right: 4px;
 
-    min-width: 200px;
+    min-width: 160px;
     font-size: 16px;
 }
 
@@ -324,12 +322,13 @@ QTabWidget#editorTabs QTabBar::tab:selected {
 
 QTabWidget#editorTabs QTabBar::close-button {
     background: transparent;
+    color: #cad3f5;
     border-radius: 4px;
     margin-left: 6px;
 }
 
 QTabWidget#editorTabs QTabBar::close-button:hover {
-    background-color: #494d64;
+    color: #8aadf4;
 }
 
 QPlainTextEdit#codeEditor {
@@ -341,35 +340,29 @@ QPlainTextEdit#codeEditor {
     selection-color: #cad3f5;
 }
 
-
 QToolButton#editorTabClose {
     background-color: transparent;
     color: #cad3f5;
     border: none;
     border-radius: 4px;
-    padding: 0;
+    margin-right: 16px;
     font-size: 16px;
 }
 
-QToolButton#editorTabClose:hover {
-    background-color: #494d64;
-    color: #f4dbd6;
-}
-
+QToolButton#editorTabClose:hover,
 QToolButton#editorTabClose:pressed {
-    background-color: #6e738d;
+    color: #F48AA5;
 }
-
 
 QPlainTextEdit#codeEditor QScrollBar:vertical {
     background-color: #1e2030;
-    width: 10px;
+    width: 12px;
     margin: 0;
 }
 
 QPlainTextEdit#codeEditor QScrollBar::handle:vertical {
     background-color: #494d64;
-    border-radius: 5px;
+    border-radius: 4px;
     min-height: 28px;
 }
 
