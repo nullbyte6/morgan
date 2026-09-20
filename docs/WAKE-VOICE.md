@@ -1,11 +1,11 @@
 # Hands-free wake commands
 
-Run the existing `setup.bat` to register the `ARLO_WAKE` logon task, or keep
-`.venv\Scripts\python.exe -B wake.py` running for interactive diagnostics.
-The task still runs `wake.py` through the existing virtual environment. Restart
+Run `scripts\setup.bat` to register the `ARLO_WAKE` logon task, or keep
+`.venv\Scripts\python.exe -B -m entry.wake` running for interactive diagnostics.
+The task runs `entry\wake.py` through the existing virtual environment. Restart
 both the wake task and desktop after updating; an old desktop cannot consume the
 new inbox or cooperate with microphone ownership. No new dependencies or service
-ports are required. The existing `arlo.bat` → `arlo-run.ps1` → services/desktop
+ports are required. The existing `scripts\arlo.bat` → `scripts\arlo-run.ps1` → services/desktop
 launch path and desktop single-instance mutex remain in use.
 
 Say any of the following:

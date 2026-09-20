@@ -17,7 +17,7 @@ bash install.sh
 ```
 For an existing installation, you can start arlo directly by running `arlo.ps1`.
 
-Arlo also has a desktop interface application (`arlo.bat`) which, if you 
+Arlo also has a desktop interface application (`scripts\arlo.bat`) which, if you 
 ask me, works better for the public and for my own development.
 
 See more of its usage/application when you launch the script :) 
