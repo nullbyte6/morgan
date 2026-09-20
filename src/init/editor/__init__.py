@@ -22,7 +22,7 @@ from src.init.lang import tr
 import subprocess
 from pathlib import Path
 
-from entry.agent import Assistant
+from src.init.identity import get_assistant
 
 
 def open_in_editor(path: str) -> str:
@@ -43,7 +43,7 @@ def open_in_editor(path: str) -> str:
         return tr('editor.not_a_file', requested=requested)
 
     try:
-        with Assistant().suspend_terminal():
+        with get_assistant().suspend_terminal():
             subprocess.run(["nvim", str(path)])
         return tr('editor.editor_closed', path=path)
 

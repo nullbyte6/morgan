@@ -21,8 +21,6 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QApplication
 
 
 @dataclass
@@ -80,6 +78,9 @@ def capture_to_clipboard() -> bool:
     """Capture the primary screen and copy it to the clipboard.
     Must be called from the Qt GUI thread.
     """
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtWidgets import QApplication
+
     app = QApplication.instance()
     if app is None:
         raise RuntimeError("QApplication is not running.")
