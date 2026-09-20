@@ -438,8 +438,7 @@ snapshot_download(repo_id=os.environ["ARLO_VOICE_MODEL"], local_dir=os.environ["
 
 find_powershell
 [[ -f "${SCRIPT_DIR}/requirements.txt" ]] || fail "${SCRIPT_DIR}/requirements.txt was not found."
-[[ -f "${SCRIPT_DIR}/arlo.ps1" ]] || fail "${SCRIPT_DIR}/arlo.ps1 was not
-found."
+[[ -f "${SCRIPT_DIR}/scripts/arlo.ps1" ]] || fail "${SCRIPT_DIR}/scripts/arlo.ps1 was not found."
 [[ -d "${SCRIPT_DIR}/src" ]] || fail "${SCRIPT_DIR}/src was not found."
 
 readonly LOCAL_APP_DATA_WINDOWS="${LOCALAPPDATA:-$(get_windows_folder LocalApplicationData)}"
@@ -551,7 +550,7 @@ info "Downloading/verifying ${ARLO_MODEL} (approximately 9.3 GB)..."
 "$OLLAMA_BIN" pull "$ARLO_MODEL"
 
 configure_arlo_environment
-readonly ARLO_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/arlo.ps1")"
+readonly ARLO_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/scripts/arlo.ps1")"
 
 cleanup_installers
 trap - EXIT
