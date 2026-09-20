@@ -19,6 +19,7 @@
 """Thin typed tools exposed through the existing Pydantic AI registry."""
 
 from src.init.lang import tr
+from src.init.brain import kill_self
 from typing import Literal
 
 from .models import HealthReport

@@ -66,6 +66,7 @@ class Assistant:
                 instance = super().__new__(cls)
                 instance.terminal_ui = None
                 instance.agent = None
+                instance.shutdown_requested = threading.Event()
                 instance.voice = None
                 instance.debug_console = None
                 instance.username = getuser().capitalize()
@@ -343,7 +344,7 @@ class Assistant:
         cancel_event = cancel_event if cancel_event is not None else threading.Event()
         reply = []
         completed_history = None
-        stream_result = None
+        stream_messages = list(history)
 
         if attachments:
             attachments.reserve_history(history)
@@ -351,26 +352,36 @@ class Assistant:
         attachment_tools = [attachments.toolset()] if attachments else []
 
         async def generate():
-            nonlocal completed_history, stream_result
+            nonlocal completed_history, stream_messages
+            from pydantic_ai.messages import PartStartEvent, PartDeltaEvent, TextPartDelta
             buffer = SpeechBuffer()
-            async with self.agent.run_stream(
-                model_prompt, message_history=history, toolsets=attachment_tools,
-                model_settings={"temperature": brain.load_config()["temperature"]}
-            ) as result:
-                stream_result = result
-                async for chunk in result.stream_text(delta=True, debounce_by=0.05):
+
+            async def stream_events(ctx, events):
+                nonlocal stream_messages
+                stream_messages = ctx.messages
+                async for event in events:
                     if cancel_event.is_set():
                         return
+                    chunk = ""
+                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                        chunk = event.part.content
+                    elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                        chunk = event.delta.content_delta
                     if chunk:
                         reply.append(chunk)
                         if on_chunk is not None:
                             on_chunk(chunk)
                         for phrase in buffer.feed(chunk):
                             self.voice.enqueue(phrase)
-                for phrase in buffer.finish():
-                    if not cancel_event.is_set():
-                        self.voice.enqueue(phrase)
-                completed_history = result.all_messages()
+
+            result = await self.agent.run(
+                model_prompt, message_history=history, toolsets=attachment_tools,
+                model_settings={"temperature": brain.load_config()["temperature"]},
+                event_stream_handler=stream_events)
+            completed_history = result.all_messages()
+            for phrase in buffer.finish():
+                if not cancel_event.is_set():
+                    self.voice.enqueue(phrase)
             self.voice.request_done()
             while not self.voice.is_done():
                 await asyncio.sleep(0.02)
@@ -416,8 +427,7 @@ class Assistant:
 
         text = "".join(reply)
         if cancel_event.is_set():
-            messages = (stream_result.all_messages() if stream_result is not None
-                        else list(history) + [ModelRequest(parts=[UserPromptPart(model_prompt)])])
+            messages = stream_messages or list(history) + [ModelRequest(parts=[UserPromptPart(model_prompt)])]
             safe = list(history)
             pending = set()
             segment = []
@@ -481,7 +491,7 @@ class Assistant:
         greeting = self.startup_greeting
 
         history = []
-        while True:
+        while not self.shutdown_requested.is_set():
             prompt = self.build_user_prompt()
             if session.private:
                 prompt = tr("status.private") + " " + prompt
@@ -548,43 +558,15 @@ class Assistant:
 
             try:
                 logging.getLogger("arlo.llm").debug(tr('agent.processing_request'))
-                logger.warning(tr('agent.trace_1_before_run_stream_sync'))
-                with self.agent.run_stream_sync(user_input,
-                        message_history=history,
-                        model_settings={"temperature": brain.load_config()["temperature"]}) as result:
-
-                    logger.warning(tr('agent.trace_2_stream_context_opened'))
-                    def traced_chunks():
-                        logger.warning(tr('agent.trace_3_starting_stream_text'))
-
-                        for chunk in result.stream_text(
-                                delta=True,
-                                debounce_by=0.05):
-                            logger.warning(tr('agent.trace_4_received_chunk_r'), chunk[:100])
-                            yield chunk
-
-                        logger.warning(tr('agent.trace_5_stream_finished'))
-
-                    reply = self.speak(traced_chunks())
-
-                    logger.warning("TRACE 6: speak() returned")
-                    if self.terminal_ui is not None:
-                        self.terminal_ui.set_thinking(False)
-
-                    if reply:
-                        session.write(self.name, reply)
-                        logging.getLogger("arlo.response").info(
-                            "%s: %s", self.name, reply)
-
-                    logger.warning(tr('agent.trace_7_waiting_for_tts'))
-                    self.voice.wait_until_done()
-                    logger.warning(tr('agent.trace_8_tts_finished'))
-
-                    if self.terminal_ui is not None:
-                        self.terminal_ui.clear_audio_levels()
-
-                    history = result.all_messages()
-                    logger.warning(tr('agent.trace_9_history_updated'))
+                reply, history = self.run_desktop_turn(
+                    user_input, history,
+                    on_audio=(self.terminal_ui.update_audio_levels
+                              if self.terminal_ui is not None else None))
+                if reply:
+                    session.write(self.name, reply)
+                if self.terminal_ui is not None:
+                    self.terminal_ui.set_thinking(False)
+                    self.terminal_ui.clear_audio_levels()
 
             except Exception as error:
                 if self.terminal_ui is not None:
@@ -623,7 +605,12 @@ class Assistant:
                     self.terminal_ui = None
             else:
                 self._initialize_runtime()
-                self.run_session()
+                try:
+                    self.run_session()
+                finally:
+                    if self.voice is not None:
+                        self.voice.close()
+                        self.voice = None
 
         except (EOFError, KeyboardInterrupt):
             pass

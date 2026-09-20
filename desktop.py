@@ -43,6 +43,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import *
 
 from agent import Assistant
+from src.init.brain import kill_self
 from src.init.commands import execute_command, set_confirmation_handler
 from src.init.config import load_dev_file, load_config
 from src.init.lang import get_language, set_language, tr
@@ -255,6 +256,7 @@ class AssistantWorker(QObject):
     confirmation_requested = Signal(int, str)
     accepted = Signal(int)
     rejected = Signal(int, str)
+    exit_requested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -308,6 +310,12 @@ class AssistantWorker(QObject):
                 return
 
             self.session.write(self.assistant.username, message.log_text())
+            directory_result = (self.assistant.directory_cmd(prompt)
+                                if not message.attachments else None)
+            if directory_result is not None:
+                self.session.write(self.assistant.name, directory_result)
+                self.finished.emit(directory_result)
+                return
 
             if not message.attachments and prompt.casefold().startswith("pwsh:"):
                 self.command_reply = True
@@ -356,6 +364,11 @@ class AssistantWorker(QObject):
                 error)
             self.session.write("System", message)
             self.failed.emit(message)
+
+        finally:
+            self.directory.emit(str(Path.cwd()))
+            if self.assistant.shutdown_requested.is_set():
+                self.exit_requested.emit()
 
     def report_audio(self, turn_id, samples, sample_rate):
         if not self.cancel_event.is_set():
@@ -461,6 +474,11 @@ class ArloWindow(QMainWindow):
         self.language_timer.setInterval(500)
         self.language_timer.timeout.connect(self.refresh_language)
         self.language_timer.start()
+        self.directory_timer = QTimer(self)
+        self.directory_timer.setInterval(250)
+        self.directory_timer.timeout.connect(
+            lambda: self.directory_indicator.set_directory(Path.cwd()))
+        self.directory_timer.start()
 
 
     def build_ui(self):
@@ -664,6 +682,7 @@ class ArloWindow(QMainWindow):
         self.worker.speaking.connect(self.on_speaking)
         self.worker.finished.connect(self.on_finished)
         self.worker.failed.connect(self.on_error)
+        self.worker.exit_requested.connect(self.close)
 
         self.thread.finished.connect(self.worker.shutdown)
         self.thread.finished.connect(self.worker.deleteLater)
@@ -977,6 +996,9 @@ class ArloWindow(QMainWindow):
         self.resume_pending_prompt()
 
     def resume_pending_prompt(self):
+        if self.worker.assistant.shutdown_requested.is_set():
+            self.pending_prompt = None
+            return
         prompt, self.pending_prompt = self.pending_prompt, None
         if prompt:
             self.start_prompt(prompt)
@@ -1007,6 +1029,7 @@ class ArloWindow(QMainWindow):
             event.ignore()
             return
 
+        kill_self()
         if self.thread.isRunning():
             self.thread.quit()
             self.thread.wait()
