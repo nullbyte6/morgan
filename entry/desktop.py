@@ -465,9 +465,9 @@ class Orb(QWidget):
     )
 
     def __init__(self, parent=None, *,
-                 size: int = 320,
+                 size: int = 384,
                  floating: bool = False,
-                 line_width: float = 3.6):
+                 line_width: float = 8.0):
         super().__init__(parent)
         self.floating = floating
         if floating:
@@ -487,6 +487,8 @@ class Orb(QWidget):
 
         self.amplitude = 0.0
         self.phase = 0.0
+        self.ripple_phase = random.uniform(0.0, math.tau)
+        self.ripple_seed = random.uniform(0.0, math.tau)
         self.speaking = False
 
         self.click_pulse = 0.0
@@ -504,7 +506,6 @@ class Orb(QWidget):
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.animate)
         self.timer.start()
-        self._preferred_size = size
 
     def sizeHint(self):
         return QSize(self._preferred_size, self._preferred_size)
@@ -547,18 +548,19 @@ class Orb(QWidget):
     def animate(self):
         for index, target in enumerate(self.levels):
             current = self.smoothed[index]
-            factor = 0.38 if target > current else 0.12
+            factor = 0.65 if target > current else 0.16
             self.smoothed[index] += (target - current) * factor
 
         target = max(self.smoothed)
-        factor = (0.30 if target > self.amplitude
-            else 0.10)
+        factor = (0.55 if target > self.amplitude
+            else 0.12)
 
         self.amplitude += (target - self.amplitude) * factor
         if self.amplitude < 0.0005:
             self.amplitude = 0.0
 
         self.phase += (0.025 + self.amplitude * 0.045)
+        self.ripple_phase += 0.008
 
         self.click_pulse *= 0.88
         self.double_pulse *= 0.93
@@ -618,17 +620,24 @@ class Orb(QWidget):
                     angle * 11.0
                     - self.phase * 0.37) * 0.12
 
-                energy = (
-                    self.amplitude * 0.45
-                    + level * 0.55)
+                energy = (self.amplitude * 0.35+ level * 0.65)
+                energy = min(1.0, energy * 2.0) ** 0.7
 
                 idle = math.sin(
                     angle * 3.0 - self.phase * 0.5) * 0.45
 
-                deformation = (
-                    (primary + secondary + detail)
-                    * energy
-                    * (10.0 + layer * 1.8))
+                ripple = (math.sin(angle * 5.0
+                            + self.ripple_phase * 0.75
+                            + self.ripple_seed) * 0.75 + math.sin(angle * 9.0
+                            - self.ripple_phase * 0.43
+                            + self.ripple_seed * 1.7) * 0.35+ math.sin(angle * 13.0
+                            + self.ripple_phase * 0.27
+                            + self.ripple_seed * 0.6) * 0.15)
+
+                ripple *= 1.2 + layer * 0.08
+
+                deformation = ((primary + secondary + detail)
+                        * energy * (9.0 + layer * 1.2))
 
                 click_wave = math.sin(
                     angle * 3.0
@@ -654,9 +663,12 @@ class Orb(QWidget):
                         self.click_pulse * 1.5
                         + self.double_pulse * 4.0)
 
-                radius = (base_radius + deformation + idle + click_effect +
-                        double_effect +
-                        expansion)
+                breathing = (math.sin(self.phase * 0.8) * 0.8)
+                voice_expansion = (self.amplitude * 6.0)
+
+                radius = (base_radius + deformation + idle + breathing +
+                        ripple + voice_expansion + click_effect +
+                        double_effect + expansion)
 
                 x = math.cos(angle) * radius
                 y = math.sin(angle) * radius
@@ -1225,15 +1237,17 @@ class ArloWindow(QMainWindow):
 
     def update_subtitles(self, text):
         from PySide6.QtGui import QTextLayout
-
         self.subtitle_text = text
         font = self.subtitles.font()
-        width = max(1, self.subtitles.contentsRect().width() - 12)
+        metrics = QFontMetrics(font)
+        max_width = metrics.horizontalAdvance("M" * 56)
+        available = max(1,self.subtitles.contentsRect().width() - 24)
 
+        width = min(max_width, available)
         layout = QTextLayout(text, font)
         layout.beginLayout()
-
         lines = []
+
         while True:
             line = layout.createLine()
             if not line.isValid():
