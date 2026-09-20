@@ -1063,24 +1063,33 @@ class ArloWindow(QMainWindow):
         event.accept()
 
 
+def set_windows_app_id():
+    """Identify Arlo as an independent Windows application."""
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "Diego.Arlo.Desktop")
+
 
 def main():
+    set_windows_app_id()
     os.chdir(Path.home())
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     assets = Path(__file__).resolve().parent / "assets"
-    fonts = assets / "fonts"
     app.setWindowIcon(QIcon(str(assets / "pwsh.ico")))
+    fonts = assets / "fonts"
 
     def load_font(filename: str) -> str:
         path = fonts / filename
         font_id = QFontDatabase.addApplicationFont(str(path))
         if font_id == -1:
-            raise RuntimeError(f"No se pudo cargar la fuente: {path}")
+            raise RuntimeError(f"Invalid font: {path}")
 
         families = QFontDatabase.applicationFontFamilies(font_id)
         if not families:
-            raise RuntimeError(f"La fuente no tiene familias: {path}")
+            raise RuntimeError(f"Font has no fam: {path}")
 
         return families[0]
 
