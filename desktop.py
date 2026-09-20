@@ -36,10 +36,7 @@ from PySide6.QtCore import (
     Qt, QObject, QThread, QTimer, Signal, Slot,
     QSettings)
 
-from PySide6.QtGui import (
-    QColor, QFont, QFontDatabase,
-    QIcon, QPainter, QPainterPath, QPen)
-
+from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
 from agent import Assistant
@@ -474,6 +471,15 @@ class ArloWindow(QMainWindow):
         self.settings_view.subtitles_changed.connect(self.toggle_subtitles)
         self.settings_view.language_changed.connect(self.change_language)
         self.build_ui()
+
+        self.next_page_shortcut = QShortcut(QKeySequence("Ctrl+Tab"), self)
+        self.next_page_shortcut.setContext(Qt.WindowShortcut)
+        self.next_page_shortcut.activated.connect(lambda: self.switch_page(1))
+
+        self.previous_page_shortcut = QShortcut(QKeySequence("Ctrl+Shift+Tab"), self)
+        self.previous_page_shortcut.setContext(Qt.WindowShortcut)
+        self.previous_page_shortcut.activated.connect(lambda: self.switch_page(-1))
+
         self.build_worker()
         self.set_status("status.waking")
         self.language_timer = QTimer(self)
@@ -676,6 +682,14 @@ class ArloWindow(QMainWindow):
         if index == 0 and self.ready:
             self.input.setFocus()
 
+    def switch_page(self, direction: int):
+        count = self.pages.count()
+        if count <= 1:
+            return
+
+        current = self.pages.currentIndex()
+        next_index = (current + direction) % count
+        self.show_page(next_index)
 
     def load_stylesheet(self):
         self.setStyleSheet(get_stylesheet())
