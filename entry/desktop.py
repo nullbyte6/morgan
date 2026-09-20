@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-
-#
 #  Copyright (c) 2026 Diego.
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
@@ -457,7 +455,7 @@ class ArloWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
-        icon_path = (Path(__file__).resolve().parent /
+        icon_path = (Path(__file__).resolve().parent.parent /
                      "assets" / "pwsh.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
         self.resize(900, 720)
@@ -1336,7 +1334,7 @@ def main():
         os.chdir(Path.home())
         app = QApplication(sys.argv)
         app.setStyle("Fusion")
-        assets = Path(__file__).resolve().parent / "assets"
+        assets = Path(__file__).resolve().parent.parent / "assets"
         app.setWindowIcon(QIcon(str(assets / "pwsh.ico")))
         fonts = assets / "fonts"
 
