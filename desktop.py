@@ -506,12 +506,6 @@ class ArloWindow(QMainWindow):
         navigation.setContentsMargins(20, 8, 20, 0)
         navigation.setSpacing(8)
 
-        self.settings_button.setObjectName("settingsNav")
-        self.settings_button.setCheckable(True)
-        self.settings_button.setChecked(False)
-        self.settings_button.setFixedSize(48, 48)
-        self.settings_button.setToolTip(tr("ui.settings"))
-
         self.chat_button.setObjectName("chatNav")
         self.chat_button.setCheckable(True)
         self.chat_button.setChecked(True)
@@ -523,14 +517,20 @@ class ArloWindow(QMainWindow):
         self.logs_button.setFixedSize(48, 48)
         self.logs_button.setToolTip("Logs")
 
+        self.settings_button.setObjectName("settingsNav")
+        self.settings_button.setCheckable(True)
+        self.settings_button.setChecked(False)
+        self.settings_button.setFixedSize(48, 48)
+        self.settings_button.setToolTip(tr("ui.settings"))
+
         self.editor_button.setObjectName("editorNav")
         self.editor_button.setCheckable(True)
         self.editor_button.setFixedSize(48, 48)
         self.editor_button.setToolTip("Editor")
 
-        navigation.addWidget(self.settings_button)
         navigation.addWidget(self.chat_button)
         navigation.addWidget(self.logs_button)
+        navigation.addWidget(self.settings_button)
         navigation.addWidget(self.editor_button)
         navigation.addStretch()
 
@@ -587,15 +587,18 @@ class ArloWindow(QMainWindow):
 
         input_frame = QFrame()
         input_frame.setObjectName("inputFrame")
-        input_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        input_frame.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed
+        )
         input_frame.setMinimumHeight(48)
-
-        input_layout = QVBoxLayout(input_frame)
-        input_layout.setContentsMargins(16, 0, 16, 0)
+        input_layout = QHBoxLayout(input_frame)
+        input_layout.setContentsMargins(16, 0, 0, 0)
         input_layout.setSpacing(0)
 
         self.input.submitted.connect(self.send_message)
-        input_layout.addWidget(self.input, 0, Qt.AlignVCenter)
+        input_layout.addWidget(self.input, 1, Qt.AlignVCenter)
+        input_layout.addWidget(self.attach, 0, Qt.AlignBottom)
         input_layout.addWidget(self.input_meter)
 
         input_column = QVBoxLayout()
@@ -605,8 +608,7 @@ class ArloWindow(QMainWindow):
         self.attachment_tray.setMinimumWidth(0)
         self.attachment_tray.setSizePolicy(
             QSizePolicy.Expanding,
-            QSizePolicy.Fixed,
-        )
+            QSizePolicy.Fixed)
 
         input_column.addWidget(self.attachment_tray)
         input_column.addWidget(self.directory_indicator)
@@ -628,14 +630,23 @@ class ArloWindow(QMainWindow):
 
         composer.addWidget(self.arlo_ring, 0, Qt.AlignBottom)
         composer.addWidget(input_group, 1)
-        composer.addWidget(self.attach, 0, Qt.AlignBottom)
         composer.addWidget(self.send, 0, Qt.AlignBottom)
 
+        composer_container = QWidget()
+        composer_container.setLayout(composer)
+        composer_container.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed
+        )
+
         composer_row = QHBoxLayout()
-        composer_row.setContentsMargins(0, 0, 0, 0)
-        composer_row.setSpacing(0)
         composer_row.setContentsMargins(20, 0, 20, 12)
-        composer_row.addLayout(composer, 1)
+        composer_row.setSpacing(0)
+
+        composer_row.addStretch(1)
+        composer_row.addWidget(composer_container, 2)
+        composer_row.addStretch(1)
+
         composer_area.addLayout(composer_row)
         self.composer_widget.setLayout(composer_area)
 

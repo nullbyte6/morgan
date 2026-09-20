@@ -43,25 +43,38 @@ QPushButton#send {
 
 QPushButton#attach {
     background-color: transparent;
+    border: none;
     color: #cad3f5
 }
 
-QPushButton#attach:hover,
 QPushButton#send:hover {
     background-color: #b7bdf8;
     color: #494d64
 }
 
-QPushButton#attach:pressed,
+QPushButton#attach:hover {
+    background-color: transparent;
+    color: #b7bdf8;
+}
+
 QPushButton#send:pressed {
     background-color: #8aadf4;
     color: #494d64
 }
 
-QPushButton#attach:disabled,
+QPushButton#attach:pressed {
+    background-color: transparent;
+    color: #8aadf4;
+}
+
 QPushButton#send:disabled {
     background-color: #494d64;
     color: #cad3f5;
+}
+
+QPushButton#attach:disabled {
+    background-color: transparent;
+    color: #494d64;
 }
 
 ToggleSwitch {
