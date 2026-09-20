@@ -125,7 +125,8 @@ def get_voice_model():
     return _VOICE_MODEL
 
 
-def transcribe_voice(pcm_data: bytes, sample_rate: int) -> tuple[str, str]:
+def transcribe_voice(pcm_data: bytes, sample_rate: int, *, model=None,
+                     language=None, beam_size=5, vad_filter=True) -> tuple[str, str]:
     """Transcribe PCM audio locally and return its text and detected language."""
     audio_file = io.BytesIO()
     with wave.open(audio_file, "wb") as wav_file:
@@ -135,12 +136,12 @@ def transcribe_voice(pcm_data: bytes, sample_rate: int) -> tuple[str, str]:
         wav_file.writeframes(pcm_data)
     audio_file.seek(0)
 
-    segments, information = get_voice_model().transcribe(
+    segments, information = (model if model is not None else get_voice_model()).transcribe(
         audio_file,
-        language=None,
+        language=language,
         task="transcribe",
-        beam_size=5,
-        vad_filter=True,
+        beam_size=beam_size,
+        vad_filter=vad_filter,
         vad_parameters={"min_silence_duration_ms": 500},
         condition_on_previous_text=False,
     )

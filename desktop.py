@@ -24,6 +24,7 @@ import asyncio
 import ctypes
 import html
 import json
+import logging
 import math
 import os
 import random
@@ -51,6 +52,7 @@ from src.init.logs import LogView
 from src.init.session_log import SessionLog
 from src.init.settings import SettingsView
 from src.init.terminal import spectrum_levels
+from src.init.voice_ipc import WakeInbox, desktop_audio
 
 from src.init.desktop.capture import (
     CaptureRequest,
@@ -232,17 +234,20 @@ class VoiceInputWorker(QThread):
         try:
             from src.init.voice import record_voice, transcribe_voice
 
-            recording = record_voice(
-                on_audio=self.report_audio, stop_event=self.stop_event)
-            if self.isInterruptionRequested():
-                return
-            if recording is None:
-                self.error = tr("voice.not_detected")
-                return
-            self.transcribing.emit()
-            self.transcript, _ = transcribe_voice(*recording)
-            if not self.transcript:
-                self.error = tr("voice.not_transcribed")
+            with desktop_audio(stop_event=self.stop_event, tail=0):
+                if self.isInterruptionRequested():
+                    return
+                recording = record_voice(
+                    on_audio=self.report_audio, stop_event=self.stop_event)
+                if self.isInterruptionRequested():
+                    return
+                if recording is None:
+                    self.error = tr("voice.not_detected")
+                    return
+                self.transcribing.emit()
+                self.transcript, _ = transcribe_voice(*recording)
+                if not self.transcript:
+                    self.error = tr("voice.not_transcribed")
         except Exception as error:
             self.error = str(error)
 
@@ -290,6 +295,15 @@ class AssistantWorker(QObject):
 
     @Slot(int, object)
     def ask(self, turn_id, message):
+        try:
+            # Hold through agent execution, confirmation, TTS completion and
+            # cancellation. Capture must stop before any synthesized speech.
+            with desktop_audio(stop_event=self.cancel_event):
+                self._ask(turn_id, message)
+        except Exception as error:
+            self.rejected.emit(turn_id, str(error))
+
+    def _ask(self, turn_id, message):
         message = DesktopMessage(message) if isinstance(message, str) else message
         attachment_session = None
         try:
@@ -415,6 +429,7 @@ class AssistantWorker(QObject):
         self.confirmation_event.set()
 
 
+# noinspection PyBroadException
 class ArloWindow(QMainWindow):
     request = Signal(int, object)
     username = getuser().capitalize()
@@ -485,6 +500,8 @@ class ArloWindow(QMainWindow):
         self.showing_greeting = True
         self.current_reply = None
         self.subtitle_text = ""
+        self.wake_inbox = None
+        self.wake_command_id = None
 
         self.settings = QSettings("ARLO", "desktop")
         self.settings_view = SettingsView(
@@ -512,6 +529,43 @@ class ArloWindow(QMainWindow):
         self.directory_timer.timeout.connect(
             lambda: self.directory_indicator.set_directory(Path.cwd()))
         self.directory_timer.start()
+        self.wake_timer = QTimer(self)
+        self.wake_timer.setInterval(250)
+        self.wake_timer.timeout.connect(self.poll_wake_commands)
+        self.wake_timer.start()
+
+    def poll_wake_commands(self):
+        """Consume only when ready; preserve the composer and compact mode."""
+        if (not self.ready or self.busy or self.voice_thread is not None or
+                self.submitting is not None or self.pending_prompt is not None or
+                self.closing_after_voice or self.worker.assistant.shutdown_requested.is_set()):
+            return
+        try:
+            if self.wake_inbox is None:
+                self.wake_inbox = WakeInbox()
+            command = self.wake_inbox.claim()
+        except Exception:
+            logging.getLogger("arlo.wake").exception("Wake inbox unavailable; will retry")
+            return
+        if command is None:
+            return
+        self.wake_command_id, text = command
+        if not self.mascot.isVisible():
+            self.showNormal()
+            self.raise_()
+            self.activateWindow()
+        # Deliberately do not use the composer: draft text and attachments
+        # belong to the manual interaction and must not be sent or cleared.
+        self.start_prompt(DesktopMessage(text))
+
+    def finish_wake_command(self, state, detail=""):
+        command_id, self.wake_command_id = self.wake_command_id, None
+        if command_id is not None:
+            try:
+                self.wake_inbox.finish(command_id, state, detail)
+            except Exception:
+                # A dispatched ID stays consumed even if acknowledgement fails.
+                logging.getLogger("arlo.wake").exception("Wake acknowledgement failed")
 
 
     def build_ui(self):
@@ -953,6 +1007,7 @@ class ArloWindow(QMainWindow):
     def on_request_rejected(self, turn_id, error):
         if turn_id != self.turn_id:
             return
+        self.finish_wake_command("failed", error)
         self.submitting = None
         self.busy = False
         self.current_reply = None
@@ -1026,7 +1081,8 @@ class ArloWindow(QMainWindow):
             self.start_recording()
 
     def start_recording(self):
-        if not self.ready or self.busy or self.submitting is not None:
+        if (not self.ready or self.busy or self.submitting is not None or
+                self.voice_thread is not None):
             return
         self.voice_thread = VoiceInputWorker(self)
         self.voice_thread.levels.connect(self.input_meter.set_levels)
@@ -1129,6 +1185,8 @@ class ArloWindow(QMainWindow):
     @Slot(str)
     def on_finished(self, reply):
         interrupted = self.stopping
+        self.finish_wake_command("failed" if interrupted else "completed",
+                                 "Interrupted" if interrupted else "")
         if self.worker.command_reply:
             self.command_output.setPlainText(reply)
             self.command_output.show()
@@ -1162,6 +1220,7 @@ class ArloWindow(QMainWindow):
 
     @Slot(str)
     def on_error(self, error):
+        self.finish_wake_command("failed", error)
         self.showing_greeting = False
         self.update_subtitles(tr("ui.error", error=error))
         self.current_reply = None
