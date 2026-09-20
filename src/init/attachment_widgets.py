@@ -22,8 +22,8 @@ from dataclasses import replace
 
 from PySide6.QtCore import Qt, QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
-    QFileDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-    QVBoxLayout, QWidget, QSizePolicy)
+    QFileDialog, QFrame, QHBoxLayout, QGridLayout, QLabel, QPushButton,
+    QScrollArea, QVBoxLayout, QWidget, QSizePolicy)
 
 from .attachments import Attachment, inspect_attachment, normalized_path
 from .lang import tr
@@ -58,22 +58,27 @@ class AttachmentTray(QScrollArea):
         self.setObjectName("attachmentTray")
         self.setWidgetResizable(True)
         self.setFrameShape(QFrame.NoFrame)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        self.setFixedHeight(80)
+        self.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed)
 
         self.content = QWidget()
-        self.content.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Preferred,
-        )
 
-        self.row = QHBoxLayout(self.content)
-        self.row.setContentsMargins(0, 4, 0, 4)
-        self.row.setSpacing(8)
+        self.grid = QGridLayout(self.content)
+        self.grid.setContentsMargins(0, 4, 0, 4)
+        self.grid.setHorizontalSpacing(8)
+        self.grid.setVerticalSpacing(8)
+
+        for column in range(4):
+            self.grid.setColumnStretch(column, 1)
 
         self.setWidget(self.content)
+
+        self.setFixedHeight(80)
         self.hide()
 
     def choose_files(self):
@@ -127,8 +132,8 @@ class AttachmentTray(QScrollArea):
         return tuple(self.items.values())
 
     def refresh(self):
-        while self.row.count():
-            layout_item = self.row.takeAt(0)
+        while self.grid.count():
+            layout_item = self.grid.takeAt(0)
             widget = layout_item.widget()
 
             if widget is not None:
@@ -136,7 +141,7 @@ class AttachmentTray(QScrollArea):
                 widget.deleteLater()
 
         over_limit = sum(a.size for a in self.items.values()) > self.limits["max_total_bytes"]
-        for item in self.items.values():
+        for index, item in enumerate(self.items.values()):
             chip = QFrame()
             chip.setObjectName("attachmentChip")
 
@@ -185,7 +190,20 @@ class AttachmentTray(QScrollArea):
             remove.setAccessibleName(remove.toolTip())
             remove.clicked.connect(lambda checked=False, item_id=item.id: self.remove(item_id))
             row.addWidget(remove)
-            self.row.addWidget(chip, 1)
+            grid_row, grid_column = divmod(index, 4)
+            self.grid.addWidget(chip, grid_row, grid_column)
+
+        count = len(self.items)
+        rows = (count + 3) // 4
+
+        chip_height = 72
+        vertical_spacing = self.grid.verticalSpacing()
+        top, bottom = 4, 4
+
+        height = (top + bottom + rows * chip_height + max(0, rows - 1) *
+                  vertical_spacing)
+
+        self.setFixedHeight(height if rows else 0)
 
         self.setVisible(bool(self.items))
         self.changed.emit()

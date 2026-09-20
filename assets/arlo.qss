@@ -158,79 +158,85 @@ QComboBox#languageDropdown QAbstractItemView::item:selected {
     color: #cad3f5;
 }
 
-
-QScrollArea#attachmentTray, QScrollArea#attachmentTray > QWidget > QWidget {
-    background: transparent;
-    border: none;
-}
 QScrollArea#chatScroll {
     background: transparent;
     border: none;
 }
-QScrollArea#chatScroll
-QScrollBar:vertical {
+
+QScrollArea#chatScroll QScrollBar:vertical {
     background: transparent;
-    width: 16px;
+    width: 0px;
     margin: 0;
 }
-QScrollArea#attachmentTray
-QScrollBar:horizontal {
-    background: #24273a;
-    height: 8px;
+
+QScrollArea#chatScroll QScrollBar:horizontal {
+    background: transparent;
+    height: 0px;
     margin: 0;
 }
-QScrollArea#chatScroll
-QScrollBar::handle,
-QScrollArea#attachmentTray
-QScrollBar::handle {
+
+QScrollArea#attachmentTray {
     background: transparent;
-    border-radius: 4px;
-    min-width: 24px;
-    min-height: 16px;
+    border: none;
 }
-QScrollArea#chatScroll
-QScrollBar::add-line,
-QScrollArea#chatScroll
-QScrollBar::sub-line,
-QScrollArea#attachmentTray
-QScrollBar::add-line,
-QScrollArea#attachmentTray
-QScrollBar::sub-line {
-    width: 0;
-    height: 0;
-}
-QScrollArea#chatScroll
-QScrollBar::add-page,
-QScrollArea#chatScroll
-QScrollBar::sub-page,
-QScrollArea#attachmentTray
-QScrollBar::add-page,
-QScrollArea#attachmentTray
- QScrollBar::sub-page {
+
+QScrollArea#attachmentTray > QWidget > QWidget {
     background: transparent;
+    border: none;
 }
+
+QScrollArea#attachmentTray QScrollBar:horizontal {
+    background: transparent;
+    height: 0px;
+    margin: 0;
+}
+
+QScrollArea#attachmentTray QScrollBar:vertical {
+    background: transparent;
+    width: 0px;
+    margin: 0;
+}
+
 QFrame#attachmentChip {
     background-color: #363a4f;
     border: 1px solid #494d64;
     border-radius: 12px;
 }
+
+QFrame#attachmentChip:hover {
+    background-color: #3c4057;
+    border-color: #6e738d;
+}
+
 QFrame#attachmentChip QLabel {
-    color: #cad3f5;
     background: transparent;
+    border: none;
+    color: #cad3f5;
+    font-size: 13px;
 }
-QFrame#attachmentChip
-QLabel#attachmentDetail {
+
+QFrame#attachmentChip QLabel#attachmentDetail {
     color: #a5adcb;
-    font-size: 12px;
+    font-size: 11px;
 }
+
+
 QPushButton#removeAttachment {
     background: transparent;
     color: #a5adcb;
     border: none;
     border-radius: 12px;
-    font-size: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 0;
 }
+
 QPushButton#removeAttachment:hover {
     background-color: #494d64;
+    color: #cad3f5;
+}
+
+QPushButton#removeAttachment:pressed {
+    background-color: #5b6078;
     color: #cad3f5;
 }
