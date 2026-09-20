@@ -36,7 +36,7 @@ class PythonHighlighter(QSyntaxHighlighter):
     """Python syntax highlighting for Arlo."""
     COLORS = {
         "keyword": "#c6a0f6",
-        "builtin": "#8aadf4",
+        "builtin": "#f5a97f",
         "function": "#8bd5ca",
         "class": "#eed49f",
         "string": "#a6da95",
