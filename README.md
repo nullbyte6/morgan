@@ -9,15 +9,15 @@ directly:
 curl -fsSL https://raw.githubusercontent.com/xddigs/arlo/main/install.sh | bash
 ```
 
-The installation script creates the virtual environment, installs the required dependencies, sets up Ollama, and downloads the configured model.
-If you have already cloned the repository, navigate to its directory and run:
-
+The installation script creates the virtual environment, installs the required dependencies, 
+sets up Ollama, and downloads the configured model, If you have already 
+cloned the repository, navigate to its directory and run:
 ```bash
 bash install.sh
 ```
 For an existing installation, you can start arlo directly by running `arlo.ps1`.
 
-Arlo also has a desktop interface application (`arloui.bat`) which, if you 
+Arlo also has a desktop interface application (`arlo.bat`) which, if you 
 ask me, works better for the public and for my own development.
 
 See more of its usage/application when you launch the script :) 
@@ -25,3 +25,9 @@ See more of its usage/application when you launch the script :)
 After updating, restart both the desktop app and its persistent TTS service so
 they use the same interruption protocol. Offline regression checks can be run
 with `.venv/Scripts/python.exe -m unittest discover -s test -v`.
+
+Hands-free voice activation supports “Arlo, abre el navegador” and a wake phrase
+followed by a short pause, including in corner mascot mode. See
+[wake voice setup and configuration](docs/wake-voice.md). After updating, restart
+the desktop and the `ARLO_WAKE` task. Wake regression checks:
+`.venv/Scripts/python.exe -B -m unittest discover -s tests -v`.
