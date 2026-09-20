@@ -14,8 +14,8 @@ if not defined ARLO_HOME (
 )
 
 set "ARLO_ROOT=%ARLO_HOME%"
-set "ARLO_SERVICES=%ARLO_ROOT%\arlo-services.ps1"
-set "ARLO_SCRIPT=%ARLO_ROOT%\arlo-run.ps1"
+set "ARLO_SERVICES=%ARLO_ROOT%arlo-services.ps1"
+set "ARLO_SCRIPT=%ARLO_ROOT%arlo-run.ps1"
 
 if not exist "%ARLO_SERVICES%" (
     echo [ARLO] Missing: %ARLO_SERVICES%

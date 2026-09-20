@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $pythonExecutable = if ($Mode -eq "Tui") { "python.exe" } else { "pythonw.exe" }
 $python = Join-Path $root ".venv\Scripts\$pythonExecutable"
-$entryPoint = if ($Mode -eq "Tui") { "agent.py" } else { "desktop.py" }
+$entryPoint = if ($Mode -eq "Tui") { "entry\agent.py" } else { "entry\desktop.py" }
 $application = Join-Path $root $entryPoint
 $services = Join-Path $root "arlo-services.ps1"
 

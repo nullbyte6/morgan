@@ -3,7 +3,7 @@ setlocal
 
 set "ROOT=%~dp0"
 set "PYTHON=%ROOT%.venv\Scripts\pythonw.exe"
-set "WAKE=%ROOT%wake.py"
+set "WAKE=%ROOT%entry\wake.py"
 
 schtasks /Create /F ^
     /TN "ARLO_WAKE" ^
