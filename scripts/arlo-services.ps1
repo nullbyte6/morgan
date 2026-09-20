@@ -110,32 +110,19 @@ if (-not (Test-TcpPort -Address "127.0.0.1" -Port 11434)) {
 }
 
 Write-Host "Ollama ready." -ForegroundColor Green
+$corePath = Join-Path $root "dev\core.json"
 $modelName = $env:MODEL
-if (-not $modelName) {
-    $configPath = $env:ARLO_CONFIG_FILE
-    $corePath = $env:ARLO_CORE_FILE
-    if (-not $configPath) {
-        $configPath = Join-Path $env:USERPROFILE ".arlo\json\config.json"
+if ([string]::IsNullOrWhiteSpace($modelName)) {
+    if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
+        throw "ARLO model configuration not found: $corePath"
     }
 
-    if (-not $corePath) {
-        $arloHome = $env:ARLO_HOME
-
-        if (-not $arloHome) {
-            $arloHome = $root
-        }
-
-        $corePath = Join-Path $arloHome "dev\core.json"
-    }
-
-    if (Test-Path -LiteralPath $corePath) {
-        $core = Get-Content -LiteralPath $corePath -Raw | ConvertFrom-Json
-        $modelName = $core.model_name
-    }
+    $core = Get-Content -LiteralPath $corePath -Raw -Encoding utf8 | ConvertFrom-Json
+    $modelName = $core.model_name
 }
 
-if (-not $modelName) {
-    throw "Model name not found. Set MODEL or ARLO_CONFIG_FILE."
+if ($modelName -isnot [string] -or [string]::IsNullOrWhiteSpace($modelName)) {
+    throw "Model name is missing or invalid in $corePath. Set model_name or MODEL."
 }
 
 $keepAlive = $env:KEEP_ALIVE
