@@ -64,8 +64,7 @@ from src.init.attachments import DesktopMessage, AttachmentSession,ollama_capabi
 from src.init.brain import kill_self
 from src.init.commands import execute_command, set_confirmation_handler
 from src.init.config import load_dev_file, load_config
-from src.init.desktop.mascot import ArloMascot
-from src.init.editor.live import EditorView, ArloRing
+from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
 from src.init.logs import LogView
 from src.init.session_log import SessionLog
@@ -448,6 +447,269 @@ class AssistantWorker(QObject):
         self.confirmation_event.set()
 
 
+class Orb(QWidget):
+    """Shared audio-reactive widget, embedded or floating.
+
+    ``size`` is the preferred diameter in Qt logical pixels. Call ``set_size``
+    to change it later, or let the layout resize the widget. All painted
+    dimensions scale with the smaller of the current width and height.
+    """
+    restore_requested = Signal()
+    record_requested = Signal()
+
+    COLORS = (
+        QColor(245, 247, 255, 240),
+        QColor(165, 181, 255, 165),
+        QColor(116, 133, 240, 110),
+        QColor(96, 113, 205, 65),
+    )
+
+    def __init__(self, parent=None, *, size: int = 320, floating: bool = False):
+        super().__init__(parent)
+        self.floating = floating
+        if floating:
+            self.setWindowFlags(
+                Qt.WindowType.Tool
+                | Qt.WindowType.FramelessWindowHint
+                | Qt.WindowType.WindowStaysOnTopHint)
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setObjectName("arloOrb")
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.set_size(size)
+        self.setToolTip("Arlo")
+
+        self.levels = [0.0] * 15
+        self.smoothed = [0.0] * 15
+
+        self.amplitude = 0.0
+        self.phase = 0.0
+        self.speaking = False
+
+        self.click_pulse = 0.0
+        self.double_pulse = 0.0
+
+        self.click_timer = QTimer(self)
+        self.click_timer.setSingleShot(True)
+        self.click_timer.timeout.connect(self._confirm_single_click)
+
+        self.restore_timer = QTimer(self)
+        self.restore_timer.setSingleShot(True)
+        self.restore_timer.timeout.connect(self.restore_requested.emit)
+
+        self.timer = QTimer(self)
+        self.timer.setInterval(16)
+        self.timer.timeout.connect(self.animate)
+        self.timer.start()
+
+    def sizeHint(self):
+        return QSize(self._preferred_size, self._preferred_size)
+
+    def minimumSizeHint(self):
+        return QSize(24, 24)
+
+    def set_size(self, size: int):
+        """Change the preferred size without locking the widget's geometry."""
+        if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+            raise ValueError("Orb size must be a positive integer")
+        self._preferred_size = size
+        self.resize(size, size)
+        self.updateGeometry()
+        self.update()
+
+    def set_levels(self, levels):
+        values = list(levels)[:15]
+        self.levels = [max(0.0, min(1.0, float(value)))
+            for value in values]
+
+        self.levels.extend([0.0] * (15 - len(self.levels)))
+
+    def set_speaking(self, speaking: bool):
+        self.speaking = speaking
+        if not speaking:
+            self.clear()
+
+    def clear(self):
+        self.levels = [0.0] * 15
+
+    def animate(self):
+        for index, target in enumerate(self.levels):
+            current = self.smoothed[index]
+            factor = 0.38 if target > current else 0.12
+            self.smoothed[index] += (target - current) * factor
+
+        target = max(self.smoothed)
+        factor = (0.30 if target > self.amplitude
+            else 0.10)
+
+        self.amplitude += (target - self.amplitude) * factor
+        if self.amplitude < 0.0005:
+            self.amplitude = 0.0
+
+        self.phase += (0.025 + self.amplitude * 0.045)
+
+        self.click_pulse *= 0.88
+        self.double_pulse *= 0.93
+
+        if self.click_pulse < 0.001:
+            self.click_pulse = 0.0
+
+        if self.double_pulse < 0.001:
+            self.double_pulse = 0.0
+
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(
+            QPainter.RenderHint.Antialiasing)
+
+        side = min(self.width(), self.height())
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.scale(side / 320.0, side / 320.0)
+        points = 240
+        for layer, color in enumerate(self.COLORS):
+            path = QPainterPath()
+            base_radius = 102.4 + layer * 3.0
+            for index in range(points + 1):
+                t = index / points
+                angle = t * math.tau
+
+                position = t * 15
+                band = int(position) % 15
+                next_band = (band + 1) % 15
+                fraction = position - int(position)
+
+                fraction = (
+                    fraction * fraction
+                    * (3.0 - 2.0 * fraction))
+
+                level = (
+                    self.smoothed[band] * (1.0 - fraction)
+                    + self.smoothed[next_band] * fraction)
+
+                primary = math.sin(
+                    angle * 4.0
+                    - self.phase * (1.0 + layer * 0.07)
+                    + layer * 0.45)
+
+                secondary = math.sin(
+                    angle * 7.0
+                    + self.phase * 0.63
+                    + layer * 0.32) * 0.35
+
+                detail = math.sin(
+                    angle * 11.0
+                    - self.phase * 0.37) * 0.12
+
+                energy = (
+                    self.amplitude * 0.45
+                    + level * 0.55)
+
+                idle = math.sin(
+                    angle * 3.0 - self.phase * 0.5) * 0.45
+
+                deformation = (
+                    (primary + secondary + detail)
+                    * energy
+                    * (10.0 + layer * 1.8))
+
+                click_wave = math.sin(
+                    angle * 3.0
+                    - self.phase * 2.5
+                    - layer * 0.65)
+
+                click_effect = (
+                        click_wave
+                        * self.click_pulse
+                        * (3.0 + layer * 0.8))
+
+                double_wave = math.sin(
+                    angle * 2.0
+                    + self.phase * 3.0
+                    - layer * 0.9)
+
+                double_effect = (
+                        double_wave
+                        * self.double_pulse
+                        * (5.0 + layer * 1.2))
+
+                expansion = (
+                        self.click_pulse * 1.5
+                        + self.double_pulse * 4.0)
+
+                radius = (base_radius + deformation + idle + click_effect +
+                        double_effect +
+                        expansion)
+
+                x = math.cos(angle) * radius
+                y = math.sin(angle) * radius
+
+                if index == 0:
+                    path.moveTo(x, y)
+                else:
+                    path.lineTo(x, y)
+
+            path.closeSubpath()
+
+            pen = QPen(color)
+            pen.setWidthF(
+                2.2 if layer == 0 else 1.5)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPath(path)
+
+        painter.end()
+
+    def move_to_corner(self):
+        screen = (
+            QApplication.screenAt(self.pos())
+            or QApplication.primaryScreen())
+
+        if screen is None:
+            return
+
+        area = screen.availableGeometry()
+        margin = round(min(self.width(), self.height()) / 6)
+
+        self.move(
+            area.right() - self.width() - margin + 1,
+            area.bottom() - self.height() - margin + 1)
+
+    def mousePressEvent(self, event):
+        if self.floating and event.button() == Qt.MouseButton.LeftButton:
+            self.click_timer.start(
+                QApplication.doubleClickInterval()
+            )
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
+
+    def _confirm_single_click(self):
+        """Trigger a visual pulse and request recording."""
+        self.click_pulse = 1.0
+        self.record_requested.emit()
+
+    def mouseDoubleClickEvent(self, event):
+        if self.floating and event.button() == Qt.MouseButton.LeftButton:
+            self.click_timer.stop()
+
+            self.double_pulse = 1.0
+            self.restore_timer.start(220)
+
+            event.accept()
+            return
+
+        super().mouseDoubleClickEvent(event)
+
+    def hideEvent(self, event):
+        self.click_timer.stop()
+        self.restore_timer.stop()
+        super().hideEvent(event)
+
 # noinspection PyBroadException
 class ArloWindow(QMainWindow):
     request = Signal(int, object)
@@ -462,7 +724,7 @@ class ArloWindow(QMainWindow):
         self.resize(900, 720)
         self.setMinimumSize(600, 480)
 
-        self.mascot = ArloMascot()
+        self.mascot = Orb(size=120, floating=True)
         self.mascot.hide()
 
         self.mascot.record_requested.connect(self.on_mascot_record)
@@ -470,8 +732,8 @@ class ArloWindow(QMainWindow):
         self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
         self.mascot_shortcut.activated.connect(self.show_mascot)
 
-        self.arlo_ring = ArloRing(self)
-        self.arlo_ring.hide()
+        self.composer_orb = Orb(self, size=84)
+        self.composer_orb.hide()
         self.chat_button = QPushButton("󰭹")
         self.logs_button = QPushButton("")
         self.settings_button = QPushButton("")
@@ -497,8 +759,9 @@ class ArloWindow(QMainWindow):
         self.pages = QStackedWidget()
         self.greeting_key = f"greeting.{random.randrange(6)}"
         self.subtitles = QLabel(self.startup_greeting)
-        self.hero = QLabel(Assistant().banner.strip("\n"))
-        self.meter = AudioVisualizer()
+
+        self.orb = Orb(self)
+
         self.worker = AssistantWorker()
         self.capture_handler = self.worker.screenshot_requested.emit
         register_capture_handler(self.capture_handler)
@@ -581,7 +844,6 @@ class ArloWindow(QMainWindow):
             try:
                 self.wake_inbox.finish(command_id, state, detail)
             except Exception:
-                # A dispatched ID stays consumed even if acknowledgement fails.
                 logging.getLogger("arlo.wake").exception("Wake acknowledgement failed")
 
 
@@ -639,15 +901,7 @@ class ArloWindow(QMainWindow):
         banner_group = QVBoxLayout()
         banner_group.setSpacing(16)
         banner_group.setAlignment(Qt.AlignCenter)
-
-        self.hero.setObjectName("hero")
-        self.hero.setTextFormat(Qt.PlainText)
-        self.hero.setAlignment(Qt.AlignCenter)
-        self.hero.setWordWrap(False)
-        self.hero.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        banner_group.addWidget(self.hero)
-
-        banner_group.addWidget(self.meter)
+        banner_group.addWidget(self.orb, 0, Qt.AlignCenter)
         main.addLayout(banner_group, 1)
 
         self.subtitles.setObjectName("subtitles")
@@ -720,7 +974,7 @@ class ArloWindow(QMainWindow):
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
 
-        composer.addWidget(self.arlo_ring, 0, Qt.AlignBottom)
+        composer.addWidget(self.composer_orb, 0, Qt.AlignBottom)
         composer.addWidget(input_group, 1)
         composer.addWidget(self.send, 0, Qt.AlignBottom)
 
@@ -773,7 +1027,7 @@ class ArloWindow(QMainWindow):
 
     def show_page(self, index: int):
         self.pages.setCurrentIndex(index)
-        self.arlo_ring.setVisible(index != 0)
+        self.composer_orb.setVisible(index != 0)
         self.chat_button.setChecked(index == 0)
         self.logs_button.setChecked(index == 1)
         self.settings_button.setChecked(index == 2)
@@ -1152,8 +1406,8 @@ class ArloWindow(QMainWindow):
         self.stopping = True
         self.worker.interrupt()
         self.speaking = False
-        self.meter.clear()
-        self.arlo_ring.clear()
+        self.orb.clear()
+        self.composer_orb.clear()
         self.mascot.set_speaking(False)
         self.set_status("status.stopping")
         self.update_send_button()
@@ -1177,14 +1431,14 @@ class ArloWindow(QMainWindow):
 
         self.current_reply += chunk
         self.update_subtitles(self.current_reply)
-        self.arlo_ring.setToolTip(self.current_reply)
+        self.composer_orb.setToolTip(self.current_reply)
 
     @Slot(int, object)
     def on_audio(self, turn_id, levels):
         if turn_id == self.turn_id and self.busy and not self.stopping:
-            self.meter.set_levels(levels)
-            self.arlo_ring.set_levels(levels)
+            self.composer_orb.set_levels(levels)
             self.mascot.set_levels(levels)
+            self.orb.set_levels(levels)
 
     @Slot(int, bool)
     def on_speaking(self, turn_id, speaking):
@@ -1216,8 +1470,8 @@ class ArloWindow(QMainWindow):
         self.busy = False
         self.speaking = False
         self.stopping = False
-        self.meter.clear()
-        self.arlo_ring.clear()
+        self.orb.clear()
+        self.composer_orb.clear()
         self.mascot.set_speaking(False)
         self.set_status("status.stopped" if interrupted else
                         "status.private" if self.worker.session.private else "")
@@ -1244,8 +1498,8 @@ class ArloWindow(QMainWindow):
         self.busy = False
         self.speaking = False
         self.stopping = False
-        self.meter.clear()
-        self.arlo_ring.clear()
+        self.orb.clear()
+        self.composer_orb.clear()
         self.mascot.set_speaking(False)
         self.set_status("status.error")
         self.set_enabled(self.ready)
@@ -1358,7 +1612,6 @@ def main():
         window.log_view.code_font_family = nerd_font
         banner_font = QFont(nerd_font, 11)
         banner_font.setStyleHint(QFont.Monospace)
-        window.hero.setFont(banner_font)
         icon_font = QFont(nerd_font, 18)
 
         for button in (
