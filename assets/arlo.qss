@@ -198,7 +198,7 @@ QScrollArea#attachmentTray QScrollBar:vertical {
 }
 
 QFrame#attachmentChip {
-    background-color: #363a4f;
+    background-color: transparent;
     border: 1px solid #494d64;
     border-radius: 12px;
 }
@@ -216,27 +216,27 @@ QFrame#attachmentChip QLabel {
 }
 
 QFrame#attachmentChip QLabel#attachmentDetail {
-    color: #a5adcb;
+    color: #cad3f5;
     font-size: 11px;
 }
 
-
 QPushButton#removeAttachment {
     background: transparent;
-    color: #a5adcb;
+    color: #cad3f5;
     border: none;
     border-radius: 12px;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
     padding: 0;
 }
 
 QPushButton#removeAttachment:hover {
-    background-color: #494d64;
+    background-color: #363a4f;
     color: #cad3f5;
 }
 
 QPushButton#removeAttachment:pressed {
-    background-color: #5b6078;
+    background-color: #363a4f;
     color: #cad3f5;
 }
+
