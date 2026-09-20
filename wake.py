@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
+from src.init.lang import tr
 
 ROOT = Path(__file__).resolve().parent
 LAUNCHER = ROOT / "arlo.bat"
@@ -69,14 +70,14 @@ def is_arlo_running() -> bool:
 
 def launch_arlo() -> None:
     if not LAUNCHER.is_file():
-        log.error("No existe %s", LAUNCHER)
+        log.error(tr("wake.launcher_not_found", path=LAUNCHER))
         return
 
     if is_arlo_running():
-        log.info("Arlo ya está ejecutándose.")
+        log.info(tr("wake.already_running"))
         return
 
-    log.info("Activación detectada. Iniciando Arlo...")
+    log.info(tr("wake.activation_detected"))
     subprocess.Popen(
         ["cmd.exe", "/c", str(LAUNCHER)],
         cwd=str(ROOT),
@@ -85,7 +86,7 @@ def launch_arlo() -> None:
 
 
 def main() -> None:
-    log.info("Cargando modelo de reconocimiento...")
+    log.info(tr("wake.loading_model"))
 
     model = WhisperModel(
         "tiny",
@@ -93,7 +94,7 @@ def main() -> None:
         compute_type="int8",
     )
 
-    log.info("Escuchando: Hola Arlo")
+    log.info(tr("wake.listening", phrase="Hola Arlo"))
     last_activation = 0.0
 
     while True:
@@ -124,7 +125,7 @@ def main() -> None:
         if not text:
             continue
 
-        log.info("Reconocido: %s", text)
+        log.info(tr("wake.recognized", text=text))
         if not any(trigger in text for trigger in TRIGGERS):
             continue
 
@@ -143,5 +144,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         sys.exit(0)
     except Exception:
-        log.exception("Error en el detector.")
+        log.exception(tr("wake.detector_error"))
         sys.exit(1)

@@ -1,4 +1,11 @@
 {
+  "wake.launcher_not_found": "No existe el lanzador: {path}",
+  "wake.already_running": "Arlo ya está ejecutándose.",
+  "wake.activation_detected": "Activación detectada. Iniciando Arlo...",
+  "wake.loading_model": "Cargando modelo de reconocimiento...",
+  "wake.listening": "Escuchando: {phrase}",
+  "wake.recognized": "Reconocido: {text}",
+  "wake.detector_error": "Error en el detector de activación.",
   "voice.record": "Grabar Voz",
   "voice.recording": "Escuchando… Pulsa detener para terminar la grabación.",
   "voice.transcribing": "Transcribiendo",

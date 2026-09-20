@@ -1,4 +1,11 @@
 {
+  "wake.launcher_not_found": "Launcher not found: {path}",
+  "wake.already_running": "Arlo is already running.",
+  "wake.activation_detected": "Wake word detected. Starting Arlo...",
+  "wake.loading_model": "Loading speech recognition model...",
+  "wake.listening": "Listening for: {phrase}",
+  "wake.recognized": "Recognized: {text}",
+  "wake.detector_error": "Wake word detector error.",
   "voice.record": "Record Voice",
   "voice.recording": "Listening… Click stop to finish recording.",
   "voice.transcribing": "Transcribing…",
