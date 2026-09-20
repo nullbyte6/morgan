@@ -209,6 +209,41 @@ class AudioVisualizer(QWidget):
         painter.end()
 
 
+class VoiceInputWorker(QThread):
+    levels = Signal(object)
+    transcribing = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.stop_event = threading.Event()
+        self.transcript = ""
+        self.error = ""
+
+    def run(self):
+        try:
+            from src.init.voice import record_voice, transcribe_voice
+
+            recording = record_voice(
+                on_audio=self.report_audio, stop_event=self.stop_event)
+            if self.isInterruptionRequested():
+                return
+            if recording is None:
+                self.error = tr("voice.not_detected")
+                return
+            self.transcribing.emit()
+            self.transcript, _ = transcribe_voice(*recording)
+            if not self.transcript:
+                self.error = tr("voice.not_transcribed")
+        except Exception as error:
+            self.error = str(error)
+
+    def report_audio(self, pcm_data, sample_rate):
+        import numpy as np
+
+        samples = np.frombuffer(pcm_data, dtype="<i2").astype(np.float32) / 32768.0
+        self.levels.emit(spectrum_levels(samples, sample_rate).tolist())
+
+
 class AssistantWorker(QObject):
     chunk = Signal(int, str)
     audio = Signal(int, object)
@@ -374,12 +409,20 @@ class ArloWindow(QMainWindow):
         self.chat_button = QPushButton("󰭹")
         self.logs_button = QPushButton("󰋚")
         self.settings_button = QPushButton("")
-        self.send = QPushButton("")
+        self.has_text = False
+        self.recording = False
+        self.voice_thread = None
+        self.closing_after_voice = False
+        self.send = QPushButton("")
         self.attach = QPushButton("")
         self.directory_indicator = WorkingDirectory(self)
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
         self.submitting = None
         self.input = ChatInput()
+        self.input_meter = AudioVisualizer()
+        self.input_meter.setMinimumWidth(0)
+        self.input_meter.setFixedHeight(48)
+        self.input_meter.hide()
         self.status = QLabel()
         self.command_output = QPlainTextEdit()
         self.active_language = None
@@ -518,6 +561,7 @@ class ArloWindow(QMainWindow):
 
         self.input.submitted.connect(self.send_message)
         input_layout.addWidget(self.input, 0, Qt.AlignVCenter)
+        input_layout.addWidget(self.input_meter)
 
         input_column = QVBoxLayout()
         input_column.setContentsMargins(0, 0, 0, 0)
@@ -568,6 +612,7 @@ class ArloWindow(QMainWindow):
         self.chat_scroll.setWidget(root)
         self.attachment_tray.changed.connect(self.ensure_composer_visible)
         self.input.textChanged.connect(self.ensure_composer_visible)
+        self.input.textChanged.connect(self.update_send_button)
         self.pages.addWidget(self.chat_scroll)
         self.pages.addWidget(self.log_view)
         self.pages.addWidget(self.settings_view)
@@ -658,20 +703,26 @@ class ArloWindow(QMainWindow):
         self.update_send_button()
 
     def update_send_button(self):
+        self.has_text = bool(self.input.toPlainText().strip())
+        voice_active = self.voice_thread is not None
         stopping_available = self.busy and self.speaking and not self.stopping
-        self.send.setText("" if stopping_available else "")
+        self.send.setText("" if stopping_available or self.recording else
+                          "" if self.has_text else "")
         self.send.setEnabled(
-            self.ready and (stopping_available or (not self.busy and
+            self.ready and (self.recording or stopping_available or (
+                not voice_active and not self.busy and
                 self.submitting is None and self.attachment_tray.can_send)))
-        editable = self.ready and self.submitting is None
+        editable = self.ready and self.submitting is None and not voice_active
         self.attach.setEnabled(editable)
         self.attachment_tray.setEnabled(editable)
         self.input.setEnabled(editable)
         self.attach.setToolTip(tr("ui.attach_files"))
         self.attach.setAccessibleName(tr("ui.attach_files"))
-        key = "ui.stop" if stopping_available else "ui.send"
-        self.send.setAccessibleName(tr(key))
-        self.send.setToolTip(tr("ui.stop_hint" if stopping_available else key))
+        key = ("ui.stop" if stopping_available or self.recording else
+               "ui.send" if self.has_text else "voice.record")
+        label = tr(key)
+        self.send.setAccessibleName(label)
+        self.send.setToolTip(tr("ui.stop_hint") if stopping_available else label)
         self.input.setPlaceholderText(
             tr("ui.steering_input" if self.busy else "ui.input"))
 
@@ -737,7 +788,7 @@ class ArloWindow(QMainWindow):
 
     @staticmethod
     def render_subtitle(text: str) -> str:
-        """Renderiza **negrita** sin interpretar HTML del modelo."""
+        """Enbold the font without rendering Markdown **"""
         escaped = html.escape(text)
         return (re.sub(r"\*\*(.+?)\*\*",
                        r"<b>\1</b>", escaped, flags=re.DOTALL, )
@@ -750,7 +801,7 @@ class ArloWindow(QMainWindow):
 
     @Slot()
     def send_message(self):
-        if not self.ready:
+        if not self.ready or self.voice_thread is not None:
             return
 
         if self.submitting is not None or not self.attachment_tray.can_send:
@@ -814,11 +865,63 @@ class ArloWindow(QMainWindow):
 
     @Slot()
     def on_send_clicked(self):
-        if self.busy:
+        if self.recording:
+            self.voice_thread.stop_event.set()
+            self.recording = False
+            self.update_send_button()
+        elif self.voice_thread is not None:
+            return
+        elif self.busy:
             if self.speaking and not self.stopping:
                 self.stop_response()
-        else:
+        elif self.has_text:
             self.send_message()
+        else:
+            self.start_recording()
+
+    def start_recording(self):
+        if not self.ready or self.busy or self.submitting is not None:
+            return
+        self.voice_thread = VoiceInputWorker(self)
+        self.voice_thread.levels.connect(self.input_meter.set_levels)
+        self.voice_thread.transcribing.connect(self.on_voice_transcribing)
+        self.voice_thread.finished.connect(self.on_voice_finished)
+        self.recording = True
+        self.input.hide()
+        self.input_meter.clear()
+        self.input_meter.show()
+        self.set_status("voice.recording")
+        self.update_send_button()
+        self.voice_thread.start()
+
+    @Slot()
+    def on_voice_transcribing(self):
+        self.recording = False
+        self.input_meter.hide()
+        self.input.show()
+        self.set_status("voice.transcribing")
+        self.update_send_button()
+
+    @Slot()
+    def on_voice_finished(self):
+        worker = self.voice_thread
+        self.voice_thread = None
+        self.recording = False
+        self.input_meter.hide()
+        self.input_meter.clear()
+        self.input.show()
+        worker.deleteLater()
+        self.update_send_button()
+        if self.closing_after_voice:
+            self.close()
+            return
+        self.set_status("")
+        if worker.error:
+            self.status.setText(worker.error)
+        elif worker.transcript:
+            self.input.setPlainText(worker.transcript)
+            self.send_message()
+        self.input.setFocus()
 
     def stop_response(self):
         self.stopping = True
@@ -892,6 +995,12 @@ class ArloWindow(QMainWindow):
         self.resume_pending_prompt()
 
     def closeEvent(self, event):
+        if self.voice_thread is not None:
+            self.closing_after_voice = True
+            self.voice_thread.requestInterruption()
+            self.voice_thread.stop_event.set()
+            event.ignore()
+            return
         if self.thread.isRunning() and self.busy:
             self.set_status(
                 "status.close_wait")

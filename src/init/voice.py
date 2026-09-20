@@ -48,8 +48,8 @@ def pcm_rms(pcm_data: bytes) -> float:
     return (sum(sample * sample for sample in samples) / len(samples)) ** 0.5
 
 
-def record_voice() -> tuple[bytes, int] | None:
-    """Record one utterance, starting and stopping automatically around speech."""
+def record_voice(*, on_audio=None, stop_event=None) -> tuple[bytes, int] | None:
+    """Record speech; optionally report PCM blocks and accept an early stop."""
     try:
         import sounddevice as sound
     except ImportError as error:
@@ -81,8 +81,12 @@ def record_voice() -> tuple[bytes, int] | None:
             channels=1,
             dtype="int16") as stream:
         for block_index in range(maximum_blocks):
+            if stop_event is not None and stop_event.is_set():
+                break
             data, _ = stream.read(block_size)
             audio_block = bytes(data)
+            if on_audio is not None:
+                on_audio(audio_block, sample_rate)
             contains_speech = pcm_rms(audio_block) >= VOICE_SILENCE_THRESHOLD
 
             if not speech_started:
