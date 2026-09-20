@@ -401,6 +401,7 @@ class ArloWindow(QMainWindow):
 
 
     def build_ui(self):
+        inputWidth: int = 600
         container = QWidget()
         container.setObjectName("windowContainer")
         self.setCentralWidget(container)
@@ -482,7 +483,21 @@ class ArloWindow(QMainWindow):
 
         composer_area = QVBoxLayout()
         composer_area.setSpacing(8)
-        composer_area.addWidget(self.attachment_tray)
+
+        attachment_row = QHBoxLayout()
+        attachment_row.setContentsMargins(0, 0, 0, 0)
+        attachment_row.setSpacing(0)
+        attachment_row.addStretch(1)
+        self.attachment_tray.setMaximumWidth(inputWidth)
+        self.attachment_tray.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed)
+
+        attachment_row.addWidget(self.attachment_tray, 1)
+        attachment_row.addStretch(1)
+
+        composer_area.addLayout(attachment_row)
+
         self.attachment_tray.changed.connect(self.update_send_button)
         composer = QHBoxLayout()
         composer.setSpacing(12)
@@ -491,7 +506,7 @@ class ArloWindow(QMainWindow):
         input_frame = QFrame()
         input_frame.setObjectName("inputFrame")
         input_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        input_frame.setMaximumWidth(600)
+        input_frame.setMaximumWidth(inputWidth)
 
         input_layout = QVBoxLayout(input_frame)
         input_layout.setContentsMargins(16, 0, 16, 0)

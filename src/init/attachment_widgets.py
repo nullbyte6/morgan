@@ -23,7 +23,7 @@ from dataclasses import replace
 from PySide6.QtCore import Qt, QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
     QFileDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-    QVBoxLayout, QWidget)
+    QVBoxLayout, QWidget, QSizePolicy)
 
 from .attachments import Attachment, inspect_attachment, normalized_path
 from .lang import tr
@@ -60,12 +60,19 @@ class AttachmentTray(QScrollArea):
         self.setFrameShape(QFrame.NoFrame)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setFixedHeight(88)
+
+        self.setFixedHeight(80)
+
         self.content = QWidget()
+        self.content.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Preferred,
+        )
+
         self.row = QHBoxLayout(self.content)
         self.row.setContentsMargins(0, 4, 0, 4)
         self.row.setSpacing(8)
-        self.row.addStretch()
+
         self.setWidget(self.content)
         self.hide()
 
@@ -120,15 +127,25 @@ class AttachmentTray(QScrollArea):
         return tuple(self.items.values())
 
     def refresh(self):
-        while self.row.count() > 1:
-            widget = self.row.takeAt(0).widget()
-            widget.hide()
-            widget.deleteLater()
+        while self.row.count():
+            layout_item = self.row.takeAt(0)
+            widget = layout_item.widget()
+
+            if widget is not None:
+                widget.hide()
+                widget.deleteLater()
+
         over_limit = sum(a.size for a in self.items.values()) > self.limits["max_total_bytes"]
         for item in self.items.values():
             chip = QFrame()
             chip.setObjectName("attachmentChip")
-            chip.setFixedWidth(220)
+
+            chip.setMinimumWidth(0)
+            chip.setSizePolicy(
+                QSizePolicy.Expanding,
+                QSizePolicy.Fixed,
+            )
+
             row = QHBoxLayout(chip)
             row.setContentsMargins(10, 6, 8, 6)
             icon = QLabel({"image": "\uf1c5", "pdf": "\uf1c1", "text": "\uf1c9"}.get(item.kind, "\uf15b"))
@@ -137,7 +154,15 @@ class AttachmentTray(QScrollArea):
             labels.setSpacing(2)
             name = QLabel()
             name.setTextFormat(Qt.PlainText)
-            name.setText(name.fontMetrics().elidedText(item.name, Qt.ElideMiddle, 140))
+
+            name.setText(item.name)
+            name.setMinimumWidth(0)
+            name.setSizePolicy(
+                QSizePolicy.Ignored,
+                QSizePolicy.Preferred,
+            )
+            name.setToolTip(item.name)
+
             name.setToolTip(item.name)
             labels.addWidget(name)
             detail = QLabel()
@@ -160,6 +185,7 @@ class AttachmentTray(QScrollArea):
             remove.setAccessibleName(remove.toolTip())
             remove.clicked.connect(lambda checked=False, item_id=item.id: self.remove(item_id))
             row.addWidget(remove)
-            self.row.insertWidget(self.row.count() - 1, chip)
+            self.row.addWidget(chip, 1)
+
         self.setVisible(bool(self.items))
         self.changed.emit()
