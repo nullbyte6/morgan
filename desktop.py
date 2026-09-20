@@ -296,8 +296,6 @@ class AssistantWorker(QObject):
     @Slot(int, object)
     def ask(self, turn_id, message):
         try:
-            # Hold through agent execution, confirmation, TTS completion and
-            # cancellation. Capture must stop before any synthesized speech.
             with desktop_audio(stop_event=self.cancel_event):
                 self._ask(turn_id, message)
         except Exception as error:
@@ -554,8 +552,6 @@ class ArloWindow(QMainWindow):
             self.showNormal()
             self.raise_()
             self.activateWindow()
-        # Deliberately do not use the composer: draft text and attachments
-        # belong to the manual interaction and must not be sent or cleared.
         self.start_prompt(DesktopMessage(text))
 
     def finish_wake_command(self, state, detail=""):
