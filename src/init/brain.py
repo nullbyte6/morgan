@@ -86,6 +86,16 @@ VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy preparado para ayudarte "
 VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
 
 
+def kill_self() -> str:
+    """Close Arlo itself gracefully, only when the user explicitly asks to exit.
+
+    Requests shutdown after the current turn; never shuts down Windows or
+    terminates another application or the shared model/voice services.
+    """
+    get_assistant().shutdown_requested.set()
+    return "Arlo shutdown requested."
+
+
 def get_version() -> str:
     """Return the assistant's current version from its application configuration."""
     try:

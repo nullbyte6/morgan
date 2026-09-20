@@ -83,10 +83,11 @@ from .self_code import (get_repo_lnk, get_repo, list_code,
                         read_code, edit_code, update_repo)
 
 from src.diagnostics.tools import (check_system_health, check_disk_health,
-                                   check_security_health,)
+                                   check_security_health, kill_self)
 from .editor import open_in_editor
 
 TOOLS = [
+    kill_self,
     open_in_editor,
     close_application,
     execute_command,
