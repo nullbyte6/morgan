@@ -22,14 +22,226 @@ from __future__ import annotations
 import builtins
 import keyword
 import re
+from bisect import bisect_right
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from threading import Event
 
-from PySide6.QtCore import QRegularExpression
+from pygments.lexer import RegexLexer
+from pygments.lexers import get_lexer_by_name, get_lexer_for_filename
+from pygments.token import Comment, Generic, Keyword, Name, Number, Operator, String, Text
+from pygments.util import ClassNotFound
+
+from PySide6.QtCore import QRegularExpression, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
     QSyntaxHighlighter,
     QTextCharFormat,
 )
+
+_LEXER_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="arlo-lexer")
+
+class _IgnoreLexer(RegexLexer):
+    """Pygments has no built-in lexer for Git/Docker ignore patterns."""
+    name = "Ignore patterns"
+    tokens = {"root": [
+        (r"^#.*$", Comment.Single),
+        (r"^!", Operator),
+        (r"\\.", String.Escape),
+        (r"\*\*?|\?|\[[^\]\n]*\]", String.Regex),
+        (r"[^\\*?\[\n]+|.", Text),
+        (r"\n", Text),
+    ]}
+
+
+def lexer_for_path(path):
+    """Select solely by filename, preserving compound Pygments patterns."""
+    name = Path(path).name
+    lower = name.lower()
+    if lower in {".gitignore", ".dockerignore", ".ignore", ".npmignore"}:
+        return _IgnoreLexer()
+    aliases = {
+        ".editorconfig": "ini", ".gitconfig": "ini",
+        ".npmrc": "ini", ".yarnrc": "ini", ".env": "bash",
+    }
+
+    alias = aliases.get(lower)
+    if lower.endswith(".jsonc"):
+        alias = "json"
+    elif lower.endswith(".d.ts"):
+        alias = "typescript"
+    elif lower.endswith(".blade.php"):
+        alias = "html+php"
+    elif lower.startswith("dockerfile."):
+        alias = "docker"
+    elif lower.startswith(".env."):
+        alias = "bash"
+    try:
+        if alias:
+            return get_lexer_by_name(alias)
+        try:
+            return get_lexer_for_filename(name)
+        except ClassNotFound:
+            return get_lexer_for_filename(lower)
+    except ClassNotFound:
+        return None
+
+
+def _tokenize_blocks(lexer, text, cancelled):
+    """Lex one complete snapshot, then split ranges at Qt block boundaries.
+
+    Using the unprocessed API keeps tabs, whitespace and offsets intact. Full
+    context is required for arbitrary Pygments lexers (including delegating
+    template lexers); line-by-line RegexLexer stacks are not sufficient.
+    """
+    lines = text.split("\n")
+    starts = []
+    offset = 0
+    for line in lines:
+        starts.append(offset)
+        offset += len(line) + 1
+    spans = [[] for _ in lines]
+    utf16 = {}
+    for index, line in enumerate(lines):
+        if not line.isascii() and any(ord(char) > 0xffff for char in line):
+            positions = [0]
+            for char in line:
+                positions.append(positions[-1] + (2 if ord(char) > 0xffff else 1))
+            utf16[index] = positions
+    for start, token, value in lexer.get_tokens_unprocessed(text):
+        if cancelled.is_set():
+            return None
+        end = start + len(value)
+        block = max(0, bisect_right(starts, start) - 1)
+        while block < len(lines) and starts[block] < end:
+            left = max(0, start - starts[block])
+            right = min(len(lines[block]), end - starts[block])
+            if right > left:
+                mapping = utf16.get(block)
+                a, b = (mapping[left], mapping[right]) if mapping else (left, right)
+                spans[block].append((a, b - a, token))
+            block += 1
+    return lines, spans
+
+
+class PygmentsHighlighter(QSyntaxHighlighter):
+    """Debounced full-context lexing with cached, constant-time block lookup.
+
+    Edits invalidate pending results immediately. After 180 ms of idle time a
+    worker lexes a snapshot; the GUI installs only the latest result. No lexing
+    happens in highlightBlock. Retokenizing after a pause is intentional: the
+    public Pygments API has no universal resumable lexer state.
+    """
+    def __init__(self, document, lexer):
+        super().__init__(None)
+        self.lexer = lexer
+        self._formats = {}
+        self._cache = None
+        self._generation = 0
+        self._future = None
+        self._cancelled = Event()
+        self._applying = False
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(180)
+        self._debounce.timeout.connect(self._submit)
+        self._poll = QTimer(self)
+        self._poll.setInterval(25)
+        self._poll.timeout.connect(self._collect)
+        self.destroyed.connect(self._cancelled.set)
+        self.setParent(document)
+        self.setDocument(document)
+
+    def setDocument(self, document):
+        old = self.document()
+        if old is not None:
+            old.contentsChange.disconnect(self._changed)
+        self._debounce.stop()
+        self._poll.stop()
+        self._cancelled.set()
+        if self._future is not None:
+            self._future.cancel()
+        self._generation += 1
+        self._cache = None
+        super().setDocument(document)
+        if document is not None:
+            document.contentsChange.connect(self._changed)
+            self._debounce.start(0)
+
+    def _changed(self, position, removed, added):
+        if self._applying or not (removed or added):
+            return
+        self._generation += 1
+        self._cache = None
+        self._cancelled.set()
+        self._debounce.start(180)
+
+    def _submit(self):
+        document = self.document()
+        if document is None:
+            return
+        if self._future is not None and not self._future.done():
+            self._debounce.start(180)
+            return
+        self._cancelled.clear()
+        self._submitted_generation = self._generation
+        self._future = _LEXER_POOL.submit(
+            _tokenize_blocks, self.lexer, document.toPlainText(), self._cancelled)
+        self._poll.start()
+
+    def _collect(self):
+        if self._future is None or not self._future.done():
+            return
+        self._poll.stop()
+        future, self._future = self._future, None
+        if self._submitted_generation != self._generation or self.document() is None:
+            return
+        try:
+            self._cache = future.result()
+        except Exception:
+            self._cache = None
+        self._applying = True
+        try:
+            modified = self.document().isModified()
+            self.rehighlight()
+            self.document().setModified(modified)
+        finally:
+            self._applying = False
+
+    def _format_token(self, token):
+        if token in self._formats:
+            return self._formats[token]
+        fmt = QTextCharFormat()
+        styles = (
+            (Comment, "comment"), (Keyword, "keyword"),
+            (Name.Function, "function"), (Name.Class, "class"),
+            (Name.Builtin, "builtin"), (Name.Decorator, "decorator"),
+            (Name.Tag, "keyword"), (Name.Attribute, "function"),
+            (String, "string"), (Number, "number"),
+            (Operator, "decorator"), (Generic.Heading, "class"),
+            (Generic.Subheading, "class"), (Generic.Inserted, "string"),
+            (Generic.Deleted, "decorator"),
+        )
+        for parent, color in styles:
+            if token in parent:
+                fmt.setForeground(QColor(PythonHighlighter.COLORS[color]))
+                break
+        if token in Keyword or token in Generic.Strong or token in Generic.Heading:
+            fmt.setFontWeight(QFont.Bold)
+        if token in Generic.Emph:
+            fmt.setFontItalic(True)
+        self._formats[token] = fmt
+        return fmt
+
+    def highlightBlock(self, text):
+        if self._cache is None:
+            return
+        lines, spans = self._cache
+        index = self.currentBlock().blockNumber()
+        if index < len(lines) and lines[index] == text:
+            for start, length, token in spans[index]:
+                self.setFormat(start, length, self._format_token(token))
 
 
 class PythonHighlighter(QSyntaxHighlighter):

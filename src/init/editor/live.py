@@ -29,7 +29,8 @@ from PySide6.QtGui import (
 
 from PySide6.QtWidgets import *
 
-from src.init.editor.highlighter import PythonHighlighter
+from src.init.editor.highlighter import (
+    PythonHighlighter, PygmentsHighlighter, lexer_for_path)
 
 class CodeEditor(QPlainTextEdit):
     """Native code editor with line numbers and file operations."""
@@ -45,7 +46,7 @@ class CodeEditor(QPlainTextEdit):
             self.fontMetrics().horizontalAdvance(" ") * 4)
 
         self.setObjectName("codeEditor")
-        self.highlighter: PythonHighlighter | None = None
+        self.highlighter: PythonHighlighter | PygmentsHighlighter | None = None
 
         self.line_area = LineNumberArea(self)
         self.blockCountChanged.connect(
@@ -62,6 +63,7 @@ class CodeEditor(QPlainTextEdit):
         """Configure syntax highlighting for the current file."""
         if self.highlighter is not None:
             self.highlighter.setDocument(None)
+            self.highlighter.deleteLater()
             self.highlighter = None
 
         if self.file_path is None:
@@ -70,6 +72,10 @@ class CodeEditor(QPlainTextEdit):
         suffix = self.file_path.suffix.lower()
         if suffix in {".py", ".pyw"}:
             self.highlighter = PythonHighlighter(self.document())
+        else:
+            lexer = lexer_for_path(self.file_path)
+            if lexer is not None:
+                self.highlighter = PygmentsHighlighter(self.document(), lexer)
 
     def line_area_width(self):
         digits = len(str(max(1, self.blockCount())))
