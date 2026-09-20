@@ -401,7 +401,6 @@ class ArloWindow(QMainWindow):
 
 
     def build_ui(self):
-        inputWidth: int = 600
         container = QWidget()
         container.setObjectName("windowContainer")
         self.setCentralWidget(container)
@@ -484,21 +483,6 @@ class ArloWindow(QMainWindow):
         composer_area = QVBoxLayout()
         composer_area.setSpacing(8)
 
-        attachment_row = QHBoxLayout()
-        attachment_row.setContentsMargins(0, 0, 0, 0)
-        attachment_row.setSpacing(0)
-        attachment_row.addStretch(1)
-        self.attachment_tray.setMaximumWidth(inputWidth)
-        self.attachment_tray.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Fixed)
-
-        attachment_row.addWidget(self.attachment_tray, 1)
-        attachment_row.addStretch(1)
-
-        composer_area.addLayout(attachment_row)
-
-        self.attachment_tray.changed.connect(self.update_send_button)
         composer = QHBoxLayout()
         composer.setSpacing(12)
         composer.setAlignment(Qt.AlignBottom)
@@ -506,7 +490,7 @@ class ArloWindow(QMainWindow):
         input_frame = QFrame()
         input_frame.setObjectName("inputFrame")
         input_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        input_frame.setMaximumWidth(inputWidth)
+        input_frame.setMinimumHeight(48)
 
         input_layout = QVBoxLayout(input_frame)
         input_layout.setContentsMargins(16, 0, 16, 0)
@@ -514,28 +498,38 @@ class ArloWindow(QMainWindow):
 
         self.input.submitted.connect(self.send_message)
         input_layout.addWidget(self.input, 0, Qt.AlignVCenter)
-        input_frame.setMinimumHeight(48)
 
-        composer.addStretch()
+        input_column = QVBoxLayout()
+        input_column.setContentsMargins(0, 0, 0, 0)
+        input_column.setSpacing(8)
+
+        self.attachment_tray.setMinimumWidth(0)
+        self.attachment_tray.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Fixed,
+        )
+
+        input_column.addWidget(self.attachment_tray)
+        input_column.addWidget(input_frame)
+
         input_group = QWidget()
-        input_group.setMaximumWidth(600)
         input_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        input_row = QHBoxLayout(input_group)
-        input_row.setContentsMargins(0, 0, 0, 0)
-        input_row.setSpacing(12)
-        input_row.addWidget(input_frame, 1)
-        composer.addWidget(input_group, 1)
+        input_group.setLayout(input_column)
+
+        self.attachment_tray.changed.connect(self.update_send_button)
 
         self.attach.setObjectName("attach")
         self.attach.setFixedSize(48, 48)
         self.attach.clicked.connect(self.attachment_tray.choose_files)
-        input_row.addWidget(self.attach, 0, Qt.AlignVCenter)
 
         self.send.setObjectName("send")
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
-        composer.addWidget(self.send, 0, Qt.AlignVCenter)
-        composer.addStretch()
+
+        composer.addWidget(input_group, 1)
+        composer.addWidget(self.attach, 0, Qt.AlignBottom)
+        composer.addWidget(self.send, 0, Qt.AlignBottom)
+
         composer_area.addLayout(composer)
         main.addLayout(composer_area)
 

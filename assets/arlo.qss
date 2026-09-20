@@ -36,29 +36,36 @@ QPushButton#attach,
 QPushButton#send {
     background-color: #8aadf4;
     color: #24273a;
-    border: none;
+    border: 1px solid #494d64;
     border-radius: 24px;
     font-size: 32px;
+}
+
+QPushButton#attach {
+    background-color: transparent;
+    color: #cad3f5
 }
 
 QPushButton#attach:hover,
 QPushButton#send:hover {
     background-color: #b7bdf8;
+    color: #494d64
 }
 
 QPushButton#attach:pressed,
 QPushButton#send:pressed {
-    background-color: #7dc4e4;
+    background-color: #8aadf4;
+    color: #494d64
 }
 
 QPushButton#attach:disabled,
 QPushButton#send:disabled {
     background-color: #494d64;
-    color: #a5adcb;
+    color: #cad3f5;
 }
 
 ToggleSwitch {
-    qproperty-trackOff: #24273a;
+    qproperty-trackOff: #494d64;
     qproperty-trackOn: #8aadf4;
     qproperty-thumbColor: #cad3f5;
 }
@@ -121,7 +128,7 @@ QComboBox#languageDropdown {
     border: 1px solid #494d64;
     border-radius: 8px;
     padding: 10px 32px 10px 16px;
-    font-size: 24px;
+    font-size: 16px;
 }
 
 QComboBox#languageDropdown:hover,

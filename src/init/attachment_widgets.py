@@ -23,7 +23,7 @@ from dataclasses import replace
 from PySide6.QtCore import Qt, QObject, QRunnable, QThreadPool, Signal
 from PySide6.QtWidgets import (
     QFileDialog, QFrame, QHBoxLayout, QGridLayout, QLabel, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget, QSizePolicy)
+    QVBoxLayout, QWidget, QSizePolicy)
 
 from .attachments import Attachment, inspect_attachment, normalized_path
 from .lang import tr
@@ -47,7 +47,7 @@ class ValidateAttachment(QRunnable):
         self.signals.finished.emit(result)
 
 
-class AttachmentTray(QScrollArea):
+class AttachmentTray(QWidget):
     changed = Signal()
 
     def __init__(self, limits, parent=None):
@@ -56,19 +56,7 @@ class AttachmentTray(QScrollArea):
         self.items = {}
         self.jobs = {}
         self.setObjectName("attachmentTray")
-        self.setWidgetResizable(True)
-        self.setFrameShape(QFrame.NoFrame)
-
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        self.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Fixed)
-
-        self.content = QWidget()
-
-        self.grid = QGridLayout(self.content)
+        self.grid = QGridLayout(self)
         self.grid.setContentsMargins(0, 4, 0, 4)
         self.grid.setHorizontalSpacing(8)
         self.grid.setVerticalSpacing(8)
@@ -76,8 +64,10 @@ class AttachmentTray(QScrollArea):
         for column in range(4):
             self.grid.setColumnStretch(column, 1)
 
-        self.setWidget(self.content)
+        for column in range(4):
+            self.grid.setColumnMinimumWidth(column, 0)
 
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setFixedHeight(80)
         self.hide()
 
@@ -146,58 +136,70 @@ class AttachmentTray(QScrollArea):
             chip.setObjectName("attachmentChip")
 
             chip.setMinimumWidth(0)
+            chip.setMaximumWidth(16777215)
             chip.setSizePolicy(
-                QSizePolicy.Expanding,
-                QSizePolicy.Fixed,
-            )
+                QSizePolicy.Ignored,
+                QSizePolicy.Fixed)
+            chip.setFixedHeight(72)
 
-            row = QHBoxLayout(chip)
-            row.setContentsMargins(10, 6, 8, 6)
-            icon = QLabel({"image": "\uf1c5", "pdf": "\uf1c1", "text": "\uf1c9"}.get(item.kind, "\uf15b"))
-            row.addWidget(icon)
-            labels = QVBoxLayout()
-            labels.setSpacing(2)
+            chip_layout = QVBoxLayout(chip)
+            chip_layout.setContentsMargins(8, 4, 8, 6)
+            chip_layout.setSpacing(2)
+
+            header = QHBoxLayout()
+            header.setContentsMargins(0, 0, 0, 0)
+            header.setSpacing(0)
+
+            icon = QLabel({
+                          "image": "\uf1c5",
+                          "pdf": "\uf1c1",
+                          "text": "\uf1c9",}
+                          .get(item.kind, "\uf15b"))
+
+            header.addWidget(icon)
+            header.addStretch()
+
+            remove = QPushButton("×")
+            remove.setObjectName("removeAttachment")
+            remove.setFixedSize(20, 20)
+            remove.setToolTip(tr("ui.remove_attachment", name=item.name))
+            remove.setAccessibleName(remove.toolTip())
+            remove.clicked.connect(
+                lambda checked=False, item_id=item.id: self.remove(item_id))
+
+            header.addWidget(remove, 0, Qt.AlignTop)
+            chip_layout.addLayout(header)
+
             name = QLabel()
             name.setTextFormat(Qt.PlainText)
-
-            name.setText(item.name)
             name.setMinimumWidth(0)
-            name.setSizePolicy(
-                QSizePolicy.Ignored,
-                QSizePolicy.Preferred,
-            )
+            name.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
             name.setToolTip(item.name)
 
-            name.setToolTip(item.name)
-            labels.addWidget(name)
+            name.setWordWrap(False)
+            name.setText(
+                name.fontMetrics().elidedText(item.name, Qt.ElideMiddle, 100))
+
+            chip_layout.addWidget(name)
             detail = QLabel()
             detail.setObjectName("attachmentDetail")
             detail.setTextFormat(Qt.PlainText)
+            detail.setMinimumWidth(0)
+            detail.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+
             if item.status == "pending":
                 secondary = tr("ui.attachment_checking")
             elif item.error or over_limit:
                 secondary = tr("ui.attachment_error")
                 chip.setToolTip(item.error or tr("ui.attachment_total"))
             else:
-                secondary = f"{item.extension.upper().lstrip('.') or 'TEXT'} · {item.size / 1024:.1f} KB"
+                secondary = (
+                    f"{item.extension.upper().lstrip('.') or 'TEXT'}"
+                    f" · {item.size / 1024:.1f} KB")
+
             detail.setText(secondary)
-            labels.addWidget(detail)
-            row.addLayout(labels, 1)
-            remove = QPushButton("×")
-            remove.setObjectName("removeAttachment")
-            remove.setFixedSize(24, 24)
-            remove.setToolTip(tr("ui.remove_attachment", name=item.name))
-            remove.setAccessibleName(remove.toolTip())
-            remove.clicked.connect(lambda checked=False, item_id=item.id: self.remove(item_id))
-            remove_container = QVBoxLayout()
-            remove_container.setContentsMargins(0, 0, 0, 0)
-            remove_container.setSpacing(0)
-            remove_container.addWidget(remove, 0, Qt.AlignTop | Qt.AlignRight)
-            remove_container.addStretch()
-            row.addLayout(remove_container)
-            remove.setParent(chip)
-            remove.move(0, 0)
-            remove.raise_()
+            chip_layout.addWidget(detail)
+
             grid_row, grid_column = divmod(index, 4)
             self.grid.addWidget(chip, grid_row, grid_column)
 
