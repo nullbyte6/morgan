@@ -449,10 +449,10 @@ class AssistantWorker(QObject):
 
 class Orb(QWidget):
     """Shared audio-reactive widget, embedded or floating.
-
     ``size`` is the preferred diameter in Qt logical pixels. Call ``set_size``
-    to change it later, or let the layout resize the widget. All painted
-    dimensions scale with the smaller of the current width and height.
+    to change it later, or let the layout resize the widget. Geometry scales
+    with the available space; ``line_width`` stays in Qt logical pixels so
+    small instances retain visible outlines. Change it with ``set_line_width``.
     """
     restore_requested = Signal()
     record_requested = Signal()
@@ -464,7 +464,10 @@ class Orb(QWidget):
         QColor(96, 113, 205, 65),
     )
 
-    def __init__(self, parent=None, *, size: int = 320, floating: bool = False):
+    def __init__(self, parent=None, *,
+                 size: int = 320,
+                 floating: bool = False,
+                 line_width: float = 3.6):
         super().__init__(parent)
         self.floating = floating
         if floating:
@@ -475,6 +478,7 @@ class Orb(QWidget):
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setObjectName("arloOrb")
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self.set_line_width(line_width)
         self.set_size(size)
         self.setToolTip("Arlo")
 
@@ -500,6 +504,7 @@ class Orb(QWidget):
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.animate)
         self.timer.start()
+        self._preferred_size = size
 
     def sizeHint(self):
         return QSize(self._preferred_size, self._preferred_size)
@@ -514,6 +519,14 @@ class Orb(QWidget):
         self._preferred_size = size
         self.resize(size, size)
         self.updateGeometry()
+        self.update()
+
+    def set_line_width(self, line_width: float):
+        """Set the main outline width in logical pixels, independent of size."""
+        if (isinstance(line_width, bool) or not isinstance(line_width, (int, float))
+                or not math.isfinite(line_width) or line_width <= 0):
+            raise ValueError("Orb line_width must be a positive finite number")
+        self.line_width = float(line_width)
         self.update()
 
     def set_levels(self, levels):
@@ -559,13 +572,17 @@ class Orb(QWidget):
         self.update()
 
     def paintEvent(self, event):
+        side = min(self.width(), self.height())
+        if side <= 0:
+            return
+        scale = side / 320.0
         painter = QPainter(self)
         painter.setRenderHint(
             QPainter.RenderHint.Antialiasing)
 
         side = min(self.width(), self.height())
         painter.translate(self.width() / 2, self.height() / 2)
-        painter.scale(side / 320.0, side / 320.0)
+        painter.scale(scale, scale)
         points = 240
         for layer, color in enumerate(self.COLORS):
             path = QPainterPath()
@@ -653,7 +670,7 @@ class Orb(QWidget):
 
             pen = QPen(color)
             pen.setWidthF(
-                2.2 if layer == 0 else 1.5)
+                self.line_width * (1.0 if layer == 0 else 1.5 / 2.2) / scale)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
 
@@ -724,7 +741,7 @@ class ArloWindow(QMainWindow):
         self.resize(900, 720)
         self.setMinimumSize(600, 480)
 
-        self.mascot = Orb(size=120, floating=True)
+        self.mascot = Orb(size=120, floating=True, line_width=2.8)
         self.mascot.hide()
 
         self.mascot.record_requested.connect(self.on_mascot_record)
@@ -732,7 +749,7 @@ class ArloWindow(QMainWindow):
         self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
         self.mascot_shortcut.activated.connect(self.show_mascot)
 
-        self.composer_orb = Orb(self, size=84)
+        self.composer_orb = Orb(self, size=84, line_width=2.6)
         self.composer_orb.hide()
         self.chat_button = QPushButton("󰭹")
         self.logs_button = QPushButton("")
