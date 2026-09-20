@@ -326,17 +326,11 @@ while ($true) {
 
     if (-not $existingConsole) {
         $pwsh = (Get-Command "pwsh.exe" -ErrorAction Stop).Source
-        $wt = (Get-Command "wt.exe" -ErrorAction Stop).Source
         if (-not (Test-Path -LiteralPath $consoleScript -PathType Leaf)) {
             throw "Debug console script not found: $consoleScript"
         }
 
-        $wtArguments = @(
-            "-w", "new",
-            "new-tab",
-            "--title", "ARLO Console",
-            "--suppressApplicationTitle",
-            "`"$pwsh`"",
+        $pwshArguments = @(
             "-NoLogo",
             "-NoProfile",
             "-NoExit",
@@ -345,8 +339,9 @@ while ($true) {
         ) -join ' '
 
         Start-Process `
-            -FilePath $wt `
-            -ArgumentList $wtArguments
+            -FilePath $pwsh `
+            -ArgumentList $pwshArguments `
+            -WorkingDirectory $root
         Write-Host "Debug console started." -ForegroundColor Green
         Write-Host "Debug console started." -ForegroundColor Green
     }

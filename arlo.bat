@@ -1,4 +1,6 @@
 @echo off
+setlocal
 cd /d "%~dp0"
-start "" /D "%~dp0" "%~dp0.venv\Scripts\pythonw.exe" "%~dp0desktop.py"
-exit /b
+pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0arlo-run.ps1"
+-Mode Desktop
+exit /b %errorlevel%
