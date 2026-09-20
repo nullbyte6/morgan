@@ -1088,7 +1088,7 @@ class ArloWindow(QMainWindow):
     @Slot()
     def capture_screen(self):
         try:
-            success = capture_to_clipboard(mascot=self.mascot)
+            success = capture_to_clipboard()
             if success:
                 self.mascot.setToolTip("Check!")
             else:
