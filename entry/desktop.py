@@ -1310,9 +1310,6 @@ class ArloWindow(QMainWindow):
         width = min(max_width, available)
         lines = []
 
-        # QTextLayout lays out one paragraph at a time. Feeding it embedded
-        # newlines makes those breaks survive inside an already-counted line,
-        # so the QLabel can render more than the three lines selected below.
         for paragraph in text.split("\n"):
             if not paragraph:
                 lines.append("")
@@ -1594,11 +1591,7 @@ class ArloWindow(QMainWindow):
         self.composer_orb.clear()
         self.set_orbs_speaking(False)
         self.set_status("status.stopped" if interrupted else "")
-
-        def refresh_privacy_indicator(self):
-            private = self.worker.session.private
-            self.privacy_indicator.setVisible(private)
-
+        self.refresh_privacy_indicator()
         self.set_enabled(True)
         if self.isVisible():
             self.input.setFocus()
@@ -1704,7 +1697,6 @@ def start_instance_server() -> QLocalServer:
     if server.listen(ARLO_INSTANCE_SERVER):
         return server
 
-    # A crashed process can leave a stale Unix-domain socket behind.
     QLocalServer.removeServer(ARLO_INSTANCE_SERVER)
     if not server.listen(ARLO_INSTANCE_SERVER):
         raise RuntimeError(server.errorString())
@@ -1743,8 +1735,6 @@ def main():
     app.setQuitOnLastWindowClosed(False)
     instance_lock = acquire_instance_lock()
     if instance_lock is None:
-        # The first process may still be constructing its window and local
-        # server, so briefly retry before letting this launcher exit.
         for _ in range(12):
             if notify_running_instance(250):
                 break
