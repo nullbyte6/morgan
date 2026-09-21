@@ -35,6 +35,17 @@ if (-not $?) {
 
 Write-Host "Starting ARLO: $Mode"
 
+if ($Mode -eq "Desktop") {
+    Start-Process `
+        -FilePath $python `
+        -ArgumentList "-m", $module `
+        -WorkingDirectory $root `
+        -WindowStyle Hidden
+
+    Write-Host "ARLO started independently in the background."
+    exit 0
+}
+
 & $python -m $module
 
 exit $LASTEXITCODE
