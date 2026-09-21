@@ -490,6 +490,92 @@ class AssistantWorker(QObject):
         self.confirmation_event.set()
 
 
+def compact_mascot_subtitle(text: str, limit: int = 32) -> str:
+    """Return a single compact subtitle fragment capped at ``limit`` chars."""
+    compact = " ".join(str(text or "").split())
+    if len(compact) <= limit:
+        return compact
+    return compact[:limit - 1].rstrip() + "…"
+
+
+class MascotSubtitleBubble(QLabel):
+    """Non-interactive subtitle bubble that follows a floating mascot."""
+    WIDTH = 184
+    GAP = 10
+
+    def __init__(self, mascot):
+        super().__init__(None)
+        self.mascot = mascot
+        self._active = False
+        self.setObjectName("mascotSubtitleBubble")
+        self.setWindowFlags(
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus
+            | Qt.WindowType.WindowTransparentForInput)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setWordWrap(True)
+        self.setContentsMargins(14, 9, 14, 9)
+        self.setFixedWidth(self.WIDTH)
+        self.setMaximumHeight(
+            self.fontMetrics().lineSpacing() * 3 + 18)
+        self.mascot.installEventFilter(self)
+        self.hide()
+
+    def set_subtitle(self, text: str, active: bool):
+        subtitle = compact_mascot_subtitle(text)
+        self._active = bool(active and subtitle)
+        self.setText(subtitle)
+        if not self._active or not self.mascot.isVisible():
+            self.hide()
+            return
+        self.adjustSize()
+        self.reposition()
+        self.show()
+        self.raise_()
+
+    def reposition(self):
+        screen = (
+            QApplication.screenAt(self.mascot.frameGeometry().center())
+            or QApplication.primaryScreen())
+        if screen is None:
+            return
+
+        area = screen.availableGeometry()
+        mascot = self.mascot.frameGeometry()
+        bubble = self.frameGeometry()
+        left_x = mascot.left() - bubble.width() - self.GAP
+        right_x = mascot.right() + self.GAP + 1
+        if left_x >= area.left():
+            x = left_x
+        else:
+            x = min(right_x, area.right() - bubble.width() + 1)
+        y = mascot.center().y() - bubble.height() // 2
+        y = max(area.top(), min(y, area.bottom() - bubble.height() + 1))
+        self.move(x, y)
+
+    def eventFilter(self, watched, event):
+        if watched is self.mascot:
+            if event.type() in (QEvent.Type.Move, QEvent.Type.Resize):
+                if self.isVisible():
+                    self.reposition()
+            elif event.type() == QEvent.Type.Show and self._active:
+                QTimer.singleShot(0, self._show_for_mascot)
+            elif event.type() == QEvent.Type.Hide:
+                self.hide()
+        return super().eventFilter(watched, event)
+
+    def _show_for_mascot(self):
+        if self._active and self.mascot.isVisible():
+            self.reposition()
+            self.show()
+            self.raise_()
+
+
 class Orb(QWidget):
     """Shared audio-reactive widget, embedded or floating.
     ``size`` is the preferred diameter in Qt logical pixels. Call ``set_size``
