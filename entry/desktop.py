@@ -1241,24 +1241,32 @@ class ArloWindow(QMainWindow):
         font = self.subtitles.font()
         metrics = QFontMetrics(font)
         max_width = metrics.horizontalAdvance("M" * 56)
-        available = max(1,self.subtitles.contentsRect().width() - 24)
+        available = max(1, self.subtitles.contentsRect().width() - 24)
 
         width = min(max_width, available)
-        layout = QTextLayout(text, font)
-        layout.beginLayout()
         lines = []
 
-        while True:
-            line = layout.createLine()
-            if not line.isValid():
-                break
+        # QTextLayout lays out one paragraph at a time. Feeding it embedded
+        # newlines makes those breaks survive inside an already-counted line,
+        # so the QLabel can render more than the three lines selected below.
+        for paragraph in text.split("\n"):
+            if not paragraph:
+                lines.append("")
+                continue
 
-            line.setLineWidth(width)
-            start = line.textStart()
-            end = start + line.textLength()
-            lines.append(text[start:end])
+            layout = QTextLayout(paragraph, font)
+            layout.beginLayout()
+            while True:
+                line = layout.createLine()
+                if not line.isValid():
+                    break
 
-        layout.endLayout()
+                line.setLineWidth(width)
+                start = line.textStart()
+                end = start + line.textLength()
+                lines.append(paragraph[start:end])
+            layout.endLayout()
+
         self.subtitles.setText(self.render_subtitle("\n".join(lines[-3:])))
 
     @staticmethod
