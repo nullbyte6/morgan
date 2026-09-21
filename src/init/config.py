@@ -74,6 +74,7 @@ DEFAULTS = {
         "humor": "light",
         "formality": "informal",
         "instructions": "",
+        "favorite_color": "blue"
     },
     "pronunciations": {},
     "instructions": {
