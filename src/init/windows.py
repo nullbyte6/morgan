@@ -21,6 +21,8 @@
 from src.init.lang import tr
 import ctypes
 from ctypes import wintypes as wt
+import json
+import os
 
 
 def is_taskbar_window(visible, cloaked, style, owner, shell):
@@ -117,3 +119,53 @@ def request_window_close(hwnd, expected_pid):
         raise OSError(tr('windows.window_no_longer_belongs_to_the_selected_process'))
     if not user.PostMessageW(hwnd, 0x0010, 0, 0):
         raise ctypes.WinError(ctypes.get_last_error())
+
+
+def minimize_all_windows(except_applications: list[str] | None = None) -> str:
+    """Minimize taskbar windows, optionally keeping named apps visible."""
+    exclusions = [
+        value.strip().casefold() for value in (except_applications or [])
+        if value.strip()
+    ]
+    context = {"except_applications": except_applications or []}
+    if os.name != "nt":
+        return json.dumps({
+            **context,
+            "status": "error",
+            "error": "Window minimization is only supported on Windows",
+        }, ensure_ascii=False)
+
+    try:
+        user = ctypes.WinDLL("user32", use_last_error=True)
+        user.ShowWindowAsync.argtypes = [wt.HWND, ctypes.c_int]
+        user.ShowWindowAsync.restype = wt.BOOL
+        minimized = []
+        kept = []
+        failures = []
+        for window in get_open_windows():
+            identity = " ".join((
+                window.get("title") or "",
+                window.get("executable") or "",
+            )).casefold()
+            if any(exclusion in identity for exclusion in exclusions):
+                kept.append(window.get("title") or window.get("executable"))
+                continue
+            if window["minimized"]:
+                continue
+            if user.ShowWindowAsync(window["hwnd"], 6):
+                minimized.append(window.get("title") or window.get("executable"))
+            else:
+                failures.append(window.get("title") or window.get("executable"))
+        return json.dumps({
+            **context,
+            "status": "completed" if not failures else "partial",
+            "minimized": minimized,
+            "kept": kept,
+            "failures": failures,
+        }, ensure_ascii=False)
+    except (OSError, ValueError) as error:
+        return json.dumps({
+            **context,
+            "status": "error",
+            "error": str(error),
+        }, ensure_ascii=False)

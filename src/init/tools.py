@@ -59,6 +59,8 @@ from .notifications import (send_notification, schedule_notification,
 
 from .message import send_message
 from .commands import execute_command
+from .quick_commands import list_quick_commands, run_quick_command
+from .windows import minimize_all_windows
 from .app_close import close_application
 from .app_manager import (search_apps, install_app, uninstall_app, get_app_operation,
                         scan_app_residues, clean_app_residue)
@@ -99,6 +101,9 @@ TOOLS = [
     read_clipboard,
     close_application,
     execute_command,
+    list_quick_commands,
+    run_quick_command,
+    minimize_all_windows,
     search_apps,
     install_app,
     uninstall_app,

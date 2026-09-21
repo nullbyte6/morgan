@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 
@@ -14,6 +15,10 @@ from .config import HOME_PATH
 
 
 COMMANDS_FILE = HOME_PATH / "json" / "commands.json"
+TOOL_ALIASES = {
+    "open_app": "open_application",
+    "minimize_all": "minimize_all_windows",
+}
 
 
 def _action(action, index: int) -> dict:
@@ -94,3 +99,101 @@ def list_quick_commands() -> str:
             "commands_file": str(COMMANDS_FILE),
             "error": str(error),
         }, ensure_ascii=False)
+
+
+def _prepare_actions(actions: list[dict], registry: dict) -> list[tuple]:
+    """Resolve and bind every action before the first one is executed."""
+    prepared = []
+    for index, action in enumerate(actions, start=1):
+        requested_name = action["tool"]
+        tool_name = TOOL_ALIASES.get(requested_name, requested_name)
+        if tool_name == "run_quick_command":
+            raise ValueError("Quick commands cannot recursively run quick commands")
+        function = registry.get(tool_name)
+        if function is None:
+            raise ValueError(
+                f"action {index} references unavailable tool {requested_name!r}")
+
+        arguments = action["arguments"]
+        if "value" in action:
+            if arguments:
+                raise ValueError(
+                    f"action {index} cannot combine a compact value and arguments")
+            bound = inspect.signature(function).bind(action["value"])
+        else:
+            bound = inspect.signature(function).bind(**arguments)
+        prepared.append((index, requested_name, tool_name, function, bound))
+    return prepared
+
+
+def _result_failed(value) -> bool:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return value.strip().casefold().startswith("error")
+    return (isinstance(value, dict)
+            and value.get("status") in {"error", "failed", "timeout", "denied"})
+
+
+def run_quick_command(name: str) -> str:
+    """Run one commands.json group through Arlo's registered tools in order.
+
+    All actions are resolved and their arguments validated before execution.
+    Existing tool safeguards and confirmations remain active. Runtime failures
+    are reported per action and do not hide results from the remaining actions.
+    """
+    context = {"quick_command": name, "commands_file": str(COMMANDS_FILE)}
+    try:
+        commands = load_quick_commands()
+        matches = [key for key in commands if key.casefold() == name.strip().casefold()]
+        if len(matches) != 1:
+            available = sorted(commands, key=str.casefold)
+            raise ValueError(
+                f"Unknown quick command {name!r}; available: {available}")
+        command_name = matches[0]
+        definition = commands[command_name]
+
+        from .tools import TOOLS
+        registry = {tool.__name__: tool for tool in TOOLS}
+        prepared = _prepare_actions(definition["actions"], registry)
+    except (OSError, TypeError, UnicodeError, ValueError) as error:
+        return json.dumps({
+            **context,
+            "status": "error",
+            "error": str(error),
+        }, ensure_ascii=False)
+
+    results = []
+    failures = 0
+    for index, requested_name, tool_name, function, bound in prepared:
+        try:
+            output = function(*bound.args, **bound.kwargs)
+            failed = _result_failed(output)
+            failures += int(failed)
+            results.append({
+                "index": index,
+                "action": requested_name,
+                "tool": tool_name,
+                "status": "failed" if failed else "completed",
+                "output": output,
+            })
+        except Exception as error:
+            failures += 1
+            results.append({
+                "index": index,
+                "action": requested_name,
+                "tool": tool_name,
+                "status": "failed",
+                "error": str(error),
+            })
+
+    return json.dumps({
+        **context,
+        "quick_command": command_name,
+        "description": definition["description"],
+        "status": "completed" if not failures else "partial",
+        "completed_actions": len(results) - failures,
+        "failed_actions": failures,
+        "results": results,
+    }, ensure_ascii=False, default=str)
