@@ -240,14 +240,25 @@ class MemoryService:
         return {"warning": UNTRUSTED, "memories": selected,
                 "conversations": bounded(conversations, remaining)}
 
-    def context(self):
+    def context(self, query=""):
         with self.db.connect() as db:
-            rows = [dict(row) for row in db.execute("""SELECT id,content,category FROM memories
+            relevant = search_memories(db, query, self.max_results) if query.strip() else []
+            preferences = [dict(row) for row in db.execute("""SELECT id,content,category FROM memories
                 WHERE status='active' AND origin='explicit' AND category='preference'
                 AND (expires_at IS NULL OR expires_at > ?) ORDER BY modified_at DESC,id LIMIT ?""",
                                                    (timestamp(), self.max_results))]
-        selected = bounded(rows, self.context_chars - len(UNTRUSTED) - 2)
-        return UNTRUSTED + "\n" + json.dumps(selected, ensure_ascii=False) if selected else ""
+            conversations = (search_history(db, query, min(2, self.max_results))
+                             if query.strip() and not relevant else [])
+        seen = {memory["id"] for memory in relevant}
+        memories = relevant + [memory for memory in preferences
+                               if memory["id"] not in seen]
+        budget = self.context_chars - len(UNTRUSTED) - 100
+        selected = bounded(memories, budget // 2 if conversations else budget)
+        remaining = budget - len(json.dumps(selected, ensure_ascii=False))
+        payload = {"memories": selected,
+                   "conversations": bounded(conversations, remaining)}
+        return (UNTRUSTED + "\n" + json.dumps(payload, ensure_ascii=False)
+                if selected or conversations else "")
 
     def delete_message(self, message_id):
         with self.db.connect(write=True) as db:
