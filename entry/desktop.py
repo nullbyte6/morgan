@@ -276,6 +276,7 @@ class VoiceInputWorker(QThread):
         self.levels.emit(spectrum_levels(samples, sample_rate).tolist())
 
 
+# noinspection PyBroadException
 class AssistantWorker(QObject):
     chunk = Signal(int, str)
     audio = Signal(int, object)
