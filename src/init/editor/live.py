@@ -390,11 +390,5 @@ class EditorView(QWidget):
         if self.tabs.count() == 0:
             self.new_file()
 
-    def set_audio_levels(self, levels):
-        self.ring.set_levels(levels)
-
-    def clear_audio(self):
-        self.ring.clear()
-
     def set_status(self, text: str):
         self.status.setText(text)

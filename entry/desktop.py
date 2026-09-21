@@ -1402,7 +1402,6 @@ class ArloWindow(QMainWindow):
             return
         self.voice_thread = VoiceInputWorker(self)
         self.voice_thread.levels.connect(self.input_meter.set_levels)
-        self.voice_thread.levels.connect(self.editor_view.set_audio_levels)
         self.voice_thread.levels.connect(self.mascot.set_levels)
         self.voice_thread.transcribing.connect(self.on_voice_transcribing)
         self.voice_thread.finished.connect(self.on_voice_finished)
