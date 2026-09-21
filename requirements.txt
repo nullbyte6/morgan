@@ -194,6 +194,7 @@ pydantic-settings==2.15.0
 pydub==0.25.1
 pyfiglet==1.0.4
 Pygments==2.21.0
+pyinstaller
 PyJWT==2.14.0
 pyparsing==3.3.2
 pyperclip==1.11.0
