@@ -1,6 +1,7 @@
 .idea/
 .venv/
-bin/
+build/
+dist/
 
 __pycache__/
 *.py[cod]
@@ -13,3 +14,4 @@ __pycache__/
 
 /src/models/*
 !/src/models/.gitkeep
+Arlo.spec
