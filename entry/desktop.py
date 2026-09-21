@@ -585,6 +585,9 @@ class Orb(QWidget):
     ``fill_ratio`` controls the diameter of a centered, animated inner fill as
     a fraction of the main outline diameter.
     """
+    _preferred_size: int
+    line_width: float
+    fill_ratio: float
     restore_requested = Signal()
     record_requested = Signal()
 
@@ -994,6 +997,8 @@ class ArloWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.settings = QSettings("ARLO", "desktop")
+        subtitles_enabled = self.settings.value(
+            "subtitles", True, type=bool)
         orb_speech_pulse = self.settings.value(
             "orb_speech_pulse", True, type=bool)
         self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
@@ -1007,6 +1012,8 @@ class ArloWindow(QMainWindow):
             size=120, floating=True, line_width=2.8, fill_ratio=0.6)
         self.mascot.set_speech_pulse_enabled(orb_speech_pulse)
         self.mascot.hide()
+        self.mascot_subtitles = MascotSubtitleBubble(self.mascot)
+        self.subtitles_enabled = subtitles_enabled
 
         self.mascot.record_requested.connect(self.on_mascot_record)
         self.mascot.restore_requested.connect(self.restore_from_mascot)
@@ -1074,7 +1081,7 @@ class ArloWindow(QMainWindow):
         self.wake_command_id = None
 
         self.settings_view = SettingsView(
-            self.settings.value("subtitles", True, type=bool),
+            subtitles_enabled,
             orb_speech_pulse,
             self)
         self.settings_view.subtitles_changed.connect(self.toggle_subtitles)
@@ -1526,7 +1533,9 @@ class ArloWindow(QMainWindow):
 
     @Slot(bool)
     def toggle_subtitles(self, enabled: bool):
+        self.subtitles_enabled = enabled
         self.subtitles.setVisible(enabled)
+        self.sync_mascot_subtitle()
         self.settings.setValue("subtitles", enabled)
 
     def toggle_orb_speech_pulse(self, enabled: bool):
@@ -1537,6 +1546,12 @@ class ArloWindow(QMainWindow):
     def set_orbs_speaking(self, speaking: bool):
         for orb in (self.orb, self.composer_orb, self.mascot):
             orb.set_speaking(speaking)
+        self.sync_mascot_subtitle()
+
+    def sync_mascot_subtitle(self):
+        self.mascot_subtitles.set_subtitle(
+            self.subtitle_text,
+            self.subtitles_enabled and self.speaking)
 
     def update_subtitles(self, text):
         from PySide6.QtGui import QTextLayout
@@ -1568,6 +1583,7 @@ class ArloWindow(QMainWindow):
             layout.endLayout()
 
         self.subtitles.setText(self.render_subtitle("\n".join(lines[-3:])))
+        self.sync_mascot_subtitle()
 
     @staticmethod
     def render_subtitle(text: str) -> str:
