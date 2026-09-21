@@ -4,47 +4,45 @@ Run `scripts\setup.bat` to register the `ARLO_WAKE` logon task, or keep
 `.venv\Scripts\python.exe -B -m entry.wake` running for interactive diagnostics.
 The task runs `entry\wake.py` through the existing virtual environment. Restart
 both the wake task and desktop after updating; an old desktop cannot consume the
-new inbox or cooperate with microphone ownership. No new dependencies or service
-ports are required. The existing `scripts\arlo.bat` → `scripts\arlo-run.ps1` → services/desktop
-launch path and desktop single-instance mutex remain in use.
+new recording request or advertise its running state. No new dependencies or
+service ports are required.
 
-Say any of the following:
+With Arlo already open, say any of the following and then dictate the request:
 
-- “Arlo, abre el navegador.”
-- “Hola Arlo, abre Spotify.”
-- “Hey Arlo.” Pause briefly, then “Qué hora es.”
-- “Oye Arlo, …”
+- “Arlo.”
+- “Hola Arlo.”
+- “Hey Arlo.”
+- “Oye Arlo.”
 
 Matching requires a complete wake phrase at the beginning of the recognized
 utterance. Case, leading punctuation, punctuation between words, and the merged
 recognition `HolaArlo` are accepted. `Carlos`, `hablarlo`, `Arlophone`, and mentions
-of Arlo inside unrelated sentences do not activate it. The wake phrase is removed
-and the first command letter capitalized; the rest of the command is preserved.
+of Arlo inside unrelated sentences do not activate it.
 
-**Mascot mode is supported.** Wake commands keep the mascot in the corner and use
-its existing speaking/level indicators and normal TTS. They do not open the full
-window. In full mode, a delivered command restores/focuses the existing window.
-Pending typed text and attachments stay in the composer and are not included in
-a wake request. The manual microphone button remains available.
+**Arlo is never launched by the wake listener.** If the desktop is closed, the
+phrase is ignored. If it is open, normal voice recording begins automatically.
+This works while the window is visible, minimized, hidden, or in mascot mode.
+Recording stops after end silence, then the transcript is submitted so Arlo can
+execute the request or answer conversationally. In mascot mode the mascot stays
+in the corner: no full window is shown, restored, or focused, and the mascot
+shrinks or grows with microphone intensity. Pending typed text and attachments
+stay in the composer. The manual microphone button remains available and keeps
+its click-to-start/click-to-stop behavior.
 
 ## Capture and coordination
 
 The listener maintains a continuous 16 kHz mono input stream, with 100 ms blocks.
 RMS silence detection reuses the manual recorder's PCM utility. A single
 background recognizer checks overlapping audio while the stream continues to
-record. Detection starts the existing launcher immediately. The complete wake +
-command audio remains buffered while recognition and desktop startup run.
-Silence ends a command; the maximum duration is a safety ceiling, not a fixed
-recording length. Reaching that ceiling discards the incomplete command instead
-of executing a truncated instruction. A wake-only utterance returns to listening
-after the speech-wait timeout without submitting an agent request.
+record. Once it recognizes the wake phrase, it closes its input stream and queues
+a recording request only when the desktop's lifetime lock confirms that Arlo is
+open. The desktop then acquires the microphone through its normal voice-input
+path.
 
-The existing `transcribe_voice` function accepts an optional model, so wake
-detection and final transcription reuse the listener's one multilingual Whisper
-model. Only text crosses the process boundary; the desktop does not load another
-STT model for a wake command. Short detection passes use the configured interface
-language (Spanish/English); final transcription detects the command's language.
-Manual recording retains its existing lazily loaded
+The wake listener reuses `transcribe_voice` with one multilingual Whisper model.
+Short detection passes use the configured interface language (Spanish/English).
+After activation, normal desktop recording performs command transcription and
+retains its existing lazily loaded
 `WHISPER_MODEL` (default `small`). As before, Whisper weights must be available
 locally for fully offline use; first use of an uncached model may download them.
 
@@ -66,29 +64,26 @@ network command endpoint or socket authentication to configure. It uses the
 current Windows user's profile permissions; run both processes as the same user
 and keep this directory private and on a local disk.
 
-Each capture has a UUID. SQLite commits it before delivery, and the desktop only
-claims pending commands after its existing worker reports readiness and is idle.
-Busy/manual-recording states defer delivery. Startup attempts are throttled to
-one every 30 seconds while unexpired pending commands exist. Transient database,
-microphone, launcher, and recognition failures are logged and retried without
-replaying a submitted command. Audio overflows discard the affected capture.
+Each activation has a UUID. SQLite commits it before delivery, and the desktop
+only claims pending recording requests after its worker reports readiness and is
+idle. Busy/manual-recording states defer delivery. Transient database, microphone,
+and recognition failures are logged and retried without replaying a claimed
+request. Audio overflows discard the affected capture.
 An unresponsive inference is abandoned after the recognition timeout; no second
 model/inference is started until that worker returns. Restart the listener if a
 native inference remains permanently stuck.
 
 Queue states are `pending`, `dispatched`, `completed`, `failed`, and `expired`.
-Dispatch uses **at-most-once** semantics: the claim is committed before calling
-the existing agent pipeline. If the desktop crashes between that commit and
-completion, the command remains `dispatched` and is not replayed automatically;
-its tool effects may be unknown. This avoids duplicate external actions. Commands
-that have not been claimed survive restarts and are delivered until their TTL
-expires (five minutes by default). Expired requests never execute later. No
-exactly-once guarantee is possible across arbitrary agent tool side effects.
+Dispatch uses **at-most-once** semantics: the claim is committed before starting
+recording. If the desktop crashes after that claim, the request remains
+`dispatched` and is not replayed automatically. Requests that have not been
+claimed survive until their TTL expires (five minutes by default). Expired
+requests never start a later recording.
 
 Wake diagnostics are retained in `voice\wake.log` (rotated at 1 MB, two backups),
 including queued IDs and capture errors. Transcriptions are not written to this
-log. The inbox stores command text and completion status locally; normal desktop
-session logging still applies when the agent executes a request.
+log. The inbox stores the internal recording-request marker and completion status
+locally; normal desktop session logging applies after dictated text is submitted.
 
 ## Configuration
 
@@ -96,16 +91,16 @@ Set these environment variables for the user running the logon task, then restar
 that task. For a foreground test, set `$env:ARLO_WAKE_WAIT_SECONDS = '8'` in
 PowerShell before starting `wake.py`.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `ARLO_WAKE_WAIT_SECONDS` | `6` | Wait for command speech after wake detection. |
-| `ARLO_WAKE_SILENCE_SECONDS` | `1.2` | Continuous silence that ends an utterance. Increase for slower speech. |
-| `ARLO_WAKE_MAX_SECONDS` | `120` | Maximum buffered interaction duration, including wake audio and pauses. |
-| `ARLO_WAKE_PRE_ROLL_SECONDS` | `0.3` | Audio retained before speech onset; `0` disables it. |
-| `ARLO_WAKE_THRESHOLD` | `400` | RMS speech threshold in signed 16-bit PCM units. Tune for microphone/noise level. |
-| `ARLO_WAKE_DELIVERY_SECONDS` | `300` | Lifetime of an unclaimed command during startup or busy periods. |
-| `ARLO_WAKE_RECOGNITION_SECONDS` | `60` | Maximum wait for an individual transcription. |
-| `ARLO_WAKE_MODEL` | `tiny` | Listener's multilingual faster-whisper model; e.g. `small` for greater accuracy at higher CPU cost. |
+| Variable                        | Default | Meaning                                                                                             |
+|---------------------------------|---------|-----------------------------------------------------------------------------------------------------|
+| `ARLO_WAKE_WAIT_SECONDS`        | `6`     | Internal capture timeout after detection.                                                           |
+| `ARLO_WAKE_SILENCE_SECONDS`     | `1.2`   | Silence threshold used by wake detection.                                                           |
+| `ARLO_WAKE_MAX_SECONDS`         | `120`   | Safety limit for a listener capture.                                                                |
+| `ARLO_WAKE_PRE_ROLL_SECONDS`    | `0.3`   | Audio retained before speech onset; `0` disables it.                                                |
+| `ARLO_WAKE_THRESHOLD`           | `400`   | RMS speech threshold in signed 16-bit PCM units. Tune for microphone/noise level.                   |
+| `ARLO_WAKE_DELIVERY_SECONDS`    | `300`   | Lifetime of an unclaimed recording request while the open app becomes ready.                        |
+| `ARLO_WAKE_RECOGNITION_SECONDS` | `60`    | Maximum wait for an individual transcription.                                                       |
+| `ARLO_WAKE_MODEL`               | `tiny`  | Listener's multilingual faster-whisper model; e.g. `small` for greater accuracy at higher CPU cost. |
 
 Numeric values must be finite and positive except pre-roll, which may be zero.
 Maximum duration must exceed end silence. Recognition quality and the RMS
@@ -115,16 +110,14 @@ identification system.
 ## Verification
 
 Run `.venv\Scripts\python.exe -B -m unittest discover -s tests -v`.
-Tests use synthetic PCM, temporary databases, actual OS locks (including a child
-process), and offscreen Qt with the agent mocked. They cover command matching,
-continuous audio through inference, pauses, long commands, timeouts, startup
-delivery, retries, crash semantics, manual recording, and mascot/draft preservation.
-They do not measure real Whisper accuracy or speaker echo on a physical device.
+The regression tests cover wake matching, the recording-request round trip, and
+exclusive desktop lifetime locking. They do not measure physical microphone,
+Whisper, speaker echo, or Qt rendering behavior.
 
-For a live acceptance check, restart the updated listener and desktop, then try
-the example phrases with the app closed, fully visible, and in mascot mode. Try
-a command longer than 30 seconds, a wake phrase with no command, the manual mic
-button, and a response that speaks the name Arlo. Check that there is one desktop
-instance, one agent request, no self-activation, and that listening resumes after
-the reply. Normal desktop dependencies (including its current Steam discovery,
-Ollama and TTS startup requirements) must work before this live check can pass.
+For a live acceptance check, restart the updated listener and desktop. Confirm
+that a phrase does nothing while the app is closed. With the full app open, say a
+wake phrase, wait for recording to start, and dictate a command. Repeat in mascot
+mode and verify that the full window stays hidden while the mascot changes size
+with your voice. Also try the manual mic button and a response that speaks the
+name Arlo. Check that there is one desktop instance, one agent request, no
+self-activation, and that listening resumes after the reply.

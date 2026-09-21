@@ -31,8 +31,14 @@ After updating, restart both the desktop app and its persistent TTS service so
 they use the same interruption protocol. Offline regression checks can be run
 with `.venv/Scripts/python.exe -m unittest discover -s test -v`.
 
-Hands-free voice activation supports “Arlo, abre el navegador” and a wake phrase
-followed by a short pause, including in corner mascot mode. See
-[wake voice setup and configuration](docs/wake-voice.md). After updating, restart
+Hands-free voice activation uses a wake phrase to start Arlo's normal voice
+recording, including in corner mascot mode. See
+[wake voice setup and configuration](docs/WAKE-VOICE.md). After updating, 
+restart
 the desktop and the `ARLO_WAKE` task. Wake regression checks:
 `.venv/Scripts/python.exe -B -m unittest discover -s tests -v`.
+
+With the desktop open, `reload`, `ref`, or `/reload` hot-reloads Arlo's loaded
+source/tool modules and rebuilds the model tool registry for the following turn.
+Live process infrastructure (Qt bridges, locks, timers, sessions, and memory) is
+preserved so reloading does not require restarting the application.
