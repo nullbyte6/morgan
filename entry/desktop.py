@@ -544,6 +544,13 @@ class Orb(QWidget):
         self.click_pulse = 0.0
         self.double_pulse = 0.0
 
+        self._drag_origin = None
+        self._drag_offset = None
+        self._dragging = False
+        self._suppress_release_click = False
+        if floating:
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+
         self.click_timer = QTimer(self)
         self.click_timer.setSingleShot(True)
         self.click_timer.timeout.connect(self._confirm_single_click)
@@ -802,13 +809,67 @@ class Orb(QWidget):
 
     def mousePressEvent(self, event):
         if self.floating and event.button() == Qt.MouseButton.LeftButton:
-            self.click_timer.start(
-                QApplication.doubleClickInterval()
-            )
+            self._drag_origin = event.globalPosition().toPoint()
+            self._drag_offset = event.position().toPoint()
+            self._dragging = False
+            self._suppress_release_click = False
             event.accept()
             return
 
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if (self.floating and self._drag_origin is not None
+                and event.buttons() & Qt.MouseButton.LeftButton):
+            global_position = event.globalPosition().toPoint()
+            distance = (global_position - self._drag_origin).manhattanLength()
+            if not self._dragging:
+                if distance < QApplication.startDragDistance():
+                    event.accept()
+                    return
+                self._dragging = True
+                self.click_timer.stop()
+                self.restore_timer.stop()
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                self.raise_()
+
+            target = global_position - self._drag_offset
+            screen = (
+                QApplication.screenAt(global_position)
+                or QApplication.screenAt(target)
+                or QApplication.primaryScreen())
+            if screen is not None:
+                area = screen.availableGeometry()
+                target.setX(max(
+                    area.left(),
+                    min(target.x(), area.right() - self.width() + 1)))
+                target.setY(max(
+                    area.top(),
+                    min(target.y(), area.bottom() - self.height() + 1)))
+
+            self.move(target)
+            event.accept()
+            return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.floating and event.button() == Qt.MouseButton.LeftButton:
+            was_dragging = self._dragging
+            suppress_click = self._suppress_release_click
+            self._drag_origin = None
+            self._drag_offset = None
+            self._dragging = False
+            self._suppress_release_click = False
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+
+            if not was_dragging and not suppress_click:
+                self.click_timer.start(QApplication.doubleClickInterval())
+
+            event.accept()
+            return
+
+        super().mouseReleaseEvent(event)
 
     def _confirm_single_click(self):
         """Trigger a visual pulse and request recording."""
@@ -818,6 +879,7 @@ class Orb(QWidget):
     def mouseDoubleClickEvent(self, event):
         if self.floating and event.button() == Qt.MouseButton.LeftButton:
             self.click_timer.stop()
+            self._suppress_release_click = True
 
             self.double_pulse = 1.0
             self.restore_timer.start(220)
@@ -830,6 +892,12 @@ class Orb(QWidget):
     def hideEvent(self, event):
         self.click_timer.stop()
         self.restore_timer.stop()
+        self._drag_origin = None
+        self._drag_offset = None
+        self._dragging = False
+        self._suppress_release_click = False
+        if self.floating:
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
         super().hideEvent(event)
 
 # noinspection PyBroadException
@@ -977,8 +1045,6 @@ class ArloWindow(QMainWindow):
                 "" if self.recording else "Recording was unavailable",
             )
             return
-        # Preserve delivery of commands queued by an older listener, but do not
-        # restore or focus the window (especially while mascot mode is active).
         self.wake_command_id = command_id
         self.start_prompt(DesktopMessage(text))
 
