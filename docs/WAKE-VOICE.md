@@ -7,7 +7,8 @@ both the wake task and desktop after updating; an old desktop cannot consume the
 new recording request or advertise its running state. No new dependencies or
 service ports are required.
 
-With Arlo already open, say any of the following and then dictate the request:
+Say any of the following, wait for recording to begin, and then dictate the
+request:
 
 - “Arlo.”
 - “Hola Arlo.”
@@ -19,9 +20,10 @@ utterance. Case, leading punctuation, punctuation between words, and the merged
 recognition `HolaArlo` are accepted. `Carlos`, `hablarlo`, `Arlophone`, and mentions
 of Arlo inside unrelated sentences do not activate it.
 
-**Arlo is never launched by the wake listener.** If the desktop is closed, the
-phrase is ignored. If it is open, normal voice recording begins automatically.
-This works while the window is visible, minimized, hidden, or in mascot mode.
+If the desktop is closed, the wake listener launches it and starts normal voice
+recording as soon as it is ready. If it is already open, recording begins
+automatically. This works while the window is visible, minimized, hidden, or in
+mascot mode.
 Recording stops after end silence, then the transcript is submitted so Arlo can
 execute the request or answer conversationally. In mascot mode the mascot stays
 in the corner: no full window is shown, restored, or focused, and the mascot
@@ -34,10 +36,9 @@ its click-to-start/click-to-stop behavior.
 The listener maintains a continuous 16 kHz mono input stream, with 100 ms blocks.
 RMS silence detection reuses the manual recorder's PCM utility. A single
 background recognizer checks overlapping audio while the stream continues to
-record. Once it recognizes the wake phrase, it closes its input stream and queues
-a recording request only when the desktop's lifetime lock confirms that Arlo is
-open. The desktop then acquires the microphone through its normal voice-input
-path.
+record. Once it recognizes the wake phrase, it closes its input stream, durably
+queues a recording request, and launches the desktop when necessary. The desktop
+then acquires the microphone through its normal voice-input path.
 
 The wake listener reuses `transcribe_voice` with one multilingual Whisper model.
 Short detection passes use the configured interface language (Spanish/English).
@@ -114,10 +115,10 @@ The regression tests cover wake matching, the recording-request round trip, and
 exclusive desktop lifetime locking. They do not measure physical microphone,
 Whisper, speaker echo, or Qt rendering behavior.
 
-For a live acceptance check, restart the updated listener and desktop. Confirm
-that a phrase does nothing while the app is closed. With the full app open, say a
-wake phrase, wait for recording to start, and dictate a command. Repeat in mascot
-mode and verify that the full window stays hidden while the mascot changes size
-with your voice. Also try the manual mic button and a response that speaks the
-name Arlo. Check that there is one desktop instance, one agent request, no
-self-activation, and that listening resumes after the reply.
+For a live acceptance check, restart the updated listener and close the desktop.
+Say a wake phrase and confirm that Arlo opens and recording starts once it is
+ready. Repeat with the full app already open and in mascot mode; in mascot mode,
+verify that the full window stays hidden while the mascot changes size with your
+voice. Also try the manual mic button and a response that speaks the name Arlo.
+Check that there is one desktop instance, one agent request, no self-activation,
+and that listening resumes after the reply.

@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import os
 import queue
+import subprocess
 import sys
 import threading
 import time
@@ -44,6 +45,9 @@ from src.init.voice_ipc import (
 )
 from src.init.wake_capture import BLOCK_SECONDS, SAMPLE_RATE, WakeCapture, WakeSettings
 
+ROOT = Path(__file__).resolve().parent.parent
+LAUNCHER = ROOT / "scripts" / "arlo.bat"
+
 logging.basicConfig(
     level=logging.INFO,
     format="[Wake] %(message)s")
@@ -57,6 +61,38 @@ def is_arlo_running() -> bool:
         return True
     lock.release()
     return False
+
+
+def launch_arlo() -> None:
+    """Start the desktop without waiting for its services or UI."""
+    if not LAUNCHER.is_file():
+        log.error(tr("wake.launcher_not_found", path=LAUNCHER))
+        return
+    if is_arlo_running():
+        return
+
+    log.info(tr("wake.activation_detected"))
+    subprocess.Popen(
+        ["cmd.exe", "/c", str(LAUNCHER)],
+        cwd=str(ROOT),
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+
+
+class Launcher:
+    """Throttle retries while the services launcher starts the desktop."""
+
+    def __init__(self):
+        self.next_attempt = 0.0
+
+    def ensure_running(self):
+        if is_arlo_running() or time.monotonic() < self.next_attempt:
+            return
+        self.next_attempt = time.monotonic() + 30
+        try:
+            launch_arlo()
+        except OSError:
+            log.exception("Unable to launch Arlo; recording request remains queued")
 
 
 class Recognizer:
@@ -87,7 +123,7 @@ class Recognizer:
         return future
 
 
-def capture_wake_word(recognizer, settings):
+def capture_wake_word(recognizer, settings, maintenance=lambda: None):
     """Return as soon as a wake phrase is heard, releasing input to desktop."""
     import sounddevice as sd
 
@@ -96,6 +132,7 @@ def capture_wake_word(recognizer, settings):
     capture = WakeCapture(settings)
     job = None
     last_frame = time.monotonic()
+    next_maintenance = last_frame
 
     def receive(data, count, timing, status):
         if status:
@@ -109,6 +146,10 @@ def capture_wake_word(recognizer, settings):
                            blocksize=int(SAMPLE_RATE * BLOCK_SECONDS),
                            channels=1, dtype="int16", callback=receive):
         while not audio_requested():
+            now = time.monotonic()
+            if now >= next_maintenance:
+                maintenance()
+                next_maintenance = now + 1
             try:
                 pcm = frames.get(timeout=0.2)
             except queue.Empty:
@@ -141,7 +182,6 @@ def capture_wake_word(recognizer, settings):
 
 
 def main() -> None:
-    # Scheduler and manual starts share the same crash-safe singleton lock.
     singleton = ProcessLock("wake-listener")
     if not singleton.acquire():
         return
@@ -162,6 +202,7 @@ def run_listener(microphone):
 
     settings = WakeSettings.from_environment()
     inbox = None
+    launcher = Launcher()
     log.info(tr("wake.loading_model"))
     model = WhisperModel(
         os.environ.get("ARLO_WAKE_MODEL", "tiny"),
@@ -173,6 +214,10 @@ def run_listener(microphone):
     pending_request = False
     pending_id = None
 
+    def maintain_delivery():
+        if inbox.has_pending():
+            launcher.ensure_running()
+
     while True:
         try:
             if inbox is None:
@@ -183,18 +228,18 @@ def run_listener(microphone):
                               ttl=settings.delivery_seconds)
                 log.info("Wake recording request queued: %s", pending_id)
                 pending_request = False
+            maintain_delivery()
             if audio_requested() or not microphone.acquire():
                 time.sleep(0.1)
                 continue
             try:
                 # Recheck after acquisition to close the handoff race.
                 if not audio_requested():
-                    activated = capture_wake_word(recognizer, settings)
-                    if activated and is_arlo_running():
+                    activated = capture_wake_word(
+                        recognizer, settings, maintain_delivery)
+                    if activated:
                         pending_request = True
                         pending_id = uuid.uuid4().hex
-                    elif activated:
-                        log.info("Wake phrase ignored because Arlo is not open")
             finally:
                 microphone.release()
         except Exception:
