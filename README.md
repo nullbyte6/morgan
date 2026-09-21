@@ -20,6 +20,11 @@ For an existing installation, you can start arlo directly by running `arlo.ps1`.
 Arlo also has a desktop interface application (`scripts\arlo.bat`) which, if you 
 ask me, works better for the public and for my own development.
 
+Closing the desktop window keeps Arlo and its local services running in the
+background. On desktops with a system tray, use the Arlo icon to reopen it or
+quit it completely. On other desktops, launch Arlo again to restore the existing
+instance instead of starting another one.
+
 See more of its usage/application when you launch the script :) 
 
 After updating, restart both the desktop app and its persistent TTS service so

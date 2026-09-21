@@ -130,26 +130,50 @@ if (-not $keepAlive) {
     $keepAlive = "24h"
 }
 
-Write-Host "Preloading model: $modelName"
-$payload = @{
-    model = $modelName
-    prompt = ""
-    keep_alive = $keepAlive
-    stream = $false
-} | ConvertTo-Json -Compress
-
+$modelReady = $false
 try {
-    $null = Invoke-RestMethod `
-        -Uri "$ollamaUrl/api/generate" `
-        -Method Post `
-        -ContentType "application/json" `
-        -Body $payload `
-        -TimeoutSec 300
-
-    Write-Host "Model ready." -ForegroundColor Green
+    $runningModels = Invoke-RestMethod `
+        -Uri "$ollamaUrl/api/ps" `
+        -Method Get `
+        -TimeoutSec 5
+    $modelAliases = @($modelName)
+    if (-not $modelName.Contains(":")) {
+        $modelAliases += "${modelName}:latest"
+    }
+    $modelReady = @($runningModels.models | Where-Object {
+        $modelAliases -contains $_.name -or
+        $modelAliases -contains $_.model
+    }).Count -gt 0
 }
 catch {
-    throw "Model preload failed: $($_.Exception.Message)"
+    # Fall through to the normal preload request.
+}
+
+if ($modelReady) {
+    Write-Host "Model already loaded; reusing it." -ForegroundColor Green
+}
+else {
+    Write-Host "Preloading model: $modelName"
+    $payload = @{
+        model = $modelName
+        prompt = ""
+        keep_alive = $keepAlive
+        stream = $false
+    } | ConvertTo-Json -Compress
+
+    try {
+        $null = Invoke-RestMethod `
+            -Uri "$ollamaUrl/api/generate" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body $payload `
+            -TimeoutSec 300
+
+        Write-Host "Model ready." -ForegroundColor Green
+    }
+    catch {
+        throw "Model preload failed: $($_.Exception.Message)"
+    }
 }
 
 Write-Host "[2/3] Checking CosyVoice..."

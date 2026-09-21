@@ -19,7 +19,6 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Arlo desktop interface using PySide6."""
 import asyncio
-import ctypes
 import html
 import json
 import logging
@@ -37,6 +36,7 @@ if not __package__:
 
 from PySide6.QtCore import *
 from PySide6.QtGui import *
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import *
 
 from entry.agent import Assistant
@@ -60,8 +60,7 @@ from src.init.desktop.capture import (
     unregister_capture_handler,
 )
 
-ARLO_MUTEX = r"Local\Diego.Arlo.Desktop"
-_mutex_handle = None
+ARLO_INSTANCE_SERVER = "Diego.Arlo.Desktop"
 
 class ChatInput(QTextEdit):
     submitted = Signal()
@@ -776,6 +775,7 @@ class ArloWindow(QMainWindow):
         self.recording = False
         self.voice_thread = None
         self.closing_after_voice = False
+        self.quitting = False
         self.send = QPushButton("")
         self.attach = QPushButton("")
         self.directory_indicator = WorkingDirectory(self)
@@ -1108,7 +1108,7 @@ class ArloWindow(QMainWindow):
         self.worker.finished.connect(self.on_finished)
         self.worker.failed.connect(self.on_error)
         self.worker.screenshot_requested.connect(self.on_screenshot_requested)
-        self.worker.exit_requested.connect(self.close)
+        self.worker.exit_requested.connect(self.request_quit)
 
         self.thread.finished.connect(self.worker.shutdown)
         self.thread.finished.connect(self.worker.deleteLater)
@@ -1352,10 +1352,21 @@ class ArloWindow(QMainWindow):
 
     def restore_from_mascot(self):
         """Restore the full Arlo interface."""
+        if self.quitting:
+            return
         self.mascot.hide()
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+    @Slot()
+    def request_quit(self):
+        """Explicitly stop Arlo; ordinary window closes only hide it."""
+        if self.quitting:
+            return
+        self.quitting = True
+        kill_self()
+        self.close()
 
     def start_prompt(self, prompt):
         self.turn_id += 1
@@ -1532,6 +1543,8 @@ class ArloWindow(QMainWindow):
             self.input.setFocus()
 
         self.resume_pending_prompt()
+        if self.quitting:
+            QTimer.singleShot(0, self.close)
 
     def resume_pending_prompt(self):
         if self.worker.assistant.shutdown_requested.is_set():
@@ -1556,8 +1569,16 @@ class ArloWindow(QMainWindow):
         self.set_status("status.error")
         self.set_enabled(self.ready)
         self.resume_pending_prompt()
+        if self.quitting:
+            QTimer.singleShot(0, self.close)
 
     def closeEvent(self, event):
+        if not self.quitting:
+            self.mascot.hide()
+            self.hide()
+            event.ignore()
+            return
+
         unregister_capture_handler(self.capture_handler)
         if self.voice_thread is not None:
             self.closing_after_voice = True
@@ -1578,6 +1599,7 @@ class ArloWindow(QMainWindow):
 
         self.mascot.close()
         event.accept()
+        QTimer.singleShot(0, QApplication.instance().quit)
 
 
 def set_windows_app_id():
@@ -1589,60 +1611,92 @@ def set_windows_app_id():
             "Diego.Arlo.Desktop")
 
 
-def acquire_instance_lock() -> bool:
-    """Acquire the single-instance lock for Arlo."""
-    global _mutex_handle
-    if sys.platform != "win32":
-        return True
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.CreateMutexW.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_int,
-        ctypes.c_wchar_p,
-    ]
-    kernel32.CreateMutexW.restype = ctypes.c_void_p
-
-    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
-    kernel32.CloseHandle.restype = ctypes.c_int
-    ERROR_ALREADY_EXISTS = 183
-
-    handle = kernel32.CreateMutexW(
-        None,
-        False,
-        ARLO_MUTEX,
+def notify_running_instance(timeout_ms: int = 1500) -> bool:
+    """Ask an existing desktop process to bring its window to the front."""
+    socket = QLocalSocket()
+    socket.connectToServer(
+        ARLO_INSTANCE_SERVER,
+        QIODevice.OpenModeFlag.WriteOnly,
     )
-
-    if not handle:
-        raise ctypes.WinError(ctypes.get_last_error())
-
-    if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
-        kernel32.CloseHandle(handle)
+    if not socket.waitForConnected(timeout_ms):
         return False
-
-    _mutex_handle = handle
+    socket.write(b"activate\n")
+    socket.flush()
+    socket.waitForBytesWritten(timeout_ms)
+    socket.disconnectFromServer()
     return True
 
 
-def release_instance_lock():
-    """Release the lock when Arlo exits."""
-    global _mutex_handle
-    if _mutex_handle is not None:
-        ctypes.windll.kernel32.CloseHandle(_mutex_handle)
-        _mutex_handle = None
+def acquire_instance_lock() -> QLockFile | None:
+    """Keep initialization races from creating two desktop processes."""
+    lock_path = (Path(QStandardPaths.writableLocation(
+        QStandardPaths.StandardLocation.TempLocation)) /
+        f"arlo-desktop-{getuser()}.lock")
+    lock = QLockFile(str(lock_path))
+    return lock if lock.tryLock(100) else None
+
+
+def start_instance_server() -> QLocalServer:
+    """Open the local activation endpoint for the lock-owning process."""
+    server = QLocalServer()
+    server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
+    if server.listen(ARLO_INSTANCE_SERVER):
+        return server
+
+    # A crashed process can leave a stale Unix-domain socket behind.
+    QLocalServer.removeServer(ARLO_INSTANCE_SERVER)
+    if not server.listen(ARLO_INSTANCE_SERVER):
+        raise RuntimeError(server.errorString())
+    return server
+
+
+def install_tray_icon(app: QApplication, window: ArloWindow, icon: QIcon):
+    """Install the system tray UI where the desktop environment supports it."""
+    if not QSystemTrayIcon.isSystemTrayAvailable():
+        return None
+
+    tray = QSystemTrayIcon(icon, app)
+    tray.setToolTip(tr("tray.running"))
+    menu = QMenu(window)
+    open_action = menu.addAction(tr("tray.open"))
+    quit_action = menu.addAction(tr("tray.quit"))
+    open_action.triggered.connect(window.restore_from_mascot)
+    quit_action.triggered.connect(window.request_quit)
+    tray.setContextMenu(menu)
+
+    def activate(reason):
+        if reason in (
+                QSystemTrayIcon.ActivationReason.Trigger,
+                QSystemTrayIcon.ActivationReason.DoubleClick):
+            window.restore_from_mascot()
+
+    tray.activated.connect(activate)
+    tray.show()
+    return tray
 
 
 def main():
-    if not acquire_instance_lock():
+    set_windows_app_id()
+    os.chdir(Path.home())
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    instance_lock = acquire_instance_lock()
+    if instance_lock is None:
+        # The first process may still be constructing its window and local
+        # server, so briefly retry before letting this launcher exit.
+        for _ in range(12):
+            if notify_running_instance(250):
+                break
+            QThread.msleep(100)
         return
 
+    instance_server = start_instance_server()
+
     try:
-        set_windows_app_id()
-        os.chdir(Path.home())
-        app = QApplication(sys.argv)
         app.setStyle("Fusion")
         assets = Path(__file__).resolve().parent.parent / "assets"
-        app.setWindowIcon(QIcon(str(assets / "pwsh.ico")))
+        app_icon = QIcon(str(assets / "pwsh.ico"))
+        app.setWindowIcon(app_icon)
         fonts = assets / "fonts"
 
         def load_font(filename: str) -> str:
@@ -1676,10 +1730,26 @@ def main():
                 window.log_view.refresh_button,):
             button.setFont(icon_font)
 
+        def activate_existing_window():
+            while instance_server.hasPendingConnections():
+                connection = instance_server.nextPendingConnection()
+                connection.readAll()
+                connection.disconnectFromServer()
+                connection.deleteLater()
+            window.restore_from_mascot()
+
+        instance_server.newConnection.connect(activate_existing_window)
+        if instance_server.hasPendingConnections():
+            QTimer.singleShot(0, activate_existing_window)
+
+        tray_icon = install_tray_icon(app, window, app_icon)
+        window.tray_icon = tray_icon
         window.show()
         sys.exit(app.exec())
     finally:
-        release_instance_lock()
+        instance_server.close()
+        QLocalServer.removeServer(ARLO_INSTANCE_SERVER)
+        instance_lock.unlock()
 
 if __name__ == "__main__":
     main()
