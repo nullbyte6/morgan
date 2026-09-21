@@ -973,8 +973,8 @@ class ArloWindow(QMainWindow):
 
         self.input.submitted.connect(self.send_message)
         input_layout.addWidget(self.input, 1, Qt.AlignVCenter)
-        input_layout.addWidget(self.attach, 0, Qt.AlignBottom)
         input_layout.addWidget(self.input_meter)
+        input_layout.addWidget(self.attach, 0, Qt.AlignBottom)
 
         input_column = QVBoxLayout()
         input_column.setContentsMargins(0, 0, 0, 0)
