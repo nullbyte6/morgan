@@ -1814,15 +1814,23 @@ def main():
         app.setWindowIcon(app_icon)
         fonts = assets / "fonts"
 
+        from src.tools.resources import resource_path
         def load_font(filename: str) -> str:
-            path = fonts / filename
+            path = resource_path("assets", "fonts", filename)
+            if not path.is_file():
+                raise FileNotFoundError(
+                    f"Font file not found: {path}"
+                )
+
             font_id = QFontDatabase.addApplicationFont(str(path))
             if font_id == -1:
-                raise RuntimeError(f"Invalid font: {path}")
+                raise RuntimeError(
+                    f"Qt could not load font: {path}")
 
             families = QFontDatabase.applicationFontFamilies(font_id)
             if not families:
-                raise RuntimeError(f"Font has no fam: {path}")
+                raise RuntimeError(
+                    f"No font families found in: {path}")
 
             return families[0]
 
