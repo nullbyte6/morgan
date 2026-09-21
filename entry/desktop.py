@@ -1504,6 +1504,8 @@ class ArloWindow(QMainWindow):
         elif not self.current_reply:
             self.update_subtitles(reply or tr("status.stopped"
             if interrupted else "ui.no_response"))
+        else:
+            self.update_subtitles("")
 
         self.current_reply = None
         self.busy = False
