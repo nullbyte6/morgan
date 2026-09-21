@@ -496,6 +496,8 @@ class Orb(QWidget):
     to change it later, or let the layout resize the widget. Geometry scales
     with the available space; ``line_width`` stays in Qt logical pixels so
     small instances retain visible outlines. Change it with ``set_line_width``.
+    ``fill_ratio`` controls the diameter of a centered, animated inner fill as
+    a fraction of the main outline diameter.
     """
     restore_requested = Signal()
     record_requested = Signal()
@@ -510,7 +512,8 @@ class Orb(QWidget):
     def __init__(self, parent=None, *,
                  size: int = 384,
                  floating: bool = False,
-                 line_width: float = 8.0):
+                 line_width: float = 8.0,
+                 fill_ratio: float = 0.0):
         super().__init__(parent)
         self.floating = floating
         if floating:
@@ -522,6 +525,7 @@ class Orb(QWidget):
         self.setObjectName("arloOrb")
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.set_line_width(line_width)
+        self.set_fill_ratio(fill_ratio)
         self.set_size(size)
         self.setToolTip("Arlo")
 
@@ -574,6 +578,16 @@ class Orb(QWidget):
                 or not math.isfinite(line_width) or line_width <= 0):
             raise ValueError("Orb line_width must be a positive finite number")
         self.line_width = float(line_width)
+        self.update()
+
+    def set_fill_ratio(self, fill_ratio: float):
+        """Set the animated inner fill diameter relative to the main outline."""
+        if (isinstance(fill_ratio, bool)
+                or not isinstance(fill_ratio, (int, float))
+                or not math.isfinite(fill_ratio)
+                or not 0.0 <= fill_ratio <= 1.0):
+            raise ValueError("Orb fill_ratio must be a finite number from 0 to 1")
+        self.fill_ratio = float(fill_ratio)
         self.update()
 
     def set_levels(self, levels):
@@ -654,6 +668,7 @@ class Orb(QWidget):
         points = 240
         for layer, color in enumerate(self.COLORS):
             path = QPainterPath()
+            fill_path = QPainterPath() if layer == 0 and self.fill_ratio else None
             base_radius = 102.4 + layer * 3.0
             for index in range(points + 1):
                 t = index / points
@@ -741,10 +756,22 @@ class Orb(QWidget):
 
                 if index == 0:
                     path.moveTo(x, y)
+                    if fill_path is not None:
+                        fill_path.moveTo(
+                            x * self.fill_ratio, y * self.fill_ratio)
                 else:
                     path.lineTo(x, y)
+                    if fill_path is not None:
+                        fill_path.lineTo(
+                            x * self.fill_ratio, y * self.fill_ratio)
 
             path.closeSubpath()
+
+            if fill_path is not None:
+                fill_path.closeSubpath()
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(self.COLORS[0])
+                painter.drawPath(fill_path)
 
             pen = QPen(color)
             pen.setWidthF(
@@ -822,7 +849,8 @@ class ArloWindow(QMainWindow):
         self.resize(900, 720)
         self.setMinimumSize(600, 480)
 
-        self.mascot = Orb(size=120, floating=True, line_width=2.8)
+        self.mascot = Orb(
+            size=120, floating=True, line_width=2.8, fill_ratio=0.6)
         self.mascot.set_speech_pulse_enabled(orb_speech_pulse)
         self.mascot.hide()
 
@@ -831,7 +859,8 @@ class ArloWindow(QMainWindow):
         self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
         self.mascot_shortcut.activated.connect(self.show_mascot)
 
-        self.composer_orb = Orb(self, size=84, line_width=2.6)
+        self.composer_orb = Orb(
+            self, size=84, line_width=2.6, fill_ratio=0.6)
         self.composer_orb.set_speech_pulse_enabled(orb_speech_pulse)
         self.composer_orb.hide()
         self.chat_button = QPushButton("󰭹")
@@ -862,7 +891,7 @@ class ArloWindow(QMainWindow):
         self.greeting_key = f"greeting.{random.randrange(6)}"
         self.subtitles = QLabel(self.startup_greeting)
 
-        self.orb = Orb(self)
+        self.orb = Orb(self, fill_ratio=0.6)
         self.orb.set_speech_pulse_enabled(orb_speech_pulse)
 
         self.worker = AssistantWorker(self.startup_greeting)
