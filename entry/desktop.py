@@ -769,7 +769,7 @@ class ArloWindow(QMainWindow):
             "orb_speech_pulse", True, type=bool)
         self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
         icon_path = (Path(__file__).resolve().parent.parent /
-                     "assets" / "pwsh.ico")
+                     "assets" / "arlo.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
         self.resize(900, 720)
         self.setMinimumSize(600, 480)
@@ -1727,7 +1727,7 @@ def main():
     try:
         app.setStyle("Fusion")
         assets = Path(__file__).resolve().parent.parent / "assets"
-        app_icon = QIcon(str(assets / "pwsh.ico"))
+        app_icon = QIcon(str(assets / "arlo.ico"))
         app.setWindowIcon(app_icon)
         fonts = assets / "fonts"
 
