@@ -88,6 +88,7 @@ class Assistant:
                 instance.shutdown_requested = threading.Event()
                 instance.voice = None
                 instance.debug_console = None
+                instance._reload_lock = threading.Lock()
                 instance.username = getuser().capitalize()
                 instance.typewriter_delay_seconds = float(
                     os.environ.get("TYPEWRITER_DELAY", "0"))
@@ -128,10 +129,11 @@ class Assistant:
         from src.init.brain import MODEL_NAME
         from src.init.tools import TOOLS
 
-        self.voice = VoiceClient(audio_callback=(
-                self.terminal_ui.update_audio_levels
-                if self.terminal_ui is not None
-                else None))
+        if self.voice is None:
+            self.voice = VoiceClient(audio_callback=(
+                    self.terminal_ui.update_audio_levels
+                    if self.terminal_ui is not None
+                    else None))
 
         self.MODEL_NAME = MODEL_NAME
         self.model_settings = {
@@ -153,6 +155,24 @@ class Assistant:
         self.agent.instructions(self.working_directory_instructions)
         from src.init.memory.integration import memory_instructions
         self.agent.instructions(memory_instructions)
+
+    def reload_source(self) -> str:
+        """Reload source providers and rebuild tools before the next turn."""
+        with self._reload_lock:
+            from src.init.hot_reload import reload_project_modules
+
+            reloaded, errors = reload_project_modules()
+            # The current Pydantic run keeps its local Agent reference. Clearing
+            # this attribute makes the next turn build a fresh tool registry.
+            self.agent = None
+            from src.init.brain import MODEL_NAME
+            self.MODEL_NAME = MODEL_NAME
+            summary = f"Reloaded {len(reloaded)} source modules"
+            if errors:
+                summary += "; failures: " + " | ".join(errors)
+            else:
+                summary += "; the refreshed tools will be used on the next turn."
+            return summary
 
     def suspend_terminal(self):
         if self.terminal_ui is None:
@@ -541,6 +561,9 @@ class Assistant:
                 break
 
             if user_input.strip().lower() in ("ref", "reload"):
+                result = refresh()
+                session.write(self.name, result)
+                print(result)
                 continue
 
             directory_result = self.directory_cmd(user_input)

@@ -87,6 +87,7 @@ from src.diagnostics.tools import (check_system_health, check_disk_health,
                                    check_security_health, kill_self)
 from .editor import open_in_editor
 from .memory.tools import remember, recall, forget, list_memories
+from .desktop.clipboard import read_clipboard
 
 TOOLS = [
     remember,
@@ -95,6 +96,7 @@ TOOLS = [
     list_memories,
     kill_self,
     open_in_editor,
+    read_clipboard,
     close_application,
     execute_command,
     search_apps,

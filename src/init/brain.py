@@ -22,7 +22,6 @@ from src.init.lang import tr
 import base64
 import codecs
 import ctypes
-import importlib
 import json
 import os
 import re
@@ -101,19 +100,9 @@ def get_version() -> str:
 
 
 def refresh() -> str:
-    """Reload application modules in memory without restarting the process."""
+    """Reload Arlo source modules and rebuild tools without restarting."""
     try:
-        modules_to_reload = [
-            "src.init.brain",
-            "src.init.tools",
-            "src.init.rules",
-        ]
-
-        for mod_name in modules_to_reload:
-            if mod_name in sys.modules:
-                importlib.reload(sys.modules[mod_name])
-
-        return tr('brain.modules_are_reloaded')
+        return get_assistant().reload_source()
     except Exception as error:
         return tr('brain.error_at_refresh_attempt', error=error)
 

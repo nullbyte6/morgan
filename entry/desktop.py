@@ -51,13 +51,24 @@ from src.init.logs import LogView
 from src.init.session_log import SessionLog
 from src.init.settings import SettingsView
 from src.init.terminal import spectrum_levels
-from src.init.voice_ipc import WakeInbox, desktop_audio
+from src.init.voice_ipc import (
+    WAKE_RECORD_REQUEST,
+    ProcessLock,
+    WakeInbox,
+    desktop_audio,
+)
 
 from src.init.desktop.capture import (
     CaptureRequest,
     capture_to_clipboard,
     register_capture_handler,
     unregister_capture_handler,
+)
+from src.init.desktop.clipboard import (
+    ClipboardRequest,
+    read_clipboard_on_gui_thread,
+    register_clipboard_handler,
+    unregister_clipboard_handler,
 )
 
 ARLO_INSTANCE_SERVER = "Diego.Arlo.Desktop"
@@ -237,8 +248,9 @@ class VoiceInputWorker(QThread):
     levels = Signal(object)
     transcribing = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, automatic=False):
         super().__init__(parent)
+        self.automatic = automatic
         self.stop_event = threading.Event()
         self.transcript = ""
         self.error = ""
@@ -251,7 +263,8 @@ class VoiceInputWorker(QThread):
                 if self.isInterruptionRequested():
                     return
                 recording = record_voice(
-                    on_audio=self.report_audio, stop_event=self.stop_event)
+                    on_audio=self.report_audio, stop_event=self.stop_event,
+                    stop_on_silence=self.automatic)
                 if self.isInterruptionRequested():
                     return
                 if recording is None:
@@ -285,6 +298,7 @@ class AssistantWorker(QObject):
     accepted = Signal(int)
     rejected = Signal(int, str)
     screenshot_requested = Signal(object)
+    clipboard_requested = Signal(object)
     exit_requested = Signal()
 
     def __init__(self, startup_greeting=""):
@@ -367,6 +381,13 @@ class AssistantWorker(QObject):
                 return
 
             self.session.write(self.assistant.username, message.log_text())
+            if not message.attachments and prompt.strip().casefold() in (
+                    "ref", "reload", "/reload"):
+                from src.init.brain import refresh
+                reply = refresh()
+                self.session.write(self.assistant.name, reply)
+                self.finished.emit(reply)
+                return
             directory_result = (self.assistant.directory_cmd(prompt)
                                 if not message.attachments else None)
             if directory_result is not None:
@@ -509,6 +530,7 @@ class Orb(QWidget):
         self.ripple_phase = random.uniform(0.0, math.tau)
         self.ripple_seed = random.uniform(0.0, math.tau)
         self.speaking = False
+        self.listening = False
         self.speech_pulse_enabled = True
         self.speech_scale = 1.0
 
@@ -563,6 +585,12 @@ class Orb(QWidget):
         if not speaking:
             self.clear()
 
+    def set_listening(self, listening: bool):
+        """Let microphone intensity directly resize a recording mascot."""
+        self.listening = bool(listening)
+        if not listening:
+            self.clear()
+
     def set_speech_pulse_enabled(self, enabled: bool):
         self.speech_pulse_enabled = bool(enabled)
 
@@ -584,7 +612,9 @@ class Orb(QWidget):
             self.amplitude = 0.0
 
         speech_scale_target = 1.0
-        if self.speaking and self.speech_pulse_enabled:
+        if self.listening:
+            speech_scale_target = 0.94 + self.amplitude * 0.14
+        elif self.speaking and self.speech_pulse_enabled:
             speech_scale_target = 0.965 + self.amplitude * 0.10
         scale_factor = (0.28 if speech_scale_target > self.speech_scale
                         else 0.18)
@@ -835,6 +865,8 @@ class ArloWindow(QMainWindow):
         self.worker = AssistantWorker(self.startup_greeting)
         self.capture_handler = self.worker.screenshot_requested.emit
         register_capture_handler(self.capture_handler)
+        self.clipboard_handler = self.worker.clipboard_requested.emit
+        register_clipboard_handler(self.clipboard_handler)
         self.chat_scroll = QScrollArea()
         self.thread = QThread(self)
 
@@ -904,11 +936,18 @@ class ArloWindow(QMainWindow):
             return
         if command is None:
             return
-        self.wake_command_id, text = command
-        if not self.mascot.isVisible():
-            self.showNormal()
-            self.raise_()
-            self.activateWindow()
+        command_id, text = command
+        if text == WAKE_RECORD_REQUEST:
+            self.wake_command_id = command_id
+            self.start_recording(automatic=True)
+            self.finish_wake_command(
+                "completed" if self.recording else "failed",
+                "" if self.recording else "Recording was unavailable",
+            )
+            return
+        # Preserve delivery of commands queued by an older listener, but do not
+        # restore or focus the window (especially while mascot mode is active).
+        self.wake_command_id = command_id
         self.start_prompt(DesktopMessage(text))
 
     def finish_wake_command(self, state, detail=""):
@@ -1153,6 +1192,7 @@ class ArloWindow(QMainWindow):
         self.worker.finished.connect(self.on_finished)
         self.worker.failed.connect(self.on_error)
         self.worker.screenshot_requested.connect(self.on_screenshot_requested)
+        self.worker.clipboard_requested.connect(self.on_clipboard_requested)
         self.worker.exit_requested.connect(self.request_quit)
 
         self.thread.finished.connect(self.worker.shutdown)
@@ -1192,6 +1232,21 @@ class ArloWindow(QMainWindow):
             if mascot_visible and not self.mascot.isVisible():
                 self.mascot.show()
 
+            request.completed.set()
+
+    @Slot(object)
+    def on_clipboard_requested(self, request: ClipboardRequest):
+        """Read Qt's clipboard on the GUI thread for an assistant tool call."""
+        if request.completed.is_set():
+            return
+        try:
+            request.value = read_clipboard_on_gui_thread()
+            request.success = request.value is not None
+            if not request.success:
+                request.error = "The clipboard is empty or unsupported."
+        except Exception as error:
+            request.error = str(error)
+        finally:
             request.completed.set()
 
     @Slot(int, str)
@@ -1462,16 +1517,17 @@ class ArloWindow(QMainWindow):
         else:
             self.start_recording()
 
-    def start_recording(self):
+    def start_recording(self, *, automatic=False):
         if (not self.ready or self.busy or self.submitting is not None or
                 self.voice_thread is not None):
             return
-        self.voice_thread = VoiceInputWorker(self)
+        self.voice_thread = VoiceInputWorker(self, automatic=automatic)
         self.voice_thread.levels.connect(self.input_meter.set_levels)
         self.voice_thread.levels.connect(self.mascot.set_levels)
         self.voice_thread.transcribing.connect(self.on_voice_transcribing)
         self.voice_thread.finished.connect(self.on_voice_finished)
         self.recording = True
+        self.mascot.set_listening(True)
         self.input.hide()
         self.input_meter.clear()
         self.input_meter.show()
@@ -1482,6 +1538,7 @@ class ArloWindow(QMainWindow):
     @Slot()
     def on_voice_transcribing(self):
         self.recording = False
+        self.mascot.set_listening(False)
         self.input_meter.hide()
         self.mascot.clear()
         self.input.show()
@@ -1493,6 +1550,7 @@ class ArloWindow(QMainWindow):
         worker = self.voice_thread
         self.voice_thread = None
         self.recording = False
+        self.mascot.set_listening(False)
         self.input_meter.hide()
         self.input_meter.clear()
         self.mascot.clear()
@@ -1634,6 +1692,7 @@ class ArloWindow(QMainWindow):
             return
 
         unregister_capture_handler(self.capture_handler)
+        unregister_clipboard_handler(self.clipboard_handler)
         if self.voice_thread is not None:
             self.closing_after_voice = True
             self.voice_thread.requestInterruption()
@@ -1741,6 +1800,11 @@ def main():
             QThread.msleep(100)
         return
 
+    running_lock = ProcessLock("desktop-running")
+    if not running_lock.acquire():
+        instance_lock.unlock()
+        return
+
     instance_server = start_instance_server()
 
     try:
@@ -1801,6 +1865,7 @@ def main():
         instance_server.close()
         QLocalServer.removeServer(ARLO_INSTANCE_SERVER)
         instance_lock.unlock()
+        running_lock.release()
 
 if __name__ == "__main__":
     main()
