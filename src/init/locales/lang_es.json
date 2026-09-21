@@ -20,6 +20,8 @@
   "ui.settings": "Ajustes",
   "ui.subtitles": "Subtítulos",
   "ui.subtitles_hint": "Mostrar u ocultar Subtítulos",
+  "ui.orb_speech_pulse": "Pulsar",
+  "ui.orb_speech_pulse_hint": "Hace que el Orb crezca y decrezca con la voz de Arlo",
   "ui.language": "Idioma de la interfaz",
   "ui.voice": "Voz",
   "voice.selection_restart": "El servicio de voz no admite la selección dinámica o no responde. Reinicia el servicio de voz de Arlo, no solo la ventana.",

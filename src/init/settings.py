@@ -136,10 +136,12 @@ class ToggleSwitch(QAbstractButton):
 class SettingsView(QWidget):
     """Desktop subtitle and interface language preferences."""
     subtitles_changed = Signal(bool)
+    orb_pulse_changed = Signal(bool)
     language_changed = Signal(str)
     model_changed = Signal(str)
 
-    def __init__(self, subtitles_enabled: bool, parent=None):
+    def __init__(self, subtitles_enabled: bool,
+                 orb_pulse_enabled: bool, parent=None):
         super().__init__(parent)
         self.setObjectName("settingsPage")
         layout = QVBoxLayout(self)
@@ -156,6 +158,17 @@ class SettingsView(QWidget):
         subtitle_row.addStretch()
         subtitle_row.addWidget(self.subtitles_switch)
         layout.addLayout(subtitle_row)
+
+        self.orb_pulse_label = QLabel()
+        self.orb_pulse_label.setObjectName("muted")
+        self.orb_pulse_switch = ToggleSwitch()
+        self.orb_pulse_switch.setChecked(orb_pulse_enabled)
+        self.orb_pulse_label.setBuddy(self.orb_pulse_switch)
+        orb_pulse_row = QHBoxLayout()
+        orb_pulse_row.addWidget(self.orb_pulse_label)
+        orb_pulse_row.addStretch()
+        orb_pulse_row.addWidget(self.orb_pulse_switch)
+        layout.addLayout(orb_pulse_row)
 
         self.language_label = QLabel()
         self.language_label.setObjectName("muted")
@@ -189,6 +202,7 @@ class SettingsView(QWidget):
 
         self.refresh_language()
         self.subtitles_switch.toggled.connect(self.subtitles_changed.emit)
+        self.orb_pulse_switch.toggled.connect(self.orb_pulse_changed.emit)
         self.language_dropdown.currentIndexChanged.connect(
             lambda: self.language_changed.emit(self.language_dropdown.currentData()))
 
@@ -269,6 +283,9 @@ class SettingsView(QWidget):
         self.subtitle_label.setText(tr("ui.subtitles"))
         self.subtitles_switch.setAccessibleName(tr("ui.subtitles"))
         self.subtitles_switch.setToolTip(tr("ui.subtitles_hint"))
+        self.orb_pulse_label.setText(tr("ui.orb_speech_pulse"))
+        self.orb_pulse_switch.setAccessibleName(tr("ui.orb_speech_pulse"))
+        self.orb_pulse_switch.setToolTip(tr("ui.orb_speech_pulse_hint"))
         self.language_label.setText(tr("ui.language"))
         self.language_dropdown.setAccessibleName(tr("ui.language"))
         self.language_dropdown.setToolTip(tr("ui.language_hint"))

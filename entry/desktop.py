@@ -494,6 +494,8 @@ class Orb(QWidget):
         self.ripple_phase = random.uniform(0.0, math.tau)
         self.ripple_seed = random.uniform(0.0, math.tau)
         self.speaking = False
+        self.speech_pulse_enabled = True
+        self.speech_scale = 1.0
 
         self.click_pulse = 0.0
         self.double_pulse = 0.0
@@ -546,6 +548,9 @@ class Orb(QWidget):
         if not speaking:
             self.clear()
 
+    def set_speech_pulse_enabled(self, enabled: bool):
+        self.speech_pulse_enabled = bool(enabled)
+
     def clear(self):
         self.levels = [0.0] * 15
 
@@ -562,6 +567,14 @@ class Orb(QWidget):
         self.amplitude += (target - self.amplitude) * factor
         if self.amplitude < 0.0005:
             self.amplitude = 0.0
+
+        speech_scale_target = 1.0
+        if self.speaking and self.speech_pulse_enabled:
+            speech_scale_target = 0.965 + self.amplitude * 0.10
+        scale_factor = (0.28 if speech_scale_target > self.speech_scale
+                        else 0.18)
+        self.speech_scale += (
+            speech_scale_target - self.speech_scale) * scale_factor
 
         self.phase += (0.025 + self.amplitude * 0.045)
         self.ripple_phase += 0.008
@@ -588,7 +601,8 @@ class Orb(QWidget):
 
         side = min(self.width(), self.height())
         painter.translate(self.width() / 2, self.height() / 2)
-        painter.scale(scale, scale)
+        painter.scale(scale * self.speech_scale,
+                      scale * self.speech_scale)
         points = 240
         for layer, color in enumerate(self.COLORS):
             path = QPainterPath()
@@ -750,6 +764,9 @@ class ArloWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.settings = QSettings("ARLO", "desktop")
+        orb_speech_pulse = self.settings.value(
+            "orb_speech_pulse", True, type=bool)
         self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
         icon_path = (Path(__file__).resolve().parent.parent /
                      "assets" / "pwsh.ico")
@@ -758,6 +775,7 @@ class ArloWindow(QMainWindow):
         self.setMinimumSize(600, 480)
 
         self.mascot = Orb(size=120, floating=True, line_width=2.8)
+        self.mascot.set_speech_pulse_enabled(orb_speech_pulse)
         self.mascot.hide()
 
         self.mascot.record_requested.connect(self.on_mascot_record)
@@ -766,6 +784,7 @@ class ArloWindow(QMainWindow):
         self.mascot_shortcut.activated.connect(self.show_mascot)
 
         self.composer_orb = Orb(self, size=84, line_width=2.6)
+        self.composer_orb.set_speech_pulse_enabled(orb_speech_pulse)
         self.composer_orb.hide()
         self.chat_button = QPushButton("󰭹")
         self.logs_button = QPushButton("")
@@ -795,6 +814,7 @@ class ArloWindow(QMainWindow):
         self.subtitles = QLabel(self.startup_greeting)
 
         self.orb = Orb(self)
+        self.orb.set_speech_pulse_enabled(orb_speech_pulse)
 
         self.worker = AssistantWorker(self.startup_greeting)
         self.capture_handler = self.worker.screenshot_requested.emit
@@ -819,10 +839,13 @@ class ArloWindow(QMainWindow):
         self.wake_inbox = None
         self.wake_command_id = None
 
-        self.settings = QSettings("ARLO", "desktop")
         self.settings_view = SettingsView(
-            self.settings.value("subtitles", True, type=bool), self)
+            self.settings.value("subtitles", True, type=bool),
+            orb_speech_pulse,
+            self)
         self.settings_view.subtitles_changed.connect(self.toggle_subtitles)
+        self.settings_view.orb_pulse_changed.connect(
+            self.toggle_orb_speech_pulse)
         self.settings_view.language_changed.connect(self.change_language)
         self.build_ui()
 
@@ -1241,6 +1264,15 @@ class ArloWindow(QMainWindow):
         self.subtitles.setVisible(enabled)
         self.settings.setValue("subtitles", enabled)
 
+    def toggle_orb_speech_pulse(self, enabled: bool):
+        for orb in (self.orb, self.composer_orb, self.mascot):
+            orb.set_speech_pulse_enabled(enabled)
+        self.settings.setValue("orb_speech_pulse", enabled)
+
+    def set_orbs_speaking(self, speaking: bool):
+        for orb in (self.orb, self.composer_orb, self.mascot):
+            orb.set_speaking(speaking)
+
     def update_subtitles(self, text):
         from PySide6.QtGui import QTextLayout
         self.subtitle_text = text
@@ -1463,7 +1495,7 @@ class ArloWindow(QMainWindow):
         self.speaking = False
         self.orb.clear()
         self.composer_orb.clear()
-        self.mascot.set_speaking(False)
+        self.set_orbs_speaking(False)
         self.set_status("status.stopping")
         self.update_send_button()
 
@@ -1506,7 +1538,7 @@ class ArloWindow(QMainWindow):
             return
         self.speaking = (speaking and (self.busy or not self.ready)
                          and not self.stopping)
-        self.mascot.set_speaking(self.speaking)
+        self.set_orbs_speaking(self.speaking)
 
         if not self.stopping and self.busy:
             self.set_status(
@@ -1535,7 +1567,7 @@ class ArloWindow(QMainWindow):
         self.stopping = False
         self.orb.clear()
         self.composer_orb.clear()
-        self.mascot.set_speaking(False)
+        self.set_orbs_speaking(False)
         self.set_status("status.stopped" if interrupted else
                         "status.private" if self.worker.session.private else "")
         self.set_enabled(True)
@@ -1565,7 +1597,7 @@ class ArloWindow(QMainWindow):
         self.stopping = False
         self.orb.clear()
         self.composer_orb.clear()
-        self.mascot.set_speaking(False)
+        self.set_orbs_speaking(False)
         self.set_status("status.error")
         self.set_enabled(self.ready)
         self.resume_pending_prompt()
