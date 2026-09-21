@@ -48,8 +48,9 @@ def pcm_rms(pcm_data: bytes) -> float:
     return (sum(sample * sample for sample in samples) / len(samples)) ** 0.5
 
 
-def record_voice(*, on_audio=None, stop_event=None) -> tuple[bytes, int] | None:
-    """Record speech; optionally report PCM blocks and accept an early stop."""
+def record_voice(*, on_audio=None, stop_event=None,
+                 stop_on_silence=True) -> tuple[bytes, int] | None:
+    """Record speech and optionally finish automatically after end silence."""
     try:
         import sounddevice as sound
     except ImportError as error:
@@ -102,7 +103,7 @@ def record_voice(*, on_audio=None, stop_event=None) -> tuple[bytes, int] | None:
 
             audio_blocks.append(audio_block)
             silent_blocks = 0 if contains_speech else silent_blocks + 1
-            if silent_blocks >= silence_blocks_to_stop:
+            if stop_on_silence and silent_blocks >= silence_blocks_to_stop:
                 break
 
     if not speech_started:

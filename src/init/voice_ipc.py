@@ -28,6 +28,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
+WAKE_RECORD_REQUEST = "arlo://voice/start-recording"
+
+
 def voice_directory() -> Path:
     path = Path.home() / ".arlo" / "voice"
     path.mkdir(parents=True, exist_ok=True)
