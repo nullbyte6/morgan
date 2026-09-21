@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 readonly ASSISTANT_NAME="Arlo"
-readonly ARLO_MODEL="${ARLO_MODEL:-qwen3:14b}"
+readonly ARLO_MODEL="${ARLO_MODEL:-qwen3.5:9b}"
 readonly ARLO_VOICE_MODEL="${ARLO_VOICE_MODEL:-FunAudioLLM/Fun-CosyVoice3-0.5B-2512}"
 # shellcheck disable=SC2155
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
