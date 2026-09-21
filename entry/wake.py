@@ -99,22 +99,6 @@ def launch_arlo() -> None:
     )
 
 
-class Launcher:
-    """Throttle retries while the services launcher starts the desktop."""
-
-    def __init__(self):
-        self.next_attempt = 0.0
-
-    def ensure_running(self):
-        if is_arlo_running() or time.monotonic() < self.next_attempt:
-            return
-        self.next_attempt = time.monotonic() + 30
-        try:
-            launch_arlo()
-        except OSError:
-            log.exception("Unable to launch Arlo; recording request remains queued")
-
-
 class Recognizer:
     """One model, one inference at a time; audio never waits for transcription."""
 
@@ -125,13 +109,13 @@ class Recognizer:
     def available(self):
         return self.future is None or self.future.done()
 
-    def submit(self, snapshot):
+    def submit(self, snapshot, sample_rate=SAMPLE_RATE):
         future = self.future = Future()
 
         def recognize():
             try:
                 text, _ = transcribe_voice(
-                    snapshot.pcm, SAMPLE_RATE, model=self.model,
+                    snapshot.pcm, sample_rate, model=self.model,
                     language=None if snapshot.final else LANGUAGES[get_language()],
                     beam_size=5 if snapshot.final else 1,
                     vad_filter=snapshot.final)
@@ -143,16 +127,28 @@ class Recognizer:
         return future
 
 
-def capture_wake_word(recognizer, settings, maintenance=lambda: None):
+def capture_wake_word(recognizer, settings):
     """Return as soon as a wake phrase is heard, releasing input to desktop."""
     import sounddevice as sd
 
+    device = sd.query_devices(kind="input")
+    if sys.platform == "win32":
+        # PortAudio's legacy MME default intermittently fails in a detached
+        # pythonw process. Prefer the matching WASAPI endpoint when present.
+        host_apis = sd.query_hostapis()
+        for index, candidate in enumerate(sd.query_devices()):
+            host_name = host_apis[candidate["hostapi"]]["name"]
+            if (candidate["max_input_channels"] >= 1 and
+                    candidate["name"] == device["name"] and
+                    host_name == "Windows WASAPI"):
+                device = dict(candidate, index=index)
+                break
+    sample_rate = int(device.get("default_samplerate") or SAMPLE_RATE)
     frames = queue.Queue(maxsize=50)
     overflow = threading.Event()
     capture = WakeCapture(settings)
     job = None
     last_frame = time.monotonic()
-    next_maintenance = last_frame
 
     def receive(data, count, timing, status):
         if status:
@@ -162,14 +158,11 @@ def capture_wake_word(recognizer, settings, maintenance=lambda: None):
         except queue.Full:
             overflow.set()
 
-    with sd.RawInputStream(samplerate=SAMPLE_RATE,
-                           blocksize=int(SAMPLE_RATE * BLOCK_SECONDS),
-                           channels=1, dtype="int16", callback=receive):
+    with sd.RawInputStream(samplerate=sample_rate,
+                           blocksize=int(sample_rate * BLOCK_SECONDS),
+                           device=device["index"], channels=1,
+                           dtype="int16", callback=receive):
         while not audio_requested():
-            now = time.monotonic()
-            if now >= next_maintenance:
-                maintenance()
-                next_maintenance = now + 1
             try:
                 pcm = frames.get(timeout=0.2)
             except queue.Empty:
@@ -206,7 +199,8 @@ def capture_wake_word(recognizer, settings, maintenance=lambda: None):
             if job is None and recognizer.available():
                 snapshot = capture.next_transcription()
                 if snapshot is not None:
-                    job = snapshot, recognizer.submit(snapshot), time.monotonic()
+                    job = (snapshot, recognizer.submit(snapshot, sample_rate),
+                           time.monotonic())
     return None
 
 
@@ -232,7 +226,6 @@ def run_listener(microphone):
 
     settings = WakeSettings.from_environment()
     inbox = None
-    launcher = Launcher()
     log.info(tr("wake.loading_model"))
     model = WhisperModel(
         os.environ.get("ARLO_WAKE_MODEL", "tiny"),
@@ -243,10 +236,7 @@ def run_listener(microphone):
     log.info(tr("wake.listening", phrase="Hola Arlo"))
     pending_request = False
     pending_id = None
-
-    def maintain_delivery():
-        if inbox.has_pending():
-            launcher.ensure_running()
+    pending_launch = False
 
     while True:
         try:
@@ -258,18 +248,25 @@ def run_listener(microphone):
                               ttl=settings.delivery_seconds)
                 log.info("Wake recording request queued: %s", pending_id)
                 pending_request = False
-            maintain_delivery()
+            if pending_launch:
+                # Each activation gets one launch attempt. A stale inbox entry
+                # must never reopen a console or desktop every few seconds.
+                pending_launch = False
+                try:
+                    launch_arlo()
+                except OSError:
+                    log.exception("Unable to launch Arlo")
             if audio_requested() or not microphone.acquire():
                 time.sleep(0.1)
                 continue
             try:
                 # Recheck after acquisition to close the handoff race.
                 if not audio_requested():
-                    activated = capture_wake_word(
-                        recognizer, settings, maintain_delivery)
+                    activated = capture_wake_word(recognizer, settings)
                     if activated:
                         pending_request = True
                         pending_id = uuid.uuid4().hex
+                        pending_launch = not is_arlo_running()
             finally:
                 microphone.release()
         except Exception:

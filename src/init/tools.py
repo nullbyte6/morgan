@@ -1,4 +1,4 @@
-from .brain import (
+from src.init.brain import (
     load_config,
     get_version,
     refresh,

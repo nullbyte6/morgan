@@ -31,6 +31,8 @@ import threading
 from getpass import getuser
 from pathlib import Path
 
+from src.tools.resources import resource_path
+
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -114,9 +116,10 @@ class ChatInput(QTextEdit):
 
 def get_stylesheet():
     """Returns the global stylesheet"""
-    stylesheet_path = (Path(__file__).resolve().parent.parent / "assets" / "arlo.qss")
+    stylesheet_path = resource_path((Path(__file__).resolve().parent.parent / "assets" / "arlo.qss"))
     stylesheet = stylesheet_path.read_text(encoding="utf-8")
     return stylesheet
+
 
 class WorkingDirectory(QToolButton):
     def __init__(self, parent=None):
@@ -1814,9 +1817,8 @@ def main():
         app.setWindowIcon(app_icon)
         fonts = assets / "fonts"
 
-        from src.tools.resources import resource_path
         def load_font(filename: str) -> str:
-            path = resource_path("assets", "fonts", filename)
+            path = resource_path(fonts, filename)
             if not path.is_file():
                 raise FileNotFoundError(
                     f"Font file not found: {path}"

@@ -27,7 +27,12 @@ $env:ARLO_EXTERNAL_CONSOLE = "1"
 
 Set-Location -LiteralPath $root
 
-& $services
+if ($Mode -eq "Desktop") {
+    & $services -NoConsole
+}
+else {
+    & $services
+}
 
 if (-not $?) {
     throw "ARLO services failed to start."
