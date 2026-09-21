@@ -36,6 +36,7 @@ class VoiceClient:
             port: int = 18765):
         self.audio_callback = audio_callback
         self.speaking_callback = None
+        self.subtitle_callback = None
         self._turn_id = uuid.uuid4().hex
         self.supports_interruptions = False
         self.supports_voice_selection = False
@@ -112,6 +113,14 @@ class VoiceClient:
                     if callback is not None:
                         try:
                             callback(bool(message["speaking"]))
+                        except Exception:
+                            pass
+
+                elif kind == "subtitle":
+                    callback = self.subtitle_callback
+                    if callback is not None:
+                        try:
+                            callback(str(message.get("text", "")))
                         except Exception:
                             pass
 

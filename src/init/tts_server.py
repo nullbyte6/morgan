@@ -58,7 +58,8 @@ class TTSServer:
             reference_text=VOICE_REFERENCE_TEXT,
             speed=1.0,
             audio_callback=self._on_audio,
-            speaking_callback=self._on_speaking)
+            speaking_callback=self._on_speaking,
+            subtitle_callback=self._on_subtitle)
         logger.info(tr('tts_server.cosyvoice_ready'))
 
     def _send(self, message: dict, client=None) -> None:
@@ -78,6 +79,9 @@ class TTSServer:
 
     def _on_speaking(self, speaking, turn_id):
         self._send({"type": "speaking", "speaking": speaking, "turn_id": turn_id})
+
+    def _on_subtitle(self, text, turn_id):
+        self._send({"type": "subtitle", "text": text, "turn_id": turn_id})
 
     def _on_audio(self, samples, sample_rate, turn_id) -> None:
         with self._client_lock:

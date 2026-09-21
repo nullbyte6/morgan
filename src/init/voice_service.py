@@ -142,6 +142,7 @@ class SpeechBatch:
         self.done.set()
         self.pending = 0
         self.speaking = False
+        self.subtitle = ""
         self.error = None
 
 
@@ -155,7 +156,8 @@ class VoiceService:
 
     def __init__(self, model_path, voice_reference, reference_text,
                  speed=1.0,
-                 audio_callback=None, speaking_callback=None):
+                 audio_callback=None, speaking_callback=None,
+                 subtitle_callback=None):
         self.model_path = Path(model_path)
         self.voice_reference = selected_voice() or Path(voice_reference)
         reference_text = reference_text.strip()
@@ -176,6 +178,7 @@ class VoiceService:
         self.speaking = False
         self.audio_callback = audio_callback
         self.speaking_callback = speaking_callback
+        self.subtitle_callback = subtitle_callback
         self._state_lock = threading.RLock()
         self._batch = SpeechBatch(None)
 
@@ -237,6 +240,13 @@ class VoiceService:
         if self.speaking_callback is not None:
             self.speaking_callback(speaking, batch.turn_id)
 
+    def _set_subtitle(self, batch, text):
+        if batch.subtitle == text:
+            return
+        batch.subtitle = text
+        if self.subtitle_callback is not None:
+            self.subtitle_callback(text, batch.turn_id)
+
     def stop(self, turn_id=None) -> None:
         with self._state_lock:
             batch = self._batch
@@ -244,6 +254,7 @@ class VoiceService:
                 return
             batch.cancelled.set()
             self._set_speaking(batch, False)
+            self._set_subtitle(batch, "")
             batch.done.set()
 
     def _complete(self, batch):
@@ -252,6 +263,7 @@ class VoiceService:
             if batch.pending == 0:
                 if batch is self._batch:
                     self._set_speaking(batch, False)
+                    self._set_subtitle(batch, "")
                 batch.done.set()
 
     def _tts_loop(self) -> None:
@@ -265,6 +277,7 @@ class VoiceService:
                 generator = self.voice.inference_zero_shot(
                     text, "", "", zero_shot_spk_id="arlo", stream=True,
                     speed=self.speed)
+                first_chunk = True
                 for chunk in generator:
                     if batch.cancelled.is_set():
                         break
@@ -275,7 +288,9 @@ class VoiceService:
                     with self._state_lock:
                         if samples.size and not batch.cancelled.is_set():
                             batch.pending += 1
-                            self._audio_queue.put((batch, samples))
+                            self._audio_queue.put(
+                                (batch, samples, text, first_chunk))
+                            first_chunk = False
             except Exception as error:
                 batch.error = error
                 logger.exception(tr('voice_service.tts_inference_failed'))
@@ -295,10 +310,13 @@ class VoiceService:
         last_ui_update = 0.0
         stream = None
         while True:
-            batch, samples = self._audio_queue.get()
+            batch, samples, text, first_chunk = self._audio_queue.get()
             try:
                 if batch.cancelled.is_set():
                     continue
+                if first_chunk:
+                    with self._state_lock:
+                        self._set_subtitle(batch, text)
                 if stream is None:
                     stream = sd.OutputStream(samplerate=self.sample_rate, channels=1,
                                              dtype="float32", latency="low", blocksize=0)

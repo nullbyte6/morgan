@@ -263,6 +263,7 @@ class AssistantWorker(QObject):
     audio = Signal(int, object)
     directory = Signal(str)
     speaking = Signal(int, bool)
+    subtitle = Signal(int, str)
     finished = Signal(str)
     failed = Signal(str)
     ready = Signal()
@@ -295,6 +296,7 @@ class AssistantWorker(QObject):
                     0, samples, rate)
                 voice.speaking_callback = lambda speaking: self.speaking.emit(
                     0, speaking)
+                voice.subtitle_callback = lambda text: self.subtitle.emit(0, text)
                 try:
                     with desktop_audio():
                         voice.begin_turn()
@@ -306,6 +308,7 @@ class AssistantWorker(QObject):
                 finally:
                     voice.audio_callback = None
                     voice.speaking_callback = None
+                    voice.subtitle_callback = None
                     self.speaking.emit(0, False)
             self.directory.emit(str(Path.cwd()))
             self.ready.emit()
@@ -388,6 +391,7 @@ class AssistantWorker(QObject):
                                                                  samples, rate),
                 on_speaking=lambda speaking: self.speaking.emit(turn_id,
                                                                 speaking),
+                on_subtitle=lambda text: self.subtitle.emit(turn_id, text),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
                 attachments=attachment_session, session=self.session)
@@ -1100,6 +1104,7 @@ class ArloWindow(QMainWindow):
         self.worker.chunk.connect(self.on_chunk)
         self.worker.audio.connect(self.on_audio)
         self.worker.speaking.connect(self.on_speaking)
+        self.worker.subtitle.connect(self.on_subtitle)
         self.worker.finished.connect(self.on_finished)
         self.worker.failed.connect(self.on_error)
         self.worker.screenshot_requested.connect(self.on_screenshot_requested)
@@ -1470,8 +1475,12 @@ class ArloWindow(QMainWindow):
             return
 
         self.current_reply += chunk
-        self.update_subtitles(self.current_reply)
         self.composer_orb.setToolTip(self.current_reply)
+
+    @Slot(int, str)
+    def on_subtitle(self, turn_id, text):
+        if turn_id == self.turn_id and not self.stopping:
+            self.update_subtitles(text)
 
     @Slot(int, object)
     def on_audio(self, turn_id, levels):

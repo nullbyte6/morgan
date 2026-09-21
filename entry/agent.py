@@ -350,8 +350,9 @@ class Assistant:
 
 
     def run_desktop_turn(self, prompt: str, history: list, on_chunk=None,
-                         on_audio=None, on_speaking=None, cancel_event=None,
-                         event_loop=None, attachments=None, session=None):
+                         on_audio=None, on_speaking=None, on_subtitle=None,
+                         cancel_event=None, event_loop=None, attachments=None,
+                         session=None):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
@@ -361,6 +362,7 @@ class Assistant:
         self._initialize_runtime()
         self.voice.audio_callback = on_audio
         self.voice.speaking_callback = on_speaking
+        self.voice.subtitle_callback = on_subtitle
         self.voice.begin_turn()
         cancel_event = cancel_event if cancel_event is not None else threading.Event()
         reply = []
@@ -444,6 +446,7 @@ class Assistant:
             active_attachments.reset(attachment_token)
             self.voice.audio_callback = None
             self.voice.speaking_callback = None
+            self.voice.subtitle_callback = None
             if on_speaking is not None:
                 on_speaking(False)
 
