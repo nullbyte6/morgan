@@ -33,6 +33,8 @@ import torch
 from transformers.utils import logging as transformers_logging
 
 from src.init.lang import tr
+from .config import load_config
+from .speech_text import prepare_speech
 from .voice_profiles import selected_voice, resolve_voice
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -188,7 +190,8 @@ class VoiceService:
         self._player_worker.start()
 
     def enqueue(self, text: str, turn_id=None, voice_reference=None) -> None:
-        text = _clean_for_speech(text)
+        subtitle = _clean_for_speech(text)
+        text = prepare_speech(subtitle, load_config().get("pronunciations", {}))
         text = normalize_spanish_numbers(text)
         spoken_chars = sum(char.isalnum() for char in text)
 
@@ -208,7 +211,7 @@ class VoiceService:
             batch = self._batch
             batch.pending += 1
             batch.done.clear()
-            self._text_queue.put((batch, text, reference))
+            self._text_queue.put((batch, text, subtitle, reference))
 
     def _select_reference(self, reference):
         """Only the synthesis worker replaces speaker conditioning after startup."""
@@ -268,7 +271,7 @@ class VoiceService:
 
     def _tts_loop(self) -> None:
         while True:
-            batch, text, reference = self._text_queue.get()
+            batch, text, subtitle, reference = self._text_queue.get()
             generator = None
             try:
                 if batch.cancelled.is_set():
@@ -289,7 +292,7 @@ class VoiceService:
                         if samples.size and not batch.cancelled.is_set():
                             batch.pending += 1
                             self._audio_queue.put(
-                                (batch, samples, text, first_chunk))
+                                (batch, samples, subtitle, first_chunk))
                             first_chunk = False
             except Exception as error:
                 batch.error = error

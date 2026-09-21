@@ -54,7 +54,7 @@ except ImportError:
     winreg = None
 
 from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
-                     save_config, load_dev_file)
+                     save_config, load_dev_file, update_config)
 from .app_cache import cached_app, remember_app, forget_app
 from .steam import steam_manager
 from .voice_profiles import (VOICE_DIR, MODEL_DIR, VOICE_MODEL,
@@ -1534,13 +1534,9 @@ def atomic_write_bytes(path: Path, content: bytes) -> None:
 
 def learn_pronunciation(word: str, pronunciation: str) -> str:
     """Learn how a word should be pronounced aloud and remember it permanently."""
-    from .identity import get_assistant
-
-    assistant = get_assistant()
-    if assistant.voice is None:
-        return tr('brain.voice_service_is_not_initialized')
-
-    return assistant.voice.learn_pronunciation(word, pronunciation)
+    return update_config({"pronunciations": {
+        word.strip().casefold(): pronunciation.strip()
+    }})
 
 def should_show_working_directory() -> bool:
     """Whether a successful cd has enabled the location in the prompt."""

@@ -176,6 +176,15 @@ def validate_config(config):
     for key, value in result["personality"].items():
         if not isinstance(value, str):
             raise ValueError(tr('config.personality_must_be_text', key=key))
+    pronunciations = config.get("pronunciations", {})
+    if not isinstance(pronunciations, dict) or len(pronunciations) > 512:
+        raise ValueError("pronunciations must be an object with at most 512 entries")
+    for word, pronunciation in pronunciations.items():
+        if (not isinstance(word, str) or not isinstance(pronunciation, str)
+                or not 1 <= len(word.strip()) <= 100
+                or not 1 <= len(pronunciation.strip()) <= 200):
+            raise ValueError("pronunciations must contain non-empty text entries")
+    result["pronunciations"] = pronunciations
     instructions = config.get("instructions", {})
     if not isinstance(instructions, dict):
         raise ValueError(tr('config.instructions_must_be_an_object'))
