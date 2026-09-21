@@ -290,9 +290,10 @@ class AssistantWorker(QObject):
     screenshot_requested = Signal(object)
     exit_requested = Signal()
 
-    def __init__(self):
+    def __init__(self, startup_greeting=""):
         super().__init__()
         self.assistant = Assistant()
+        self.startup_greeting = startup_greeting
         self.history = []
         self.session = SessionLog()
         self.confirmation_event = threading.Event()
@@ -306,6 +307,15 @@ class AssistantWorker(QObject):
         try:
             self.event_loop = asyncio.new_event_loop()
             self.assistant._initialize_runtime()
+            if self.startup_greeting:
+                try:
+                    with desktop_audio():
+                        self.assistant.voice.begin_turn()
+                        self.assistant.voice.enqueue(self.startup_greeting)
+                        self.assistant.voice.wait_until_done()
+                except Exception:
+                    logging.getLogger("arlo.voice").exception(
+                        "Unable to play startup greeting")
             self.directory.emit(str(Path.cwd()))
             self.ready.emit()
         except Exception as error:
@@ -791,7 +801,7 @@ class ArloWindow(QMainWindow):
 
         self.orb = Orb(self)
 
-        self.worker = AssistantWorker()
+        self.worker = AssistantWorker(self.startup_greeting)
         self.capture_handler = self.worker.screenshot_requested.emit
         register_capture_handler(self.capture_handler)
         self.chat_scroll = QScrollArea()
@@ -933,6 +943,10 @@ class ArloWindow(QMainWindow):
         banner_group.addWidget(self.orb, 0, Qt.AlignCenter)
         main.addLayout(banner_group, 1)
 
+        self.status.setObjectName("status")
+        self.status.setAlignment(Qt.AlignCenter)
+        main.addWidget(self.status)
+
         self.subtitles.setObjectName("subtitles")
         self.subtitles.setAlignment(Qt.AlignCenter)
         self.subtitles.setWordWrap(True)
@@ -941,10 +955,6 @@ class ArloWindow(QMainWindow):
         self.subtitles.setFixedHeight(90)
         self.subtitles.setVisible(self.settings_view.subtitles_switch.isChecked())
         main.addWidget(self.subtitles)
-
-        self.status.setObjectName("status")
-        self.status.setAlignment(Qt.AlignCenter)
-        main.addWidget(self.status)
 
         self.command_output.setObjectName("commandOutput")
         self.command_output.setReadOnly(True)
