@@ -30,7 +30,8 @@ VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy preparado para ayudarte "
 VOICE_NAMES = {
     "arlo-01.wav": "Javier",
     "arlo-02.wav": "Oscar",
-    "arlo-03.wav": "Ciro"
+    "arlo-03.wav": "Ciro",
+    "arlo-04.wav": "Brian"
 }
 
 
@@ -61,14 +62,6 @@ def select_voice(name: str) -> None:
     config = load_config()
     config["voice_reference"] = name
     save_config(config)
-
-
-def resolve_voice(name: str) -> Path:
-    """Accept only an existing reference from the voice directory."""
-    for path in available_voices():
-        if path.name == name:
-            return path
-    raise ValueError(f"Voice reference unavailable: {name}")
 
 
 def resolve_voice(name: str) -> Path:
