@@ -290,14 +290,23 @@ class AssistantWorker(QObject):
             self.event_loop = asyncio.new_event_loop()
             self.assistant._initialize_runtime()
             if self.startup_greeting:
+                voice = self.assistant.voice
+                voice.audio_callback = lambda samples, rate: self.report_audio(
+                    0, samples, rate)
+                voice.speaking_callback = lambda speaking: self.speaking.emit(
+                    0, speaking)
                 try:
                     with desktop_audio():
-                        self.assistant.voice.begin_turn()
-                        self.assistant.voice.enqueue(self.startup_greeting)
-                        self.assistant.voice.wait_until_done()
+                        voice.begin_turn()
+                        voice.enqueue(self.startup_greeting)
+                        voice.wait_until_done()
                 except Exception:
                     logging.getLogger("arlo.voice").exception(
                         "Unable to play startup greeting")
+                finally:
+                    voice.audio_callback = None
+                    voice.speaking_callback = None
+                    self.speaking.emit(0, False)
             self.directory.emit(str(Path.cwd()))
             self.ready.emit()
         except Exception as error:
@@ -1466,7 +1475,8 @@ class ArloWindow(QMainWindow):
 
     @Slot(int, object)
     def on_audio(self, turn_id, levels):
-        if turn_id == self.turn_id and self.busy and not self.stopping:
+        if (turn_id == self.turn_id and (self.busy or not self.ready)
+                and not self.stopping):
             self.composer_orb.set_levels(levels)
             self.mascot.set_levels(levels)
             self.orb.set_levels(levels)
@@ -1475,7 +1485,8 @@ class ArloWindow(QMainWindow):
     def on_speaking(self, turn_id, speaking):
         if turn_id != self.turn_id:
             return
-        self.speaking = speaking and self.busy and not self.stopping
+        self.speaking = (speaking and (self.busy or not self.ready)
+                         and not self.stopping)
         self.mascot.set_speaking(self.speaking)
 
         if not self.stopping and self.busy:
