@@ -42,7 +42,7 @@
   "status.speaking": "Speaking",
   "status.stopping": "Stopping",
   "status.stopped": "Response stopped",
-  "status.private": "[PRIVATE]",
+  "status.private": "private",
   "status.error": "Error",
   "status.authorization": "Waiting for authorization...",
   "status.denied": "Command denied",

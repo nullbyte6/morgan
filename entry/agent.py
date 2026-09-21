@@ -519,7 +519,7 @@ class Assistant:
         while not self.shutdown_requested.is_set():
             prompt = self.build_user_prompt()
             if session.private:
-                prompt = tr("status.private") + " " + prompt
+                prompt = tr("status.private") + " | " + prompt
 
             user_input = self.read_user_input(prompt, placeholder=greeting)
             greeting = ""

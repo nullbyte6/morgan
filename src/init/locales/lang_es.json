@@ -42,7 +42,7 @@
   "status.speaking": "Hablando",
   "status.stopping": "Deteniendo",
   "status.stopped": "Respuesta detenida",
-  "status.private": "[PRIVADO]",
+  "status.private": "privado",
   "status.error": "Error",
   "status.authorization": "Esperando autorización...",
   "status.denied": "Comando denegado",

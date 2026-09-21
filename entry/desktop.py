@@ -121,6 +121,21 @@ class WorkingDirectory(QToolButton):
         self.setToolTip(str(path))
 
 
+class PrivacyIndicator(QToolButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("privacyIndicator")
+        self.setText(tr("status.private"))
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self.setAutoRaise(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Fixed
+        )
+
+        self.hide()
+
 class AudioVisualizer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -798,6 +813,7 @@ class ArloWindow(QMainWindow):
         self.send = QPushButton("")
         self.attach = QPushButton("")
         self.directory_indicator = WorkingDirectory(self)
+        self.privacy_indicator = PrivacyIndicator(self)
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
         self.submitting = None
         self.input = ChatInput()
@@ -1014,7 +1030,13 @@ class ArloWindow(QMainWindow):
             QSizePolicy.Fixed)
 
         input_column.addWidget(self.attachment_tray)
-        input_column.addWidget(self.directory_indicator)
+        indicator_row = QHBoxLayout()
+        indicator_row.setContentsMargins(0, 0, 0, 0)
+        indicator_row.setSpacing(6)
+        indicator_row.addWidget(self.directory_indicator)
+        indicator_row.addWidget(self.privacy_indicator)
+        indicator_row.addStretch()
+        input_column.addLayout(indicator_row)
         input_column.addWidget(input_frame)
 
         input_group = QWidget()
@@ -1249,6 +1271,10 @@ class ArloWindow(QMainWindow):
         self.update_send_button()
         if self.showing_greeting:
             self.update_subtitles(self.startup_greeting)
+
+    def refresh_privacy_indicator(self):
+        private = self.worker.session.private
+        self.privacy_indicator.setVisible(private)
 
     @Slot()
     def on_ready(self):
@@ -1541,8 +1567,7 @@ class ArloWindow(QMainWindow):
         self.set_orbs_speaking(self.speaking)
 
         if not self.stopping and self.busy:
-            self.set_status(
-                "status.speaking" if self.speaking else "status.thinking")
+            self.set_status("status.speaking" if self.speaking else "status.thinking")
 
         self.update_send_button()
 
@@ -1568,8 +1593,12 @@ class ArloWindow(QMainWindow):
         self.orb.clear()
         self.composer_orb.clear()
         self.set_orbs_speaking(False)
-        self.set_status("status.stopped" if interrupted else
-                        "status.private" if self.worker.session.private else "")
+        self.set_status("status.stopped" if interrupted else "")
+
+        def refresh_privacy_indicator(self):
+            private = self.worker.session.private
+            self.privacy_indicator.setVisible(private)
+
         self.set_enabled(True)
         if self.isVisible():
             self.input.setFocus()
