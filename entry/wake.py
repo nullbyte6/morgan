@@ -54,6 +54,26 @@ logging.basicConfig(
 
 log = logging.getLogger("arlo.wake")
 
+
+def prioritize_listener() -> None:
+    """Keep foreground UI rendering from starving wake audio/inference."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        kernel32.SetPriorityClass.restype = ctypes.c_int
+        above_normal_priority_class = 0x00008000
+        if not kernel32.SetPriorityClass(
+                kernel32.GetCurrentProcess(), above_normal_priority_class):
+            raise ctypes.WinError(ctypes.get_last_error())
+    except OSError:
+        log.exception("Unable to raise wake-listener priority")
+
+
 def is_arlo_running() -> bool:
     """Check the lifetime lock without activating or launching the desktop."""
     lock = ProcessLock("desktop-running")
@@ -158,7 +178,16 @@ def capture_wake_word(recognizer, settings, maintenance=lambda: None):
                 continue
             last_frame = time.monotonic()
             if overflow.is_set():
-                raise RuntimeError("Audio input overflow; discarded incomplete interaction")
+                overflow.clear()
+                capture = WakeCapture(settings)
+                job = None
+                while True:
+                    try:
+                        frames.get_nowait()
+                    except queue.Empty:
+                        break
+                log.warning("Audio input overflow; wake capture reset")
+                continue
             capture.feed(pcm)
             if job is not None:
                 snapshot, future, started = job
@@ -185,6 +214,7 @@ def main() -> None:
     singleton = ProcessLock("wake-listener")
     if not singleton.acquire():
         return
+    prioritize_listener()
     microphone = ProcessLock("microphone")
     try:
         handler = RotatingFileHandler(voice_directory() / "wake.log",
