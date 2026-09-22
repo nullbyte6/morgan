@@ -486,4 +486,62 @@ QToolButton#privacyIndicator:hover {
     border-color: rgba(134, 239, 172, 0.55);
 }
 
+QScrollArea#logScroll {
+    background: transparent;
+    border: none;
+}
+
+QWidget#logContainer {
+    background: transparent;
+}
+
+QFrame#logMessageCard {
+    background-color: #1e2030;
+    border: 1px solid #494d64;
+    border-radius: 12px;
+}
+
+QFrame#logMessageCard[role="assistant"] {
+    background-color: #292d40;
+    border-color: #494d64;
+}
+
+QFrame#logMessageCard[role="user"] {
+    background-color: #1e2030;
+    border-color: #494d64;
+}
+
+QFrame#logMessageCard[role="system"] {
+    background-color: #363a4f;
+    border-color: #6e738d;
+}
+
+QLabel#logMessageAuthor {
+    color: #8aadf4;
+    font-size: 16px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#logMessageTime {
+    color: #a5adcb;
+    font-size: 16px;
+    background: transparent;
+    border: none;
+}
+
+QTextBrowser#logMessageBody {
+    background: transparent;
+    color: #cad3f5;
+    border: none;
+    padding: 0;
+    font-size: 16px;
+    selection-background-color: #494d64;
+    selection-color: #cad3f5;
+}
+
+QTextBrowser#logMessageBody QScrollBar {
+    width: 0;
+    height: 0;
+}
 
