@@ -1,0 +1,38 @@
+import unittest
+
+from src.init.subtitle_timing import WordTimeline
+
+
+class WordTimelineTests(unittest.TestCase):
+    def test_maps_audio_offsets_to_individual_words(self):
+        timeline = WordTimeline("uno dos tres", 900)
+
+        self.assertEqual(timeline.word_at(0), "uno")
+        self.assertEqual(timeline.word_at(300), "dos")
+        self.assertEqual(timeline.word_at(600), "tres")
+
+    def test_preserves_punctuation_on_the_displayed_word(self):
+        timeline = WordTimeline("Hola, mundo!", 1200)
+
+        self.assertEqual(timeline.word_at(0), "Hola,")
+        self.assertEqual(timeline.word_at(1199), "mundo!")
+
+    def test_punctuation_reserves_more_time_for_a_pause(self):
+        timeline = WordTimeline("sí, vale", 1000)
+
+        self.assertEqual(timeline.word_at(450), "sí,")
+        self.assertEqual(timeline.word_at(650), "vale")
+
+    def test_empty_text_or_audio_has_no_current_word(self):
+        self.assertEqual(WordTimeline("", 100).word_at(0), "")
+        self.assertEqual(WordTimeline("hola", 0).word_at(0), "")
+
+    def test_offsets_are_clamped_to_the_timeline(self):
+        timeline = WordTimeline("primera última", 500)
+
+        self.assertEqual(timeline.word_at(-20), "primera")
+        self.assertEqual(timeline.word_at(999), "última")
+
+
+if __name__ == "__main__":
+    unittest.main()
