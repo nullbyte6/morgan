@@ -947,11 +947,10 @@ def kill_process(process: str, force: bool = False,
         return f"Error: {error}"
 
 
-def shutdown_computer(delay_seconds: int) -> str:
-    """Schedule a Windows shutdown after an exact number of seconds.
-
-    This is the only tool that performs a computer shutdown. It returns the
-    operating system result so the assistant can report confirmed execution.
+def shutdown_computer(delay_seconds: int = 0) -> str:
+    """Shut down Windows now, or schedule it after delay_seconds.
+    Convert requested minutes or hours to seconds. Omit the delay for an
+    immediate shutdown. Returns the operating system's result.
     """
     if os.name != "nt":
         return tr('brain.error_shutdown_computer_is_only_supported_on_windows')

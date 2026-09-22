@@ -43,6 +43,7 @@ def close_application(application: str, force: bool = False) -> str:
     running processes; return candidates if ambiguous. force=True is only for
     explicitly requested forced termination. Normal window closure can leave
     save dialogs or a tray process running; report requested, not terminated.
+    Closing Arlo itself requests a graceful exit after the current turn.
     """
     def result(status, **values):
         return json.dumps(dict(status=status, **values), ensure_ascii=False)
@@ -53,7 +54,11 @@ def close_application(application: str, force: bool = False) -> str:
     if not query:
         return result("error", error=tr('app_close.an_application_name_is_required'))
     try:
-        from .brain import kill_process, normalize_application_name
+        from .brain import kill_process, kill_self, normalize_application_name
+        from .identity import get_assistant
+
+        if query == _normalize(get_assistant().name) or application.strip() == str(os.getpid()):
+            return result("close_requested", application=application, detail=kill_self())
         app = cached_app(normalize_application_name(application))
         cached_name = _normalize(Path(app["Path"]).name) if app and app.get("Path") else None
         if query in {"explorador de archivos", "explorador", "fileexplorer",

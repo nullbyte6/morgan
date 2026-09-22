@@ -110,6 +110,8 @@ def _fire(timer_id):
 def schedule_notification(delay_seconds: int, message: str, title: str | None = None) -> str:
     """Schedule a notification after 0–31536000 seconds. the assistant must stay running.
     Returns an ID for list_timers/cancel_timer. Timers survive reload, not exit.
+    Displays a message only; does not execute commands or shut down the PC.
+    Use shutdown_computer for a scheduled Windows shutdown.
     """
     try:
         if os.name != "nt":
