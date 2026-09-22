@@ -206,7 +206,7 @@ class Orb(QWidget):
         if abs(target - self.thinking_mix) < 0.001:
             self.thinking_mix = target
 
-        self.thinking_rotation += 0.045 * self.thinking_mix
+        self.thinking_rotation += 0.090 * self.thinking_mix
         self.update()
 
     def paintEvent(self, event):
@@ -227,6 +227,10 @@ class Orb(QWidget):
             path = QPainterPath()
             fill_path = QPainterPath() if layer == 0 and self.fill_ratio else None
             base_radius = 102.4 + layer * 3.0
+
+            if layer == 0:
+                base_radius *= 1.0 - 0.15 * self.thinking_mix
+
             for index in range(points + 1):
                 t = index / points
                 angle = t * math.tau
@@ -240,8 +244,7 @@ class Orb(QWidget):
                         fraction * fraction
                         * (3.0 - 2.0 * fraction))
 
-                level = (
-                        self.smoothed[band] * (1.0 - fraction)
+                level = (self.smoothed[band] * (1.0 - fraction)
                         + self.smoothed[next_band] * fraction)
 
                 primary = math.sin(
