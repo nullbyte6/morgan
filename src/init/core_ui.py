@@ -438,6 +438,7 @@ class ArloWindow(QMainWindow):
         self.set_enabled(False)
         self.load_stylesheet()
         self.refresh_language()
+        self.set_status("")
 
     def ensure_composer_visible(self):
         QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(
