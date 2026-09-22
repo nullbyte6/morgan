@@ -52,13 +52,13 @@ try:
 except ImportError:
     winreg = None
 
-from .config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
+from src.init.config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
                      save_config, load_dev_file, update_config)
-from .app_cache import cached_app, remember_app, forget_app
-from .steam import steam_manager
-from .voice_profiles import (VOICE_DIR, MODEL_DIR, VOICE_MODEL,
+from src.init.app_cache import cached_app, remember_app, forget_app
+from src.init.steam import steam_manager
+from src.init.voice_profiles import (VOICE_DIR, MODEL_DIR, VOICE_MODEL,
                              VOICE_REFERENCE, VOICE_REFERENCE_TEXT)
-from .desktop.capture import request_screenshot
+from src.init.desktop.capture import request_screenshot
 
 VERSION = "no-version-found"
 

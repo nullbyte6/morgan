@@ -28,6 +28,7 @@ from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
 from src.init.config import load_dev_file
+from src.init.desktop.capture import request_screen_image
 
 VISION_MODEL = os.getenv("ARLO_VISION_MODEL", load_dev_file()["vision_model"])
 IMAGE_TYPES = {
