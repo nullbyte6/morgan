@@ -385,15 +385,13 @@ class Assistant:
         turn_model_settings = {"temperature": brain.load_config()["temperature"]}
         model_prompt = attachments.prompt() if attachments else prompt
         voice_model_active = audio_input is not None or any(
-            isinstance(content, BinaryContent) and content.is_audio
+            isinstance(content, []) and content.is_audio
             for message in history
             for part in message.parts
             if isinstance(part, UserPromptPart)
             for content in (part.content if isinstance(part.content, list) else [])
         )
         if audio_input is not None:
-            # The user's request is the audio itself. Appending a second textual
-            # request here can make Gemma answer that text instead of the audio.
             model_prompt = [BinaryContent(data=audio_input, media_type="audio/wav")]
         if voice_model_active:
             from pydantic_ai.models.ollama import OllamaModel
