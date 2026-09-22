@@ -491,6 +491,18 @@ QScrollArea#logScroll {
     border: none;
 }
 
+QScrollArea#logScroll QScrollBar:vertical {
+    background: transparent;
+    width: 0px;
+    margin: 0;
+}
+
+QScrollArea#logScroll QScrollBar:horizontal {
+    background: transparent;
+    height: 0px;
+    margin: 0;
+}
+
 QWidget#logContainer {
     background: transparent;
 }
@@ -544,4 +556,3 @@ QTextBrowser#logMessageBody QScrollBar {
     width: 0;
     height: 0;
 }
-

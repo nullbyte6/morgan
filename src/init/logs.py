@@ -320,6 +320,8 @@ class LogView(QWidget):
 
         self.scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self.container = QWidget()
         self.container.setObjectName("logContainer")
