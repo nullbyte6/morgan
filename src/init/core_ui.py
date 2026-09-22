@@ -671,6 +671,10 @@ class ArloWindow(QMainWindow):
             orb.set_speaking(speaking)
         self.sync_mascot_subtitle()
 
+    def set_orbs_listening(self, listening: bool):
+        for orb in (self.orb, self.composer_orb, self.mascot):
+            orb.set_listening(listening)
+
     def set_orbs_visual_state(self, state, *, fade_in=180, fade_out=180):
         for orb in (self.orb, self.composer_orb, self.mascot):
             orb.set_visual_state(state, fade_in=fade_in, fade_out=fade_out)
@@ -860,11 +864,13 @@ class ArloWindow(QMainWindow):
         self.voice_thread = VoiceInputWorker(self, automatic=automatic)
         self.voice_thread.levels.connect(self.input_meter.set_levels)
         self.voice_thread.levels.connect(self.mascot.set_levels)
+        self.voice_thread.levels.connect(self.composer_orb.set_levels)
+        self.voice_thread.levels.connect(self.orb.set_levels)
         self.voice_thread.processing.connect(self.on_voice_processing)
         self.voice_thread.finished.connect(self.on_voice_finished)
         self.recording = True
         self.set_orbs_visual_state(Orb.State.WRITING)
-        self.mascot.set_listening(True)
+        self.set_orbs_listening(True)
         self.input.hide()
         self.input_meter.clear()
         self.input_meter.show()
@@ -876,7 +882,7 @@ class ArloWindow(QMainWindow):
     def on_voice_processing(self):
         self.recording = False
         self.set_orbs_visual_state(Orb.State.PROCESSING)
-        self.mascot.set_listening(False)
+        self.set_orbs_listening(False)
         self.input_meter.hide()
         self.mascot.clear()
         self.input.show()
@@ -887,7 +893,7 @@ class ArloWindow(QMainWindow):
         worker = self.voice_thread
         self.voice_thread = None
         self.recording = False
-        self.mascot.set_listening(False)
+        self.set_orbs_listening(False)
         self.input_meter.hide()
         self.input_meter.clear()
         self.mascot.clear()
@@ -900,7 +906,8 @@ class ArloWindow(QMainWindow):
         if worker.error:
             self.status.setText(worker.error)
         elif worker.audio_wav:
-            self.start_prompt(DesktopVoiceMessage(worker.audio_wav))
+            self.start_prompt(DesktopVoiceMessage(worker.audio_wav,
+                                                  worker.transcript))
 
         if self.isVisible():
             self.input.setFocus()

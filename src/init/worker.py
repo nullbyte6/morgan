@@ -45,11 +45,13 @@ class VoiceInputWorker(QThread):
         self.automatic = automatic
         self.stop_event = threading.Event()
         self.audio_wav = b""
+        self.transcript = ""
         self.error = ""
 
     def run(self):
         try:
-            from src.init.voice import record_voice, recording_to_wav
+            from src.init.voice import (record_voice, recording_to_wav,
+                                        transcribe_voice)
 
             with desktop_audio(stop_event=self.stop_event, tail=0):
                 if self.isInterruptionRequested():
@@ -64,6 +66,12 @@ class VoiceInputWorker(QThread):
                 return
             self.processing.emit()
             self.audio_wav = recording_to_wav(*recording)
+            try:
+                self.transcript, _ = transcribe_voice(*recording)
+            except Exception as error:
+                logging.getLogger("arlo.voice").warning(
+                    "Voice transcript unavailable; continuing with native audio: %s",
+                    error)
         except Exception as error:
             self.error = str(error)
 

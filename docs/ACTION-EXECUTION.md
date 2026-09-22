@@ -1,9 +1,10 @@
 # Desktop action execution
 
 Typed messages and voice messages reach `AssistantWorker._ask`. Voice capture
-only converts microphone PCM to 16 kHz WAV. The WAV is sent directly to
-`gemma4:e2b` as `input_audio`, with the registered tools. There is no transcription
-model, intermediate transcript, or transfer of spoken commands to Qwen.
+converts microphone PCM to 16 kHz WAV and also obtains a local Whisper transcript
+for the conversation log. The WAV is sent directly to `gemma4:e2b` as
+`input_audio`, with the registered tools; the transcript is not used as an
+intermediate command or transferred to Qwen.
 
 Gemma also handles subsequent turns while the conversation contains audio.
 Image attachments alone do not select the audio model. Gemma uses low reasoning
@@ -25,9 +26,9 @@ turn. Substring matching no
 longer bypasses the model or defaults unrecognized durations to immediate power
 off.
 
-The voice log marker `[Voice input]` is not a semantic memory query. Voice turns
-receive saved preferences without automatically retrieving unrelated voice
-commands from previous sessions.
+If local transcription is unavailable, the voice log falls back to `[Voice input]`.
+That marker is not a semantic memory query. Voice turns receive saved preferences
+without automatically retrieving unrelated voice commands from previous sessions.
 
 Restart the desktop application after updating this flow. Ordinary window close
 hides the app; use the tray's quit action before launching it again. Future

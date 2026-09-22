@@ -95,6 +95,7 @@ class DesktopMessage:
 @dataclass(frozen=True)
 class DesktopVoiceMessage:
     audio_wav: bytes
+    transcript: str = ""
 
     @property
     def text(self):
@@ -109,7 +110,7 @@ class DesktopVoiceMessage:
         return ()
 
     def log_text(self):
-        return "[Voice input]"
+        return self.transcript.strip() or "[Voice input]"
 
 
 def _encoding(sample: bytes) -> str:

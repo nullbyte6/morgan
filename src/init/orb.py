@@ -228,9 +228,9 @@ class Orb(QWidget):
 
         speech_scale_target = 1.0
         if self.listening:
-            speech_scale_target = 0.94 + self.amplitude * 0.14
+            speech_scale_target = 0.90 + self.amplitude * 0.24
         elif self.speaking and self.speech_pulse_enabled:
-            speech_scale_target = 0.965 + self.amplitude * 0.10
+            speech_scale_target = 0.93 + self.amplitude * 0.22
         scale_factor = (0.28 if speech_scale_target > self.speech_scale
                         else 0.18)
         self.speech_scale += (speech_scale_target - self.speech_scale) * scale_factor
@@ -394,7 +394,7 @@ class Orb(QWidget):
 
                 breathing = (math.sin(self._state_phase * 1.7) *
                              (0.25 if self.visual_state == self.State.IDLE else 0.8))
-                voice_expansion = (self.amplitude * 6.0)
+                voice_expansion = (self.amplitude * 14.0)
 
                 radius = (base_radius + deformation + idle + breathing +
                           ripple + voice_expansion + click_effect +
