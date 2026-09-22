@@ -100,7 +100,11 @@ def get_version() -> str:
 
 
 def refresh() -> str:
-    """Reload Arlo source modules and rebuild tools without restarting."""
+    """Reload loaded Arlo Python modules and rebuild model tools without restarting.
+
+    Use this when the user asks to refresh, reload, or update Arlo's modules
+    or source code. Modules under src.init and src.diagnostics are included.
+    """
     try:
         return get_assistant().reload_source()
     except Exception as error:

@@ -57,11 +57,22 @@ def is_reload_command(text: str) -> bool:
         if not unicodedata.combining(character))
     normalized = re.sub(r"\s+", " ", normalized.strip(" \t\r\n.!?"))
     if normalized in {"ref", "reload", "/reload", "recarga", "/recarga",
-                      "recargar", "/recargar", "hot reload"}:
+                      "recargar", "/recargar", "hot reload",
+                      "actualiza modulos", "actualizar modulos",
+                      "actualiza los modulos", "actualizar los modulos",
+                      "actualiza todos los modulos",
+                      "actualizar todos los modulos",
+                      "actualiza sus modulos", "actualizar sus modulos",
+                      "update modules", "update all modules",
+                      "reload modules", "reload all modules"}:
         return True
     return re.fullmatch(
-        r"(?:reload|recarga|recargar) (?:"
-        r"arlo|el codigo|codigo|source|the source|"
+        r"(?:reload|recarga|recargar|actualiza|actualizar|update|refresh) (?:(?:los|todos los|sus|all|the) )?(?:"
+        r"modulos|modules|archivos|ficheros|files)"
+        r"(?: de (?:arlo|init(?: y diagnostics)?|diagnostics)|"
+        r" in (?:arlo|init(?: and diagnostics)?))?|"
+        r"(?:reload|recarga|recargar|actualiza|actualizar|update|refresh) (?:(?:el|the) )?(?:"
+        r"arlo|codigo|source|the source|"
         r"la hoja de estilos|hoja de estilos|los estilos|estilos|stylesheet)",
         normalized,
     ) is not None

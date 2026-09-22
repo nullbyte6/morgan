@@ -123,13 +123,32 @@ class Assistant:
         self.agent.instructions(memory_instructions)
 
     def reload_source(self) -> str:
-        """Reload source providers and rebuild tools before the next turn."""
+        """Reload source modules and rebuild the model and tools for next turn."""
         with self._reload_lock:
             from src.init.hot_reload import reload_project_modules
 
             reloaded, errors = reload_project_modules()
             from src.init.brain import MODEL_NAME
             self.MODEL_NAME = MODEL_NAME
+
+            if self.agent is not None:
+                from pydantic_ai import Agent, Tool
+                from pydantic_ai.models.ollama import OllamaModel
+                from src.init.tools import TOOLS
+
+                self.model = OllamaModel(
+                    self.MODEL_NAME, provider=self.provider,
+                    settings=self.model_settings)
+                self.agent = Agent(
+                    model=self.model,
+                    tools=[Tool(function, sequential=True)
+                           for function in TOOLS])
+                self.agent.instructions(self.current_instructions)
+                self.agent.instructions(self.current_datetime_instructions)
+                self.agent.instructions(self.working_directory_instructions)
+                from src.init.memory.integration import memory_instructions
+                self.agent.instructions(memory_instructions)
+
             summary = f"Reloaded {len(reloaded)} source modules"
             if errors:
                 summary += "; failures: " + " | ".join(errors)
