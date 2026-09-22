@@ -385,7 +385,7 @@ class Assistant:
         turn_model_settings = {"temperature": brain.load_config()["temperature"]}
         model_prompt = attachments.prompt() if attachments else prompt
         voice_model_active = audio_input is not None or any(
-            isinstance(content, []) and content.is_audio
+            isinstance(content, [BinaryContent]) and content.is_audio
             for message in history
             for part in message.parts
             if isinstance(part, UserPromptPart)
