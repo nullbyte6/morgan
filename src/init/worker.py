@@ -40,14 +40,9 @@ class VoiceInputWorker(QThread):
     levels = Signal(object)
     transcribing = Signal()
 
-    def __init__(self, parent=None, *, automatic=False, barge_in=False,
-                 speech_threshold=None):
+    def __init__(self, parent=None, *, automatic=False):
         super().__init__(parent)
         self.automatic = automatic
-        self.barge_in = barge_in
-        self.speech_threshold = speech_threshold
-        self.detected_speech = False
-        self.peak_rms = 0.0
         self.stop_event = threading.Event()
         self.transcript = ""
         self.error = ""
@@ -56,26 +51,16 @@ class VoiceInputWorker(QThread):
         try:
             from src.init.voice import record_voice, transcribe_voice
 
-            if self.barge_in:
+            with desktop_audio(stop_event=self.stop_event, tail=0):
+                if self.isInterruptionRequested():
+                    return
                 recording = record_voice(
-                    on_audio=self.report_audio,
-                    on_speech=self.on_speech_detected,
-                    stop_event=self.stop_event,
-                    stop_on_silence=True,
-                    wait_for_speech=True,
-                    speech_threshold=self.speech_threshold)
-            else:
-                with desktop_audio(stop_event=self.stop_event, tail=0):
-                    if self.isInterruptionRequested():
-                        return
-                    recording = record_voice(
-                        on_audio=self.report_audio, stop_event=self.stop_event,
-                        stop_on_silence=self.automatic)
-            if self.isInterruptionRequested():
-                return
+                    on_audio=self.report_audio, stop_event=self.stop_event,
+                    stop_on_silence=self.automatic)
+                if self.isInterruptionRequested():
+                    return
             if recording is None:
-                if not self.barge_in:
-                    self.error = tr("voice.not_detected")
+                self.error = tr("voice.not_detected")
                 return
             self.transcribing.emit()
             self.transcript, _ = transcribe_voice(*recording)
@@ -84,13 +69,7 @@ class VoiceInputWorker(QThread):
         except Exception as error:
             self.error = str(error)
 
-    def on_speech_detected(self):
-        self.detected_speech = True
-
     def report_audio(self, pcm_data, sample_rate):
-        if self.barge_in:
-            from src.init.voice import pcm_rms
-            self.peak_rms = max(self.peak_rms, pcm_rms(pcm_data))
         import numpy as np
 
         samples = np.frombuffer(pcm_data, dtype="<i2").astype(
