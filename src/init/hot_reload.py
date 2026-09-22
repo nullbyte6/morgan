@@ -20,7 +20,9 @@
 from __future__ import annotations
 
 import importlib
+import re
 import sys
+import unicodedata
 from pathlib import Path
 
 
@@ -45,6 +47,24 @@ _PRESERVED = {
 }
 _PRESERVED_PREFIXES = ("src.init.memory.",)
 _RELOAD_LAST = ("src.init.brain", "src.init.rules", "src.init.tools")
+
+
+def is_reload_command(text: str) -> bool:
+    """Recognize explicit reload requests without sending them to the model."""
+    normalized = "".join(
+        character for character in unicodedata.normalize(
+            "NFKD", str(text).casefold())
+        if not unicodedata.combining(character))
+    normalized = re.sub(r"\s+", " ", normalized.strip(" \t\r\n.!?"))
+    if normalized in {"ref", "reload", "/reload", "recarga", "/recarga",
+                      "recargar", "/recargar", "hot reload"}:
+        return True
+    return re.fullmatch(
+        r"(?:reload|recarga|recargar) (?:"
+        r"arlo|el codigo|codigo|source|the source|"
+        r"la hoja de estilos|hoja de estilos|los estilos|estilos|stylesheet)",
+        normalized,
+    ) is not None
 
 
 def _is_project_source(module) -> bool:

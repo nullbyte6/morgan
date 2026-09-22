@@ -504,7 +504,7 @@ class Assistant:
 
         from src.init import brain
         from src.init.brain import (
-            refresh_model_keep_alive, refresh, get_working_directory)
+            refresh_model_keep_alive, get_working_directory)
 
         from src.init.output import chunks_group
         from src.init.session_log import SessionLog
@@ -558,8 +558,9 @@ class Assistant:
             if user_input.strip().lower() in ("quit", "exit"):
                 break
 
-            if user_input.strip().lower() in ("ref", "reload"):
-                result = refresh()
+            from src.init.hot_reload import is_reload_command
+            if is_reload_command(user_input):
+                result = self.reload_source()
                 session.write(self.name, result)
                 print(result)
                 continue

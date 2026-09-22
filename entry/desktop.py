@@ -391,10 +391,9 @@ class AssistantWorker(QObject):
                 return
 
             self.session.write(self.assistant.username, message.log_text())
-            if not message.attachments and prompt.strip().casefold() in (
-                    "ref", "reload", "/reload"):
-                from src.init.brain import refresh
-                reply = refresh()
+            from src.init.hot_reload import is_reload_command
+            if not message.attachments and is_reload_command(prompt):
+                reply = self.assistant.reload_source()
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
