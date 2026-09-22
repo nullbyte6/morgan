@@ -1356,6 +1356,16 @@ def identify_playing_song(seconds: int = 8) -> str:
                 pass
 
 
+async def media_is_playing() -> bool:
+    """Is media playing? Checks whether is media playing"""
+    from winrt.windows.media.control import (
+        GlobalSystemMediaTransportControlsSessionManager as Manager,
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status)
+
+    manager = await Manager.request_async()
+    return any(session.get_playback_info().playback_status == Status.PLAYING
+               for session in manager.get_sessions())
+
 def get_current_media() -> str:
     """
     Return the media currently exposed through Windows GSMTC.

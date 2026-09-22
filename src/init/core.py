@@ -16,10 +16,10 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
+import logging
+import os
 import random
 import re
-import os
-import logging
 import subprocess
 import threading
 import time
@@ -28,15 +28,15 @@ from datetime import datetime
 from getpass import getuser
 
 from src.init.console import DebugConsole
-from src.init.terminal import TerminalUI, interactive_terminal
 from src.init.voice_client import VoiceClient
 
+
+# noinspection PyBroadException
 class Assistant:
     """One shared assistant; reading its identity never
     starts the model or UI."""
     name = "Arlo"
     voice: VoiceClient = None
-    terminal_ui: TerminalUI
     _instance = None
     _instance_lock = threading.Lock()
     debug_console = None
@@ -124,7 +124,6 @@ class Assistant:
             from src.init.hot_reload import reload_project_modules
 
             reloaded, errors = reload_project_modules()
-            self.agent = None
             from src.init.brain import MODEL_NAME
             self.MODEL_NAME = MODEL_NAME
             summary = f"Reloaded {len(reloaded)} source modules"
@@ -457,171 +456,12 @@ class Assistant:
             return text, safe
         return text, completed_history
 
-    def run_session(self):
-        logger = logging.getLogger("arlo.trace")
-
-        self._initialize_runtime()
-        from pydantic_ai.messages import (
-            ModelRequest, ModelResponse, TextPart, UserPromptPart)
-
-        from src.init import brain
-        from src.init.brain import (
-            refresh_model_keep_alive, get_working_directory)
-
-        from src.init.session_log import SessionLog
-        from src.init.colors import RESET_COLOR
-        from src.init.voice import VOICE_COMMANDS, capture_voice_input
-        from src.init.lang import tr
-
-        session = SessionLog()
-        refresh_model_keep_alive()
-
-        if self.terminal_ui is None:
-            from colorama import Fore
-            from shutil import get_terminal_size
-
-            lines = self.banner.rstrip("\n").splitlines()
-            width = get_terminal_size().columns
-            left = max(0, (width - max(map(len, lines), default=0)) // 2)
-            sys.stdout.write(f"{RESET_COLOR}{Fore.LIGHTWHITE_EX}\n")
-            sys.stdout.write("\n".join(" " * left + line for line in lines))
-            sys.stdout.write(f"{RESET_COLOR}\n")
-
-        version = brain.get_version()
-
-        if self.terminal_ui is not None:
-            self.terminal_ui.set_version(version)
-
-        greeting = self.startup_greeting
-
-        history = []
-        while not self.shutdown_requested.is_set():
-            prompt = self.build_user_prompt()
-            if session.private:
-                prompt = tr("status.private") + " | " + prompt
-
-            user_input = self.read_user_input(prompt, placeholder=greeting)
-            greeting = ""
-
-            logging.getLogger("arlo.user").info(
-                "%s: %s",
-                self.username,
-                user_input)
-
-            privacy_result = session.handle_command(user_input)
-
-            if privacy_result is not None:
-                continue
-
-            if user_input.strip().casefold() not in VOICE_COMMANDS:
-                session.write(self.username, user_input)
-
-            if user_input.strip().lower() in ("quit", "exit"):
-                break
-
-            from src.init.hot_reload import is_reload_command
-            if is_reload_command(user_input):
-                result = self.reload_source()
-                session.write(self.name, result)
-                print(result)
-                continue
-
-            directory_result = self.directory_cmd(user_input)
-            if directory_result is not None:
-                session.write(self.name, directory_result)
-                continue
-
-            git_result = self.git_cmd(user_input)
-
-            if git_result is not None:
-                session.write(self.name, git_result)
-                history.extend([
-                    ModelRequest(parts=[UserPromptPart(user_input)]),
-                    ModelResponse(parts=[TextPart(
-                        f"Direct Git command result in {get_working_directory()}:\n"
-                        f"{git_result}")]),
-                ])
-                continue
-
-            file_content = self.print_file_cmd(user_input)
-            if file_content is not None:
-                self.printlns(file_content)
-                session.write(self.name, file_content)
-                continue
-
-            if user_input.strip().casefold() in VOICE_COMMANDS:
-                try:
-                    user_input = capture_voice_input()
-                except Exception as error:
-                    session.write("System", str(error))
-                    continue
-                if not user_input:
-                    session.write("System", tr("voice.transcription_failed"))
-                    continue
-                session.write(self.username, json.loads(user_input)[
-                    "voice_text"])
-
-            if self.terminal_ui is not None:
-                self.terminal_ui.set_thinking(True)
-
-            try:
-                logging.getLogger("arlo.llm").debug(tr('agent.processing_request'))
-                reply, history = self.run_desktop_turn(
-                    user_input, history,
-                    session=session,
-                    on_audio=(self.terminal_ui.update_audio_levels
-                              if self.terminal_ui is not None else None))
-                if reply:
-                    session.write(self.name, reply)
-                if self.terminal_ui is not None:
-                    self.terminal_ui.set_thinking(False)
-                    self.terminal_ui.clear_audio_levels()
-
-            except Exception as error:
-                if self.terminal_ui is not None:
-                    self.terminal_ui.set_thinking(False)
-                cause = error.__cause__
-                if cause is not None:
-                    logger.error(tr('agent.trace_10_exception_caught_s'), cause)
-                    session.write("System", f"{error}; Detail: {cause}"
-                if cause is not None else str(error))
-
-        session.close()
-
     def run(self):
         try:
             self.debug_console = DebugConsole()
             self.debug_console.start()
             self.debug_console.configure_logging()
-
             logging.getLogger("arlo").info(tr('agent.arlo_is_awake'))
-
-            if interactive_terminal():
-                ui = TerminalUI()
-                self.terminal_ui = ui
-                self.debug_console.redirect_native_streams()
-                self.debug_console.redirect_streams()
-
-                try:
-                    with ui:
-                        ui.set_banner(self.banner)
-                        self.run_session()
-                finally:
-                    if self.voice is not None:
-                        self.voice.close()
-                        self.voice = None
-
-                    self.debug_console.restore_streams()
-                    self.debug_console.restore_native_streams()
-                    self.terminal_ui = None
-            else:
-                self._initialize_runtime()
-                try:
-                    self.run_session()
-                finally:
-                    if self.voice is not None:
-                        self.voice.close()
-                        self.voice = None
 
         except (EOFError, KeyboardInterrupt):
             pass

@@ -56,7 +56,7 @@ from src.init.lang import get_language, set_language, tr
 from src.init.logs import LogView
 from src.init.session_log import SessionLog
 from src.init.settings import SettingsView
-from src.init.terminal import spectrum_levels
+
 from src.init.voice_ipc import (
     WAKE_RECORD_REQUEST,
     ProcessLock,
@@ -70,6 +70,7 @@ from src.init.desktop.capture import (
     register_capture_handler,
     unregister_capture_handler,
 )
+
 from src.init.desktop.clipboard import (
     ClipboardRequest,
     read_clipboard_on_gui_thread,
@@ -78,6 +79,42 @@ from src.init.desktop.clipboard import (
 )
 
 ARLO_INSTANCE_SERVER = "Diego.Arlo.Desktop"
+
+def spectrum_levels(audio, sample_rate=44100):
+    import numpy as np
+
+    samples = np.asarray(audio)
+    if samples.ndim == 1:
+        samples = samples[:, None]
+
+    band_count = 15
+
+    if len(samples) < 2 or samples.shape[1] == 0:
+        return np.zeros(band_count)
+
+    window = np.hanning(len(samples))
+    spectrum = np.abs(
+        np.fft.rfft(samples * window[:, None], axis=0))
+
+    power = np.mean(
+        (spectrum / max(window.sum(), 1)) ** 2,
+        axis=1)
+
+    frequencies = np.fft.rfftfreq(
+        len(samples),
+        1 / sample_rate)
+
+    edges = np.geomspace(60,
+        min(12000, sample_rate / 2),
+        band_count + 1)
+
+    rms = np.array([
+        np.sqrt(power[
+                (frequencies >= low) &
+                (frequencies < high)
+            ].sum()) for low, high in zip(edges, edges[1:])])
+
+    return np.clip((20 * np.log10(np.maximum(rms, 1e-8)) + 60) / 60, 0, 1)
 
 
 class ChatInput(QTextEdit):
@@ -873,8 +910,7 @@ class Orb(QWidget):
             speech_scale_target = 0.965 + self.amplitude * 0.10
         scale_factor = (0.28 if speech_scale_target > self.speech_scale
                         else 0.18)
-        self.speech_scale += (
-                                     speech_scale_target - self.speech_scale) * scale_factor
+        self.speech_scale += (speech_scale_target - self.speech_scale) * scale_factor
 
         self.phase += (0.025 + self.amplitude * 0.045)
         self.ripple_phase += 0.008
