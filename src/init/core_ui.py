@@ -455,6 +455,10 @@ class ArloWindow(QMainWindow):
     def startup_greeting(self) -> str:
         return tr(self.greeting_key, username=self.username, name="Arlo")
 
+    def set_orbs_thinking(self, thinking: bool):
+        for orb in (self.orb, self.composer_orb, self.mascot):
+            orb.set_thinking(thinking)
+
     def build_worker(self):
         self.worker.moveToThread(self.thread)
 
@@ -787,7 +791,8 @@ class ArloWindow(QMainWindow):
 
         self.busy = True
         self.set_enabled(True)
-        self.set_status("status.thinking")
+        self.set_orbs_thinking(True)
+
         try:
             if not self.thread.isRunning():
                 raise RuntimeError(tr("ui.worker_unavailable"))
@@ -825,7 +830,7 @@ class ArloWindow(QMainWindow):
         self.input.hide()
         self.input_meter.clear()
         self.input_meter.show()
-        self.set_status("voice.recording")
+        self.set_orbs_thinking(False)
         self.update_send_button()
         self.voice_thread.start()
 
@@ -871,7 +876,7 @@ class ArloWindow(QMainWindow):
         self.orb.clear()
         self.composer_orb.clear()
         self.set_orbs_speaking(False)
-        self.set_status("status.stopping")
+        self.set_orbs_thinking(False)
         self.update_send_button()
 
     @Slot()
@@ -913,11 +918,13 @@ class ArloWindow(QMainWindow):
             return
         self.speaking = (speaking and (self.busy or not self.ready)
                          and not self.stopping)
+        self.set_orbs_thinking(
+            self.busy and not self.speaking and not self.stopping)
+
         self.set_orbs_speaking(self.speaking)
 
         if not self.stopping and self.busy:
-            self.set_status(
-                "status.speaking" if self.speaking else "status.thinking")
+            self.set_orbs_thinking(False)
 
         self.update_send_button()
 
@@ -943,7 +950,7 @@ class ArloWindow(QMainWindow):
         self.orb.clear()
         self.composer_orb.clear()
         self.set_orbs_speaking(False)
-        self.set_status("status.stopped" if interrupted else "")
+        self.set_orbs_thinking(False)
         self.refresh_privacy_indicator()
         self.set_enabled(True)
         if self.isVisible():
@@ -974,6 +981,7 @@ class ArloWindow(QMainWindow):
         self.composer_orb.clear()
         self.set_orbs_speaking(False)
         self.set_status("status.error")
+        self.set_orbs_thinking(False)
         self.set_enabled(self.ready)
         self.resume_pending_prompt()
         if self.quitting:

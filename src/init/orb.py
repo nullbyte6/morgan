@@ -74,6 +74,9 @@ class Orb(QWidget):
         self.ripple_seed = random.uniform(0.0, math.tau)
         self.speaking = False
         self.listening = False
+        self.thinking = False
+        self.thinking_mix = 0.0
+        self.thinking_rotation = 0.0
         self.speech_pulse_enabled = True
         self.speech_scale = 1.0
 
@@ -99,6 +102,9 @@ class Orb(QWidget):
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.animate)
         self.timer.start()
+
+    def set_thinking(self, thinking: bool):
+        self.thinking = bool(thinking)
 
     def sizeHint(self):
         return QSize(self._preferred_size, self._preferred_size)
@@ -194,6 +200,13 @@ class Orb(QWidget):
         if self.double_pulse < 0.001:
             self.double_pulse = 0.0
 
+        target = 1.0 if self.thinking else 0.0
+
+        self.thinking_mix += (target - self.thinking_mix) * 0.085
+        if abs(target - self.thinking_mix) < 0.001:
+            self.thinking_mix = target
+
+        self.thinking_rotation += 0.032 * self.thinking_mix
         self.update()
 
     def paintEvent(self, event):
@@ -245,7 +258,7 @@ class Orb(QWidget):
                     angle * 11.0
                     - self.phase * 0.37) * 0.12
 
-                energy = (self.amplitude * 0.35 + level * 0.65)
+                energy = (self.amplitude * 0.35 + level * (1.0 - 0.65 * self.thinking_mix))
                 energy = min(1.0, energy * 2.0) ** 0.7
 
                 idle = math.sin(
@@ -311,22 +324,47 @@ class Orb(QWidget):
                             x * self.fill_ratio, y * self.fill_ratio)
 
             path.closeSubpath()
-
             if fill_path is not None:
                 fill_path.closeSubpath()
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(self.COLORS[0])
                 painter.drawPath(fill_path)
 
-            pen = QPen(color)
-            pen.setWidthF(
-                self.line_width * (1.0 if layer == 0 else 1.5 / 2.2) / scale)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            width = (self.line_width * (1.0 if layer == 0 else 1.5 / 2.2) /
+                    scale)
 
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawPath(path)
+            mix = self.thinking_mix
+            solid_color = QColor(color)
+            solid_color.setAlphaF(color.alphaF() * (1.0 - mix))
+
+            if solid_color.alpha() > 0:
+                pen = QPen(solid_color)
+                pen.setWidthF(width)
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawPath(path)
+
+            if mix > 0.001:
+                dashed_color = QColor(color)
+                dashed_color.setAlphaF(color.alphaF() * mix)
+
+                pen = QPen(dashed_color)
+                pen.setWidthF(width)
+                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+                pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+
+                pen.setDashPattern([5.0, 4.0])
+
+                direction = 1.0 if layer % 2 == 0 else -1.0
+                pen.setDashOffset(
+                    self.thinking_rotation * direction * (1.0 + layer * 0.15))
+
+                painter.setPen(pen)
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawPath(path)
 
         painter.end()
 
