@@ -127,16 +127,6 @@ find_git() {
     return 1
 }
 
-find_neovim() {
-    if command -v nvim.exe >/dev/null 2>&1; then NVIM_BIN="$(command -v nvim.exe)"; return 0; fi
-    if command -v nvim >/dev/null 2>&1; then NVIM_BIN="$(command -v nvim)"; return 0; fi
-    local candidate
-    for candidate in "${PROGRAM_FILES_UNIX}/Neovim/bin/nvim.exe" "${LOCAL_APP_DATA_UNIX}/Programs/Neovim/bin/nvim.exe"; do
-        if [[ -x "$candidate" ]]; then NVIM_BIN="$candidate"; return 0; fi
-    done
-    return 1
-}
-
 ensure_ollama_server() {
     if "$OLLAMA_BIN" list >/dev/null 2>&1; then return 0; fi
     info "Starting the local Ollama service..."
@@ -222,195 +212,6 @@ configure_arlo_environment() {
         Write-Host "ARLO_HOME = $root"
         Write-Host "User PATH configured."
         ' || fail "Could not configure ARLO_HOME or user PATH."
-}
-
-
-configure_neovim() {
-    local nvim_dir="${LOCAL_APP_DATA_UNIX}/nvim"
-    local lua_dir="${nvim_dir}/lua/diego"
-    local core_dir="${lua_dir}/core"
-    local plugins_dir="${lua_dir}/plugins"
-    info "Preparing Neovim configuration at ${LOCAL_APP_DATA_WINDOWS}\\nvim..."
-    if [[ -d "$nvim_dir" ]] && [[ -n "$(find "$nvim_dir" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
-        local backup="${LOCAL_APP_DATA_UNIX}/nvim.backup.$(date +%Y%m%d-%H%M%S)"
-        info "Existing Neovim configuration found; backing it up to $(to_windows_path "$backup")..."
-        mv "$nvim_dir" "$backup"
-    fi
-    mkdir -p "$core_dir" "$plugins_dir"
-    cat >"${nvim_dir}/init.lua" <<'EOF'
-require("diego.core")
-require("diego.lazy")
-EOF
-    cat >"${lua_dir}/lazy.lua" <<'EOF'
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.uv.fs_stat(lazypath) then
-  local result = vim.fn.system({"git", "clone", "--filter=blob:none", "--branch=stable", "https://github.com/folke/lazy.nvim.git", lazypath})
-  if vim.v.shell_error ~= 0 then error("Failed to install lazy.nvim:\n" .. result) end
-end
-vim.opt.rtp:prepend(lazypath)
-require("lazy").setup({
-  spec = { { import = "diego.plugins" } },
-  install = { colorscheme = { "catppuccin" } },
-  checker = { enabled = false },
-  change_detection = { notify = false },
-})
-EOF
-    cat >"${core_dir}/init.lua" <<'EOF'
-require("diego.core.options")
-require("diego.core.keymaps")
-EOF
-    cat >"${core_dir}/options.lua" <<'EOF'
-vim.cmd("let g:netrw_liststyle = 3")
-local opt = vim.opt
-opt.number = true
-opt.relativenumber = false
-opt.tabstop = 2
-opt.shiftwidth = 2
-opt.expandtab = true
-opt.autoindent = true
-opt.wrap = false
-opt.ignorecase = true
-opt.smartcase = true
-opt.cursorline = true
-opt.termguicolors = true
-opt.background = "dark"
-opt.signcolumn = "yes"
-opt.backspace = "indent,eol,start"
-opt.clipboard:append("unnamedplus")
-opt.completeopt = { "menu", "menuone", "noselect" }
-opt.splitright = true
-opt.splitbelow = true
-opt.scrolloff = 4
-opt.sidescrolloff = 8
-opt.undofile = true
-opt.updatetime = 250
-opt.timeoutlen = 400
-EOF
-    cat >"${core_dir}/keymaps.lua" <<'EOF'
-vim.g.mapleader = " "
-vim.g.maplocalleader = " "
-local keymap = vim.keymap
-keymap.set("n", "<leader>to", "<cmd>tabnew<CR>", { desc = "Open new tab" })
-keymap.set("n", "<leader>tx", "<cmd>tabclose<CR>", { desc = "Close current tab" })
-keymap.set("n", "<leader>w", "<cmd>write<CR>", { desc = "Save file" })
-keymap.set("n", "<leader>q", "<cmd>quit<CR>", { desc = "Quit" })
-keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR>")
-EOF
-    cat >"${plugins_dir}/colorscheme.lua" <<'EOF'
-return {
-  "catppuccin/nvim",
-  name = "catppuccin",
-  priority = 1000,
-  config = function()
-    require("catppuccin").setup({ flavour = "macchiato" })
-    vim.cmd.colorscheme("catppuccin")
-  end,
-}
-EOF
-    cat >"${plugins_dir}/indent-blankline.lua" <<'EOF'
-return {
-  "lukas-reineke/indent-blankline.nvim",
-  event = { "BufReadPre", "BufNewFile" },
-  main = "ibl",
-  opts = { indent = { char = "│" }, scope = { enabled = true } },
-}
-EOF
-    cat >"${plugins_dir}/nvim-tree.lua" <<'EOF'
-return {
-  "nvim-tree/nvim-tree.lua",
-  dependencies = { "nvim-tree/nvim-web-devicons" },
-  config = function()
-    vim.g.loaded_netrw = 1
-    vim.g.loaded_netrwPlugin = 1
-    local nvimtree = require("nvim-tree")
-    nvimtree.setup({
-      view = { width = 35, relativenumber = true },
-      renderer = { indent_markers = { enable = true }, icons = { glyphs = { folder = { arrow_closed = "", arrow_open = "" } } } },
-      filters = { custom = { ".DS_Store" } },
-      git = { ignore = false },
-    })
-    vim.keymap.set("n", "<leader>ee", "<cmd>NvimTreeToggle<CR>", { desc = "Toggle file explorer" })
-    vim.keymap.set("n", "<leader>ef", "<cmd>NvimTreeFindFileToggle<CR>", { desc = "Toggle file explorer on current file" })
-  end,
-}
-EOF
-    cat >"${plugins_dir}/nvim-cmp.lua" <<'EOF'
-return {
-  "hrsh7th/nvim-cmp",
-  event = "InsertEnter",
-  dependencies = {
-    "hrsh7th/cmp-buffer", "hrsh7th/cmp-path", "hrsh7th/cmp-nvim-lsp",
-    { "L3MON4D3/LuaSnip", version = "v2.*" },
-    "saadparwaiz1/cmp_luasnip", "rafamadriz/friendly-snippets", "onsails/lspkind.nvim",
-  },
-  config = function()
-    local cmp = require("cmp")
-    local luasnip = require("luasnip")
-    local lspkind = require("lspkind")
-    require("luasnip.loaders.from_vscode").lazy_load()
-    cmp.setup({
-      snippet = { expand = function(args) luasnip.lsp_expand(args.body) end },
-      mapping = cmp.mapping.preset.insert({
-        ["<C-k>"] = cmp.mapping.select_prev_item(),
-        ["<C-j>"] = cmp.mapping.select_next_item(),
-        ["<C-b>"] = cmp.mapping.scroll_docs(-4),
-        ["<C-f>"] = cmp.mapping.scroll_docs(4),
-        ["<C-Space>"] = cmp.mapping.complete(),
-        ["<C-e>"] = cmp.mapping.abort(),
-        ["<CR>"] = cmp.mapping.confirm({ select = false }),
-        ["<Tab>"] = cmp.mapping(function(fallback)
-          if cmp.visible() then cmp.select_next_item()
-          elseif luasnip.expand_or_jumpable() then luasnip.expand_or_jump()
-          else fallback() end
-        end, { "i", "s" }),
-        ["<S-Tab>"] = cmp.mapping(function(fallback)
-          if cmp.visible() then cmp.select_prev_item()
-          elseif luasnip.jumpable(-1) then luasnip.jump(-1)
-          else fallback() end
-        end, { "i", "s" }),
-      }),
-      sources = cmp.config.sources({ { name = "nvim_lsp" }, { name = "luasnip" } }, { { name = "buffer" }, { name = "path" } }),
-      formatting = { format = lspkind.cmp_format({ maxwidth = 50, ellipsis_char = "..." }) },
-    })
-  end,
-}
-EOF
-    cat >"${plugins_dir}/treesitter.lua" <<'EOF'
-return {
-  "nvim-treesitter/nvim-treesitter",
-  branch = "master",
-  event = { "BufReadPost", "BufNewFile" },
-  build = ":TSUpdate",
-  dependencies = { { "windwp/nvim-ts-autotag", opts = {} } },
-  config = function()
-    local treesitter = require("nvim-treesitter.configs")
-    treesitter.setup({
-      highlight = { enable = true },
-      indent = { enable = true },
-      ensure_installed = { "bash", "c", "css", "dockerfile", "gitignore", "graphql", "html", "javascript", "json", "lua", "markdown", "markdown_inline", "prisma", "query", "svelte", "tsx", "typescript", "vim", "vimdoc", "yaml" },
-      auto_install = true,
-      incremental_selection = {
-        enable = true,
-        keymaps = { init_selection = "<C-space>", node_incremental = "<C-space>", scope_incremental = false, node_decremental = "<BS>" },
-      },
-    })
-  end,
-}
-EOF
-    cat >"${nvim_dir}/.stylua.toml" <<'EOF'
-column_width = 160
-line_endings = "Unix"
-indent_type = "Spaces"
-indent_width = 2
-quote_style = "AutoPreferSingle"
-call_parentheses = "None"
-EOF
-}
-
-bootstrap_neovim() {
-    info "Installing Neovim plugins..."
-    "$NVIM_BIN" --headless "+Lazy! sync" +qa
-    info "Neovim configuration installed successfully."
 }
 
 download_cosyvoice_model() {
@@ -511,25 +312,12 @@ download_cosyvoice_model "$VOICE_MODEL_DIR"
 info "Checking for Git..."
 GIT_BIN=""
 if ! find_git; then
-    [[ -n "$WINGET_BIN" ]] || fail "Git is required by Neovim plugins, but WinGet is unavailable."
+    [[ -n "$WINGET_BIN" ]] || fail "Git is required, but WinGet is unavailable."
     info "Git was not found; installing it..."
     winget_install "Git.Git"
     find_git || fail "Git was installed, but git.exe could not be located."
 fi
 "$GIT_BIN" --version
-
-info "Checking for Neovim..."
-NVIM_BIN=""
-if ! find_neovim; then
-    [[ -n "$WINGET_BIN" ]] || fail "Neovim is not installed and WinGet is unavailable."
-    info "Neovim was not found; installing it..."
-    winget_install "Neovim.Neovim"
-    find_neovim || fail "Neovim was installed, but nvim.exe could not be located."
-fi
-"$NVIM_BIN" --version
-
-configure_neovim
-bootstrap_neovim
 
 info "Checking for Ollama..."
 OLLAMA_BIN=""
