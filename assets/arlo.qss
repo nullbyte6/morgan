@@ -46,7 +46,6 @@ QPushButton#send {
     color: #24273a;
     border: 1px solid #494d64;
     border-radius: 24px;
-    font-size: 32px;
 }
 
 QPushButton#attach {

@@ -570,6 +570,11 @@ class ArloWindow(QMainWindow):
         stopping_available = self.busy and self.speaking and not self.stopping
         self.send.setText("" if stopping_available or self.recording else
                           "" if self.has_text else "")
+
+        font = self.send.font()
+        font.setPointSize(36 if self.send.text() == "" else 32)
+        self.send.setFont(font)
+
         self.send.setEnabled(
             self.ready and (self.recording or stopping_available or (
                     not voice_active and not self.busy and
