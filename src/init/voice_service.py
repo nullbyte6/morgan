@@ -342,12 +342,9 @@ class VoiceService:
                             and now - last_ui_update >= 0.10):
                         self.audio_callback(frame, self.sample_rate, batch.turn_id)
                         last_ui_update = now
-                with self._state_lock:
-                    drained = batch.pending == 1
+               
                 if batch.cancelled.is_set():
                     stream.abort()
-                elif drained:
-                    stream.stop()
             except Exception as error:
                 batch.error = error
                 logger.exception(tr('voice_service.audio_playback_failed'))
