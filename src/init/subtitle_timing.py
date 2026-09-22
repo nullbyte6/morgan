@@ -52,10 +52,18 @@ class WordTimeline:
         ends[-1] = self.total_samples
         return tuple(ends)
 
+    def _index_at(self, sample_offset: int) -> int | None:
+        if not self._ends:
+            return None
+        offset = min(max(0, int(sample_offset)), self.total_samples - 1)
+        return min(bisect_right(self._ends, offset), len(self.words) - 1)
+
     def word_at(self, sample_offset: int) -> str:
         """Return the current word, clamping offsets to the audio duration."""
-        if not self._ends:
-            return ""
-        offset = min(max(0, int(sample_offset)), self.total_samples - 1)
-        index = min(bisect_right(self._ends, offset), len(self.words) - 1)
-        return self.words[index]
+        index = self._index_at(sample_offset)
+        return "" if index is None else self.words[index]
+
+    def text_at(self, sample_offset: int) -> str:
+        """Return the phrase revealed through the current spoken word."""
+        index = self._index_at(sample_offset)
+        return "" if index is None else " ".join(self.words[:index + 1])

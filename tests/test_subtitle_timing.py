@@ -17,6 +17,18 @@ class WordTimelineTests(unittest.TestCase):
         self.assertEqual(timeline.word_at(0), "Hola,")
         self.assertEqual(timeline.word_at(1199), "mundo!")
 
+    def test_reveals_the_phrase_through_the_current_word(self):
+        timeline = WordTimeline("uno dos tres", 900)
+
+        self.assertEqual(timeline.text_at(0), "uno")
+        self.assertEqual(timeline.text_at(300), "uno dos")
+        self.assertEqual(timeline.text_at(600), "uno dos tres")
+
+    def test_revealed_phrase_keeps_repeated_words(self):
+        timeline = WordTimeline("muy muy bien", 1000)
+
+        self.assertEqual(timeline.text_at(500), "muy muy")
+
     def test_punctuation_reserves_more_time_for_a_pause(self):
         timeline = WordTimeline("sí, vale", 1000)
 
@@ -26,6 +38,7 @@ class WordTimelineTests(unittest.TestCase):
     def test_empty_text_or_audio_has_no_current_word(self):
         self.assertEqual(WordTimeline("", 100).word_at(0), "")
         self.assertEqual(WordTimeline("hola", 0).word_at(0), "")
+        self.assertEqual(WordTimeline("", 100).text_at(0), "")
 
     def test_offsets_are_clamped_to_the_timeline(self):
         timeline = WordTimeline("primera última", 500)
