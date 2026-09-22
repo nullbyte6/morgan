@@ -21,13 +21,13 @@
 import asyncio
 import html
 import json
-import logging
 import math
 import os
 import random
 import re
 import sys
 import threading
+import logging
 from getpass import getuser
 from pathlib import Path
 
@@ -36,12 +36,15 @@ from src.tools.resources import resource_path
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
+os.environ["TORCH_LOGS"] = "-all"
+
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import *
 
-from entry.agent import Assistant
+from src.init.core import Assistant
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, AttachmentSession, \
     ollama_capabilities

@@ -4,12 +4,7 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $services = Join-Path $PSScriptRoot "arlo-services.ps1"
-
-$module = if ($Mode -eq "Tui") {
-    "entry.agent"
-} else {
-    "entry.desktop"
-}
+$module = "entry.desktop"
 
 foreach ($path in @($python, $services)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {

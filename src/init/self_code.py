@@ -57,7 +57,7 @@ def get_repo() -> str:
     from .brain import git_status
     from .config import CONFIG_FILE
     return json.dumps(
-        {"repository": str(ROOT), "entrypoint": str(ROOT / "entry" / "agent.py"),
+        {"repository": str(ROOT), "entrypoint": str(ROOT / "entry" / "desktop.py"),
          "user_config": str(CONFIG_FILE), "git_status": git_status(str(ROOT))},
         ensure_ascii=False)
 
@@ -72,7 +72,7 @@ def list_code(directory: str = ".") -> str:
 
 
 def read_code(path: str) -> str:
-    """Read source using a repository-relative path, e.g. entry/agent.py."""
+    """Read source using a repository-relative path, e.g. entry/desktop.py."""
     from .brain import read_file
     try:
         return read_file(str(_path(path)))
