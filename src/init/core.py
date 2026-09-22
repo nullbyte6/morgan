@@ -110,6 +110,7 @@ class Assistant:
         self.model = OllamaModel(
             self.MODEL_NAME,
             provider=self.provider,
+            profile={"openai_chat_supports_multiple_system_messages": False},
             settings=self.model_settings)
 
         self.agent = Agent(
@@ -130,6 +131,8 @@ class Assistant:
             reloaded, errors = reload_project_modules()
             from src.init.brain import MODEL_NAME
             self.MODEL_NAME = MODEL_NAME
+            self.audio_model = None
+            self.audio_model_name = None
 
             if self.agent is not None:
                 from pydantic_ai import Agent, Tool
@@ -138,6 +141,7 @@ class Assistant:
 
                 self.model = OllamaModel(
                     self.MODEL_NAME, provider=self.provider,
+                    profile={"openai_chat_supports_multiple_system_messages": False},
                     settings=self.model_settings)
                 self.agent = Agent(
                     model=self.model,
@@ -372,45 +376,48 @@ class Assistant:
         cancel_event = cancel_event if cancel_event is not None else threading.Event()
         reply = []
         completed_history = None
+        execution_started = False
         stream_messages = list(history)
 
         if attachments:
             attachments.reserve_history(history)
         turn_model = None
         turn_model_settings = {"temperature": brain.load_config()["temperature"]}
+        model_prompt = attachments.prompt() if attachments else prompt
         voice_model_active = audio_input is not None or any(
-            isinstance(content, BinaryContent)
+            isinstance(content, BinaryContent) and content.is_audio
             for message in history
             for part in message.parts
             if isinstance(part, UserPromptPart)
             for content in (part.content if isinstance(part.content, list) else [])
         )
         if audio_input is not None:
-            model_prompt = [
-                BinaryContent(data=audio_input, media_type="audio/wav"),
-                "Respond directly to the user's spoken message in its language.",
-                "If the spoken request asks to shut down the computer, call "
-                "shutdown_computer. If it asks to close Arlo, call kill_self. "
-                "Execute the tool; never read or describe a command instead.",
-            ]
-        else:
-            model_prompt = attachments.prompt() if attachments else prompt
+            # The user's request is the audio itself. Appending a second textual
+            # request here can make Gemma answer that text instead of the audio.
+            model_prompt = [BinaryContent(data=audio_input, media_type="audio/wav")]
         if voice_model_active:
             from pydantic_ai.models.ollama import OllamaModel
             from src.init.config import load_dev_file
 
-            if self.audio_model is None:
-                self.audio_model_name = load_dev_file()["audio_model"]
+            audio_model_name = load_dev_file()["audio_model"]
+            if self.audio_model is None or self.audio_model_name != audio_model_name:
+                self.audio_model_name = audio_model_name
                 self.audio_model = OllamaModel(
                     self.audio_model_name, provider=self.provider,
-                    settings={"openai_reasoning_effort": "none"})
+                    profile={"openai_chat_supports_multiple_system_messages": False},
+                    settings={"openai_reasoning_effort": "low"})
             turn_model = self.audio_model
-            turn_model_settings["openai_reasoning_effort"] = "none"
+            # Gemma needs reasoning to select and chain actions from the full
+            # registry. Disabling it produced promises and notification calls
+            # in place of the requested actions. Thinking is never sent to TTS.
+            turn_model_settings["openai_reasoning_effort"] = "low"
         attachment_tools = [attachments.toolset()] if attachments else []
 
         async def generate():
-            nonlocal completed_history, stream_messages
-            from pydantic_ai.messages import PartStartEvent, PartDeltaEvent, TextPartDelta
+            nonlocal completed_history, stream_messages, execution_started
+            from pydantic_ai.messages import (PartStartEvent, PartDeltaEvent,
+                                              TextPartDelta, FunctionToolCallEvent,
+                                              FunctionToolResultEvent)
             buffer = SpeechBuffer()
 
             async def stream_events(ctx, events):
@@ -424,9 +431,17 @@ class Assistant:
                         chunk = event.part.content
                     elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
                         chunk = event.delta.content_delta
-                    part_kind = getattr(getattr(event, "part", None), "part_kind", "")
-                    if on_phase is not None and part_kind in ("tool-call", "tool-return"):
-                        on_phase("executing" if part_kind == "tool-call" else "processing")
+                    if isinstance(event, FunctionToolCallEvent):
+                        logging.getLogger("arlo.tools").info(
+                            "Executing %s (%s)", event.part.tool_name, event.part.tool_call_id)
+                        if on_phase is not None:
+                            on_phase("executing")
+                    elif isinstance(event, FunctionToolResultEvent):
+                        logging.getLogger("arlo.tools").info(
+                            "Tool result: %s (%s)", event.part.tool_name,
+                            event.part.tool_call_id)
+                        if on_phase is not None:
+                            on_phase("processing")
                     if chunk:
                         reply.append(chunk)
                         if on_chunk is not None:
@@ -434,6 +449,9 @@ class Assistant:
                         for phrase in buffer.feed(chunk):
                             self.voice.enqueue(phrase)
 
+            if cancel_event.is_set():
+                return
+            execution_started = True
             result = await self.agent.run(
                 model_prompt, message_history=history, toolsets=attachment_tools,
                 model=turn_model,
@@ -490,6 +508,8 @@ class Assistant:
 
         text = "".join(reply)
         if cancel_event.is_set():
+            if not execution_started:
+                return "", history
             messages = stream_messages or list(history) + [ModelRequest(parts=[UserPromptPart(model_prompt)])]
             safe = list(history)
             pending = set()
