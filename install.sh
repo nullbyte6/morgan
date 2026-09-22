@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-
 readonly ASSISTANT_NAME="Arlo"
 readonly ARLO_MODEL="${ARLO_MODEL:-qwen3.5:9b}"
+readonly ARLO_VISION_MODEL="${ARLO_VISION_MODEL:-qwen3-vl:4b}"
 readonly ARLO_VOICE_MODEL="${ARLO_VOICE_MODEL:-FunAudioLLM/Fun-CosyVoice3-0.5B-2512}"
 # shellcheck disable=SC2155
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -334,11 +334,12 @@ fi
 
 ensure_ollama_server
 
-info "Downloading/verifying ${ARLO_MODEL} (approximately 9.3 GB)..."
+info "Downloading/verifying ${ARLO_MODEL} (approximately 6.7 GB)..."
 "$OLLAMA_BIN" pull "$ARLO_MODEL"
 
-configure_arlo_environment
-readonly ARLO_SCRIPT="$(to_windows_path "${SCRIPT_DIR}/scripts/arlo-run.ps1")"
+info "Downloading/verifying ${ARLO_VISION_MODEL} (approximately 3.3 GB)..."
+"$OLLAMA_BIN" pull "$ARLO_VISION_MODEL"
 
+configure_arlo_environment
 cleanup_installers
 trap - EXIT
