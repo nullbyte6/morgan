@@ -16,13 +16,16 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
+import base64
 import io
 import json
 import os
 import sys
+import urllib.request
 import wave
 from array import array
 from collections import deque
+from math import gcd
 
 from .colors import RESET_COLOR, USER_COLOR
 from .lang import tr
@@ -152,24 +155,70 @@ def transcribe_voice(pcm_data: bytes, sample_rate: int, *, model=None,
     return transcript, information.language
 
 
-def capture_voice_input() -> str | None:
-    """Capture and transcribe a single spoken command from the default microphone."""
-    print("[MIC]", flush=True)
-    recording = record_voice()
-    if recording is None:
-        print(tr("voice.not_detected"))
-        return None
+def process(pcm_data: bytes, sample_rate: int, *,
+            model: str, timeout: float = 120.0) -> str:
+    """Send recorded speech directly to an audio-capable Ollama model."""
+    import numpy as np
+    from scipy.signal import resample_poly
+
+    samples = np.frombuffer(pcm_data, dtype="<i2").astype(np.float32)
+    samples /= 32768.0
+    if sample_rate != 16000:
+        divisor = gcd(sample_rate, 16000)
+        samples = resample_poly(
+            samples, 16000 // divisor, sample_rate // divisor)
+    samples = np.clip(samples, -1.0, 1.0)
+
+    wav_buffer = io.BytesIO()
+    with wave.open(wav_buffer, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(16000)
+        wav_file.writeframes((samples * 32767).astype("<i2").tobytes())
+
+    audio_data = base64.b64encode(wav_buffer.getvalue()).decode("ascii")
+    prompt = (
+        "Convert the user's speech into a plain-text message for Arlo. "
+        "Preserve the spoken language, wording, intent, and details. "
+        "Output only the recognized message; do not answer it or add commentary. "
+        "If no intelligible speech is present, return an empty response."
+    )
+
+    request_data = {
+        "model": model,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "input_audio", "input_audio": {
+                    "data": audio_data, "format": "wav"}},
+                {"type": "text", "text": prompt},
+            ],
+        }],
+        "stream": False,
+        "temperature": 0,
+        "max_tokens": 512,
+        "reasoning_effort": "none",
+    }
+
+    request = urllib.request.Request(
+        "http://localhost:11434/v1/chat/completions",
+        data=json.dumps(request_data).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            result = json.load(response)
+    except (OSError, ValueError) as error:
+        raise RuntimeError(
+            f"Ollama audio model '{model}' failed: {error}") from error
 
     try:
-        transcript, language = transcribe_voice(*recording)
-    finally:
-        pass
-
-    if not transcript:
-        print(tr("voice.not_transcribed"))
-        return None
-    print(f"{USER_COLOR}[VOICE:{language}] {transcript}{RESET_COLOR}")
-    return json.dumps({
-        "voice_language": language,
-        "voice_text": transcript,
-    }, ensure_ascii=False)
+        message = result["choices"][0]["message"]
+        content = message.get("content", "")
+    except (KeyError, IndexError, TypeError) as error:
+        raise RuntimeError(
+            f"Ollama audio model '{model}' returned an invalid response") from error
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError(
+            f"Ollama audio model '{model}' returned no recognized speech")
+    return content.strip()

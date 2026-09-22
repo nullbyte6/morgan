@@ -28,7 +28,7 @@ from src.init.attachments import (DesktopMessage, AttachmentSession,
     ollama_capabilities)
 
 from src.init.commands import execute_command, set_confirmation_handler
-from src.init.config import load_config
+from src.init.config import load_config, load_dev_file
 from src.init.core import Assistant
 from src.init.lang import tr
 from src.init.session_log import SessionLog
@@ -49,7 +49,7 @@ class VoiceInputWorker(QThread):
 
     def run(self):
         try:
-            from src.init.voice import record_voice, transcribe_voice
+            from src.init.voice import record_voice, process
 
             with desktop_audio(stop_event=self.stop_event, tail=0):
                 if self.isInterruptionRequested():
@@ -63,7 +63,11 @@ class VoiceInputWorker(QThread):
                 self.error = tr("voice.not_detected")
                 return
             self.transcribing.emit()
-            self.transcript, _ = transcribe_voice(*recording)
+            audio_model = load_dev_file().get("audio_model")
+            if not audio_model:
+                raise RuntimeError("No Ollama audio model is configured")
+            self.transcript = process(
+                *recording, model=audio_model)
             if not self.transcript:
                 self.error = tr("voice.not_transcribed")
         except Exception as error:
