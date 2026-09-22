@@ -82,6 +82,8 @@ class AssistantWorker(QObject):
     directory = Signal(str)
     speaking = Signal(int, bool)
     subtitle = Signal(int, str)
+    phase = Signal(int, str)
+    permission_denied = Signal(int)
     finished = Signal(str)
     failed = Signal(str)
     ready = Signal()
@@ -228,6 +230,7 @@ class AssistantWorker(QObject):
                                                                  samples, rate),
                 on_speaking=speaking_changed,
                 on_subtitle=lambda text: self.subtitle.emit(turn_id, text),
+                on_phase=lambda phase: self.phase.emit(turn_id, phase),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
                 attachments=attachment_session, session=self.session,
@@ -291,7 +294,10 @@ class AssistantWorker(QObject):
         while not self.confirmation_event.wait(0.05):
             if cancel_event.is_set():
                 return False
-        return self.confirmation_answer and not cancel_event.is_set()
+        accepted = self.confirmation_answer and not cancel_event.is_set()
+        if not accepted:
+            self.permission_denied.emit(turn_id)
+        return accepted
 
     def resolve_confirmation(self, accepted: bool):
         self.confirmation_answer = accepted

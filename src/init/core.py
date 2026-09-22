@@ -353,6 +353,7 @@ class Assistant:
 
     def run_desktop_turn(self, prompt: str, history: list, on_chunk=None,
                          on_audio=None, on_speaking=None, on_subtitle=None,
+                         on_phase=None,
                          cancel_event=None, event_loop=None, attachments=None,
                          session=None, audio_input=None):
         """Cancel the model stream and queued speech before accepting steering."""
@@ -420,6 +421,9 @@ class Assistant:
                         chunk = event.part.content
                     elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
                         chunk = event.delta.content_delta
+                    part_kind = getattr(getattr(event, "part", None), "part_kind", "")
+                    if on_phase is not None and part_kind in ("tool-call", "tool-return"):
+                        on_phase("executing" if part_kind == "tool-call" else "processing")
                     if chunk:
                         reply.append(chunk)
                         if on_chunk is not None:

@@ -117,6 +117,7 @@ class ArloWindow(QMainWindow):
         self.recording = False
         self.voice_thread = None
         self.pending_voice_barge = False
+        self.permission_denied_state = False
         self.pending_wake_barge = False
         self.closing_after_voice = False
         self.quitting = False
@@ -493,6 +494,8 @@ class ArloWindow(QMainWindow):
         self.worker.chunk.connect(self.on_chunk)
         self.worker.audio.connect(self.on_audio)
         self.worker.speaking.connect(self.on_speaking)
+        self.worker.phase.connect(self.on_phase)
+        self.worker.permission_denied.connect(self.on_permission_denied)
         self.worker.subtitle.connect(self.on_subtitle)
         self.worker.finished.connect(self.on_finished)
         self.worker.failed.connect(self.on_error)
@@ -560,6 +563,7 @@ class ArloWindow(QMainWindow):
         if self.stopping:
             self.worker.resolve_confirmation(False)
             return
+        self.set_orbs_visual_state(Orb.State.AWAITING_PERMISSION)
         dialog = QMessageBox(self)
         dialog.setWindowTitle(tr("command.title"))
         dialog.setIcon(QMessageBox.Question)
@@ -643,6 +647,7 @@ class ArloWindow(QMainWindow):
     @Slot()
     def on_ready(self):
         self.ready = True
+        self.set_orbs_visual_state(Orb.State.IDLE)
         self.set_enabled(True)
 
         if self.isVisible():
@@ -664,6 +669,10 @@ class ArloWindow(QMainWindow):
         for orb in (self.orb, self.composer_orb, self.mascot):
             orb.set_speaking(speaking)
         self.sync_mascot_subtitle()
+
+    def set_orbs_visual_state(self, state, *, fade_in=180, fade_out=180):
+        for orb in (self.orb, self.composer_orb, self.mascot):
+            orb.set_visual_state(state, fade_in=fade_in, fade_out=fade_out)
 
     def sync_mascot_subtitle(self):
         self.mascot_subtitles.set_subtitle(
@@ -750,6 +759,7 @@ class ArloWindow(QMainWindow):
     def on_request_rejected(self, turn_id, error):
         if turn_id != self.turn_id:
             return
+        self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
         self.finish_wake_command("failed", error)
         self.submitting = None
         self.busy = False
@@ -804,6 +814,7 @@ class ArloWindow(QMainWindow):
         self.showing_greeting = False
         self.worker.cancel_event = threading.Event()
         self.stopping = False
+        self.permission_denied_state = False
         self.speaking = False
 
         self.command_output.hide()
@@ -813,6 +824,7 @@ class ArloWindow(QMainWindow):
         self.update_subtitles(prompt.display_text)
 
         self.busy = True
+        self.set_orbs_visual_state(Orb.State.PROCESSING)
         self.set_enabled(True)
         self.set_orbs_thinking(True)
 
@@ -850,6 +862,7 @@ class ArloWindow(QMainWindow):
         self.voice_thread.processing.connect(self.on_voice_processing)
         self.voice_thread.finished.connect(self.on_voice_finished)
         self.recording = True
+        self.set_orbs_visual_state(Orb.State.WRITING)
         self.mascot.set_listening(True)
         self.input.hide()
         self.input_meter.clear()
@@ -861,6 +874,7 @@ class ArloWindow(QMainWindow):
     @Slot()
     def on_voice_processing(self):
         self.recording = False
+        self.set_orbs_visual_state(Orb.State.PROCESSING)
         self.mascot.set_listening(False)
         self.input_meter.hide()
         self.mascot.clear()
@@ -913,11 +927,29 @@ class ArloWindow(QMainWindow):
             self.mascot.setToolTip(f"{error}")
 
     @Slot(int, str)
+    def on_phase(self, turn_id, phase):
+        if turn_id != self.turn_id or self.stopping:
+            return
+        if phase == "executing":
+            self.set_orbs_visual_state(Orb.State.EXECUTING)
+        elif phase == "processing" and not self.speaking:
+            self.set_orbs_visual_state(Orb.State.PROCESSING)
+
+    @Slot(int)
+    def on_permission_denied(self, turn_id):
+        if turn_id == self.turn_id:
+            self.permission_denied_state = True
+            self.set_orbs_visual_state(Orb.State.DENIED_ERROR,
+                                        fade_in=100, fade_out=300)
+
+    @Slot(int, str)
     def on_chunk(self, turn_id, chunk):
         if turn_id != self.turn_id or self.current_reply is None or self.stopping:
             return
 
         self.current_reply += chunk
+        if not self.speaking:
+            self.set_orbs_visual_state(Orb.State.WRITING)
         self.composer_orb.setToolTip(self.current_reply)
 
     @Slot(int, str)
@@ -939,6 +971,10 @@ class ArloWindow(QMainWindow):
             return
         self.speaking = (speaking and (self.busy or not self.ready)
                          and not self.stopping)
+        if self.speaking:
+            self.set_orbs_visual_state(Orb.State.READING)
+        elif self.busy and not self.stopping:
+            self.set_orbs_visual_state(Orb.State.PROCESSING)
         self.set_orbs_thinking(
             self.busy and not self.speaking and not self.stopping)
 
@@ -972,6 +1008,11 @@ class ArloWindow(QMainWindow):
         self.composer_orb.clear()
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
+        result_state = (Orb.State.DENIED_ERROR if self.permission_denied_state
+                        else Orb.State.SUCCESS)
+        self.set_orbs_visual_state(result_state, fade_in=120, fade_out=260)
+        QTimer.singleShot(700, lambda: self.set_orbs_visual_state(
+            Orb.State.IDLE) if not self.busy else None)
         self.refresh_privacy_indicator()
         self.set_enabled(True)
         if self.isVisible():
@@ -1013,6 +1054,9 @@ class ArloWindow(QMainWindow):
         self.composer_orb.clear()
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
+        self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
+        QTimer.singleShot(700, lambda: self.set_orbs_visual_state(
+            Orb.State.IDLE) if not self.busy else None)
         self.set_enabled(self.ready)
         if self.pending_wake_barge:
             self.pending_wake_barge = False

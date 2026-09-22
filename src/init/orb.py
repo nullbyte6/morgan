@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import random
 import math
+from enum import Enum
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
@@ -38,12 +39,26 @@ class Orb(QWidget):
     restore_requested = Signal()
     record_requested = Signal()
 
-    COLORS = (
-        QColor(245, 247, 255, 240),
-        QColor(165, 181, 255, 165),
-        QColor(116, 133, 240, 110),
-        QColor(96, 113, 205, 65),
-    )
+    class State(str, Enum):
+        IDLE = "idle"
+        PROCESSING = "processing"
+        READING = "reading"
+        WRITING = "writing"
+        EXECUTING = "executing"
+        AWAITING_PERMISSION = "awaiting_permission"
+        DENIED_ERROR = "denied_error"
+        SUCCESS = "success"
+
+    STATE_PROFILES = {
+        State.IDLE: (0.018, 0.30, 0.0, "WindowText"),
+        State.PROCESSING: (0.040, 0.52, 0.0, "Highlight"),
+        State.READING: (0.025, 0.42, 0.0, "Link"),
+        State.WRITING: (0.055, 0.62, 0.0, "Highlight"),
+        State.EXECUTING: (0.075, 0.70, 0.085, "Link"),
+        State.AWAITING_PERMISSION: (0.030, 0.48, 0.0, "BrightText"),
+        State.DENIED_ERROR: (0.090, 0.78, 0.0, "BrightText"),
+        State.SUCCESS: (0.035, 0.54, 0.0, "Highlight"),
+    }
 
     def __init__(self, parent=None, *,
                  size: int = 384,
@@ -79,6 +94,13 @@ class Orb(QWidget):
         self.thinking_rotation = 0.0
         self.speech_pulse_enabled = True
         self.speech_scale = 1.0
+        self.visual_state = self.State.IDLE
+        self._state_mix = 1.0
+        self._state_fade = 0.18
+        self._state_phase = 0.0
+        self._state_rotation = 0.0
+        self._state_color = QColor(self.palette().color(QPalette.ColorRole.WindowText))
+        self._target_color = QColor(self._state_color)
 
         self.click_pulse = 0.0
         self.double_pulse = 0.0
@@ -105,6 +127,23 @@ class Orb(QWidget):
 
     def set_thinking(self, thinking: bool):
         self.thinking = bool(thinking)
+
+    def set_visual_state(self, state, *, fade_in=180, fade_out=180):
+        """Transition to a deterministic visual state using the app palette."""
+        try:
+            state = state if isinstance(state, self.State) else self.State(state)
+        except (TypeError, ValueError):
+            state = self.State.IDLE
+        if state == self.visual_state:
+            return
+        _, _, _, role_name = self.STATE_PROFILES[state]
+        role = getattr(QPalette.ColorRole, role_name, QPalette.ColorRole.WindowText)
+        self._state_color = QColor(self._target_color)
+        self._target_color = QColor(self.palette().color(role))
+        self.visual_state = state
+        self._state_mix = 0.0
+        self._state_fade = max(1.0, float(fade_in + fade_out) / 2.0)
+        self.update()
 
     def sizeHint(self):
         return QSize(self._preferred_size, self._preferred_size)
@@ -188,7 +227,18 @@ class Orb(QWidget):
                         else 0.18)
         self.speech_scale += (speech_scale_target - self.speech_scale) * scale_factor
 
-        self.phase += (0.025 + self.amplitude * 0.045)
+        speed, target_amplitude, rotation, _ = self.STATE_PROFILES[self.visual_state]
+        self._state_mix += (1.0 - self._state_mix) * min(1.0, 16.0 / self._state_fade)
+        current = [self._state_color.red(), self._state_color.green(),
+                   self._state_color.blue(), self._state_color.alpha()]
+        target = [self._target_color.red(), self._target_color.green(),
+                  self._target_color.blue(), self._target_color.alpha()]
+        self._state_color.setRgb(*[
+            round(value + (goal - value) * 0.12)
+            for value, goal in zip(current, target)])
+        self._state_phase += speed
+        self._state_rotation += rotation
+        self.phase += (speed + self.amplitude * 0.045)
         self.ripple_phase += 0.008
 
         self.click_pulse *= 0.88
@@ -222,8 +272,20 @@ class Orb(QWidget):
         painter.translate(self.width() / 2, self.height() / 2)
         painter.scale(scale * self.speech_scale,
                       scale * self.speech_scale)
+        painter.rotate(self._state_rotation * 12.0)
         points = 240
-        for layer, color in enumerate(self.COLORS):
+        palette = self.palette()
+        _, target_amplitude, _, role_name = self.STATE_PROFILES[self.visual_state]
+        role = getattr(QPalette.ColorRole, role_name, QPalette.ColorRole.WindowText)
+        accent = QColor(self._state_color)
+        if not accent.isValid():
+            accent = palette.color(QPalette.ColorRole.WindowText)
+        colors = []
+        for index, alpha in enumerate((240, 165, 110, 65)):
+            color = QColor(accent)
+            color.setAlpha(round(alpha * (0.72 + 0.28 * self._state_mix)))
+            colors.append(color)
+        for layer, color in enumerate(colors):
             path = QPainterPath()
             fill_path = QPainterPath() if layer == 0 and self.fill_ratio else None
             base_radius = 102.4 + layer * 3.0
@@ -261,7 +323,9 @@ class Orb(QWidget):
                     angle * 11.0
                     - self.phase * 0.37) * 0.12
 
-                energy = (self.amplitude * 0.35 + level * (1.0 - 0.65 * self.thinking_mix))
+                state_energy = target_amplitude * (0.25 + 0.75 * self._state_mix)
+                energy = (max(self.amplitude, state_energy) * 0.35
+                          + level * (1.0 - 0.65 * self.thinking_mix))
                 energy = min(1.0, energy * 2.0) ** 0.7
 
                 idle = math.sin(
@@ -305,7 +369,7 @@ class Orb(QWidget):
                         self.click_pulse * 1.5
                         + self.double_pulse * 4.0)
 
-                breathing = (math.sin(self.phase * 0.8) * 0.8)
+                breathing = (math.sin(self._state_phase * 1.7) * 0.8)
                 voice_expansion = (self.amplitude * 6.0)
 
                 radius = (base_radius + deformation + idle + breathing +
