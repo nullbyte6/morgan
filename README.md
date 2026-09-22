@@ -44,3 +44,6 @@ With the desktop open, `reload`, `ref`, or `/reload` hot-reloads Arlo's loaded
 source/tool modules and rebuilds the model tool registry for the following turn.
 Live process infrastructure (Qt bridges, locks, timers, sessions, and memory) is
 preserved so reloading does not require restarting the application.
+
+For native voice input, tool execution, and action regression checks, see
+[desktop action execution](docs/ACTION-EXECUTION.md).
