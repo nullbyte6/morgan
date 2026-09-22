@@ -25,6 +25,8 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+STYLESHEET_PATH = PROJECT_ROOT / "assets" / "arlo.qss"
+_stylesheet_bridge = None
 
 # These modules own live threads, locks, GUI bridges, open sessions, or context
 # variables. Recreating those globals would disconnect the running application.
@@ -53,6 +55,49 @@ def _is_project_source(module) -> bool:
         Path(filename).resolve().relative_to(PROJECT_ROOT)
     except (OSError, ValueError):
         return False
+    return True
+
+
+def _reload_stylesheet(errors: list[str]) -> bool:
+    """Queue the global stylesheet update on Qt's application thread."""
+    if "PySide6.QtWidgets" not in sys.modules:
+        return False
+
+    from PySide6.QtCore import QObject, Qt, Signal, Slot
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        return False
+
+    try:
+        stylesheet = STYLESHEET_PATH.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        errors.append(f"{STYLESHEET_PATH}: {error}")
+        return False
+
+    class StylesheetBridge(QObject):
+        requested = Signal(str)
+
+        def __init__(self, application):
+            super().__init__()
+            self.application = application
+            self.requested.connect(
+                self.apply, Qt.ConnectionType.QueuedConnection)
+
+        @Slot(str)
+        def apply(self, value: str):
+            self.application.setStyleSheet(value)
+            for widget in self.application.topLevelWidgets():
+                if widget.styleSheet():
+                    widget.setStyleSheet(value)
+
+    global _stylesheet_bridge
+    if (_stylesheet_bridge is None
+            or _stylesheet_bridge.application is not app):
+        _stylesheet_bridge = StylesheetBridge(app)
+        _stylesheet_bridge.moveToThread(app.thread())
+    _stylesheet_bridge.requested.emit(stylesheet)
     return True
 
 
@@ -85,4 +130,6 @@ def reload_project_modules() -> tuple[list[str], list[str]]:
             reloaded.append(name)
         except Exception as error:
             errors.append(f"{name}: {error}")
+    if _reload_stylesheet(errors):
+        reloaded.append("assets/arlo.qss")
     return reloaded, errors
