@@ -27,7 +27,7 @@ from pydantic_ai import Agent, BinaryContent
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
-from config import load_dev_file
+from src.init.config import load_dev_file
 
 VISION_MODEL = os.getenv("ARLO_VISION_MODEL", load_dev_file()["vision_model"])
 IMAGE_TYPES = {
