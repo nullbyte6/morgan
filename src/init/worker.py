@@ -19,6 +19,7 @@
 import asyncio
 import json
 import logging
+import re
 import threading
 from pathlib import Path
 
@@ -34,6 +35,31 @@ from src.init.lang import tr
 from src.init.session_log import SessionLog
 from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
+
+
+def direct_system_action(prompt: str):
+    """Handle explicit Arlo/system power requests before model generation."""
+    from src.init.brain import kill_self, shutdown_computer
+
+    text = prompt.casefold().strip()
+    close_arlo = (
+        ("arlo" in text and any(word in text for word in
+                                 ("cierra", "cerrar", "sal", "quit", "close", "exit")))
+        or text in {"cierra la aplicación", "cerrar la aplicación",
+                    "close the application", "quit arlo"}
+    )
+    if close_arlo:
+        return kill_self()
+
+    shutdown = any(phrase in text for phrase in (
+        "apaga el ordenador", "apagar el ordenador", "apaga la computadora",
+        "apagar la computadora", "apaga el pc", "apagar el pc",
+        "shut down the computer", "shutdown the computer"))
+    if shutdown:
+        match = re.search(r"\b(\d+)\s*(?:s|segundos?|seconds?)\b", text)
+        delay = int(match.group(1)) if match else 0
+        return shutdown_computer(delay)
+    return None
 
 
 class VoiceInputWorker(QThread):
@@ -178,6 +204,12 @@ class AssistantWorker(QObject):
                 return
 
             self.session.write(self.assistant.username, message.log_text())
+            if not voice_input and not message.attachments:
+                direct_reply = direct_system_action(prompt)
+                if direct_reply is not None:
+                    self.session.write(self.assistant.name, direct_reply)
+                    self.finished.emit(direct_reply)
+                    return
             from src.init.hot_reload import is_reload_command
             if (not voice_input and not message.attachments
                     and is_reload_command(prompt)):
