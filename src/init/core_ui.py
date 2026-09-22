@@ -568,11 +568,11 @@ class ArloWindow(QMainWindow):
         self.has_text = bool(self.input.toPlainText().strip())
         voice_active = self.voice_thread is not None
         stopping_available = self.busy and self.speaking and not self.stopping
-        self.send.setText("" if stopping_available or self.recording else
-                          "" if self.has_text else "")
+        self.send.setText("" if stopping_available or self.recording else
+                          "" if self.has_text else "")
 
         font = self.send.font()
-        font.setPointSize(32 if self.send.text() == "" else 28)
+        font.setPointSize(32 if self.send.text() == "" or "" else 18)
         self.send.setFont(font)
 
         self.send.setEnabled(
