@@ -559,7 +559,6 @@ class ArloWindow(QMainWindow):
         if self.stopping:
             self.worker.resolve_confirmation(False)
             return
-        self.set_status("status.authorization")
         dialog = QMessageBox(self)
         dialog.setWindowTitle(tr("command.title"))
         dialog.setIcon(QMessageBox.Question)
@@ -572,7 +571,6 @@ class ArloWindow(QMainWindow):
 
         accepted = dialog.exec() == QMessageBox.Yes
         self.worker.resolve_confirmation(accepted)
-        self.set_status("" if not accepted else "status.denied")
 
     def set_status(self, key):
         self.status_key = key
@@ -645,7 +643,6 @@ class ArloWindow(QMainWindow):
     def on_ready(self):
         self.ready = True
         self.set_enabled(True)
-        self.set_status("")
 
         if self.isVisible():
             self.input.setFocus()
@@ -756,7 +753,6 @@ class ArloWindow(QMainWindow):
         self.submitting = None
         self.busy = False
         self.current_reply = None
-        self.set_status("status.error")
         self.update_send_button()
         QMessageBox.warning(self, tr("ui.attach_files"), error)
 
@@ -868,7 +864,6 @@ class ArloWindow(QMainWindow):
         self.input_meter.hide()
         self.mascot.clear()
         self.input.show()
-        self.set_status("voice.processing")
         self.update_send_button()
 
     @Slot()
@@ -886,7 +881,6 @@ class ArloWindow(QMainWindow):
         if self.closing_after_voice:
             self.close()
             return
-        self.set_status("")
         if worker.error:
             self.status.setText(worker.error)
         elif worker.audio_wav:
@@ -1017,7 +1011,6 @@ class ArloWindow(QMainWindow):
         self.orb.clear()
         self.composer_orb.clear()
         self.set_orbs_speaking(False)
-        self.set_status("status.error")
         self.set_orbs_thinking(False)
         self.set_enabled(self.ready)
         if self.pending_wake_barge:
@@ -1050,8 +1043,6 @@ class ArloWindow(QMainWindow):
             event.ignore()
             return
         if self.thread.isRunning() and self.busy:
-            self.set_status(
-                "status.close_wait")
             event.ignore()
             return
 
