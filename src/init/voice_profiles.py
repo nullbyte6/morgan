@@ -32,7 +32,10 @@ VOICE_NAMES = {
     "arlo-02.wav": "Oscar",
     "arlo-03.wav": "Ciro",
     "arlo-04.wav": "Brian",
-    "arlo-05.wav": "Gabriel"
+    "arlo-05.wav": "Gabriel",
+    "arlo-06.wav": "David",
+    "arlo-07.wav": "Mark",
+    "arlo-08.wav": "James"
 }
 
 
