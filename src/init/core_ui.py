@@ -106,8 +106,7 @@ class ArloWindow(QMainWindow):
         self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
         self.mascot_shortcut.activated.connect(self.show_mascot)
 
-        self.composer_orb = Orb(
-            self, size=84, line_width=2.6, fill_ratio=0.6)
+        self.composer_orb = Orb(self, size=84, line_width=2.6, fill_ratio=0.6)
         self.composer_orb.set_speech_pulse_enabled(orb_speech_pulse)
         self.composer_orb.hide()
         self.chat_button = QPushButton("󰭹")
@@ -982,9 +981,8 @@ class ArloWindow(QMainWindow):
 
     def closeEvent(self, event):
         if not self.quitting:
-            self.mascot.hide()
-            self.hide()
             event.ignore()
+            self.show_mascot()
             return
 
         unregister_capture_handler(self.capture_handler)
@@ -1161,7 +1159,7 @@ def main():
 
         tray_icon = install_tray_icon(app, window, app_icon)
         window.tray_icon = tray_icon
-        window.show()
+        QTimer.singleShot(0, window.show_mascot)
         sys.exit(app.exec())
     finally:
         instance_server.close()
