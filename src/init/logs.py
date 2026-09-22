@@ -30,8 +30,9 @@ from PySide6.QtGui import QDesktopServices, QFont, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import *
 
 ENTRY_HEADER = re.compile(
-    r"^\[(?P<time>\d{2}:\d{2}:\d{2}) "
-    r"(?P<timezone>Z|[+-]\d{2}:?\d{2})\]\s*$")
+    r"^\[(?:\d{4}-\d{2}-\d{2}[ T])?"
+    r"(?P<time>\d{2}:\d{2}:\d{2})"
+    r"(?:\s+(?:Z|[+-]\d{2}:?\d{2}))?]\s*$")
 
 AUTHOR_LINE = re.compile(
     r"^(?P<author>[^\n:]{1,100}):[ \t]?(?P<content>.*)$")
@@ -79,8 +80,14 @@ def parse_log(content: str) -> list[LogMessage]:
         if fence_char is None:
             header = ENTRY_HEADER.fullmatch(stripped)
 
-            if header is not None and index + 1 < len(lines):
-                author_line = lines[index + 1].rstrip("\r\n")
+            author_index = index + 1
+            if header is not None:
+                while (author_index < len(lines)
+                       and not lines[author_index].strip()):
+                    author_index += 1
+
+            if header is not None and author_index < len(lines):
+                author_line = lines[author_index].rstrip("\r\n")
                 author_match = AUTHOR_LINE.fullmatch(author_line)
 
                 if author_match is not None:
@@ -93,7 +100,7 @@ def parse_log(content: str) -> list[LogMessage]:
                     fence_char = None
                     fence_length = 0
 
-                    index += 2
+                    index = author_index + 1
                     continue
 
         if current_time is not None:
@@ -184,7 +191,7 @@ class LogMessageCard(QFrame):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed)
 
-        self.body.setDocumentMargin(0)
+        self.body.document().setDocumentMargin(0)
         self.body.anchorClicked.connect(self.open_link)
         layout.addWidget(self.body)
         self.render_markdown()
