@@ -24,6 +24,7 @@ import random
 import re
 import sys
 import threading
+from difflib import SequenceMatcher
 from getpass import getuser
 
 from src.init.identity import register_assistant
@@ -116,6 +117,7 @@ class ArloWindow(QMainWindow):
         self.has_text = False
         self.recording = False
         self.voice_thread = None
+        self.barge_in_threshold = 1000
         self.closing_after_voice = False
         self.quitting = False
         self.send = QPushButton("")
@@ -162,6 +164,7 @@ class ArloWindow(QMainWindow):
         self.status_key = "status.waking"
         self.showing_greeting = True
         self.current_reply = None
+        self.completed_reply = ""
         self.subtitle_text = ""
         self.wake_inbox = None
         self.wake_command_id = None
@@ -794,6 +797,7 @@ class ArloWindow(QMainWindow):
         self.worker.cancel_event = threading.Event()
         self.stopping = False
         self.speaking = False
+        self.barge_in_threshold = 1000
 
         self.command_output.hide()
         self.command_output.clear()
@@ -828,11 +832,13 @@ class ArloWindow(QMainWindow):
         else:
             self.start_recording()
 
-    def start_recording(self, *, automatic=False):
-        if (not self.ready or self.busy or self.submitting is not None or
-                self.voice_thread is not None):
+    def start_recording(self, *, automatic=False, barge_in=False):
+        if (not self.ready or (self.busy and not barge_in) or
+                self.submitting is not None or self.voice_thread is not None):
             return
-        self.voice_thread = VoiceInputWorker(self, automatic=automatic)
+        self.voice_thread = VoiceInputWorker(
+            self, automatic=automatic, barge_in=barge_in,
+            speech_threshold=(self.barge_in_threshold if barge_in else None))
         self.voice_thread.levels.connect(self.input_meter.set_levels)
         self.voice_thread.levels.connect(self.mascot.set_levels)
         self.voice_thread.transcribing.connect(self.on_voice_transcribing)
@@ -872,14 +878,43 @@ class ArloWindow(QMainWindow):
             self.close()
             return
         self.set_status("")
-        if worker.error:
+        if worker.barge_in and not worker.detected_speech:
+            return
+        elif worker.error:
             self.status.setText(worker.error)
         elif worker.transcript:
+            if worker.barge_in and self.is_assistant_echo(worker.transcript):
+                self.barge_in_threshold = min(
+                    8000, max(self.barge_in_threshold + 500,
+                              int(worker.peak_rms * 2)))
+                if self.busy and self.speaking:
+                    QTimer.singleShot(
+                        0, lambda: self.start_recording(
+                            automatic=True, barge_in=True))
+                return
             self.input.setPlainText(worker.transcript)
-            self.send_message()
+            if self.busy:
+                self.pending_prompt = DesktopMessage(worker.transcript)
+                if not self.stopping:
+                    self.stop_response()
+            else:
+                self.send_message()
 
         if self.isVisible():
             self.input.setFocus()
+
+    def is_assistant_echo(self, transcript):
+        """Identify captured speech that matches the current TTS response."""
+        words = re.findall(r"\w+", transcript.casefold())
+        response = " ".join((self.current_reply or self.completed_reply,
+                              self.subtitle_text))
+        spoken_words = re.findall(r"\w+", response.casefold())
+        if not words or not spoken_words:
+            return False
+        match = SequenceMatcher(
+            None, words, spoken_words, autojunk=False).find_longest_match()
+        required = min(len(words), 2 if len(words) <= 2 else 3)
+        return match.size >= required and match.size / len(words) >= 0.7
 
     def stop_response(self):
         self.stopping = True
@@ -939,10 +974,17 @@ class ArloWindow(QMainWindow):
             self.set_orbs_thinking(False)
 
         self.update_send_button()
+        if self.ready and self.busy and self.speaking:
+            self.start_recording(automatic=True, barge_in=True)
+        elif (not self.speaking and self.voice_thread is not None
+              and self.voice_thread.barge_in
+              and not self.voice_thread.detected_speech):
+            self.voice_thread.stop_event.set()
 
     @Slot(str)
     def on_finished(self, reply):
         interrupted = self.stopping
+        self.completed_reply = reply
         self.finish_wake_command("failed" if interrupted else "completed",
                                  "Interrupted" if interrupted else "")
         if self.worker.command_reply:

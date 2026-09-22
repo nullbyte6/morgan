@@ -48,8 +48,9 @@ def pcm_rms(pcm_data: bytes) -> float:
     return (sum(sample * sample for sample in samples) / len(samples)) ** 0.5
 
 
-def record_voice(*, on_audio=None, stop_event=None,
-                 stop_on_silence=True) -> tuple[bytes, int] | None:
+def record_voice(*, on_audio=None, on_speech=None, stop_event=None,
+                 stop_on_silence=True, wait_for_speech=False,
+                 speech_threshold=VOICE_SILENCE_THRESHOLD) -> tuple[bytes, int] | None:
     """Record speech and optionally finish automatically after end silence."""
     try:
         import sounddevice as sound
@@ -81,27 +82,34 @@ def record_voice(*, on_audio=None, stop_event=None,
             device=device["index"],
             channels=1,
             dtype="int16") as stream:
-        for block_index in range(maximum_blocks):
+        block_index = 0
+        while wait_for_speech or block_index < maximum_blocks:
             if stop_event is not None and stop_event.is_set():
                 break
             data, _ = stream.read(block_size)
+            block_index += 1
             audio_block = bytes(data)
             if on_audio is not None:
                 on_audio(audio_block, sample_rate)
-            contains_speech = pcm_rms(audio_block) >= VOICE_SILENCE_THRESHOLD
+            contains_speech = pcm_rms(audio_block) >= speech_threshold
 
             if not speech_started:
                 if contains_speech:
                     speech_started = True
                     audio_blocks.extend(pre_roll)
                     audio_blocks.append(audio_block)
+                    if on_speech is not None:
+                        on_speech()
                 else:
                     pre_roll.append(audio_block)
-                    if block_index >= start_timeout_blocks:
+                    if (not wait_for_speech
+                            and block_index >= start_timeout_blocks):
                         return None
                 continue
 
             audio_blocks.append(audio_block)
+            if len(audio_blocks) >= maximum_blocks:
+                break
             silent_blocks = 0 if contains_speech else silent_blocks + 1
             if stop_on_silence and silent_blocks >= silence_blocks_to_stop:
                 break
