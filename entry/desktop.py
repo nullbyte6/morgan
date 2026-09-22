@@ -500,7 +500,7 @@ def compact_mascot_subtitle(text: str, limit: int = 32) -> str:
 
 class MascotSubtitleBubble(QLabel):
     """Non-interactive subtitle bubble that follows a floating mascot."""
-    WIDTH = 184
+    WIDTH = 156
     GAP = 10
 
     def __init__(self, mascot):
@@ -514,15 +514,16 @@ class MascotSubtitleBubble(QLabel):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.WindowDoesNotAcceptFocus
             | Qt.WindowType.WindowTransparentForInput)
+
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.setWordWrap(True)
-        self.setContentsMargins(14, 9, 14, 9)
+        self.setContentsMargins(8, 4, 8, 4)
         self.setFixedWidth(self.WIDTH)
         self.setMaximumHeight(
-            self.fontMetrics().lineSpacing() * 3 + 18)
+            self.fontMetrics().lineSpacing() * 2 + 18)
         self.mascot.installEventFilter(self)
         self.hide()
 

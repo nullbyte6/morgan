@@ -162,8 +162,6 @@ class Assistant:
             from src.init.hot_reload import reload_project_modules
 
             reloaded, errors = reload_project_modules()
-            # The current Pydantic run keeps its local Agent reference. Clearing
-            # this attribute makes the next turn build a fresh tool registry.
             self.agent = None
             from src.init.brain import MODEL_NAME
             self.MODEL_NAME = MODEL_NAME
