@@ -274,6 +274,15 @@ class ArloWindow(QMainWindow):
         self.editor_button.setFixedSize(48, 48)
         self.editor_button.setToolTip("Editor")
 
+        self.navigation_group = QButtonGroup(self)
+        self.navigation_group.setExclusive(True)
+        for button in (
+                self.chat_button,
+                self.logs_button,
+                self.settings_button,
+                self.editor_button):
+            self.navigation_group.addButton(button)
+
         navigation.addWidget(self.chat_button)
         navigation.addWidget(self.logs_button)
         navigation.addWidget(self.settings_button)
