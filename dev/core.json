@@ -1,5 +1,6 @@
 {
   "version": "1.1.2-beta",
   "model_name": "qwen3.5:9b",
-  "vision_model": "qwen3-vl:4b"
+  "vision_model": "qwen3-vl:4b",
+  "audio_model": "gemma4:e2b"
 }
