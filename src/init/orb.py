@@ -206,7 +206,7 @@ class Orb(QWidget):
         if abs(target - self.thinking_mix) < 0.001:
             self.thinking_mix = target
 
-        self.thinking_rotation += 0.032 * self.thinking_mix
+        self.thinking_rotation += 0.045 * self.thinking_mix
         self.update()
 
     def paintEvent(self, event):
