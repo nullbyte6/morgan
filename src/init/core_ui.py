@@ -572,7 +572,7 @@ class ArloWindow(QMainWindow):
                           "" if self.has_text else "")
 
         font = self.send.font()
-        font.setPointSize(32 if self.send.text() == "" or "" else 18)
+        font.setPointSize(32 if self.send.text() == "" or "" else 12)
         self.send.setFont(font)
 
         self.send.setEnabled(
