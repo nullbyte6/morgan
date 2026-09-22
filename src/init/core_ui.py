@@ -647,6 +647,7 @@ class ArloWindow(QMainWindow):
     @Slot()
     def on_ready(self):
         self.ready = True
+        self.set_status("")
         self.set_orbs_visual_state(Orb.State.IDLE)
         self.set_enabled(True)
 

@@ -286,6 +286,10 @@ class Orb(QWidget):
             color = QColor(accent)
             color.setAlpha(round(alpha * (0.72 + 0.28 * self._state_mix)))
             colors.append(color)
+        inner_fill = QColor(palette.color(QPalette.ColorRole.WindowText))
+        if not inner_fill.isValid():
+            inner_fill = QColor(palette.color(QPalette.ColorRole.HighlightedText))
+        inner_fill.setAlpha(colors[0].alpha())
         for layer, color in enumerate(colors):
             path = QPainterPath()
             fill_path = QPainterPath() if layer == 0 and self.fill_ratio else None
@@ -395,7 +399,7 @@ class Orb(QWidget):
             if fill_path is not None:
                 fill_path.closeSubpath()
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(colors[0])
+                painter.setBrush(inner_fill)
                 painter.drawPath(fill_path)
 
             width = (self.line_width * (1.0 if layer == 0 else 0.85) /
