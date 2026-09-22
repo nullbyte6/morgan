@@ -31,7 +31,7 @@ from PySide6.QtWidgets import *
 
 ENTRY_HEADER = re.compile(
     r"^\[(?P<time>\d{2}:\d{2}:\d{2}) "
-    r"(?P<timezone>[+-]\d{4})\]\s*$")
+    r"(?P<timezone>Z|[+-]\d{2}:?\d{2})\]\s*$")
 
 AUTHOR_LINE = re.compile(
     r"^(?P<author>[^\n:]{1,100}):[ \t]?(?P<content>.*)$")
@@ -129,6 +129,7 @@ class LogMessageCard(QFrame):
         log_path: Path,
         code_font_family: str,
         parent=None):
+
         super().__init__(parent)
         self.message = message
         self.log_path = log_path
@@ -340,8 +341,8 @@ class LogView(QWidget):
         super().hideEvent(event)
 
     def clear_messages(self) -> None:
-        """Remove all currently displayed cards."""
-        while self.message_layout.count() > 1:
+        """Remove all message cards, preserving the bottom stretch."""
+        while self.message_layout.count():
             item = self.message_layout.takeAt(0)
 
             widget = item.widget()
@@ -350,20 +351,21 @@ class LogView(QWidget):
                 widget.deleteLater()
 
         self.messages.clear()
+        self.message_layout.addStretch()
 
     def append_message(
-        self,
-        message: LogMessage,
-        log_path: Path) -> None:
-        """Append one message card above the bottom stretch."""
+            self,
+            message: LogMessage,
+            log_path: Path) -> None:
+        """Append a message above the bottom stretch."""
         card = LogMessageCard(
             message,
             log_path,
             self.code_font_family,
             self.container)
-
-        index = self.message_layout.count() - 1
-        self.message_layout.insertWidget(index, card)
+        self.message_layout.insertWidget(
+            self.message_layout.count() - 1,
+            card)
         self.messages.append(message)
 
     def refresh(self) -> None:
