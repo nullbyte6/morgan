@@ -50,7 +50,7 @@ class Orb(QWidget):
         SUCCESS = "success"
 
     STATE_PROFILES = {
-        State.IDLE: (0.018, 0.30, 0.0, "WindowText"),
+        State.IDLE: (0.018, 0.30, 0.0, "Highlight"),
         State.PROCESSING: (0.040, 0.52, 0.0, "Highlight"),
         State.READING: (0.025, 0.42, 0.0, "Link"),
         State.WRITING: (0.055, 0.62, 0.0, "Highlight"),
@@ -63,7 +63,7 @@ class Orb(QWidget):
     def __init__(self, parent=None, *,
                  size: int = 384,
                  floating: bool = False,
-                 line_width: float = 8.0,
+                 line_width: float = 5.0,
                  fill_ratio: float = 0.0):
         super().__init__(parent)
         self.floating = floating
@@ -99,7 +99,7 @@ class Orb(QWidget):
         self._state_fade = 0.18
         self._state_phase = 0.0
         self._state_rotation = 0.0
-        self._state_color = QColor(self.palette().color(QPalette.ColorRole.WindowText))
+        self._state_color = QColor(self.palette().color(QPalette.ColorRole.Highlight))
         self._target_color = QColor(self._state_color)
 
         self.click_pulse = 0.0
@@ -277,18 +277,19 @@ class Orb(QWidget):
         palette = self.palette()
         _, target_amplitude, _, role_name = self.STATE_PROFILES[self.visual_state]
         role = getattr(QPalette.ColorRole, role_name, QPalette.ColorRole.WindowText)
-        accent = QColor(self._state_color)
-        if not accent.isValid():
-            accent = palette.color(QPalette.ColorRole.WindowText)
         colors = []
         for index, alpha in enumerate((240, 165, 110, 65)):
+            accent = (QColor(self._state_color) if index == 0 else
+                      palette.color(QPalette.ColorRole.WindowText))
+            if not accent.isValid():
+                accent = palette.color(QPalette.ColorRole.Highlight)
             color = QColor(accent)
             color.setAlpha(round(alpha * (0.72 + 0.28 * self._state_mix)))
             colors.append(color)
         for layer, color in enumerate(colors):
             path = QPainterPath()
             fill_path = QPainterPath() if layer == 0 and self.fill_ratio else None
-            base_radius = 102.4 + layer * 3.0
+            base_radius = 102.4 + layer * 8.0
 
             if layer == 0:
                 base_radius *= 1.0 - 0.15 * self.thinking_mix
@@ -394,13 +395,13 @@ class Orb(QWidget):
             if fill_path is not None:
                 fill_path.closeSubpath()
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(self.COLORS[0])
+                painter.setBrush(colors[0])
                 painter.drawPath(fill_path)
 
-            width = (self.line_width * (1.0 if layer == 0 else 1.5 / 2.2) /
+            width = (self.line_width * (1.0 if layer == 0 else 0.85) /
                     scale)
 
-            mix = self.thinking_mix
+            mix = self.thinking_mix if layer == 0 else 0.0
             solid_color = QColor(color)
             solid_color.setAlphaF(color.alphaF() * (1.0 - mix))
 
@@ -414,7 +415,7 @@ class Orb(QWidget):
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawPath(path)
 
-            if mix > 0.001:
+            if mix > 0.001 and layer == 0:
                 dashed_color = QColor(color)
                 dashed_color.setAlphaF(color.alphaF() * mix)
 

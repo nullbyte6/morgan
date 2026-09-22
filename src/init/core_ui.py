@@ -95,7 +95,7 @@ class ArloWindow(QMainWindow):
         self.setMinimumSize(600, 480)
 
         self.mascot = Orb(
-            size=120, floating=True, line_width=2.8, fill_ratio=0.6)
+            size=120, floating=True, line_width=4.2, fill_ratio=0.54)
         self.mascot.set_speech_pulse_enabled(orb_speech_pulse)
         self.mascot.hide()
         self.mascot_subtitles = MascotSubtitleBubble(self.mascot)
@@ -106,7 +106,7 @@ class ArloWindow(QMainWindow):
         self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
         self.mascot_shortcut.activated.connect(self.show_mascot)
 
-        self.composer_orb = Orb(self, size=84, line_width=2.6, fill_ratio=0.6)
+        self.composer_orb = Orb(self, size=84, line_width=4.0, fill_ratio=0.54)
         self.composer_orb.set_speech_pulse_enabled(orb_speech_pulse)
         self.composer_orb.hide()
         self.chat_button = QPushButton("󰭹")
@@ -140,7 +140,7 @@ class ArloWindow(QMainWindow):
         self.greeting_key = f"greeting.{random.randrange(6)}"
         self.subtitles = QLabel(self.startup_greeting)
 
-        self.orb = Orb(self, fill_ratio=0.6)
+        self.orb = Orb(self, fill_ratio=0.54)
         self.orb.set_speech_pulse_enabled(orb_speech_pulse)
 
         self.worker = AssistantWorker(self.startup_greeting)
