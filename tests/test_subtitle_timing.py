@@ -1,6 +1,6 @@
 import unittest
 
-from src.init.subtitle_timing import WordTimeline
+from src.init.subtitle_timing import StreamingWordTimeline, WordTimeline
 
 
 class WordTimelineTests(unittest.TestCase):
@@ -45,6 +45,32 @@ class WordTimelineTests(unittest.TestCase):
 
         self.assertEqual(timeline.word_at(-20), "primera")
         self.assertEqual(timeline.word_at(999), "última")
+
+
+class StreamingWordTimelineTests(unittest.TestCase):
+    def test_reveals_text_before_the_final_duration_is_known(self):
+        timeline = StreamingWordTimeline(
+            "uno dos tres", sample_rate=100, characters_per_second=3)
+
+        self.assertEqual(timeline.text_at(0), "uno")
+        self.assertEqual(timeline.text_at(100), "uno dos")
+
+    def test_final_duration_refines_remaining_word_timing(self):
+        timeline = StreamingWordTimeline(
+            "uno dos tres", sample_rate=100, characters_per_second=3)
+        timeline.finalize(900)
+
+        self.assertEqual(timeline.text_at(0), "uno")
+        self.assertEqual(timeline.text_at(300), "uno dos")
+        self.assertEqual(timeline.text_at(600), "uno dos tres")
+
+    def test_finalization_never_hides_already_revealed_words(self):
+        timeline = StreamingWordTimeline(
+            "uno dos tres", sample_rate=100, characters_per_second=3)
+
+        self.assertEqual(timeline.text_at(200), "uno dos tres")
+        timeline.finalize(900)
+        self.assertEqual(timeline.text_at(100), "uno dos tres")
 
 
 if __name__ == "__main__":

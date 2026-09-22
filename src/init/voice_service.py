@@ -35,7 +35,7 @@ from transformers.utils import logging as transformers_logging
 from src.init.lang import tr
 from .config import load_config
 from .speech_text import prepare_speech
-from .subtitle_timing import WordTimeline
+from .subtitle_timing import StreamingWordTimeline
 from .voice_profiles import selected_voice, resolve_voice
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -274,7 +274,8 @@ class VoiceService:
         while True:
             batch, text, subtitle, reference = self._text_queue.get()
             generator = None
-            audio_chunks = []
+            timeline = StreamingWordTimeline(subtitle, self.sample_rate)
+            sample_offset = 0
             try:
                 if batch.cancelled.is_set():
                     continue
@@ -289,19 +290,19 @@ class VoiceService:
                     if hasattr(audio, "detach"):
                         audio = audio.detach().cpu().numpy()
                     samples = np.asarray(audio, dtype=np.float32).reshape(-1)
-                    if samples.size:
-                        audio_chunks.append(samples)
-
-                if audio_chunks and not batch.cancelled.is_set():
-                    samples = np.concatenate(audio_chunks)
+                    if not samples.size:
+                        continue
                     with self._state_lock:
                         if not batch.cancelled.is_set():
                             batch.pending += 1
-                            self._audio_queue.put((batch, samples, subtitle))
+                            self._audio_queue.put(
+                                (batch, samples, timeline, sample_offset))
+                            sample_offset += len(samples)
             except Exception as error:
                 batch.error = error
                 logger.exception(tr('voice_service.tts_inference_failed'))
             finally:
+                timeline.finalize(sample_offset)
                 try:
                     if generator is not None:
                         generator.close()
@@ -317,11 +318,10 @@ class VoiceService:
         last_ui_update = 0.0
         stream = None
         while True:
-            batch, samples, text = self._audio_queue.get()
+            batch, samples, timeline, sample_offset = self._audio_queue.get()
             try:
                 if batch.cancelled.is_set():
                     continue
-                timeline = WordTimeline(text, len(samples))
                 if stream is None:
                     stream = sd.OutputStream(samplerate=self.sample_rate, channels=1,
                                              dtype="float32", latency="low", blocksize=0)
@@ -333,7 +333,8 @@ class VoiceService:
                             stream.abort()
                             break
                         self._set_speaking(batch, True)
-                        self._set_subtitle(batch, timeline.text_at(start))
+                        self._set_subtitle(
+                            batch, timeline.text_at(sample_offset + start))
                     frame = samples[start:start + frame_size]
                     stream.write(frame)
                     now = time.monotonic()

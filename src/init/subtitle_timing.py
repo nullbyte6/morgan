@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 import re
+import threading
 
 
 _WORD = re.compile(r"\S+")
@@ -52,7 +53,8 @@ class WordTimeline:
         ends[-1] = self.total_samples
         return tuple(ends)
 
-    def _index_at(self, sample_offset: int) -> int | None:
+    def index_at(self, sample_offset: int) -> int | None:
+        """Return the current word index for a clamped audio offset."""
         if not self._ends:
             return None
         offset = min(max(0, int(sample_offset)), self.total_samples - 1)
@@ -60,10 +62,42 @@ class WordTimeline:
 
     def word_at(self, sample_offset: int) -> str:
         """Return the current word, clamping offsets to the audio duration."""
-        index = self._index_at(sample_offset)
+        index = self.index_at(sample_offset)
         return "" if index is None else self.words[index]
 
     def text_at(self, sample_offset: int) -> str:
         """Return the phrase revealed through the current spoken word."""
-        index = self._index_at(sample_offset)
+        index = self.index_at(sample_offset)
         return "" if index is None else " ".join(self.words[:index + 1])
+
+
+class StreamingWordTimeline:
+    """Reveal a phrase while its final synthesized duration is still unknown."""
+
+    def __init__(self, text: str, sample_rate: int,
+                 characters_per_second: float = 14.0):
+        self.text = text
+        self.sample_rate = max(1, int(sample_rate))
+        self.characters_per_second = max(1.0, float(characters_per_second))
+        words = tuple(_WORD.findall(text))
+        weight = sum(_word_weight(word) for word in words)
+        estimated_samples = round(
+            self.sample_rate * weight / self.characters_per_second)
+        self._timeline = WordTimeline(text, estimated_samples)
+        self._revealed_index = -1
+        self._lock = threading.Lock()
+
+    def finalize(self, total_samples: int) -> None:
+        """Replace the speaking-rate estimate with the complete audio length."""
+        with self._lock:
+            self._timeline = WordTimeline(self.text, total_samples)
+
+    def text_at(self, sample_offset: int) -> str:
+        """Return monotonically accumulated text at a streamed sample offset."""
+        with self._lock:
+            index = self._timeline.index_at(sample_offset)
+            if index is None:
+                return ""
+            self._revealed_index = max(self._revealed_index, index)
+            return " ".join(
+                self._timeline.words[:self._revealed_index + 1])
