@@ -1019,6 +1019,11 @@ class ArloWindow(QMainWindow):
         if self.isVisible():
             self.input.setFocus()
 
+        if self.worker.assistant.shutdown_requested.is_set():
+            self.quitting = True
+            QTimer.singleShot(0, self.request_quit)
+            return
+
         if self.pending_wake_barge:
             self.pending_wake_barge = False
             self.start_recording(automatic=True)
