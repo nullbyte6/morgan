@@ -43,7 +43,8 @@ from PySide6.QtWidgets import *
 
 from entry.agent import Assistant
 from src.init.attachment_widgets import AttachmentTray
-from src.init.attachments import DesktopMessage, AttachmentSession,ollama_capabilities
+from src.init.attachments import DesktopMessage, AttachmentSession, \
+    ollama_capabilities
 from src.init.brain import kill_self
 from src.init.commands import execute_command, set_confirmation_handler
 from src.init.config import load_dev_file, load_config
@@ -74,6 +75,7 @@ from src.init.desktop.clipboard import (
 )
 
 ARLO_INSTANCE_SERVER = "Diego.Arlo.Desktop"
+
 
 class ChatInput(QTextEdit):
     submitted = Signal()
@@ -116,7 +118,8 @@ class ChatInput(QTextEdit):
 
 def get_stylesheet():
     """Returns the global stylesheet"""
-    stylesheet_path = resource_path((Path(__file__).resolve().parent.parent / "assets" / "arlo.qss"))
+    stylesheet_path = resource_path(
+        (Path(__file__).resolve().parent.parent / "assets" / "arlo.qss"))
     stylesheet = stylesheet_path.read_text(encoding="utf-8")
     return stylesheet
 
@@ -149,6 +152,7 @@ class PrivacyIndicator(QToolButton):
         )
 
         self.hide()
+
 
 class AudioVisualizer(QWidget):
     def __init__(self, parent=None):
@@ -283,7 +287,8 @@ class VoiceInputWorker(QThread):
     def report_audio(self, pcm_data, sample_rate):
         import numpy as np
 
-        samples = np.frombuffer(pcm_data, dtype="<i2").astype(np.float32) / 32768.0
+        samples = np.frombuffer(pcm_data, dtype="<i2").astype(
+            np.float32) / 32768.0
         self.levels.emit(spectrum_levels(samples, sample_rate).tolist())
 
 
@@ -327,7 +332,8 @@ class AssistantWorker(QObject):
                     0, samples, rate)
                 voice.speaking_callback = lambda speaking: self.speaking.emit(
                     0, speaking)
-                voice.subtitle_callback = lambda text: self.subtitle.emit(0, text)
+                voice.subtitle_callback = lambda text: self.subtitle.emit(0,
+                                                                          text)
                 try:
                     with desktop_audio():
                         voice.begin_turn()
@@ -355,7 +361,8 @@ class AssistantWorker(QObject):
             self.rejected.emit(turn_id, str(error))
 
     def _ask(self, turn_id, message):
-        message = DesktopMessage(message) if isinstance(message, str) else message
+        message = DesktopMessage(message) if isinstance(message,
+                                                        str) else message
         attachment_session = None
         try:
             if message.attachments:
@@ -398,7 +405,8 @@ class AssistantWorker(QObject):
                 self.finished.emit(directory_result)
                 return
 
-            if not message.attachments and prompt.casefold().startswith("pwsh:"):
+            if not message.attachments and prompt.casefold().startswith(
+                    "pwsh:"):
                 self.command_reply = True
                 command = prompt[5:].strip()
                 raw_result = execute_command(command)
@@ -490,8 +498,8 @@ class AssistantWorker(QObject):
         self.confirmation_event.set()
 
 
-def compact_mascot_subtitle(text: str, limit: int = 32) -> str:
-    """Return a single compact subtitle fragment capped at ``limit`` chars."""
+def compact_mascot_subtitle(text: str, limit: int = 64) -> str:
+    """Return a single compact subtitle fragment capped at 'limit' chars."""
     compact = " ".join(str(text or "").split())
     if len(compact) <= limit:
         return compact
@@ -500,8 +508,12 @@ def compact_mascot_subtitle(text: str, limit: int = 32) -> str:
 
 class MascotSubtitleBubble(QLabel):
     """Non-interactive subtitle bubble that follows a floating mascot."""
-    WIDTH = 156
-    GAP = 10
+    WIDTH = 320
+    GAP = 12
+    PADDING_X = 16
+    PADDING_Y = 10
+    MAX_LINES = 3
+    RADIUS = 16
 
     def __init__(self, mascot):
         super().__init__(None)
@@ -516,14 +528,22 @@ class MascotSubtitleBubble(QLabel):
             | Qt.WindowType.WindowTransparentForInput)
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.setWordWrap(True)
-        self.setContentsMargins(8, 4, 8, 4)
+        self.setContentsMargins(
+            self.PADDING_X,
+            self.PADDING_Y,
+            self.PADDING_X,
+            self.PADDING_Y)
+
         self.setFixedWidth(self.WIDTH)
+        line_height = self.fontMetrics().lineSpacing()
         self.setMaximumHeight(
-            self.fontMetrics().lineSpacing() * 2 + 18)
+            line_height * self.MAX_LINES + self.PADDING_Y * 2 + 4)
         self.mascot.installEventFilter(self)
         self.hide()
 
@@ -534,15 +554,25 @@ class MascotSubtitleBubble(QLabel):
         if not self._active or not self.mascot.isVisible():
             self.hide()
             return
-        self.adjustSize()
+
+        text_width = (self.WIDTH - self.PADDING_X * 2)
+        metrics = self.fontMetrics()
+        text_rect = metrics.boundingRect(0, 0, text_width, 10000,
+                                         int(Qt.TextFlag.TextWordWrap),
+                                         subtitle)
+        height = min(
+            text_rect.height() + self.PADDING_Y * 2 + 4,
+            self.maximumHeight())
+
+        self.setFixedHeight(height)
         self.reposition()
         self.show()
         self.raise_()
 
     def reposition(self):
         screen = (
-            QApplication.screenAt(self.mascot.frameGeometry().center())
-            or QApplication.primaryScreen())
+                QApplication.screenAt(self.mascot.frameGeometry().center())
+                or QApplication.primaryScreen())
         if screen is None:
             return
 
@@ -575,6 +605,22 @@ class MascotSubtitleBubble(QLabel):
             self.reposition()
             self.show()
             self.raise_()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(
+            QPainter.RenderHint.Antialiasing,
+            True)
+
+        painter.setBrush(QColor("#24273a"))
+        painter.setPen(QPen(QColor("#494d64"), 1))
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        painter.drawRoundedRect(rect,
+                                self.RADIUS,
+                                self.RADIUS)
+
+        painter.end()
+        super().paintEvent(event)
 
 
 class Orb(QWidget):
@@ -671,7 +717,8 @@ class Orb(QWidget):
 
     def set_line_width(self, line_width: float):
         """Set the main outline width in logical pixels, independent of size."""
-        if (isinstance(line_width, bool) or not isinstance(line_width, (int, float))
+        if (isinstance(line_width, bool) or not isinstance(line_width,
+                                                           (int, float))
                 or not math.isfinite(line_width) or line_width <= 0):
             raise ValueError("Orb line_width must be a positive finite number")
         self.line_width = float(line_width)
@@ -683,14 +730,15 @@ class Orb(QWidget):
                 or not isinstance(fill_ratio, (int, float))
                 or not math.isfinite(fill_ratio)
                 or not 0.0 <= fill_ratio <= 1.0):
-            raise ValueError("Orb fill_ratio must be a finite number from 0 to 1")
+            raise ValueError(
+                "Orb fill_ratio must be a finite number from 0 to 1")
         self.fill_ratio = float(fill_ratio)
         self.update()
 
     def set_levels(self, levels):
         values = list(levels)[:15]
         self.levels = [max(0.0, min(1.0, float(value)))
-            for value in values]
+                       for value in values]
 
         self.levels.extend([0.0] * (15 - len(self.levels)))
 
@@ -719,7 +767,7 @@ class Orb(QWidget):
 
         target = max(self.smoothed)
         factor = (0.55 if target > self.amplitude
-            else 0.12)
+                  else 0.12)
 
         self.amplitude += (target - self.amplitude) * factor
         if self.amplitude < 0.0005:
@@ -733,7 +781,7 @@ class Orb(QWidget):
         scale_factor = (0.28 if speech_scale_target > self.speech_scale
                         else 0.18)
         self.speech_scale += (
-            speech_scale_target - self.speech_scale) * scale_factor
+                                     speech_scale_target - self.speech_scale) * scale_factor
 
         self.phase += (0.025 + self.amplitude * 0.045)
         self.ripple_phase += 0.008
@@ -777,12 +825,12 @@ class Orb(QWidget):
                 fraction = position - int(position)
 
                 fraction = (
-                    fraction * fraction
-                    * (3.0 - 2.0 * fraction))
+                        fraction * fraction
+                        * (3.0 - 2.0 * fraction))
 
                 level = (
-                    self.smoothed[band] * (1.0 - fraction)
-                    + self.smoothed[next_band] * fraction)
+                        self.smoothed[band] * (1.0 - fraction)
+                        + self.smoothed[next_band] * fraction)
 
                 primary = math.sin(
                     angle * 4.0
@@ -798,24 +846,25 @@ class Orb(QWidget):
                     angle * 11.0
                     - self.phase * 0.37) * 0.12
 
-                energy = (self.amplitude * 0.35+ level * 0.65)
+                energy = (self.amplitude * 0.35 + level * 0.65)
                 energy = min(1.0, energy * 2.0) ** 0.7
 
                 idle = math.sin(
                     angle * 3.0 - self.phase * 0.5) * 0.45
 
                 ripple = (math.sin(angle * 5.0
-                            + self.ripple_phase * 0.75
-                            + self.ripple_seed) * 0.75 + math.sin(angle * 9.0
-                            - self.ripple_phase * 0.43
-                            + self.ripple_seed * 1.7) * 0.35+ math.sin(angle * 13.0
-                            + self.ripple_phase * 0.27
-                            + self.ripple_seed * 0.6) * 0.15)
+                                   + self.ripple_phase * 0.75
+                                   + self.ripple_seed) * 0.75 + math.sin(
+                    angle * 9.0
+                    - self.ripple_phase * 0.43
+                    + self.ripple_seed * 1.7) * 0.35 + math.sin(angle * 13.0
+                                                                + self.ripple_phase * 0.27
+                                                                + self.ripple_seed * 0.6) * 0.15)
 
                 ripple *= 1.2 + layer * 0.08
 
                 deformation = ((primary + secondary + detail)
-                        * energy * (9.0 + layer * 1.2))
+                               * energy * (9.0 + layer * 1.2))
 
                 click_wave = math.sin(
                     angle * 3.0
@@ -845,8 +894,8 @@ class Orb(QWidget):
                 voice_expansion = (self.amplitude * 6.0)
 
                 radius = (base_radius + deformation + idle + breathing +
-                        ripple + voice_expansion + click_effect +
-                        double_effect + expansion)
+                          ripple + voice_expansion + click_effect +
+                          double_effect + expansion)
 
                 x = math.cos(angle) * radius
                 y = math.sin(angle) * radius
@@ -884,8 +933,8 @@ class Orb(QWidget):
 
     def move_to_corner(self):
         screen = (
-            QApplication.screenAt(self.pos())
-            or QApplication.primaryScreen())
+                QApplication.screenAt(self.pos())
+                or QApplication.primaryScreen())
 
         if screen is None:
             return
@@ -925,9 +974,9 @@ class Orb(QWidget):
 
             target = global_position - self._drag_offset
             screen = (
-                QApplication.screenAt(global_position)
-                or QApplication.screenAt(target)
-                or QApplication.primaryScreen())
+                    QApplication.screenAt(global_position)
+                    or QApplication.screenAt(target)
+                    or QApplication.primaryScreen())
             if screen is not None:
                 area = screen.availableGeometry()
                 target.setX(max(
@@ -989,6 +1038,7 @@ class Orb(QWidget):
         if self.floating:
             self.setCursor(Qt.CursorShape.OpenHandCursor)
         super().hideEvent(event)
+
 
 # noinspection PyBroadException
 class ArloWindow(QMainWindow):
@@ -1095,9 +1145,11 @@ class ArloWindow(QMainWindow):
         self.next_page_shortcut.setContext(Qt.WindowShortcut)
         self.next_page_shortcut.activated.connect(lambda: self.switch_page(1))
 
-        self.previous_page_shortcut = QShortcut(QKeySequence("Ctrl+Shift+Tab"), self)
+        self.previous_page_shortcut = QShortcut(QKeySequence("Ctrl+Shift+Tab"),
+                                                self)
         self.previous_page_shortcut.setContext(Qt.WindowShortcut)
-        self.previous_page_shortcut.activated.connect(lambda: self.switch_page(-1))
+        self.previous_page_shortcut.activated.connect(
+            lambda: self.switch_page(-1))
 
         self.build_worker()
         self.set_status("status.waking")
@@ -1126,7 +1178,8 @@ class ArloWindow(QMainWindow):
                 self.wake_inbox = WakeInbox()
             command = self.wake_inbox.claim()
         except Exception:
-            logging.getLogger("arlo.wake").exception("Wake inbox unavailable; will retry")
+            logging.getLogger("arlo.wake").exception(
+                "Wake inbox unavailable; will retry")
             return
         if command is None:
             return
@@ -1148,8 +1201,8 @@ class ArloWindow(QMainWindow):
             try:
                 self.wake_inbox.finish(command_id, state, detail)
             except Exception:
-                logging.getLogger("arlo.wake").exception("Wake acknowledgement failed")
-
+                logging.getLogger("arlo.wake").exception(
+                    "Wake acknowledgement failed")
 
     def build_ui(self):
         container = QWidget()
@@ -1218,7 +1271,8 @@ class ArloWindow(QMainWindow):
         self.subtitles.setTextFormat(Qt.RichText)
         self.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.subtitles.setFixedHeight(90)
-        self.subtitles.setVisible(self.settings_view.subtitles_switch.isChecked())
+        self.subtitles.setVisible(
+            self.settings_view.subtitles_switch.isChecked())
         main.addWidget(self.subtitles)
 
         self.command_output.setObjectName("commandOutput")
@@ -1333,7 +1387,8 @@ class ArloWindow(QMainWindow):
         self.refresh_language()
 
     def ensure_composer_visible(self):
-        QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(self.input))
+        QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(
+            self.input))
 
     def show_page(self, index: int):
         self.pages.setCurrentIndex(index)
@@ -1405,7 +1460,8 @@ class ArloWindow(QMainWindow):
             self.mascot.hide()
 
         QTimer.singleShot(180,
-            lambda: self.finish_screenshot(request, mascot_visible))
+                          lambda: self.finish_screenshot(request,
+                                                         mascot_visible))
 
     def finish_screenshot(self, request: CaptureRequest, mascot_visible: bool):
         """Capture the screen, restore the mascot and report the result."""
@@ -1479,8 +1535,8 @@ class ArloWindow(QMainWindow):
                           "" if self.has_text else "")
         self.send.setEnabled(
             self.ready and (self.recording or stopping_available or (
-                not voice_active and not self.busy and
-                self.submitting is None and self.attachment_tray.can_send)))
+                    not voice_active and not self.busy and
+                    self.submitting is None and self.attachment_tray.can_send)))
         editable = self.ready and self.submitting is None and not voice_active
         self.attach.setEnabled(editable)
         self.attachment_tray.setEnabled(editable)
@@ -1491,7 +1547,8 @@ class ArloWindow(QMainWindow):
                "ui.send" if self.has_text else "voice.record")
         label = tr(key)
         self.send.setAccessibleName(label)
-        self.send.setToolTip(tr("ui.stop_hint") if stopping_available else label)
+        self.send.setToolTip(
+            tr("ui.stop_hint") if stopping_available else label)
         self.input.setPlaceholderText(
             tr("ui.steering_input" if self.busy else "ui.input"))
 
@@ -1501,7 +1558,8 @@ class ArloWindow(QMainWindow):
             set_language(language)
         except (OSError, ValueError) as error:
             self.settings_view.refresh_language()
-            QMessageBox.warning(self, tr("ui.settings"), tr("ui.error", error=error))
+            QMessageBox.warning(self, tr("ui.settings"),
+                                tr("ui.error", error=error))
             return
         self.refresh_language()
 
@@ -1823,7 +1881,8 @@ class ArloWindow(QMainWindow):
         self.set_orbs_speaking(self.speaking)
 
         if not self.stopping and self.busy:
-            self.set_status("status.speaking" if self.speaking else "status.thinking")
+            self.set_status(
+                "status.speaking" if self.speaking else "status.thinking")
 
         self.update_send_button()
 
@@ -1838,7 +1897,7 @@ class ArloWindow(QMainWindow):
             self.update_subtitles(reply.splitlines()[0])
         elif not self.current_reply:
             self.update_subtitles(reply or tr("status.stopped"
-            if interrupted else "ui.no_response"))
+                                              if interrupted else "ui.no_response"))
         else:
             self.update_subtitles("")
 
@@ -1945,7 +2004,7 @@ def acquire_instance_lock() -> QLockFile | None:
     """Keep initialization races from creating two desktop processes."""
     lock_path = (Path(QStandardPaths.writableLocation(
         QStandardPaths.StandardLocation.TempLocation)) /
-        f"arlo-desktop-{getuser()}.lock")
+                 f"arlo-desktop-{getuser()}.lock")
     lock = QLockFile(str(lock_path))
     return lock if lock.tryLock(100) else None
 
@@ -2074,6 +2133,7 @@ def main():
         QLocalServer.removeServer(ARLO_INSTANCE_SERVER)
         instance_lock.unlock()
         running_lock.release()
+
 
 if __name__ == "__main__":
     main()
