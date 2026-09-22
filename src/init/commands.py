@@ -103,7 +103,7 @@ def execute_command(command: str, working_directory: str = ".",
                     timeout_seconds: int = 120) -> str:
     """Run any local shell command after direct terminal consent.
     Supports pipelines, scripts, shell builtins and installed executables.
-    shell: auto, PowerShell, pwsh, cmd, sh or bash. On Windows auto is
+    shell: auto, powershell, pwsh, cmd, sh or bash (case-insensitive). On Windows auto is
     PowerShell. elevated asks separately for sudo (Windows and POSIX).
     Never retry failed commands automatically: they may have partially run.
     Windows sudo must be enabled and uses the user's configured mode.
@@ -122,6 +122,7 @@ def execute_command(command: str, working_directory: str = ".",
         if not 1 <= timeout_seconds <= 86400:
             raise ValueError(tr("command.timeout_range"))
 
+        shell = shell.strip().casefold().removesuffix(".exe")
         if shell == "auto":
             if os.name == "nt":
                 shell = "pwsh" if shutil.which("pwsh") else "powershell"
