@@ -271,6 +271,7 @@ class Orb(QWidget):
         side = min(self.width(), self.height())
         if side <= 0:
             return
+
         scale = side / 320.0
         painter = QPainter(self)
         painter.setRenderHint(
@@ -284,17 +285,21 @@ class Orb(QWidget):
         points = 240
         _, target_amplitude, _, _ = self.STATE_PROFILES[self.visual_state]
         colors = []
-        for index, alpha in enumerate((240, 165, 110, 65)):
+        for index, alpha in enumerate((240, 165)):
             accent = QColor(self._state_color)
             if not accent.isValid():
                 accent = QColor(self.MACCHIATO["lavender"])
             color = QColor(accent)
             color.setAlpha(round(alpha * (0.72 + 0.28 * self._state_mix)))
             colors.append(color)
+
         inner_fill = QColor(self._state_color)
+
         if not inner_fill.isValid():
             inner_fill = QColor(self.MACCHIATO["lavender"])
+
         inner_fill.setAlpha(colors[0].alpha())
+
         for layer, color in enumerate(colors):
             path = QPainterPath()
             fill_path = QPainterPath() if layer == 0 and self.fill_ratio else None
