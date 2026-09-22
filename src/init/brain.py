@@ -948,7 +948,11 @@ def kill_process(process: str, force: bool = False,
 
 
 def shutdown_computer(delay_seconds: int) -> str:
-    """Schedule a Windows shutdown after an exact number of seconds."""
+    """Schedule a Windows shutdown after an exact number of seconds.
+
+    This is the only tool that performs a computer shutdown. It returns the
+    operating system result so the assistant can report confirmed execution.
+    """
     if os.name != "nt":
         return tr('brain.error_shutdown_computer_is_only_supported_on_windows')
     if isinstance(delay_seconds, bool) or not isinstance(delay_seconds, int):
@@ -957,9 +961,10 @@ def shutdown_computer(delay_seconds: int) -> str:
         return tr('brain.error_delay_seconds_must_be_between_0_and_315360000')
 
     try:
+        executable = shutil.which("shutdown.exe") or "shutdown.exe"
         result = subprocess.run(
             [
-                "shutdown.exe",
+                executable,
                 "/s",
                 "/t",
                 str(delay_seconds),
@@ -969,6 +974,7 @@ def shutdown_computer(delay_seconds: int) -> str:
             capture_output=True,
             text=True,
             errors="replace",
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
