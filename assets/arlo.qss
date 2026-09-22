@@ -18,10 +18,10 @@ QLabel#subtitles {
     font-size: 16px;
 }
 
-
 QLabel#mascotSubtitleBubble {
-    background: transparent;
-    border: none;
+    background-color: #24273a;
+    border: 1px solid #494d64;
+    border-radius: 24px;
     color: #cad3f5;
     font-size: 16px;
 }

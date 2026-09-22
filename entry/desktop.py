@@ -508,11 +508,10 @@ def compact_mascot_subtitle(text: str, limit: int = 64) -> str:
 class MascotSubtitleBubble(QLabel):
     """Non-interactive subtitle bubble that follows a floating mascot."""
     WIDTH = 320
-    GAP = 12
-    PADDING_X = 16
+    GAP = 3
+    PADDING_X = 8
     PADDING_Y = 10
     MAX_LINES = 3
-    RADIUS = 16
 
     def __init__(self, mascot):
         super().__init__(None)
@@ -530,8 +529,7 @@ class MascotSubtitleBubble(QLabel):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self.setWordWrap(True)
         self.setContentsMargins(
             self.PADDING_X,
@@ -604,23 +602,6 @@ class MascotSubtitleBubble(QLabel):
             self.reposition()
             self.show()
             self.raise_()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(
-            QPainter.RenderHint.Antialiasing,
-            True)
-
-        painter.setBrush(QColor("#24273a"))
-        painter.setPen(QPen(QColor("#494d64"), 1))
-        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        painter.drawRoundedRect(rect,
-                                self.RADIUS,
-                                self.RADIUS)
-
-        painter.end()
-        super().paintEvent(event)
-
 
 class Orb(QWidget):
     """Shared audio-reactive widget, embedded or floating.
