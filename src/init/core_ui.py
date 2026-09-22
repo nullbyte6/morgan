@@ -49,7 +49,7 @@ from src.init.chat import ChatInput
 from src.init.indicators import PrivacyIndicator, WorkingDirectory
 
 from src.init.attachment_widgets import AttachmentTray
-from src.init.attachments import DesktopMessage
+from src.init.attachments import DesktopMessage, DesktopVoiceMessage
 from src.init.brain import kill_self
 from src.init.config import load_dev_file, load_config
 from src.init.editor.live import EditorView
@@ -842,7 +842,7 @@ class ArloWindow(QMainWindow):
         self.voice_thread = VoiceInputWorker(self, automatic=automatic)
         self.voice_thread.levels.connect(self.input_meter.set_levels)
         self.voice_thread.levels.connect(self.mascot.set_levels)
-        self.voice_thread.transcribing.connect(self.on_voice_transcribing)
+        self.voice_thread.processing.connect(self.on_voice_processing)
         self.voice_thread.finished.connect(self.on_voice_finished)
         self.recording = True
         self.mascot.set_listening(True)
@@ -854,13 +854,13 @@ class ArloWindow(QMainWindow):
         self.voice_thread.start()
 
     @Slot()
-    def on_voice_transcribing(self):
+    def on_voice_processing(self):
         self.recording = False
         self.mascot.set_listening(False)
         self.input_meter.hide()
         self.mascot.clear()
         self.input.show()
-        self.set_status("voice.transcribing")
+        self.set_status("voice.processing")
         self.update_send_button()
 
     @Slot()
@@ -881,9 +881,8 @@ class ArloWindow(QMainWindow):
         self.set_status("")
         if worker.error:
             self.status.setText(worker.error)
-        elif worker.transcript:
-            self.input.setPlainText(worker.transcript)
-            self.send_message()
+        elif worker.audio_wav:
+            self.start_prompt(DesktopVoiceMessage(worker.audio_wav))
 
         if self.isVisible():
             self.input.setFocus()

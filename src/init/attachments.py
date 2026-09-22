@@ -92,6 +92,26 @@ class DesktopMessage:
         return "\n\n".join(lines)
 
 
+@dataclass(frozen=True)
+class DesktopVoiceMessage:
+    audio_wav: bytes
+
+    @property
+    def text(self):
+        return "Voice message"
+
+    @property
+    def display_text(self):
+        return "Voice message"
+
+    @property
+    def attachments(self):
+        return ()
+
+    def log_text(self):
+        return "[Voice input]"
+
+
 def _encoding(sample: bytes) -> str:
     if sample.startswith(codecs.BOM_UTF8):
         return "utf-8-sig"

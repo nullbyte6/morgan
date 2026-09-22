@@ -47,6 +47,9 @@ class Assistant:
                 instance = super().__new__(cls)
                 instance.terminal_ui = None
                 instance.agent = None
+                instance.provider = None
+                instance.audio_model = None
+                instance.audio_model_name = None
                 instance.shutdown_requested = threading.Event()
                 instance.voice = None
                 instance.debug_console = None
@@ -103,9 +106,10 @@ class Assistant:
             "temperature": 0.2,
         }
 
+        self.provider = OllamaProvider(base_url="http://localhost:11434/v1")
         self.model = OllamaModel(
             self.MODEL_NAME,
-            provider=OllamaProvider(base_url="http://localhost:11434/v1"),
+            provider=self.provider,
             settings=self.model_settings)
 
         self.agent = Agent(
@@ -331,12 +335,14 @@ class Assistant:
     def run_desktop_turn(self, prompt: str, history: list, on_chunk=None,
                          on_audio=None, on_speaking=None, on_subtitle=None,
                          cancel_event=None, event_loop=None, attachments=None,
-                         session=None):
+                         session=None, audio_input=None):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
         from src.init.streaming import SpeechBuffer
-        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+        from pydantic_ai.messages import (BinaryContent, ModelRequest,
+                                          ModelResponse, TextPart,
+                                          UserPromptPart)
 
         self._initialize_runtime()
         self.voice.audio_callback = on_audio
@@ -350,7 +356,33 @@ class Assistant:
 
         if attachments:
             attachments.reserve_history(history)
-        model_prompt = attachments.prompt() if attachments else prompt
+        turn_model = None
+        turn_model_settings = {"temperature": brain.load_config()["temperature"]}
+        voice_model_active = audio_input is not None or any(
+            isinstance(content, BinaryContent)
+            for message in history
+            for part in message.parts
+            if isinstance(part, UserPromptPart)
+            for content in (part.content if isinstance(part.content, list) else [])
+        )
+        if audio_input is not None:
+            model_prompt = [
+                BinaryContent(data=audio_input, media_type="audio/wav"),
+                "Respond directly to the user's spoken message in its language.",
+            ]
+        else:
+            model_prompt = attachments.prompt() if attachments else prompt
+        if voice_model_active:
+            from pydantic_ai.models.ollama import OllamaModel
+            from src.init.config import load_dev_file
+
+            if self.audio_model is None:
+                self.audio_model_name = load_dev_file()["audio_model"]
+                self.audio_model = OllamaModel(
+                    self.audio_model_name, provider=self.provider,
+                    settings={"openai_reasoning_effort": "none"})
+            turn_model = self.audio_model
+            turn_model_settings["openai_reasoning_effort"] = "none"
         attachment_tools = [attachments.toolset()] if attachments else []
 
         async def generate():
@@ -378,7 +410,8 @@ class Assistant:
 
             result = await self.agent.run(
                 model_prompt, message_history=history, toolsets=attachment_tools,
-                model_settings={"temperature": brain.load_config()["temperature"]},
+                model=turn_model,
+                model_settings=turn_model_settings,
                 event_stream_handler=stream_events)
             completed_history = result.all_messages()
             for phrase in buffer.finish():

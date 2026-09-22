@@ -24,11 +24,11 @@ from pathlib import Path
 
 from PySide6.QtCore import *
 
-from src.init.attachments import (DesktopMessage, AttachmentSession,
+from src.init.attachments import (DesktopMessage, DesktopVoiceMessage, AttachmentSession,
     ollama_capabilities)
 
 from src.init.commands import execute_command, set_confirmation_handler
-from src.init.config import load_config, load_dev_file
+from src.init.config import load_config
 from src.init.core import Assistant
 from src.init.lang import tr
 from src.init.session_log import SessionLog
@@ -38,18 +38,18 @@ from src.init.utils import spectrum_levels
 
 class VoiceInputWorker(QThread):
     levels = Signal(object)
-    transcribing = Signal()
+    processing = Signal()
 
     def __init__(self, parent=None, *, automatic=False):
         super().__init__(parent)
         self.automatic = automatic
         self.stop_event = threading.Event()
-        self.transcript = ""
+        self.audio_wav = b""
         self.error = ""
 
     def run(self):
         try:
-            from src.init.voice import record_voice, process
+            from src.init.voice import record_voice, recording_to_wav
 
             with desktop_audio(stop_event=self.stop_event, tail=0):
                 if self.isInterruptionRequested():
@@ -62,14 +62,8 @@ class VoiceInputWorker(QThread):
             if recording is None:
                 self.error = tr("voice.not_detected")
                 return
-            self.transcribing.emit()
-            audio_model = load_dev_file().get("audio_model")
-            if not audio_model:
-                raise RuntimeError("No Ollama audio model is configured")
-            self.transcript = process(
-                *recording, model=audio_model)
-            if not self.transcript:
-                self.error = tr("voice.not_transcribed")
+            self.processing.emit()
+            self.audio_wav = recording_to_wav(*recording)
         except Exception as error:
             self.error = str(error)
 
@@ -152,6 +146,7 @@ class AssistantWorker(QObject):
     def _ask(self, turn_id, message):
         message = DesktopMessage(message) if isinstance(message,
                                                         str) else message
+        voice_input = isinstance(message, DesktopVoiceMessage)
         attachment_session = None
         try:
             if message.attachments:
@@ -174,26 +169,29 @@ class AssistantWorker(QObject):
                 self.finished.emit("")
                 return
             privacy_result = (self.session.handle_command(prompt)
-                              if not message.attachments else None)
+                              if not voice_input and not message.attachments
+                              else None)
             if privacy_result is not None:
                 self.finished.emit(str(privacy_result))
                 return
 
             self.session.write(self.assistant.username, message.log_text())
             from src.init.hot_reload import is_reload_command
-            if not message.attachments and is_reload_command(prompt):
+            if (not voice_input and not message.attachments
+                    and is_reload_command(prompt)):
                 reply = self.assistant.reload_source()
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
             directory_result = (self.assistant.directory_cmd(prompt)
-                                if not message.attachments else None)
+                                if not voice_input and not message.attachments
+                                else None)
             if directory_result is not None:
                 self.session.write(self.assistant.name, directory_result)
                 self.finished.emit(directory_result)
                 return
 
-            if not message.attachments and prompt.casefold().startswith(
+            if not voice_input and not message.attachments and prompt.casefold().startswith(
                     "pwsh:"):
                 self.command_reply = True
                 command = prompt[5:].strip()
@@ -228,7 +226,8 @@ class AssistantWorker(QObject):
                 on_subtitle=lambda text: self.subtitle.emit(turn_id, text),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
-                attachments=attachment_session, session=self.session)
+                attachments=attachment_session, session=self.session,
+                audio_input=(message.audio_wav if voice_input else None))
 
             if reply:
                 self.session.write(self.assistant.name, reply,

@@ -9,6 +9,7 @@
   "voice.record": "Record Voice",
   "voice.recording": "Listening… Click stop to finish recording.",
   "voice.transcribing": "Transcribing…",
+  "voice.processing": "Processing audio…",
   "voice.timeout": "The voice service has produced no audio for 120 seconds. Restart Arlo's TTS service.",
   "ui.attach_files": "Attach Files",
   "ui.remove_attachment": "Remove Attachment: {name}",
