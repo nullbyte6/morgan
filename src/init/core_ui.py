@@ -117,6 +117,7 @@ class ArloWindow(QMainWindow):
         self.recording = False
         self.voice_thread = None
         self.pending_voice_barge = False
+        self.pending_wake_barge = False
         self.closing_after_voice = False
         self.quitting = False
         self.send = QPushButton("")
@@ -205,8 +206,10 @@ class ArloWindow(QMainWindow):
 
     def poll_wake_commands(self):
         """Consume only when ready; preserve the composer and compact mode."""
-        if (not self.ready or self.busy or self.voice_thread is not None or
-                self.submitting is not None or self.pending_prompt is not None or
+        barge_candidate = self.busy and not self.stopping
+        if (not self.ready or (self.busy and not barge_candidate) or
+                self.voice_thread is not None or self.submitting is not None or
+                (self.pending_prompt is not None and not barge_candidate) or
                 self.closing_after_voice or self.worker.assistant.shutdown_requested.is_set()):
             return
         try:
@@ -222,6 +225,11 @@ class ArloWindow(QMainWindow):
         command_id, text = command
         if text == WAKE_RECORD_REQUEST:
             self.wake_command_id = command_id
+            if barge_candidate:
+                self.pending_wake_barge = True
+                self.pending_prompt = None
+                self.stop_response()
+                return
             self.start_recording(automatic=True)
             self.finish_wake_command(
                 "completed" if self.recording else "failed",
@@ -974,7 +982,14 @@ class ArloWindow(QMainWindow):
         if self.isVisible():
             self.input.setFocus()
 
-        if self.pending_voice_barge:
+        if self.pending_wake_barge:
+            self.pending_wake_barge = False
+            self.start_recording(automatic=True)
+            self.finish_wake_command(
+                "completed" if self.recording else "failed",
+                "" if self.recording else "Recording was unavailable",
+            )
+        elif self.pending_voice_barge:
             self.pending_voice_barge = False
             QTimer.singleShot(0, self.start_recording)
         else:
@@ -1005,7 +1020,14 @@ class ArloWindow(QMainWindow):
         self.set_status("status.error")
         self.set_orbs_thinking(False)
         self.set_enabled(self.ready)
-        if self.pending_voice_barge:
+        if self.pending_wake_barge:
+            self.pending_wake_barge = False
+            self.start_recording(automatic=True)
+            self.finish_wake_command(
+                "completed" if self.recording else "failed",
+                "" if self.recording else "Recording was unavailable",
+            )
+        elif self.pending_voice_barge:
             self.pending_voice_barge = False
             QTimer.singleShot(0, self.start_recording)
         else:

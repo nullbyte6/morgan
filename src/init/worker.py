@@ -138,12 +138,12 @@ class AssistantWorker(QObject):
     @Slot(int, object)
     def ask(self, turn_id, message):
         try:
-            with desktop_audio(stop_event=self.cancel_event):
-                self._ask(turn_id, message)
+            with desktop_audio(stop_event=self.cancel_event) as audio_lease:
+                self._ask(turn_id, message, audio_lease)
         except Exception as error:
             self.rejected.emit(turn_id, str(error))
 
-    def _ask(self, turn_id, message):
+    def _ask(self, turn_id, message, audio_lease):
         message = DesktopMessage(message) if isinstance(message,
                                                         str) else message
         voice_input = isinstance(message, DesktopVoiceMessage)
@@ -215,19 +215,25 @@ class AssistantWorker(QObject):
                 self.finished.emit(reply)
                 return
 
+            def speaking_changed(speaking):
+                if speaking:
+                    audio_lease.yield_to_wake_listener()
+                self.speaking.emit(turn_id, speaking)
+
             reply, self.history = self.assistant.run_desktop_turn(
                 prompt,
                 self.history,
                 on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),
                 on_audio=lambda samples, rate: self.report_audio(turn_id,
                                                                  samples, rate),
-                on_speaking=lambda speaking: self.speaking.emit(turn_id,
-                                                                speaking),
+                on_speaking=speaking_changed,
                 on_subtitle=lambda text: self.subtitle.emit(turn_id, text),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
                 attachments=attachment_session, session=self.session,
                 audio_input=(message.audio_wav if voice_input else None))
+            if not self.cancel_event.is_set():
+                audio_lease.reclaim()
 
             if reply:
                 self.session.write(self.assistant.name, reply,

@@ -90,6 +90,29 @@ def desktop_audio(*, stop_event=None, timeout=5.0, tail=0.6, directory=None):
     microphone = ProcessLock("microphone", directory)
     deadline = time.monotonic() + timeout
     acquired = False
+
+    class AudioLease:
+        def yield_to_wake_listener(self):
+            nonlocal acquired
+            if acquired:
+                microphone.release()
+                priority.release()
+                acquired = False
+
+        def reclaim(self):
+            nonlocal acquired, deadline
+            if acquired:
+                return
+            deadline = time.monotonic() + timeout
+            for lock in (priority, microphone):
+                while not lock.acquire():
+                    if stop_event is not None and stop_event.is_set():
+                        raise InterruptedError("Audio request cancelled")
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("Microphone is busy; please try again")
+                    time.sleep(0.025)
+            acquired = True
+
     try:
         for lock in (priority, microphone):
             while not lock.acquire():
@@ -99,7 +122,7 @@ def desktop_audio(*, stop_event=None, timeout=5.0, tail=0.6, directory=None):
                     raise TimeoutError("Microphone is busy; please try again")
                 time.sleep(0.025)
         acquired = True
-        yield
+        yield AudioLease()
     finally:
         # Let speaker/reverb tails settle before wake capture resumes.
         if acquired and tail:

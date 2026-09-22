@@ -48,15 +48,15 @@ retains its existing lazily loaded
 locally for fully offline use; first use of an uncached model may download them.
 
 OS file locks in `%USERPROFILE%\.arlo\voice` coordinate microphone ownership.
-Manual recording and the entire desktop agent/TTS turn request priority, wait for
-the listener to close its stream, and then acquire ownership. The listener drops
-partial captures and ignores outstanding recognition results when yielding. It
-does not listen while Arlo is processing, confirming a tool, or speaking, so voice
-barge-in during a response is intentionally unavailable. Text steering and the
-existing stop button still work. Listening resumes after playback/cancellation
-and a 600 ms speaker-tail guard. Locks release on process exit, including crashes;
-the UI never waits synchronously for microphone handoff. A second wake listener
-also exits immediately through an OS lock.
+Manual recording and the desktop agent request priority while processing. During
+TTS playback, the desktop yields microphone ownership so the wake listener can
+hear a new activation. A wake activation during speech stops the current response
+and starts a fresh automatic recording as soon as the interrupted turn releases
+audio. The listener drops partial captures and ignores outstanding recognition
+results when yielding. Listening resumes after playback/cancellation and a 600 ms
+speaker-tail guard. Locks release on process exit, including crashes; the UI never
+waits synchronously for microphone handoff. A second wake listener also exits
+immediately through an OS lock.
 
 ## Local delivery and recovery
 
