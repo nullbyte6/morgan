@@ -256,6 +256,13 @@ class AssistantWorker(QObject):
     def interrupt(self):
         self.cancel_event.set()
         self.resolve_confirmation(False)
+        voice = self.assistant.voice
+        if voice is not None:
+            try:
+                voice.stop()
+            except Exception:
+                logging.getLogger("arlo.voice").exception(
+                    "Unable to stop speech immediately")
 
     @Slot()
     def shutdown(self):
