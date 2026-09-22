@@ -50,14 +50,23 @@ class Orb(QWidget):
         SUCCESS = "success"
 
     STATE_PROFILES = {
-        State.IDLE: (0.018, 0.30, 0.0, "Highlight"),
-        State.PROCESSING: (0.040, 0.52, 0.0, "Highlight"),
-        State.READING: (0.025, 0.42, 0.0, "Link"),
-        State.WRITING: (0.055, 0.62, 0.0, "Highlight"),
-        State.EXECUTING: (0.075, 0.70, 0.085, "Link"),
-        State.AWAITING_PERMISSION: (0.030, 0.48, 0.0, "BrightText"),
-        State.DENIED_ERROR: (0.090, 0.78, 0.0, "BrightText"),
-        State.SUCCESS: (0.035, 0.54, 0.0, "Highlight"),
+        State.IDLE: (0.018, 0.10, 0.0, "lavender"),
+        State.PROCESSING: (0.040, 0.52, 0.0, "sapphire"),
+        State.READING: (0.025, 0.42, 0.0, "blue"),
+        State.WRITING: (0.055, 0.62, 0.0, "lavender"),
+        State.EXECUTING: (0.075, 0.70, 0.085, "peach"),
+        State.AWAITING_PERMISSION: (0.030, 0.48, 0.0, "yellow"),
+        State.DENIED_ERROR: (0.090, 0.78, 0.0, "red"),
+        State.SUCCESS: (0.035, 0.54, 0.0, "green"),
+    }
+    MACCHIATO = {
+        "lavender": QColor("#b7bdf8"),
+        "sapphire": QColor("#7dc4e4"),
+        "blue": QColor("#8aadf4"),
+        "peach": QColor("#f5a97f"),
+        "yellow": QColor("#eed49f"),
+        "red": QColor("#ed8796"),
+        "green": QColor("#a6da95"),
     }
 
     def __init__(self, parent=None, *,
@@ -99,7 +108,7 @@ class Orb(QWidget):
         self._state_fade = 0.18
         self._state_phase = 0.0
         self._state_rotation = 0.0
-        self._state_color = QColor(self.palette().color(QPalette.ColorRole.Highlight))
+        self._state_color = QColor(self.MACCHIATO["lavender"])
         self._target_color = QColor(self._state_color)
 
         self.click_pulse = 0.0
@@ -137,9 +146,8 @@ class Orb(QWidget):
         if state == self.visual_state:
             return
         _, _, _, role_name = self.STATE_PROFILES[state]
-        role = getattr(QPalette.ColorRole, role_name, QPalette.ColorRole.WindowText)
         self._state_color = QColor(self._target_color)
-        self._target_color = QColor(self.palette().color(role))
+        self._target_color = QColor(self.MACCHIATO[role_name])
         self.visual_state = state
         self._state_mix = 0.0
         self._state_fade = max(1.0, float(fade_in + fade_out) / 2.0)
@@ -274,21 +282,18 @@ class Orb(QWidget):
                       scale * self.speech_scale)
         painter.rotate(self._state_rotation * 12.0)
         points = 240
-        palette = self.palette()
-        _, target_amplitude, _, role_name = self.STATE_PROFILES[self.visual_state]
-        role = getattr(QPalette.ColorRole, role_name, QPalette.ColorRole.WindowText)
+        _, target_amplitude, _, _ = self.STATE_PROFILES[self.visual_state]
         colors = []
         for index, alpha in enumerate((240, 165, 110, 65)):
-            accent = (QColor(self._state_color) if index == 0 else
-                      palette.color(QPalette.ColorRole.WindowText))
+            accent = QColor(self._state_color)
             if not accent.isValid():
-                accent = palette.color(QPalette.ColorRole.Highlight)
+                accent = QColor(self.MACCHIATO["lavender"])
             color = QColor(accent)
             color.setAlpha(round(alpha * (0.72 + 0.28 * self._state_mix)))
             colors.append(color)
-        inner_fill = QColor(palette.color(QPalette.ColorRole.WindowText))
+        inner_fill = QColor(self._state_color)
         if not inner_fill.isValid():
-            inner_fill = QColor(palette.color(QPalette.ColorRole.HighlightedText))
+            inner_fill = QColor(self.MACCHIATO["lavender"])
         inner_fill.setAlpha(colors[0].alpha())
         for layer, color in enumerate(colors):
             path = QPainterPath()
@@ -328,7 +333,11 @@ class Orb(QWidget):
                     angle * 11.0
                     - self.phase * 0.37) * 0.12
 
-                state_energy = target_amplitude * (0.25 + 0.75 * self._state_mix)
+                if (self.visual_state == self.State.IDLE
+                        and self.amplitude < 0.02):
+                    state_energy = 0.012
+                else:
+                    state_energy = target_amplitude * (0.25 + 0.75 * self._state_mix)
                 energy = (max(self.amplitude, state_energy) * 0.35
                           + level * (1.0 - 0.65 * self.thinking_mix))
                 energy = min(1.0, energy * 2.0) ** 0.7
@@ -346,9 +355,13 @@ class Orb(QWidget):
                                                                 + self.ripple_seed * 0.6) * 0.15)
 
                 ripple *= 1.2 + layer * 0.08
+                if self.visual_state == self.State.IDLE:
+                    ripple *= 0.35
 
                 deformation = ((primary + secondary + detail)
                                * energy * (9.0 + layer * 1.2))
+                if self.visual_state == self.State.IDLE:
+                    deformation *= 0.18 if self.amplitude < 0.02 else 0.35
 
                 click_wave = math.sin(
                     angle * 3.0
@@ -374,7 +387,8 @@ class Orb(QWidget):
                         self.click_pulse * 1.5
                         + self.double_pulse * 4.0)
 
-                breathing = (math.sin(self._state_phase * 1.7) * 0.8)
+                breathing = (math.sin(self._state_phase * 1.7) *
+                             (0.25 if self.visual_state == self.State.IDLE else 0.8))
                 voice_expansion = (self.amplitude * 6.0)
 
                 radius = (base_radius + deformation + idle + breathing +
