@@ -389,6 +389,9 @@ class Assistant:
             model_prompt = [
                 BinaryContent(data=audio_input, media_type="audio/wav"),
                 "Respond directly to the user's spoken message in its language.",
+                "If the spoken request asks to shut down the computer, call "
+                "shutdown_computer. If it asks to close Arlo, call kill_self. "
+                "Execute the tool; never read or describe a command instead.",
             ]
         else:
             model_prompt = attachments.prompt() if attachments else prompt
