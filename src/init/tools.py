@@ -1,5 +1,4 @@
 from src.init.brain import (
-    load_config,
     get_version,
     refresh,
     empty_recycle_bin,
@@ -53,19 +52,19 @@ from src.init.brain import (
     learn_pronunciation,
     take_screenshot)
 
-from .config import update_config
-from .notifications import (send_notification, schedule_notification,
+from src.init.config import update_config, load_config
+from src.init.notifications import (send_notification, schedule_notification,
                             start_timer, list_timers, cancel_timer)
 
-from .message import send_message
-from .commands import execute_command
-from .quick_commands import list_quick_commands, run_quick_command
-from .windows import minimize_all_windows
-from .app_close import close_application
-from .app_manager import (search_apps, install_app, uninstall_app, get_app_operation,
+from src.init.message import send_message
+from src.init.commands import execute_command
+from src.init.quick_commands import list_quick_commands, run_quick_command
+from src.init.windows import minimize_all_windows
+from src.init.app_close import close_application
+from src.init.app_manager import (search_apps, install_app, uninstall_app, get_app_operation,
                         scan_app_residues, clean_app_residue)
 
-from .email_service import (
+from src.init.email_service import (
     send_email,
     read_emails,
     delete_email,
@@ -74,22 +73,23 @@ from .email_service import (
     edit_email_draft,
     send_email_draft)
 
-from .session_log import open_current_session_log
-from .weather import get_weather, set_weather_location
-from .media import (control_media, search_youtube_songs, play_youtube_song,
+from src.init.session_log import open_current_session_log
+from src.init.weather import get_weather, set_weather_location
+from src.init.media import (control_media, search_youtube_songs, play_youtube_song,
                     search_spotify_songs, play_spotify_song,
                     search_spotify_playlists, search_spotify_albums,
                     play_spotify_album,
                     list_spotify_playlists, get_spotify_playlist_tracks,
                     play_spotify_playlist)
-from .self_code import (get_repo_lnk, get_repo, list_code,
+from src.init.self_code import (get_repo_lnk, get_repo, list_code,
                         read_code, edit_code, update_repo)
 
 from src.diagnostics.tools import (check_system_health, check_disk_health,
                                    check_security_health, kill_self)
-from .editor import open_in_editor
-from .memory.tools import remember, recall, forget, list_memories
-from .desktop.clipboard import read_clipboard
+from src.init.editor import open_in_editor
+from src.init.memory.tools import remember, recall, forget, list_memories
+from src.init.desktop.clipboard import read_clipboard
+from src.init.reader import analyze_image, analyze_screen
 
 TOOLS = [
     remember,
@@ -199,5 +199,7 @@ TOOLS = [
     identify_playing_song,
     get_current_media,
     learn_pronunciation,
-    take_screenshot
+    take_screenshot,
+    analyze_image,
+    analyze_screen
 ]

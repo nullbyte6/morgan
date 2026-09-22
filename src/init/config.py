@@ -25,7 +25,7 @@ import tempfile
 import warnings
 from copy import deepcopy
 from pathlib import Path
-from .attachments import DEFAULT_LIMITS
+from src.init.attachments import DEFAULT_LIMITS
 
 HOME_PATH = Path.home() / ".arlo"
 CONFIG_FILE = HOME_PATH / "json" / "config.json"

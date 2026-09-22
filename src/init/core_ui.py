@@ -505,20 +505,18 @@ class ArloWindow(QMainWindow):
     def finish_screenshot(self, request: CaptureRequest, mascot_visible: bool):
         """Capture the screen, restore the mascot and report the result."""
         try:
-            if request.completed.is_set():
-                return
-
-            request.success = capture_to_clipboard()
-            if not request.success:
-                request.error = "ERROR"
+            result = capture_to_clipboard(return_image=request.return_image)
+            if request.return_image:
+                request.image_data = result if isinstance(result,
+                                                          bytes) else None
+                request.success = request.image_data is not None
+            else:
+                request.success = result is True
 
         except Exception as error:
             request.error = str(error)
-
+            request.success = False
         finally:
-            if mascot_visible and not self.mascot.isVisible():
-                self.mascot.show()
-
             request.completed.set()
 
     @Slot(object)
@@ -556,7 +554,7 @@ class ArloWindow(QMainWindow):
 
         accepted = dialog.exec() == QMessageBox.Yes
         self.worker.resolve_confirmation(accepted)
-        self.set_status("status.thinking" if accepted else "status.denied")
+        self.set_status("" if not accepted else "status.denied")
 
     def set_status(self, key):
         self.status_key = key
