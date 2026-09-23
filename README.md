@@ -1,4 +1,4 @@
-![](.\assets\header.png)
+![header.png](\assets\header.png)
 # ARLO
 Adaptive Reasoning Local Operator is a local desktop assistant that uses 
 Ollama to run tools and automate tasks on Windows. It requires Windows, 
