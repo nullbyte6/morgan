@@ -657,9 +657,9 @@ QWidget#browserExtensionsPage QPushButton:disabled {
 }
 
 QLineEdit#browserAddressBar {
-    background-color: #24273a;
+    background-color: #363a4f;
     color: #cad3f5;
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 0 12px;
     font-size: 16px;
     selection-background-color: #494d64;
