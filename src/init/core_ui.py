@@ -123,6 +123,10 @@ class ArloWindow(QMainWindow):
         self.closing_after_voice = False
         self.quitting = False
         self.send = QPushButton("")
+        font = self.send.font()
+        font.setPointSize(32 if self.send.text() == "" or "" else 12)
+        self.send.setFont(font)
+
         self.attach = QPushButton("")
         self.directory_indicator = WorkingDirectory(self)
         self.privacy_indicator = PrivacyIndicator(self)
