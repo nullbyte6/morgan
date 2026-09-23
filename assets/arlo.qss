@@ -104,6 +104,7 @@ QPushButton#settingsNav,
 QPushButton#chatNav,
 QPushButton#logsNav,
 QPushButton#editorNav,
+QPushButton#terminalNav,
 QPushButton#refresh {
     background-color: transparent;
     color: #a5adcb;
@@ -116,6 +117,7 @@ QPushButton#settingsNav:hover,
 QPushButton#chatNav:hover,
 QPushButton#logsNav:hover,
 QPushButton#editorNav:hover,
+QPushButton#terminalNav:hover,
 QPushButton#refresh:hover {
     background-color: #363a4f;
     color: #cad3f5;
@@ -125,6 +127,7 @@ QPushButton#settingsNav:checked,
 QPushButton#chatNav:checked,
 QPushButton#logsNav:checked,
 QPushButton#editorNav:checked,
+QPushButton#terminalNav:checked,
 QPushButton#refresh:checked {
     background-color: #494d64;
     color: #cad3f5;
@@ -453,6 +456,18 @@ QWidget#editorPage QPushButton:disabled {
     background-color: #363a4f;
     color: #6e738d;
     border-color: #494d64;
+}
+
+QPlainTextEdit#terminalOutput {
+    background-color: #181926;
+    color: #cad3f5;
+    border: none;
+    selection-background-color: #494d64;
+}
+
+QLabel#terminalStatus {
+    color: #a5adcb;
+    background: transparent;
 }
 
 QLabel#editorStatus {

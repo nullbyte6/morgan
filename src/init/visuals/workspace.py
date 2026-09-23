@@ -143,6 +143,7 @@ class WorkspacePanel(QFrame):
 
         if self.content is not None:
             previous = self.content
+            self.dispose_content()
             if previous.property("workspaceViewKey") == "editor":
                 previous.windowTitleChanged.disconnect(self.set_title)
             self.content_layout.removeWidget(previous)
@@ -157,6 +158,12 @@ class WorkspacePanel(QFrame):
             self.set_renamable(False)
         else:
             self.set_renamable(self.closable)
+
+    def dispose_content(self) -> None:
+        """Release content-owned resources before deferred widget deletion."""
+        dispose = getattr(self.content, "dispose", None)
+        if callable(dispose):
+            dispose()
 
     def set_title(self, title: str) -> None:
         """Update the panel title."""
@@ -717,6 +724,7 @@ class Workspace(QWidget):
         del self._panels[panel_id]
         self._closing_panels.discard(panel_id)
 
+        panel.dispose_content()
         panel.deleteLater()
 
         if self._active_panel_id == panel_id:

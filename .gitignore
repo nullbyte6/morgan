@@ -10,6 +10,7 @@ __pycache__/
 *.txt
 
 /tests/*
+!/tests/test_terminal.py
 /dev/*.py
 
 /src/models/*

@@ -53,18 +53,23 @@ from src.init.visuals.workspace import Workspace, WorkspacePanel
 WORKSPACE_VIEW_CONFIG = {
     "logs": {
         "title": "Logs",
-        "shortcut": "Ctrl+N, 1",
+        "shortcut": "Ctrl+Alt+N+1",
         "icon": "",
     },
     "editor": {
         "title": "Editor",
-        "shortcut": "Ctrl+N, 2",
+        "shortcut": "Ctrl+Alt+N+2",
         "icon": "󰨞",
     },
     "settings": {
         "title": "Settings",
-        "shortcut": "Ctrl+N, 3",
+        "shortcut": "Ctrl+Alt+N+3",
         "icon": "",
+    },
+    "terminal": {
+        "title": "Terminal",
+        "shortcut": "Ctrl+Alt+N+4",
+        "icon": "",
     },
 }
 
@@ -130,10 +135,6 @@ class ArloWindow(DesktopWindow):
         self.composer_orb = Orb(self, size=84, line_width=4.0, fill_ratio=0.54)
         self.composer_orb.set_speech_pulse_enabled(orb_speech_pulse)
         self.composer_orb.hide()
-        self.chat_button = QPushButton("󰭹")
-        self.logs_button = QPushButton("")
-        self.settings_button = QPushButton("")
-        self.editor_button = QPushButton("󰨞")
         self.has_text = False
         self.recording = False
         self.voice_thread = None
@@ -144,7 +145,7 @@ class ArloWindow(DesktopWindow):
         self.quitting = False
         self.send = QPushButton("")
         font = self.send.font()
-        font.setPointSize(32 if self.send.text() == "" or "" else 12)
+        font.setPointSize(32 if self.send.text() == "" or "" else 11)
         self.send.setFont(font)
 
         self.attach = QPushButton("")
@@ -209,7 +210,7 @@ class ArloWindow(DesktopWindow):
             lambda _panel_id: self.show_page(0))
 
         self._workspace_shortcut_map = {
-            options["shortcut"].rsplit(",", 1)[-1].strip(): view_key
+            options["shortcut"]: view_key
             for view_key, options in WORKSPACE_VIEW_CONFIG.items()
         }
 
@@ -452,17 +453,7 @@ class ArloWindow(DesktopWindow):
         self.pages.addWidget(self.settings_view)
         self.pages.addWidget(self.editor_view)
 
-
         container_layout.addWidget(self.pages, 1)
-
-        self.chat_button.clicked.connect(
-            lambda: self.workspace.focus_panel(self.main_workspace_panel_id))
-        self.logs_button.clicked.connect(
-            lambda: self.open_workspace_view("logs"))
-        self.settings_button.clicked.connect(
-            lambda: self.open_workspace_view("settings"))
-        self.editor_button.clicked.connect(
-            lambda: self.open_workspace_view("editor"))
 
         self.show_page(0)
         self.set_enabled(False)
@@ -537,10 +528,6 @@ class ArloWindow(DesktopWindow):
     def show_page(self, index: int):
         self.pages.setCurrentIndex(index)
         self.composer_orb.setVisible(index != 0)
-        self.chat_button.setChecked(index == 0)
-        self.logs_button.setChecked(index == 1)
-        self.settings_button.setChecked(index == 2)
-        self.editor_button.setChecked(index == 3)
 
         if index == 1:
             self.log_view.refresh()
@@ -648,6 +635,9 @@ class ArloWindow(DesktopWindow):
             return LogView(self.log_dir)
         if view_key == "editor":
             return EditorView()
+        if view_key == "terminal":
+            from src.init.terminal import TerminalView
+            return TerminalView()
         if view_key == "settings":
             view = SettingsView(
                 self.settings_view.subtitles_switch.isChecked(),
@@ -834,8 +824,6 @@ class ArloWindow(DesktopWindow):
         self.task_progress.refresh_language(language)
         self.settings_view.refresh_language()
         self.attachment_tray.refresh()
-        self.settings_button.setToolTip(tr("ui.settings"))
-        self.settings_button.setAccessibleName(tr("ui.settings"))
         self.set_status(self.status_key)
         self.update_send_button()
         if self.showing_greeting:
@@ -1481,10 +1469,6 @@ def main():
         icon_font = QFont(nerd_font, 18)
 
         for button in (
-                window.settings_button,
-                window.chat_button,
-                window.logs_button,
-                window.editor_button,
                 window.send,
                 window.attach,
                 window.log_view.refresh_button,):
