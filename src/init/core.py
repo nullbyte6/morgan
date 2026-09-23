@@ -51,6 +51,7 @@ class Assistant:
                 instance.audio_model = None
                 instance.audio_model_name = None
                 instance.shutdown_requested = threading.Event()
+                instance._active_cancellation_token = None
                 instance.voice = None
                 instance.debug_console = None
                 instance._reload_lock = threading.Lock()
@@ -366,6 +367,7 @@ class Assistant:
         import asyncio
         from src.init import brain
         from src.init.streaming import SpeechBuffer
+        from pydantic_ai import CancellationToken
         from pydantic_ai.messages import (BinaryContent, ModelRequest,
                                           ModelResponse, TextPart,
                                           UserPromptPart)
@@ -376,6 +378,8 @@ class Assistant:
         self.voice.subtitle_callback = on_subtitle
         self.voice.begin_turn()
         cancel_event = cancel_event if cancel_event is not None else threading.Event()
+        cancellation_token = CancellationToken()
+        self._active_cancellation_token = cancellation_token
         reply = []
         completed_history = None
         execution_started = False
@@ -452,6 +456,7 @@ class Assistant:
                 model_prompt, message_history=history, toolsets=attachment_tools,
                 model=turn_model,
                 model_settings=turn_model_settings,
+                cancellation_token=cancellation_token,
                 event_stream_handler=stream_events)
             completed_history = result.all_messages()
             for phrase in buffer.finish():
@@ -495,6 +500,7 @@ class Assistant:
                 else:
                     event_loop.run_until_complete(run())
         finally:
+            self._active_cancellation_token = None
             active_attachments.reset(attachment_token)
             self.voice.audio_callback = None
             self.voice.speaking_callback = None
@@ -530,6 +536,12 @@ class Assistant:
                 "inspect current state before retrying. Follow the user's next instruction.]")]))
             return text, safe
         return text, completed_history
+
+    def cancel_active_generation(self):
+        """Cancel the active PydanticAI run from the worker thread."""
+        token = self._active_cancellation_token
+        if token is not None:
+            token.cancel()
 
     def run(self):
         try:

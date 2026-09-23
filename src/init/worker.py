@@ -272,6 +272,7 @@ class AssistantWorker(QObject):
 
     def interrupt(self):
         self.cancel_event.set()
+        self.assistant.cancel_active_generation()
         self.resolve_confirmation(False)
         voice = self.assistant.voice
         if voice is not None:
