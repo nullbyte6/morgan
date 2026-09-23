@@ -167,7 +167,7 @@ class AssistantWorker(QObject):
             self.rejected.emit(turn_id, str(error))
             return
         self.accepted.emit(turn_id)
-        prompt = message.text
+        prompt = (message.transcript.strip() if voice_input else message.text)
         try:
             cancel_event = self.cancel_event
             set_confirmation_handler(
@@ -241,7 +241,8 @@ class AssistantWorker(QObject):
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
                 attachments=attachment_session, session=self.session,
-                audio_input=(message.audio_wav if voice_input else None))
+                audio_input=(message.audio_wav
+                             if voice_input and not prompt else None))
             if not self.cancel_event.is_set():
                 audio_lease.reclaim()
 

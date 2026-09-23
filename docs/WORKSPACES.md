@@ -22,6 +22,9 @@ Opening and closing panels triggers smooth size transitions. When a panel closes
 
 ## Moving panels
 Drag a panel by its title bar and drop it onto another panel to exchange their positions.
+The entire panel follows the pointer at its original size during the drag, anchored
+to the point where its title bar was grabbed. The destination highlight remains
+visible to indicate where it can be dropped.
 Moving a panel preserves its embedded content and internal state, including any zoom or selection managed by that content. Only its position in the tiling layout changes.
 
 ## Independent content

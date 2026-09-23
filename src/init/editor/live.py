@@ -211,11 +211,8 @@ class EditorView(QWidget):
         super().__init__(parent)
 
         self.setObjectName("editorPage")
-        self.tabs = QTabWidget()
-        self.tabs.setObjectName("editorTabs")
-        self.tabs.setTabsClosable(False)
-        self.tabs.setDocumentMode(False)
-        self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.editor = CodeEditor(self)
+        self.editor.document().modificationChanged.connect(self.update_title)
 
         self.open_button = QPushButton("Open")
         self.save_button = QPushButton("Save")
@@ -233,85 +230,40 @@ class EditorView(QWidget):
         layout.setSpacing(12)
 
         layout.addLayout(toolbar)
-        layout.addWidget(self.tabs, 1)
-        self.new_file()
+        layout.addWidget(self.editor, 1)
+        self.update_title()
 
-    def current_editor(self) -> CodeEditor | None:
-        widget = self.tabs.currentWidget()
-        return widget if isinstance(widget, CodeEditor) else None
+    def current_editor(self) -> CodeEditor:
+        return self.editor
 
-    def new_file(self):
-        editor = CodeEditor(self)
-        index = self.tabs.addTab(editor, "Untitled")
-        close_button = QToolButton(self.tabs)
-        close_button.setObjectName("editorTabClose")
-        close_button.setText("×")
-        close_button.setFixedSize(24, 24)
-        close_button.setCursor(Qt.PointingHandCursor)
-
-        close_button.clicked.connect(
-            lambda checked=False, e=editor: self.close_editor(e))
-
-        self.tabs.tabBar().setTabButton(
-            index,
-            QTabBar.RightSide,
-            close_button)
-
-        self.tabs.setCurrentIndex(index)
-
-        editor.document().modificationChanged.connect(
-            lambda modified, e=editor: self.update_tab(e))
-
-        return editor
-
-    def close_editor(self, editor: CodeEditor):
-        index = self.tabs.indexOf(editor)
-
-        if index >= 0:
-            self.close_tab(index)
-
-    def update_tab(self, editor: CodeEditor):
-        index = self.tabs.indexOf(editor)
-
-        if index < 0:
-            return
-
-        name = (
-            editor.file_path.name
-            if editor.file_path
-            else "Untitled")
-
-        if editor.document().isModified():
+    def update_title(self, *_):
+        name = self.editor.file_path.name if self.editor.file_path else "Untitled"
+        if self.editor.document().isModified():
             name += " *"
+        self.setWindowTitle(f"Editor - {name}")
 
-        self.tabs.setTabText(index, name)
-
-        if editor.file_path:
-            self.tabs.setTabToolTip(index, str(editor.file_path))
+    def confirm_discard(self) -> bool:
+        if not self.editor.document().isModified():
+            return True
+        result = QMessageBox.question(
+            self,
+            "Unsaved changes",
+            "Save changes before closing?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Cancel)
+        if result == QMessageBox.Cancel:
+            return False
+        return result != QMessageBox.Save or self.save_current()
 
     def open_file(self, path: str | Path):
         path = Path(path).expanduser().resolve()
-
-        for index in range(self.tabs.count()):
-            editor = self.tabs.widget(index)
-
-            if isinstance(editor, CodeEditor):
-                if editor.file_path == path:
-                    self.tabs.setCurrentIndex(index)
-                    return editor
-
-        editor = self.new_file()
-
-        try:
-            editor.open_file(path)
-        except (OSError, UnicodeError, ValueError):
-            index = self.tabs.indexOf(editor)
-            self.tabs.removeTab(index)
-            editor.deleteLater()
-            raise
-
-        self.update_tab(editor)
-        return editor
+        if self.editor.file_path == path:
+            return self.editor
+        if not self.confirm_discard():
+            return None
+        self.editor.open_file(path)
+        self.update_title()
+        return self.editor
 
     def choose_file(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -356,39 +308,8 @@ class EditorView(QWidget):
                 self, "Arlo", str(error))
             return False
 
-        self.update_tab(editor)
+        self.update_title()
         return True
-
-    def close_tab(self, index):
-        editor = self.tabs.widget(index)
-
-        if not isinstance(editor, CodeEditor):
-            return
-
-        if editor.document().isModified():
-            result = QMessageBox.question(
-                self,
-                "Unsaved changes",
-                "Save changes before closing?",
-                QMessageBox.Save
-                | QMessageBox.Discard
-                | QMessageBox.Cancel,
-                QMessageBox.Cancel)
-
-            if result == QMessageBox.Cancel:
-                return
-
-            if result == QMessageBox.Save:
-                self.tabs.setCurrentIndex(index)
-
-                if not self.save_current():
-                    return
-
-        self.tabs.removeTab(index)
-        editor.deleteLater()
-
-        if self.tabs.count() == 0:
-            self.new_file()
 
     def set_status(self, text: str):
         self.status.setText(text)

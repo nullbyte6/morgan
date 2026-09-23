@@ -31,6 +31,11 @@ shrinks or grows with microphone intensity. Pending typed text and attachments
 stay in the composer. The manual microphone button remains available and keeps
 its click-to-start/click-to-stop behavior.
 
+Successfully transcribed voice requests use the same model and tools as typed
+requests. If transcription fails or is empty, the original recording is sent to
+the configured audio model instead. A conversation containing native audio keeps
+using the audio model so that its history can still be read.
+
 ## Capture and coordination
 
 The listener maintains a continuous 16 kHz mono input stream, with 100 ms blocks.
