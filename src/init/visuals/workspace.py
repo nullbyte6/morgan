@@ -143,12 +143,20 @@ class WorkspacePanel(QFrame):
 
         if self.content is not None:
             previous = self.content
+            if previous.property("workspaceViewKey") == "editor":
+                previous.windowTitleChanged.disconnect(self.set_title)
             self.content_layout.removeWidget(previous)
             previous.setParent(None)
             previous.deleteLater()
 
         self.content = content
         self.content_layout.addWidget(content)
+        if content.property("workspaceViewKey") == "editor":
+            content.windowTitleChanged.connect(self.set_title)
+            self.set_title(content.windowTitle())
+            self.set_renamable(False)
+        else:
+            self.set_renamable(self.closable)
 
     def set_title(self, title: str) -> None:
         """Update the panel title."""
@@ -218,6 +226,10 @@ class WorkspacePanel(QFrame):
         mime = QMimeData()
         mime.setData(self.MIME_TYPE, QByteArray(self.panel_id.encode()))
         drag.setMimeData(mime)
+        # Keep the full panel beneath the pointer, including its content.
+        # The hotspot uses widget coordinates (also on high-DPI screens).
+        drag.setPixmap(self.grab())
+        drag.setHotSpot(self.mapFromGlobal(QCursor.pos()))
 
         self.header.setCursor(Qt.ClosedHandCursor)
 
