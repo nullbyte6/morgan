@@ -27,7 +27,7 @@ from contextlib import nullcontext
 from datetime import datetime
 from getpass import getuser
 
-from pydantic_ai import Agent, Tool, UsageLimits
+from pydantic_ai import Agent, Tool
 
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
@@ -457,11 +457,7 @@ class Assistant:
                 model=turn_model,
                 model_settings=turn_model_settings,
                 cancellation_token=cancellation_token,
-                event_stream_handler=stream_events,
-                usage_limits=UsageLimits(
-                    request_limit=4,
-                    tool_calls_limit=1,
-                ),
+                event_stream_handler=stream_events
             )
 
             completed_history = result.all_messages()
