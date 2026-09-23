@@ -39,11 +39,13 @@ class WorkspacePanel(QFrame):
         panel_id: str,
         title: str,
         content: QWidget | None = None,
+        closable: bool = True,
         parent: QWidget | None = None):
         super().__init__(parent)
 
         self.panel_id = panel_id
         self.title = title
+        self.closable = closable
         self._drag_start: QPoint | None = None
 
         self.setObjectName("workspacePanel")
@@ -76,6 +78,7 @@ class WorkspacePanel(QFrame):
         self.close_button.setFixedSize(28, 28)
         self.close_button.setCursor(Qt.PointingHandCursor)
         self.close_button.setToolTip("Close panel")
+        self.close_button.setVisible(closable)
 
         header_layout.addWidget(self.title_label, 1)
         header_layout.addWidget(self.close_button)
@@ -356,6 +359,7 @@ class Workspace(QWidget):
             panel_id=panel_id,
             title=title,
             content=content,
+            closable=panel_id != getattr(self, "_primary_panel_id", None),
         )
 
         panel.close_requested.connect(self.close_panel)
@@ -385,6 +389,22 @@ class Workspace(QWidget):
         self.panel_opened.emit(panel_id)
         self.layout_changed.emit()
         return panel_id
+
+    def set_primary_panel(self, panel_id: str) -> bool:
+        """Mark one panel as permanent and keep it available in the workspace."""
+        if panel_id not in self._panels:
+            return False
+
+        previous = getattr(self, "_primary_panel_id", None)
+        if previous in self._panels and previous != panel_id:
+            self._panels[previous].closable = True
+            self._panels[previous].close_button.setVisible(True)
+
+        self._primary_panel_id = panel_id
+        panel = self._panels[panel_id]
+        panel.closable = False
+        panel.close_button.setVisible(False)
+        return True
 
 
 
@@ -507,6 +527,9 @@ class Workspace(QWidget):
         panel = self._panels.get(panel_id)
 
         if panel is None:
+            return False
+
+        if panel_id == getattr(self, "_primary_panel_id", None):
             return False
 
         if panel_id in self._closing_panels:
@@ -680,8 +703,10 @@ class Workspace(QWidget):
 
         self._animations.clear()
 
+        primary_id = getattr(self, "_primary_panel_id", None)
         for panel_id in tuple(self._panels):
-            self._remove_panel(panel_id)
+            if panel_id != primary_id:
+                self._remove_panel(panel_id)
 
     def _on_splitter_moved(self, position: int, index: int) -> None:
         self.layout_changed.emit()
@@ -788,31 +813,55 @@ class Workspace(QWidget):
         source_parent = source.parentWidget()
         target_parent = target.parentWidget()
 
-        if not isinstance(source_parent, QSplitter):
-            return False
+        source_is_splitter = isinstance(source_parent, QSplitter)
+        target_is_splitter = isinstance(target_parent, QSplitter)
 
-        if not isinstance(target_parent, QSplitter):
-            return False
+        source_index = (source_parent.indexOf(source)
+                        if source_is_splitter else self._layout.indexOf(source))
+        target_index = (target_parent.indexOf(target)
+                        if target_is_splitter else self._layout.indexOf(target))
 
-        source_index = source_parent.indexOf(source)
-        target_index = target_parent.indexOf(target)
+        source_sizes = source_parent.sizes() if source_is_splitter else None
+        target_sizes = target_parent.sizes() if target_is_splitter else None
 
-        if source_parent is target_parent:
-            source_parent.insertWidget(source_index, target)
-            source_parent.insertWidget(target_index, source)
-
+        source_placeholder = QWidget()
+        target_placeholder = QWidget()
+        if source_is_splitter:
+            source_parent.replaceWidget(source_index, source_placeholder)
         else:
-            source_sizes = source_parent.sizes()
-            target_sizes = target_parent.sizes()
+            self._layout.replaceWidget(source, source_placeholder)
+        if target_is_splitter:
+            target_parent.replaceWidget(target_index, target_placeholder)
+        else:
+            self._layout.replaceWidget(target, target_placeholder)
 
-            source.setParent(None)
-            target.setParent(None)
-
+        if source_is_splitter:
             source_parent.insertWidget(source_index, target)
+        else:
+            self._layout.insertWidget(source_index, target)
+            self._root = target
+        if target_is_splitter:
             target_parent.insertWidget(target_index, source)
+        else:
+            self._layout.insertWidget(target_index, source)
+            self._root = source
 
+        if source_is_splitter:
             source_parent.setSizes(source_sizes)
+        if target_is_splitter and target_parent is not source_parent:
             target_parent.setSizes(target_sizes)
+        for parent, placeholder in (
+            (source_parent, source_placeholder),
+            (target_parent, target_placeholder),
+        ):
+            if isinstance(parent, QSplitter):
+                if parent.indexOf(placeholder) >= 0:
+                    parent.widget(parent.indexOf(placeholder)).setParent(None)
+            else:
+                self._layout.removeWidget(placeholder)
+                placeholder.setParent(None)
+        source_placeholder.deleteLater()
+        target_placeholder.deleteLater()
 
         self.focus_panel(source_id)
         self.layout_changed.emit()

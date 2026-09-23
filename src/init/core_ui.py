@@ -206,12 +206,14 @@ class ArloWindow(QMainWindow):
             self.toggle_orb_speech_pulse)
         self.settings_view.language_changed.connect(self.change_language)
         self.build_ui()
-        self.workspace.panel_opened.connect(lambda: self.show_page(0))
+        self.workspace.panel_opened.connect(
+            lambda _panel_id: self.show_page(0))
 
         self._workspace_shortcut_map = {
             options["shortcut"].rsplit(",", 1)[-1].strip(): view_key
             for view_key, options in WORKSPACE_VIEW_CONFIG.items()
         }
+
         self._workspace_chord_pending = False
         self._workspace_chord_timer = QTimer(self)
         self._workspace_chord_timer.setSingleShot(True)
@@ -428,29 +430,23 @@ class ArloWindow(QMainWindow):
         self.input.textChanged.connect(self.ensure_composer_visible)
         self.input.textChanged.connect(self.update_send_button)
 
-        self.chat_workspace_splitter = QSplitter(Qt.Horizontal)
-        self.chat_workspace_splitter.setObjectName("chatWorkspaceSplitter")
-        self.chat_workspace_splitter.setChildrenCollapsible(False)
-        self.chat_workspace_splitter.setHandleWidth(8)
-
-        self.workspace = Workspace(self.chat_workspace_splitter)
+        self.workspace = Workspace()
         self.workspace.manual_content_factory = (
             self.workspace_content
         )
 
-        self.workspace.setMinimumWidth(260)
-        self.workspace.hide()
-
         self.chat_scroll.setMinimumWidth(300)
-        self.chat_workspace_splitter.addWidget(self.chat_scroll)
-        self.chat_workspace_splitter.addWidget(self.workspace)
-        self.chat_workspace_splitter.setStretchFactor(0, 1)
-        self.chat_workspace_splitter.setStretchFactor(1, 1)
+        self.main_workspace_panel_id = self.workspace.open_panel(
+            title="Arlo",
+            content=self.chat_scroll,
+            panel_id="main",
+        )
+        self.workspace.set_primary_panel(self.main_workspace_panel_id)
 
         self.workspace.panel_opened.connect(self.on_workspace_opened)
         self.workspace.panel_closed.connect(self.on_workspace_closed)
 
-        self.pages.addWidget(self.chat_workspace_splitter)
+        self.pages.addWidget(self.workspace)
         self.pages.addWidget(self.log_view)
         self.pages.addWidget(self.settings_view)
         self.pages.addWidget(self.editor_view)
@@ -459,10 +455,15 @@ class ArloWindow(QMainWindow):
         container_layout.addWidget(self.pages, 1)
         container_layout.addWidget(self.composer_widget)
 
-        self.chat_button.clicked.connect(lambda: self.show_page(0))
-        self.logs_button.clicked.connect(lambda: self.show_page(1))
-        self.settings_button.clicked.connect(lambda: self.show_page(2))
-        self.editor_button.clicked.connect(lambda: self.show_page(3))
+        self.chat_button.clicked.connect(
+            lambda: self.workspace.focus_panel(self.main_workspace_panel_id))
+        self.logs_button.clicked.connect(
+            lambda: self.open_workspace_view("logs"))
+        self.settings_button.clicked.connect(
+            lambda: self.open_workspace_view("settings"))
+        self.editor_button.clicked.connect(
+            lambda: self.open_workspace_view("editor"))
+
         self.show_page(0)
         self.set_enabled(False)
         self.load_stylesheet()
@@ -660,23 +661,13 @@ class ArloWindow(QMainWindow):
 
     @Slot(str)
     def on_workspace_opened(self, panel_id: str) -> None:
-        """Reveal the embedded workspace when its first panel opens."""
-        if self.workspace.panel_count != 1:
-            return
-
-        self.workspace.show()
-        total = max(self.chat_workspace_splitter.width(), 2)
-        start_sizes = [total, 0]
-        end_sizes = [max(300, total // 2), max(260, total - max(300, total // 2))]
-        self.chat_workspace_splitter.setSizes(start_sizes)
-        self.workspace.animate_splitter(
-            self.chat_workspace_splitter, start_sizes, end_sizes, duration=220)
+        """Focus a panel after it has been added to the main workspace."""
+        self.workspace.focus_panel(panel_id)
 
     @Slot(str)
     def on_workspace_closed(self, panel_id: str) -> None:
-        """Restore the full chat area when the last panel closes."""
-        if self.workspace.panel_count == 0:
-            self.workspace.hide()
+        """Keep the permanent main panel available after other panels close."""
+        self.workspace.focus_panel(self.main_workspace_panel_id)
 
 
     @Slot(object)
