@@ -103,6 +103,15 @@ class WorkspacePanel(QFrame):
 
         self._layout.addWidget(self.content_host, 1)
 
+        self.drop_preview = QFrame(self)
+        self.drop_preview.setObjectName("workspaceDropPreview")
+        self.drop_preview.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.drop_preview.setStyleSheet(
+            "background-color: rgba(138, 173, 244, 72);"
+            "border: 2px solid rgba(138, 173, 244, 210);"
+            "border-radius: 10px;")
+        self.drop_preview.hide()
+
         self.content: QWidget | None = None
         self.set_content(content or self._create_placeholder())
 
@@ -219,19 +228,20 @@ class WorkspacePanel(QFrame):
 
     def dragEnterEvent(self, event):
         if self._accepts_drag(event):
+            self._update_drop_preview(event.position().toPoint())
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def dragMoveEvent(self, event):
         if self._accepts_drag(event):
+            self._update_drop_preview(event.position().toPoint())
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def dragLeaveEvent(self, event):
-        self.setProperty("dropTarget", False)
-        self._refresh_style()
+        self._clear_drop_preview()
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
@@ -239,12 +249,37 @@ class WorkspacePanel(QFrame):
             event.ignore()
             return
 
+        self._clear_drop_preview()
+
         source_id = bytes(
             event.mimeData().data(self.MIME_TYPE)
         ).decode()
 
         self.move_requested.emit(source_id, self.panel_id)
         event.acceptProposedAction()
+
+    def _update_drop_preview(self, position: QPoint) -> None:
+        """Show the drop shape selected by the pointer position."""
+        margin = 6
+        rect = self.rect().adjusted(margin, margin, -margin, -margin)
+        x_ratio = position.x() / max(1, self.width())
+        y_ratio = position.y() / max(1, self.height())
+        if x_ratio < 0.25:
+            rect.setWidth(max(1, rect.width() // 2))
+        elif x_ratio > 0.75:
+            half = max(1, rect.width() // 2)
+            rect.setLeft(rect.right() - half)
+        elif y_ratio < 0.25:
+            rect.setHeight(max(1, rect.height() // 2))
+        elif y_ratio > 0.75:
+            half = max(1, rect.height() // 2)
+            rect.setTop(rect.bottom() - half)
+        self.drop_preview.setGeometry(rect)
+        self.drop_preview.show()
+        self.drop_preview.raise_()
+
+    def _clear_drop_preview(self) -> None:
+        self.drop_preview.hide()
 
     def _accepts_drag(self, event) -> bool:
         mime = event.mimeData()

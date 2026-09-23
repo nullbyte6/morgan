@@ -122,6 +122,7 @@ class Assistant:
         self.agent.instructions(self.working_directory_instructions)
         from src.init.memory.integration import memory_instructions
         self.agent.instructions(memory_instructions)
+        self.agent.instructions("When the user explicitly requests a flowchart, diagram, workflow, decision tree, or process visualization, call render_flowchart with newly supplied nodes and edges. It does not require an existing diagram. Do not claim this capability is unavailable.")
 
     def reload_source(self) -> str:
         """Reload source modules and rebuild the model and tools for next turn."""
@@ -152,6 +153,7 @@ class Assistant:
                 self.agent.instructions(self.working_directory_instructions)
                 from src.init.memory.integration import memory_instructions
                 self.agent.instructions(memory_instructions)
+                self.agent.instructions("When the user explicitly requests a flowchart, diagram, workflow, decision tree, or process visualization, call render_flowchart with newly supplied nodes and edges. It does not require an existing diagram. Do not claim this capability is unavailable.")
 
             summary = f"Reloaded {len(reloaded)} source modules"
             if errors:

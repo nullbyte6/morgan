@@ -514,6 +514,27 @@ class ArloWindow(QMainWindow):
         QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(
             self.input))
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not hasattr(self, "chat_scroll"):
+            return
+        viewport_height = self.chat_scroll.viewport().height()
+        root = self.chat_scroll.widget()
+        if root is not None and root.minimumHeight() != viewport_height:
+            root.setMinimumHeight(max(0, viewport_height))
+        QTimer.singleShot(0, self._update_orb_scale)
+
+    def _update_orb_scale(self):
+        """Keep the main orb readable while fitting the available height."""
+        if not hasattr(self, "chat_scroll"):
+            return
+        available = self.chat_scroll.viewport().height()
+        composer_height = self.composer_widget.sizeHint().height()
+        banner_height = max(180, available - composer_height - 150)
+        target = max(180, min(384, int(banner_height * 0.82)))
+        if self.orb.sizeHint().width() != target:
+            self.orb.set_size(target)
+
     def show_page(self, index: int):
         self.pages.setCurrentIndex(index)
         self.composer_orb.setVisible(index != 0)
@@ -832,6 +853,7 @@ class ArloWindow(QMainWindow):
         self.set_orbs_visual_state(Orb.State.IDLE)
         self.set_enabled(True)
         self._reveal_startup_controls()
+        self._update_orb_scale()
 
         if self.isVisible():
             self.input.setFocus()
