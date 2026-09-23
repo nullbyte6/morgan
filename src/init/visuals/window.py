@@ -24,7 +24,14 @@ from pathlib import Path
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QPainter
-from PySide6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView, QMainWindow
+from PySide6.QtWidgets import (
+    QApplication,
+    QGraphicsScene,
+    QGraphicsView,
+    QMainWindow,
+    QVBoxLayout,
+    QWidget,
+)
 
 from src.init.utils import get_stylesheet, resource_path
 
@@ -88,26 +95,21 @@ class FlowchartView(QGraphicsView):
         event.accept()
 
 
-class FlowchartWindow(QMainWindow):
-    """An independent window with no assistant or model initialization."""
+class FlowchartWidget(QWidget):
+    """An embeddable interactive flowchart surface."""
 
     def __init__(self, chart: Flowchart | None = None, parent=None):
         super().__init__(parent)
         self.chart = chart if chart is not None else demo_flowchart()
-        self.setWindowTitle(f"Arlo Flowchart — {self.chart.title}")
-        self.resize(800, 720)
-        self.setMinimumSize(400, 360)
         self.scene = QGraphicsScene(self)
-        try:
-            self.nodes = render_flowchart(self.scene, self.chart)
-        except Exception:
-            self.deleteLater()
-            raise
+        self.nodes = render_flowchart(self.scene, self.chart)
         self.view = FlowchartView(self.scene, self)
-        self.setCentralWidget(self.view)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.view)
         if self.chart.description:
-            self.setToolTip("<qt>" + escape(self.chart.description).replace("\n", "<br/>") + "</qt>")
-        self.view.centerOn(self.scene.itemsBoundingRect().center())
+            self.setToolTip(
+                "<qt>" + escape(self.chart.description).replace("\n", "<br/>") + "</qt>")
         self._initial_view_pending = True
 
     def showEvent(self, event):
@@ -120,10 +122,36 @@ class FlowchartWindow(QMainWindow):
         """Frame the initial graph once without resetting later user navigation."""
         bounds = self.scene.itemsBoundingRect().adjusted(-40, -40, 40, 40)
         viewport = self.view.viewport().rect()
-        scale = max(0.25, min(1.0, viewport.width() / bounds.width(), viewport.height() / bounds.height()))
+        if bounds.width() <= 0 or bounds.height() <= 0:
+            return
+        scale = max(
+            0.25,
+            min(1.0, viewport.width() / bounds.width(),
+                viewport.height() / bounds.height()),
+        )
         self.view.resetTransform()
         self.view.scale(scale, scale)
         self.view.centerOn(bounds.center())
+
+
+class FlowchartWindow(QMainWindow):
+    """Standalone flowchart window for the local demo entry point."""
+
+    def __init__(self, chart: Flowchart | None = None, parent=None):
+        super().__init__(parent)
+        self.chart = chart if chart is not None else demo_flowchart()
+        self.setWindowTitle(f"Arlo Flowchart — {self.chart.title}")
+        self.resize(800, 720)
+        self.setMinimumSize(400, 360)
+        try:
+            self.content = FlowchartWidget(self.chart, self)
+        except Exception:
+            self.deleteLater()
+            raise
+        self.scene = self.content.scene
+        self.nodes = self.content.nodes
+        self.view = self.content.view
+        self.setCentralWidget(self.content)
 
 
 def main() -> int:

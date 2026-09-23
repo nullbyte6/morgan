@@ -47,7 +47,7 @@ def _failure(code, message):
 
 
 class FlowchartBridge(QObject):
-    """Own diagram windows and execute every graphics operation on the GUI thread."""
+    """Own diagram workspace panels and render them on the GUI thread."""
     requested = Signal(object)
 
     def __init__(self, parent=None):
@@ -63,6 +63,9 @@ class FlowchartBridge(QObject):
         self._closed = False
         self._pending = {}
         self.windows = {}
+        self._panel_requests = {}
+        self._workspace_connected = False
+        self._workspace = None
         self.requested.connect(self._render, Qt.QueuedConnection)
         app.aboutToQuit.connect(self.shutdown)
         self.destroyed.connect(lambda: self._release())
@@ -107,32 +110,48 @@ class FlowchartBridge(QObject):
         with self._lock:
             if self._closed or request.completed.is_set():
                 return
-        window = None
+        widget = None
         try:
-            from src.init.utils import get_stylesheet
-            from .window import FlowchartWindow
+            from .window import FlowchartWidget
 
-            window = FlowchartWindow(request.chart)
-            window.setAttribute(Qt.WA_DeleteOnClose, True)
-            window.setStyleSheet(get_stylesheet())
-            window.destroyed.connect(lambda: self.windows.pop(request.id, None))
+            workspace = getattr(self.parent(), "workspace", None)
+            if workspace is None:
+                raise RuntimeError("The flowchart bridge requires the Arlo workspace")
+            self._workspace = workspace
+            if not self._workspace_connected:
+                workspace.panel_closed.connect(self._on_panel_closed)
+                self._workspace_connected = True
+            widget = FlowchartWidget(request.chart)
+            panel_id = workspace.open_panel(
+                title=request.chart.title,
+                content=widget,
+            )
+            self._panel_requests[panel_id] = request.id
+            widget.destroyed.connect(
+                lambda: self.windows.pop(request.id, None))
             with self._lock:
                 if self._closed or request.completed.is_set():
-                    window.deleteLater()
+                    workspace.close_panel(panel_id)
                     return
-                self.windows[request.id] = window
-                window.show()
+                self.windows[request.id] = widget
                 self._complete(request, {"ok": True, "window_id": request.id,
+                                        "panel_id": panel_id,
                                         "title": request.chart.title,
                                         "nodes": len(request.chart.nodes),
                                         "edges": len(request.chart.edges), "status": "opened"})
         except Exception as error:
-            if window is not None:
+            if widget is not None:
                 self.windows.pop(request.id, None)
-                window.close()
-                window.deleteLater()
+                widget.deleteLater()
             with self._lock:
                 self._complete(request, _failure("render_error", f"Could not render flowchart: {error}"))
+
+    @Slot(str)
+    def _on_panel_closed(self, panel_id: str) -> None:
+        """Forget flowchart state after its workspace panel is closed."""
+        request_id = self._panel_requests.pop(panel_id, None)
+        if request_id is not None:
+            self.windows.pop(request_id, None)
 
     @Slot()
     def shutdown(self):
@@ -152,8 +171,11 @@ class FlowchartBridge(QObject):
             self._closed = True
             for request in list(self._pending.values()):
                 self._complete(request, _failure("unavailable", "The flowchart desktop bridge was closed"))
-        for window in list(self.windows.values()):
-            window.close()
+        workspace = self._workspace
+        if workspace is not None:
+            for panel_id in list(self._panel_requests):
+                workspace.close_panel(panel_id)
+        self._panel_requests.clear()
         self.windows.clear()
 
 
