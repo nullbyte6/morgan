@@ -792,15 +792,18 @@ class ArloWindow(QMainWindow):
 
     def show_mascot(self):
         """Switch to compact desktop mode."""
-        self.mascot.move_to_corner()
-        self.mascot.show()
+        if self.quitting:
+            return
+        if not self.mascot.isVisible():
+            self.mascot.move_to_corner()
+        self.mascot.pop_in()
         self.hide()
 
     def restore_from_mascot(self):
         """Restore the full Arlo interface."""
         if self.quitting:
             return
-        self.mascot.hide()
+        self.mascot.pop_out()
         self.showNormal()
         self.raise_()
         self.activateWindow()

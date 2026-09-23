@@ -114,6 +114,10 @@ class Orb(QWidget):
         self.click_pulse = 0.0
         self.double_pulse = 0.0
 
+        self._pop_scale = 1.0
+        self._pop_animation = QPropertyAnimation(self, b"pop_scale", self)
+        self._pop_animation.finished.connect(self._finish_pop)
+
         self._drag_origin = None
         self._drag_offset = None
         self._dragging = False
@@ -133,6 +137,46 @@ class Orb(QWidget):
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.animate)
         self.timer.start()
+
+    @Property(float)
+    def pop_scale(self):
+        return self._pop_scale
+
+    @pop_scale.setter
+    def pop_scale(self, value):
+        self._pop_scale = max(0.0, float(value))
+        self.update()
+
+    def pop_in(self):
+        """Show with a centered pop, or reverse an ongoing pop-out."""
+        if not self.isVisible():
+            self._pop_animation.stop()
+            self.pop_scale = 0.0
+            self.show()
+        self._start_pop(1.0, 300, QEasingCurve.Type.OutBack)
+
+    def pop_out(self):
+        """Shrink away before hiding the widget."""
+        if self.isVisible():
+            self.click_timer.stop()
+            self.restore_timer.stop()
+            self._start_pop(0.0, 180, QEasingCurve.Type.InBack)
+
+    def _start_pop(self, target, duration, easing):
+        animation = self._pop_animation
+        if (animation.state() == QAbstractAnimation.State.Running
+                and animation.endValue() == target):
+            return
+        animation.stop()
+        animation.setDuration(duration)
+        animation.setEasingCurve(easing)
+        animation.setStartValue(self.pop_scale)
+        animation.setEndValue(target)
+        animation.start()
+
+    def _finish_pop(self):
+        if self._pop_animation.endValue() == 0.0:
+            self.hide()
 
     def set_thinking(self, thinking: bool):
         self.thinking = bool(thinking)
@@ -279,8 +323,9 @@ class Orb(QWidget):
 
         side = min(self.width(), self.height())
         painter.translate(self.width() / 2, self.height() / 2)
-        painter.scale(scale * self.speech_scale,
-                      scale * self.speech_scale)
+        painter.setOpacity(min(1.0, self.pop_scale))
+        painter.scale(scale * self.speech_scale * self.pop_scale,
+                      scale * self.speech_scale * self.pop_scale)
         painter.rotate(self._state_rotation * 12.0)
         points = 240
         _, target_amplitude, _, _ = self.STATE_PROFILES[self.visual_state]
@@ -557,6 +602,8 @@ class Orb(QWidget):
         super().mouseDoubleClickEvent(event)
 
     def hideEvent(self, event):
+        self._pop_animation.stop()
+        self.pop_scale = 1.0
         self.click_timer.stop()
         self.restore_timer.stop()
         self._drag_origin = None
