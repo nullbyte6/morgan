@@ -40,6 +40,27 @@ def main(argv=None):
     for command in ("delete-message", "delete-memory"):
         deletion = commands.add_parser(command)
         deletion.add_argument("id")
+    for command, argument in (("recall", "query"), ("words", "prefix"), ("instances", "word")):
+        search = commands.add_parser(command)
+        search.add_argument(argument, **({"nargs": "?", "default": ""} if command == "words" else {}))
+        search.add_argument("--limit", type=int, default=8)
+        search.add_argument("--session-id")
+        search.add_argument("--role", choices=("user", "assistant"))
+        search.add_argument("--since")
+        search.add_argument("--until")
+        if command == "recall":
+            search.add_argument("--mode", choices=("any", "all", "phrase"), default="any")
+            search.add_argument("--no-history", action="store_true")
+        else:
+            search.add_argument("--scope", choices=("history", "memories", "all"), default="history")
+            search.add_argument("--offset", type=int, default=0)
+    conversation = commands.add_parser("conversation")
+    conversation.add_argument("session_id")
+    conversation.add_argument("--after", type=int, default=0)
+    conversation.add_argument("--limit", type=int, default=8)
+    message = commands.add_parser("message")
+    message.add_argument("message_id")
+    message.add_argument("--offset", type=int, default=0)
     args = parser.parse_args(argv)
     try:
         if args.database:
@@ -55,6 +76,20 @@ def main(argv=None):
         elif args.command == "backup":
             service.backup(args.destination)
             result, success = {"backup": str(args.destination)}, True
+        elif args.command in ("recall", "words", "instances"):
+            options = dict(limit=args.limit, session_id=args.session_id, role=args.role,
+                           since=args.since, until=args.until)
+            if args.command == "recall":
+                result = service.recall(args.query, mode=args.mode, history=not args.no_history, **options)
+            else:
+                method = service.search_words if args.command == "words" else service.word_instances
+                value = args.prefix if args.command == "words" else args.word
+                result = method(value, scope=args.scope, offset=args.offset, **options)
+            success = True
+        elif args.command == "conversation":
+            result, success = service.read_conversation(args.session_id, after=args.after, limit=args.limit), True
+        elif args.command == "message":
+            result, success = service.read_memory_message(args.message_id, offset=args.offset), True
         elif args.command == "import":
             roles = {}
             for speaker in args.speaker:
