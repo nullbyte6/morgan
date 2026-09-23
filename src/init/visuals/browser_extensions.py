@@ -171,7 +171,7 @@ class ExtensionsView(QWidget):
         root.addWidget(hint)
         install = QBoxLayout(QBoxLayout.LeftToRight)
         self.install_layout = install
-        for label, handler in (('Install folder', self._install_folder), ('Install ZIP', self._install_zip)):
+        for label, handler in (('Install folder', self._install_folder), ('Install extension', self._install_zip)):
             button = self._button(label, handler)
             install.addWidget(button)
         root.addLayout(install)
