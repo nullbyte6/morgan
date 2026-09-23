@@ -18,6 +18,12 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Persistent extension preferences and the embedded browser's extension manager."""
 
+import shutil
+import struct
+import tempfile
+import zipfile
+from pathlib import Path
+
 from PySide6.QtCore import QObject, QSettings, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QBoxLayout, QFileDialog, QLabel, QListWidget, QListWidgetItem,
@@ -34,6 +40,8 @@ class BrowserExtensions(QObject):
         self.manager = session.profile.extensionManager()
         self._closed = False
         self.settings = QSettings(str(session.data_path / 'extensions.ini'), QSettings.IniFormat)
+        self.import_path = Path(session.data_path) / 'imports'
+        self.import_path.mkdir(parents=True, exist_ok=True)
         # Handle completion after Qt has returned from its registry callbacks.
         self.manager.loadFinished.connect(self._loaded, Qt.QueuedConnection)
         self.manager.installFinished.connect(self._installed, Qt.QueuedConnection)
@@ -44,7 +52,7 @@ class BrowserExtensions(QObject):
 
     def _restore(self, extension):
         if extension.isLoaded() and extension.isInstalled():
-            enabled = self.settings.value(f'enabled/{extension.id()}', False, type=bool)
+            enabled = self.settings.value(f'enabled/{extension.id()}', True, type=bool)
             self.manager.setExtensionEnabled(extension, enabled)
 
     @Slot(object)
@@ -85,6 +93,48 @@ class BrowserExtensions(QObject):
         self.settings.setValue(f'enabled/{extension.id()}', enabled)
         self.settings.sync()
         self.changed.emit()
+
+    def prepare_archive(self, source: str) -> str:
+        """Convert a CRX/ZIP import into a stable unpacked MV3 directory."""
+        source_path = Path(source).expanduser().resolve()
+        if source_path.suffix.lower() == '.zip':
+            return str(source_path)
+        if source_path.suffix.lower() != '.crx':
+            raise ValueError('Select a .crx or .zip Chromium extension')
+
+        raw = source_path.read_bytes()
+        if raw[:4] != b'Cr24' or len(raw) < 12:
+            raise ValueError('Invalid CRX header')
+        version = struct.unpack_from('<I', raw, 4)[0]
+        if version == 2:
+            public_size, signature_size = struct.unpack_from('<II', raw, 8)
+            payload_offset = 16 + public_size + signature_size
+        elif version == 3:
+            header_size = struct.unpack_from('<I', raw, 8)[0]
+            payload_offset = 12 + header_size
+        else:
+            raise ValueError(f'Unsupported CRX version: {version}')
+        if payload_offset >= len(raw):
+            raise ValueError('CRX payload is empty')
+
+        archive_dir = self.import_path / source_path.stem
+        if archive_dir.exists():
+            shutil.rmtree(archive_dir)
+        archive_dir.mkdir(parents=True)
+        with tempfile.SpooledTemporaryFile() as payload:
+            payload.write(raw[payload_offset:])
+            payload.seek(0)
+            with zipfile.ZipFile(payload) as archive:
+                names = archive.namelist()
+                if 'manifest.json' not in names:
+                    raise ValueError('CRX manifest.json must be at the archive root')
+                root = archive_dir.resolve()
+                for member in archive.infolist():
+                    destination = (archive_dir / member.filename).resolve()
+                    if destination != root and root not in destination.parents:
+                        raise ValueError('CRX contains an unsafe archive path')
+                archive.extractall(archive_dir)
+        return str(archive_dir)
 
     def shutdown(self):
         self._closed = True
@@ -205,10 +255,15 @@ class ExtensionsView(QWidget):
             self.manager.installExtension(path)
 
     def _install_zip(self):
-        path, _ = QFileDialog.getOpenFileName(self, 'Select extension ZIP', '', 'Extension ZIP (*.zip)')
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Select Chromium extension', '',
+            'Chromium extension (*.crx *.zip);;CRX extension (*.crx);;ZIP extension (*.zip)')
         if path:
             self.status.setText('Installing…')
-            self.manager.installExtension(path)
+            try:
+                self.manager.installExtension(self.controller.prepare_archive(path))
+            except (OSError, ValueError, zipfile.BadZipFile) as error:
+                self.status.setText(f'Could not prepare extension: {error}')
 
     def _toggle(self):
         extension = self._selected()
