@@ -33,6 +33,13 @@ When the scaled panels need more space than the screen provides, scrollbars keep
 the rest of the interface reachable.
 
 ## How tiling works
+Web searches and website requests from the assistant open in the embedded Browser
+workspace. Arlo reuses an existing browser panel or creates one, and restores the
+main window if it is hidden. Search results remain available to the assistant for
+reading and citation. Web links in conversation logs, YouTube selections and the
+repository link also use this browser. If the embedded browser is unavailable,
+Arlo reports an error instead of launching the system browser.
+
 Arlo uses a binary tiling layout built with Qt splitters. Each new panel divides an existing workspace into two regions, alternating between horizontal and vertical splits.
 Panels automatically share the available space. You can drag the separators between them to resize individual regions without affecting their content.
 Opening and closing panels triggers smooth size transitions. When a panel closes, its neighboring panel expands into the available space, and the layout reorganizes without leaving an empty region.
