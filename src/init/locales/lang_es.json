@@ -1,4 +1,6 @@
 {
+  "ui.mute": "Silenciar a Arlo",
+  "ui.mute_hint": "Desactiva la voz de Arlo. Las respuestas por texto y el micrófono siguen funcionando.",
   "wake.launcher_not_found": "No existe el lanzador: {path}",
   "wake.already_running": "Arlo ya está ejecutándose.",
   "wake.activation_detected": "Activación detectada. Iniciando Arlo...",

@@ -1,4 +1,6 @@
 {
+  "ui.mute": "Mute Arlo",
+  "ui.mute_hint": "Turn off Arlo’s voice. Text responses and microphone input remain available.",
   "wake.launcher_not_found": "Launcher not found: {path}",
   "wake.already_running": "Arlo is already running.",
   "wake.activation_detected": "Wake word detected. Starting Arlo...",

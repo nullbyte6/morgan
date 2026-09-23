@@ -121,6 +121,7 @@ class ArloWindow(DesktopWindow):
     def __init__(self):
         super().__init__()
         self.settings = QSettings("ARLO", "desktop")
+        self.muted = self.settings.value("muted", False, type=bool)
         subtitles_enabled = self.settings.value("subtitles", True, type=bool)
         orb_speech_pulse = self.settings.value("orb_speech_pulse", True, type=bool)
         self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
@@ -172,7 +173,7 @@ class ArloWindow(DesktopWindow):
         self.orb = Orb(self, fill_ratio=0.54)
         self.orb.set_speech_pulse_enabled(orb_speech_pulse)
 
-        self.worker = AssistantWorker(self.startup_greeting)
+        self.worker = AssistantWorker(self.startup_greeting, muted=self.muted)
         register_assistant(lambda: self.worker.assistant)
         self.capture_handler = self.worker.screenshot_requested.emit
         register_capture_handler(self.capture_handler)
@@ -644,7 +645,9 @@ class ArloWindow(DesktopWindow):
         if view_key == "settings":
             view = SettingsView(
                 self.subtitles_enabled,
-                self.settings.value("orb_speech_pulse", True, type=bool))
+                self.settings.value("orb_speech_pulse", True, type=bool),
+                muted=self.muted)
+            view.mute_changed.connect(self.toggle_mute)
             view.subtitles_changed.connect(self.toggle_subtitles)
             view.orb_pulse_changed.connect(self.toggle_orb_speech_pulse)
             view.language_changed.connect(self.change_language)
@@ -833,6 +836,8 @@ class ArloWindow(DesktopWindow):
 
     def refresh_settings_workspaces(self):
         for view in self.workspace.findChildren(SettingsView):
+            with QSignalBlocker(view.mute_switch):
+                view.mute_switch.setChecked(self.muted)
             with QSignalBlocker(view.subtitles_switch):
                 view.subtitles_switch.setChecked(self.subtitles_enabled)
             with QSignalBlocker(view.orb_pulse_switch):
@@ -891,6 +896,20 @@ class ArloWindow(DesktopWindow):
         self.subtitles.setVisible(enabled and self.ready)
         self.sync_mascot_subtitle()
         self.settings.setValue("subtitles", enabled)
+        self.refresh_settings_workspaces()
+
+    @Slot(bool)
+    def toggle_mute(self, muted: bool):
+        self.muted = bool(muted)
+        self.settings.setValue("muted", self.muted)
+        try:
+            self.worker.set_muted(self.muted)
+        except Exception as error:
+            QMessageBox.warning(self, tr("ui.mute"), str(error))
+        if self.muted:
+            self.on_speaking(self.turn_id, False)
+            self.orb.clear()
+            self.mascot.clear()
         self.refresh_settings_workspaces()
 
     def toggle_orb_speech_pulse(self, enabled: bool):
@@ -1200,6 +1219,8 @@ class ArloWindow(DesktopWindow):
 
     @Slot(int, object)
     def on_audio(self, turn_id, levels):
+        if self.muted:
+            return
         if (turn_id == self.turn_id and (self.busy or not self.ready)
                 and not self.stopping):
             self.mascot.set_levels(levels)
@@ -1209,7 +1230,7 @@ class ArloWindow(DesktopWindow):
     def on_speaking(self, turn_id, speaking):
         if turn_id != self.turn_id:
             return
-        self.speaking = (speaking and (self.busy or not self.ready)
+        self.speaking = (speaking and not self.muted and (self.busy or not self.ready)
                          and not self.stopping)
         if self.speaking:
             self.set_orbs_visual_state(Orb.State.READING)

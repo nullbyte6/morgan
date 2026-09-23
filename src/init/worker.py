@@ -101,10 +101,12 @@ class AssistantWorker(QObject):
     clipboard_requested = Signal(object)
     exit_requested = Signal()
 
-    def __init__(self, startup_greeting=""):
+    def __init__(self, startup_greeting="", *, muted=False):
         super().__init__()
         self.assistant = Assistant()
         self.startup_greeting = startup_greeting
+        self.muted = bool(muted)
+        self._voice_settings_lock = threading.Lock()
         self.history = []
         self.session = SessionLog()
         self.confirmation_event = threading.Event()
@@ -118,6 +120,8 @@ class AssistantWorker(QObject):
         try:
             self.event_loop = asyncio.new_event_loop()
             self.assistant._initialize_runtime()
+            with self._voice_settings_lock:
+                self.assistant.voice.set_muted(self.muted)
             if self.startup_greeting:
                 voice = self.assistant.voice
                 voice.audio_callback = lambda samples, rate: self.report_audio(
@@ -143,6 +147,13 @@ class AssistantWorker(QObject):
             self.ready.emit()
         except Exception as error:
             self.failed.emit(str(error))
+
+    def set_muted(self, muted: bool):
+        """Apply immediately even while the worker is generating a response."""
+        with self._voice_settings_lock:
+            self.muted = bool(muted)
+            if self.assistant.voice is not None:
+                self.assistant.voice.set_muted(self.muted)
 
     @Slot(int, object)
     def ask(self, turn_id, message):

@@ -137,16 +137,29 @@ class SettingsView(QWidget):
     """Desktop subtitle and interface language preferences."""
     subtitles_changed = Signal(bool)
     orb_pulse_changed = Signal(bool)
+    mute_changed = Signal(bool)
     language_changed = Signal(str)
     model_changed = Signal(str)
 
     def __init__(self, subtitles_enabled: bool,
-                 orb_pulse_enabled: bool, parent=None):
+                 orb_pulse_enabled: bool, parent=None, *, muted=False):
         super().__init__(parent)
         self.setObjectName("settingsPage")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 12, 32, 20)
         layout.setSpacing(24)
+
+        self.mute_label = QLabel()
+        self.mute_label.setObjectName("muted")
+        self.mute_switch = ToggleSwitch()
+        self.mute_switch.setChecked(muted)
+        self.mute_label.setBuddy(self.mute_switch)
+        mute_row = QHBoxLayout()
+        mute_row.addWidget(self.mute_label)
+        mute_row.addStretch()
+        mute_row.addWidget(self.mute_switch)
+        layout.addLayout(mute_row)
+        self.mute_switch.toggled.connect(self.mute_changed.emit)
 
         self.subtitle_label = QLabel()
         self.subtitle_label.setObjectName("muted")
@@ -276,6 +289,9 @@ class SettingsView(QWidget):
         self.model_changed.emit(name)
 
     def refresh_language(self):
+        self.mute_label.setText(tr("ui.mute"))
+        self.mute_switch.setAccessibleName(tr("ui.mute"))
+        self.mute_switch.setToolTip(tr("ui.mute_hint"))
         self.language_dropdown.blockSignals(True)
         self.language_dropdown.setCurrentIndex(
             self.language_dropdown.findData(get_language()))

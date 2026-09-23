@@ -37,6 +37,8 @@ class VoiceClient:
         self.audio_callback = audio_callback
         self.speaking_callback = None
         self.subtitle_callback = None
+        self._playback_lock = threading.RLock()
+        self._muted = False
         self._turn_id = uuid.uuid4().hex
         self.supports_interruptions = False
         self.supports_voice_selection = False
@@ -143,7 +145,18 @@ class VoiceClient:
             self._done.set()
             self._reader.close()
 
+    def set_muted(self, muted: bool) -> None:
+        """Stop current speech and suppress new speech without cancelling text."""
+        with self._playback_lock:
+            self._muted = bool(muted)
+            if self._muted:
+                self.stop()
+
     def begin_turn(self) -> None:
+        with self._playback_lock:
+            self._begin_turn()
+
+    def _begin_turn(self) -> None:
         if self._closed:
             raise RuntimeError(tr("voice.disconnected"))
         self._turn_id = uuid.uuid4().hex
@@ -152,6 +165,10 @@ class VoiceClient:
         self._done.set()
 
     def stop(self) -> None:
+        with self._playback_lock:
+            self._stop()
+
+    def _stop(self) -> None:
         if not self.supports_interruptions:
             if not self._done.is_set() and not self._closed:
                 raise RuntimeError(tr("voice.restart"))
@@ -163,6 +180,14 @@ class VoiceClient:
             self._send({"type": "stop", "turn_id": turn_id})
 
     def enqueue(self, text: str) -> None:
+        with self._playback_lock:
+            if self._muted:
+                if text and text.strip() and self.subtitle_callback is not None:
+                    self.subtitle_callback(text)
+                return
+            self._enqueue(text)
+
+    def _enqueue(self, text: str) -> None:
         if not text or not text.strip():
             return
 
@@ -179,6 +204,13 @@ class VoiceClient:
                     "voice_reference": reference.name})
 
     def request_done(self) -> None:
+        with self._playback_lock:
+            if self._muted:
+                self._done.set()
+                return
+            self._request_done()
+
+    def _request_done(self) -> None:
         if self._error is not None:
             self.is_done()
         if self._done.is_set():
