@@ -91,6 +91,8 @@ ToggleSwitch {
 }
 
 QMainWindow#arloWindow,
+QGraphicsView#globalZoomView,
+QWidget#globalZoomViewport,
 QWidget#windowContainer {
     background-color: transparent;
 }

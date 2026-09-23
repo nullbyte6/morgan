@@ -103,6 +103,7 @@ from src.init.desktop.clipboard import (
 )
 from src.init.desktop.task_progress import TaskProgressPill
 from src.init.desktop.window import DesktopWindow
+from src.init.desktop.zoom import ZoomView
 from src.init.visuals.bridge import FlowchartBridge
 
 # noinspection PyBroadException
@@ -269,7 +270,6 @@ class ArloWindow(DesktopWindow):
     def build_ui(self):
         container = QWidget()
         container.setObjectName("windowContainer")
-        self.setCentralWidget(container)
 
         container_layout = QVBoxLayout(container)
         container_layout.setContentsMargins(0, 0, 0, 0)
@@ -422,6 +422,14 @@ class ArloWindow(DesktopWindow):
 
         container_layout.addWidget(self.workspace, 1)
 
+        self.zoom_view = ZoomView(
+            container, self, self.settings.value("ui_zoom", 100, type=int))
+        self.setCentralWidget(self.zoom_view)
+        self.zoom_view.zoom_changed.connect(
+            lambda percent: self.settings.setValue("ui_zoom", percent))
+        self.zoom_view.content_resized.connect(
+            lambda: QTimer.singleShot(0, self._resize_chat_content))
+
         self.set_enabled(False)
         self.load_stylesheet()
         self.refresh_language()
@@ -472,6 +480,9 @@ class ArloWindow(DesktopWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._resize_chat_content()
+
+    def _resize_chat_content(self):
         if not hasattr(self, "chat_scroll"):
             return
         viewport_height = self.chat_scroll.viewport().height()
@@ -528,7 +539,9 @@ class ArloWindow(DesktopWindow):
         self._workspace_chord_pending = False
 
     def load_stylesheet(self):
-        self.setStyleSheet(get_stylesheet())
+        stylesheet = get_stylesheet()
+        self.setStyleSheet(stylesheet)
+        self.zoom_view.content.setStyleSheet(stylesheet)
 
     @property
     def startup_greeting(self) -> str:
@@ -780,7 +793,7 @@ class ArloWindow(DesktopWindow):
             self.update_subtitles(self.startup_greeting)
 
     def refresh_settings_workspaces(self):
-        for view in self.findChildren(SettingsView):
+        for view in self.workspace.findChildren(SettingsView):
             with QSignalBlocker(view.subtitles_switch):
                 view.subtitles_switch.setChecked(self.subtitles_enabled)
             with QSignalBlocker(view.orb_pulse_switch):

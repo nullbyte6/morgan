@@ -236,10 +236,13 @@ class WorkspacePanel(QFrame):
         mime = QMimeData()
         mime.setData(self.MIME_TYPE, QByteArray(self.panel_id.encode()))
         drag.setMimeData(mime)
-        # Keep the full panel beneath the pointer, including its content.
-        # The hotspot uses widget coordinates (also on high-DPI screens).
-        drag.setPixmap(self.grab())
-        drag.setHotSpot(self.mapFromGlobal(QCursor.pos()))
+        scale = (self.window().property("uiZoom") or 100) / 100.0
+        pixmap = self.grab()
+        if scale != 1.0:
+            pixmap = pixmap.scaled(
+                pixmap.size() * scale, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        drag.setPixmap(pixmap)
+        drag.setHotSpot(self.mapFromGlobal(QCursor.pos()) * scale)
 
         self.header.setCursor(Qt.ClosedHandCursor)
 

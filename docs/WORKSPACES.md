@@ -13,8 +13,19 @@ Workspaces are managed entirely through keyboard shortcuts, keeping the interfac
 | `Ctrl + Alt + →` | Focus the nearest panel to the right. |
 | `Ctrl + Alt + ↑` | Focus the nearest panel above.        |
 | `Ctrl + Alt + ↓` | Focus the nearest panel below.        |
+| `Ctrl + +`      | Enlarge the complete interface.       |
+| `Ctrl + -`      | Reduce the complete interface.        |
+| `Ctrl + 0`      | Restore 100% interface zoom.          |
 
 The active panel is highlighted, and closing it automatically selects another available panel.
+
+Interface zoom changes in 10% steps, from 50% to 200%, and is remembered between
+sessions. `Ctrl + =` also enlarges the interface on keyboards where `+` requires
+Shift. Zoom scales the workspace headers and their contents together, including
+the editor, terminal, diagrams, buttons and custom-drawn controls. New workspaces
+inherit the current zoom. Existing editor contents and terminal sessions stay open.
+When the scaled panels need more space than the screen provides, scrollbars keep
+the rest of the interface reachable.
 
 ## How tiling works
 Arlo uses a binary tiling layout built with Qt splitters. Each new panel divides an existing workspace into two regions, alternating between horizontal and vertical splits.
