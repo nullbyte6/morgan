@@ -47,7 +47,7 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
 from src.init.indicators import PrivacyIndicator, WorkingDirectory
-from src.init.visuals.workspace import Workspace
+from src.init.visuals.workspace import Workspace, WorkspacePanel
 
 
 WORKSPACE_VIEW_CONFIG = {
@@ -64,7 +64,7 @@ WORKSPACE_VIEW_CONFIG = {
     "settings": {
         "title": "Settings",
         "shortcut": "Ctrl+N, 3",
-        "icon": "",
+        "icon": "⚙",
     },
 }
 
@@ -133,7 +133,7 @@ class ArloWindow(QMainWindow):
         self.composer_orb.hide()
         self.chat_button = QPushButton("󰭹")
         self.logs_button = QPushButton("")
-        self.settings_button = QPushButton("")
+        self.settings_button = QPushButton("⚙")
         self.editor_button = QPushButton("󰨞")
         self.has_text = False
         self.recording = False
@@ -397,6 +397,7 @@ class ArloWindow(QMainWindow):
         self.send.setObjectName("send")
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
+        self.send.hide()
 
         composer.addWidget(self.composer_orb, 0, Qt.AlignBottom)
         composer.addWidget(input_group, 1)
@@ -419,6 +420,7 @@ class ArloWindow(QMainWindow):
 
         composer_area.addLayout(composer_row)
         self.composer_widget.setLayout(composer_area)
+        main.addWidget(self.composer_widget)
 
         self.chat_scroll.setObjectName("chatScroll")
         self.chat_scroll.setFrameShape(QFrame.NoFrame)
@@ -453,7 +455,6 @@ class ArloWindow(QMainWindow):
 
 
         container_layout.addWidget(self.pages, 1)
-        container_layout.addWidget(self.composer_widget)
 
         self.chat_button.clicked.connect(
             lambda: self.workspace.focus_panel(self.main_workspace_panel_id))
@@ -497,7 +498,8 @@ class ArloWindow(QMainWindow):
                 button.clicked.connect(lambda checked=False: self.show_page(0))
             else:
                 button.clicked.connect(
-                    lambda checked=False, key=view_key: self.open_workspace_view(key))
+                    lambda checked=False, key=view_key, source=button:
+                    self.open_workspace_view(key, source))
             navigation.addWidget(button)
 
         navigation.addStretch()
@@ -542,6 +544,7 @@ class ArloWindow(QMainWindow):
             if event.key() == Qt.Key_N and modifiers == Qt.ControlModifier:
                 self._workspace_chord_pending = True
                 self._workspace_chord_timer.start()
+                self.open_workspace()
                 event.accept()
                 return True
             if (self._workspace_chord_pending and
@@ -563,9 +566,7 @@ class ArloWindow(QMainWindow):
         return super().eventFilter(watched, event)
 
     def _open_pending_workspace(self):
-        if self._workspace_chord_pending:
-            self._workspace_chord_pending = False
-            self.open_workspace()
+        self._workspace_chord_pending = False
 
     def load_stylesheet(self):
         self.setStyleSheet(get_stylesheet())
@@ -637,13 +638,30 @@ class ArloWindow(QMainWindow):
             return view
         raise ValueError(f"Unknown workspace view: {view_key}")
 
-    @Slot(str)
-    def open_workspace_view(self, view_key: str) -> None:
-        """Open a new configured view instance in the embedded workspace."""
+    def open_workspace_view(self, view_key: str, source=None) -> None:
+        """Open or replace a configured view in the embedded workspace."""
         options = WORKSPACE_VIEW_CONFIG.get(view_key)
         if options is None:
             raise ValueError(f"Unknown workspace view: {view_key}")
         self.show_page(0)
+        sender = source
+        panel = None
+        while sender is not None:
+            if isinstance(sender, WorkspacePanel):
+                panel = sender
+                break
+            sender = sender.parentWidget()
+        if panel is not None:
+            try:
+                content = self._workspace_view_factory(view_key)
+                content.setProperty("workspaceViewKey", view_key)
+                panel.set_title(options["title"])
+                panel.set_content(content)
+                self.workspace.focus_panel(panel.panel_id)
+            except Exception:
+                logging.getLogger("arlo.workspace").exception(
+                    "Failed to replace workspace view %s", view_key)
+            return
         count = getattr(self, "_workspace_view_counts", {}).get(view_key, 0) + 1
         if not hasattr(self, "_workspace_view_counts"):
             self._workspace_view_counts = {}
@@ -826,6 +844,7 @@ class ArloWindow(QMainWindow):
         self._startup_reveal_animations.clear()
 
         self.input_group.setVisible(True)
+        self.send.setVisible(True)
         self.subtitles.setVisible(self.subtitles_enabled)
         self.subtitles.setMaximumHeight(0)
 

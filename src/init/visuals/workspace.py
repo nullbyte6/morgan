@@ -56,8 +56,8 @@ class WorkspacePanel(QFrame):
         self.setAcceptDrops(True)
 
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(0)
+        self._layout.setContentsMargins(6, 6, 6, 6)
+        self._layout.setSpacing(6)
 
         self.header = QWidget(self)
         self.header.setObjectName("workspacePanelHeader")
@@ -301,8 +301,8 @@ class Workspace(QWidget):
         self._next_orientation = Qt.Horizontal
 
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(0)
+        self._layout.setContentsMargins(6, 6, 6, 8)
+        self._layout.setSpacing(6)
 
         self.manual_content_factory = None
         self._shortcut_counter = 0

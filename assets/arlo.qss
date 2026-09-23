@@ -478,12 +478,12 @@ QMessageBox QLabel {
 
 #workspacePanel {
     background: transparent;
-    border: 1px solid #494d64;
+    border: 2px solid #494d64;
     border-radius: 12px;
 }
 
 #workspacePanel[active="true"] {
-    border: 1px solid #8aadf4;
+    border: 2px solid #8aadf4;
 }
 
 #workspacePanelHeader {
