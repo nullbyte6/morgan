@@ -957,11 +957,6 @@ class ArloWindow(QMainWindow):
                        r"<b>\1</b>", escaped, flags=re.DOTALL, )
                 .replace("\n", "<br>"))
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if hasattr(self, "subtitle_text"):
-            self.update_subtitles(self.subtitle_text)
-
     @Slot()
     def send_message(self):
         if not self.ready or self.voice_thread is not None:
