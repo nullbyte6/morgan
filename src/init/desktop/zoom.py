@@ -37,7 +37,7 @@
 """Live scaling of the complete widget interface, including custom painting."""
 
 from PySide6.QtCore import QEvent, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QPainter, QTransform
+from PySide6.QtGui import QKeySequence, QPainter, QShortcut, QTransform
 from PySide6.QtWidgets import QApplication, QFrame, QGraphicsScene, QGraphicsView
 
 
@@ -70,6 +70,19 @@ class ZoomView(QGraphicsView):
         self._layout_timer.setSingleShot(True)
         self._layout_timer.timeout.connect(self._resize_content)
 
+        self._zoom_shortcuts = []
+        for sequence, direction in (
+                ("Ctrl++", 1),
+                ("Ctrl+=", 1),
+                ("Ctrl+Shift+=", 1),
+                ("Ctrl+-", -1),
+                ("Ctrl+0", 0)):
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(Qt.ApplicationShortcut)
+            shortcut.activated.connect(
+                lambda direction=direction: self._apply_shortcut_zoom(direction))
+            self._zoom_shortcuts.append(shortcut)
+
         scene = QGraphicsScene(self)
         self.setScene(scene)
         content.setAttribute(Qt.WA_TranslucentBackground)
@@ -79,6 +92,12 @@ class ZoomView(QGraphicsView):
         QApplication.instance().installEventFilter(self)
         self.set_zoom(zoom_percent)
         self._layout_timer.start(0)
+
+    def _apply_shortcut_zoom(self, direction):
+        if direction == 0:
+            self.set_zoom(100)
+        else:
+            self.set_zoom(self.zoom_percent + direction * self.ZOOM_STEP)
 
     def set_zoom(self, percent):
         percent = max(self.MIN_ZOOM, min(self.MAX_ZOOM, int(percent)))
@@ -119,19 +138,14 @@ class ZoomView(QGraphicsView):
     def eventFilter(self, watched, event):
         if watched is self.content and event.type() == QEvent.LayoutRequest:
             self._layout_timer.start(0)
-        if (event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress)
+        # Some layouts deliver shifted plus as Key_Plus instead of Key_Equal;
+        # handle that variant directly because QShortcut cannot match it
+        # consistently across keyboard layouts.
+        if (event.type() == QEvent.KeyPress
+                and event.key() == Qt.Key_Plus
+                and event.modifiers() & Qt.ControlModifier
                 and QApplication.activeWindow() == self.window()):
-            modifiers = event.modifiers()
-            if (modifiers & Qt.ControlModifier
-                    and not modifiers & (Qt.AltModifier | Qt.MetaModifier)):
-                key = event.key()
-                if key in (Qt.Key_Plus, Qt.Key_Equal, Qt.Key_Minus, Qt.Key_0):
-                    event.accept()
-                    if event.type() == QEvent.KeyPress:
-                        if key == Qt.Key_0:
-                            self.set_zoom(100)
-                        else:
-                            direction = -1 if key == Qt.Key_Minus else 1
-                            self.set_zoom(self.zoom_percent + direction * self.ZOOM_STEP)
-                    return True
+            self._apply_shortcut_zoom(1)
+            event.accept()
+            return True
         return super().eventFilter(watched, event)
