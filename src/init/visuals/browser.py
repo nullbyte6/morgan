@@ -24,7 +24,7 @@ from PySide6.QtWidgets import *
 class BrowserView(QWidget):
     """A small http(s) browser for workspace panels."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, initial_url="https://google.com"):
         super().__init__(parent)
         self.setObjectName("browserView")
         toolbar = QHBoxLayout()
@@ -86,7 +86,15 @@ class BrowserView(QWidget):
         self.web_view.loadFinished.connect(self._on_load_finished)
         root.addWidget(self.web_view, 1)
         root.addWidget(self.status)
-        self.navigate("https://google.com")
+        self.web_view.page().newWindowRequested.connect(self._open_new_window)
+        if initial_url:
+            self.navigate(initial_url)
+
+    def _open_new_window(self, request):
+        """Keep links requesting a new window inside this browser panel."""
+        url = request.requestedUrl()
+        if url.scheme() in ("http", "https"):
+            self.web_view.setUrl(url)
 
     @Slot()
     def navigate(self, text=None):
@@ -106,7 +114,7 @@ class BrowserView(QWidget):
         self.web_view.setUrl(url)
 
     def open_url(self, url: str):
-        """Open an URL from the workspace or a future Arlo bridge."""
+        """Open a URL requested by the workspace or assistant tools."""
         self.address_bar.setText(url)
         self.navigate(url)
 

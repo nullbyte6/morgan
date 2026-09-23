@@ -24,7 +24,7 @@ from .identity import get_assistant
 
 import json
 import subprocess
-import webbrowser
+from src.init.visuals.browser_bridge import open_embedded_url
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,13 +40,12 @@ def _path(path):
 
 
 def get_repo_lnk() -> str:
-    """Open the assistant's public repository in the user's default external browser.
+    """Open the assistant's public repository in Arlo's integrated browser.
     Use when asked to open the assistant's online repository, not to inspect local code.
     """
     url = "https://github.com/xddigs/arlo"
     try:
-        if not webbrowser.open(url, new=2):
-            return tr('self_code.error_could_not_open_the_default_browser_repository', url=url)
+        open_embedded_url(url)
         return tr('self_code.opened_repository_in_the_default_browser', url=url)
     except Exception as error:
         return tr('self_code.error_opening_repository_repository', error=error, url=url)

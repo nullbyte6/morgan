@@ -383,7 +383,7 @@
   "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "You are {assistant_name}, a personal desktop assistant. Follow the current configuration, use tools carefully, and only report results supported by the available evidence. ",
   "rules.current_personality_apply_to_this_response": "\nCurrent personality (apply to this response):\n",
   "rules.current_instructions_apply_to_this_response": "\nCurrent instructions (apply to this response):\n",
-  "self_code.opened_repository_in_the_default_browser": "Opened repository in the default browser: {url}",
+  "self_code.opened_repository_in_the_default_browser": "Opened repository in Arlo's integrated browser: {url}",
   "self_code.updated_restart_to_activate_the_change_no_commit_or_push_perform": "Updated {target}. Restart {value1} to activate the change; no commit or push performed.",
   "self_code.choose_a_source_file_not_git_metadata_or_the_runtime": "Choose a source file, not Git metadata or the runtime",
   "self_code.error_could_not_open_the_default_browser_repository": "Error: could not open the default browser. Repository: {url}",

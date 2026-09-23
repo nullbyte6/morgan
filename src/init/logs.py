@@ -275,7 +275,11 @@ class LogMessageCard(QFrame):
             return
 
         if url.scheme() in ("https", "http"):
-            QDesktopServices.openUrl(url)
+            from src.init.visuals.browser_bridge import open_embedded_url
+            try:
+                open_embedded_url(url.toString())
+            except (RuntimeError, ValueError) as error:
+                self.body.setToolTip(str(error))
 
 
 class LogView(QWidget):

@@ -27,7 +27,7 @@ import re
 import subprocess
 import sys
 import time
-import webbrowser
+from src.init.visuals.browser_bridge import open_embedded_url
 from collections import OrderedDict
 from typing import Literal
 
@@ -554,11 +554,10 @@ def play_youtube_song(video_id: str) -> str:
         return tr('media.error_video_id_must_come_from_a_recent_search_youtube_songs_resu')
     url = candidate["url"] + "&autoplay=1"
     try:
-        if not webbrowser.open(url, new=2):
-            return tr('media.error_the_browser_did_not_accept_the_youtube_url')
+        open_embedded_url(url)
         return json.dumps({"opened": True, "title": candidate["title"], "url": url,
                            "playback_confirmed": False,
                            "note": tr('media.check_get_current_media_before_claiming_playback_browser_autopla')},
                           ensure_ascii=False)
-    except OSError as error:
+    except (OSError, RuntimeError, ValueError) as error:
         return tr('media.error_opening_youtube', error=error)

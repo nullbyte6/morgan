@@ -110,6 +110,7 @@ from src.init.desktop.task_progress import TaskProgressPill
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
 from src.init.visuals.bridge import FlowchartBridge
+from src.init.visuals.browser_bridge import BrowserBridge
 
 # noinspection PyBroadException
 class ArloWindow(DesktopWindow):
@@ -178,6 +179,7 @@ class ArloWindow(DesktopWindow):
         self.clipboard_handler = self.worker.clipboard_requested.emit
         register_clipboard_handler(self.clipboard_handler)
         self.flowchart_bridge = FlowchartBridge(self)
+        self.browser_bridge = BrowserBridge(self)
         self.chat_scroll = QScrollArea()
         self.thread = QThread(self)
 
@@ -1326,6 +1328,7 @@ class ArloWindow(DesktopWindow):
         unregister_capture_handler(self.capture_handler)
         unregister_clipboard_handler(self.clipboard_handler)
         self.flowchart_bridge.shutdown()
+        self.browser_bridge.shutdown()
         if self.voice_thread is not None:
             self.closing_after_voice = True
             self.voice_thread.requestInterruption()

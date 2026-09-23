@@ -45,6 +45,7 @@ _PRESERVED = {
     "src.init.desktop.capture",
     "src.init.desktop.clipboard",
     "src.init.visuals.bridge",
+    "src.init.visuals.browser_bridge",
     "src.init.visuals.schema",
 }
 _PRESERVED_PREFIXES = ("src.init.memory.",)

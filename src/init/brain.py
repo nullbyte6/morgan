@@ -33,7 +33,7 @@ import threading
 import time
 import urllib.request
 import wave
-import webbrowser
+from src.init.visuals.browser_bridge import open_embedded_url
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import lru_cache
@@ -690,23 +690,30 @@ def open_directory(path: str = ".") -> str:
 
 
 def open_browser(url: str) -> str:
+    """Open a website in Arlo's integrated browser workspace."""
     try:
         if "://" not in url:
             url = "https://" + url
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
             return tr('brain.error_only_http_and_https_urls_are_allowed')
-        webbrowser.open(url)
+        open_embedded_url(url)
         return tr('brain.opened_browser', url=url)
     except Exception as error:
         return f"Error: {error}"
 
 
 def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
-    """Search the web internally, prioritizing Google, without opening a browser."""
+    """Show a search in Arlo's browser and return web results for inspection and citation."""
     query = query.strip()
     if not query:
         return tr('brain.error_search_query_is_empty')
+    from urllib.parse import urlencode
+    browser_note = ""
+    try:
+        open_embedded_url("https://www.google.com/search?" + urlencode({"q": query}))
+    except (RuntimeError, ValueError) as error:
+        browser_note = f"Embedded browser unavailable: {error}\n\n"
     try:
         from ddgs import DDGS
 
@@ -718,7 +725,7 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
             max_results=result_limit
         ))
         if not results:
-            return tr('brain.no_web_results_found_for', query=query)
+            return browser_note + tr('brain.no_web_results_found_for', query=query)
         formatted_results = []
         for index, result in enumerate(results, start=1):
             formatted_results.append(
@@ -726,9 +733,9 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
                 f"URL: {result.get('href', '')}\n"
                 f"Snippet: {result.get('body', '')}"
             )
-        return "\n\n".join(formatted_results)
+        return browser_note + "\n\n".join(formatted_results)
     except Exception as error:
-        return tr('brain.error_searching_the_web', error=error)
+        return browser_note + tr('brain.error_searching_the_web', error=error)
 
 
 def read_web_page(url: str, max_characters: int = 12_000) -> str:
