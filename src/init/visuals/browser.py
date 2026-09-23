@@ -29,7 +29,7 @@ class BrowserView(QWidget):
         self.setObjectName("browserView")
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 0, 0, 6)
-        toolbar.setSpacing(6)
+        toolbar.setSpacing(8)
         self.back_button = QPushButton("‹", self)
         self.back_button.setObjectName("browserBack")
         self.back_button.clicked.connect(self._go_back)
@@ -43,15 +43,27 @@ class BrowserView(QWidget):
         self.address_bar.setObjectName("browserAddressBar")
         self.address_bar.setPlaceholderText("Enter a URL or search the web")
         self.address_bar.setClearButtonEnabled(True)
+        self.address_bar.setMinimumWidth(80)
+        self.address_bar.setMinimumHeight(40)
+        self.address_bar.setAccessibleName("Web address or search")
         self.address_bar.returnPressed.connect(self.navigate)
-        for button in (self.back_button, self.forward_button, self.reload_button):
+        for button, label in ((self.back_button, "Back"),
+                              (self.forward_button, "Forward"),
+                              (self.reload_button, "Reload")):
+            button.setFixedSize(40, 40)
+            button.setCursor(Qt.PointingHandCursor)
+            button.setToolTip(label)
+            button.setAccessibleName(label)
             toolbar.addWidget(button)
+        self.back_button.setEnabled(False)
+        self.forward_button.setEnabled(False)
         toolbar.addWidget(self.address_bar, 1)
         self.status = QLabel("Ready", self)
         self.status.setObjectName("browserStatus")
         self.status.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 10)
+        root.setSpacing(8)
         root.addLayout(toolbar)
         try:
             from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -60,9 +72,12 @@ class BrowserView(QWidget):
             message = QLabel("Embedded browser unavailable. Install PySide6-WebEngine.", self)
             message.setObjectName("browserUnavailable")
             message.setAlignment(Qt.AlignCenter)
+            message.setWordWrap(True)
             root.addWidget(message, 1)
             root.addWidget(self.status)
             self.address_bar.setEnabled(False)
+            self.reload_button.setEnabled(False)
+            self.status.setText("Browser unavailable")
             return
         self.web_view = QWebEngineView(self)
         self.web_view.setObjectName("browserWebView")
@@ -109,6 +124,13 @@ class BrowserView(QWidget):
 
     def _on_url_changed(self, url):
         self.address_bar.setText(url.toString())
+        self._update_navigation()
+
+    def _update_navigation(self):
+        history = self.web_view.history()
+        self.back_button.setEnabled(history.canGoBack())
+        self.forward_button.setEnabled(history.canGoForward())
 
     def _on_load_finished(self, ok):
         self.status.setText("Ready" if ok else "Could not load page")
+        self._update_navigation()

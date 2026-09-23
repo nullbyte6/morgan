@@ -102,6 +102,7 @@ QPushButton#chatNav,
 QPushButton#logsNav,
 QPushButton#editorNav,
 QPushButton#terminalNav,
+QPushButton#browserNav,
 QPushButton#refresh {
     background-color: transparent;
     color: #a5adcb;
@@ -115,6 +116,7 @@ QPushButton#chatNav:hover,
 QPushButton#logsNav:hover,
 QPushButton#editorNav:hover,
 QPushButton#terminalNav:hover,
+QPushButton#browserNav:hover,
 QPushButton#refresh:hover {
     background-color: #363a4f;
     color: #cad3f5;
@@ -125,6 +127,7 @@ QPushButton#chatNav:checked,
 QPushButton#logsNav:checked,
 QPushButton#editorNav:checked,
 QPushButton#terminalNav:checked,
+QPushButton#browserNav:checked,
 QPushButton#refresh:checked {
     background-color: #494d64;
     color: #cad3f5;
@@ -761,4 +764,68 @@ QMenu#terminalMenu::item:selected {
 
 QMenu#terminalMenu::item:disabled {
     color: #6e738d;
+}
+
+QWidget#browserView {
+    background-color: transparent;
+    color: #cad3f5;
+}
+
+QWidget#browserView QPushButton {
+    background-color: #363a4f;
+    color: #cad3f5;
+    border: 1px solid #494d64;
+    border-radius: 10px;
+    padding: 0;
+    font-size: 24px;
+}
+
+QWidget#browserView QPushButton:hover,
+QWidget#browserView QPushButton:focus {
+    background-color: #494d64;
+    border-color: #8aadf4;
+}
+
+QWidget#browserView QPushButton:pressed {
+    background-color: #8aadf4;
+    color: #24273a;
+}
+
+QWidget#browserView QPushButton:disabled {
+    background-color: #363a4f;
+    color: #6e738d;
+    border-color: #494d64;
+}
+
+QLineEdit#browserAddressBar {
+    background-color: #24273a;
+    color: #cad3f5;
+    border: 1px solid #494d64;
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 16px;
+    selection-background-color: #494d64;
+    selection-color: #cad3f5;
+}
+
+QLineEdit#browserAddressBar:hover,
+QLineEdit#browserAddressBar:focus {
+    border-color: #8aadf4;
+}
+
+QLineEdit#browserAddressBar:disabled {
+    color: #6e738d;
+}
+
+QLabel#browserStatus,
+QLabel#browserUnavailable {
+    background: transparent;
+    color: #a5adcb;
+    border: none;
+    font-size: 13px;
+    padding: 0 4px;
+}
+
+QLabel#browserUnavailable {
+    font-size: 16px;
 }
