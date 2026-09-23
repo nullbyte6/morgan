@@ -32,6 +32,7 @@ class WorkspacePanel(QFrame):
     close_requested = Signal(str)
     focus_requested = Signal(str)
     move_requested = Signal(str, str)
+    title_changed = Signal(str, str)
     MIME_TYPE = "application/x-arlo-workspace-panel"
 
     def __init__(
@@ -46,6 +47,7 @@ class WorkspacePanel(QFrame):
         self.panel_id = panel_id
         self.title = title
         self.closable = closable
+        self.renamable = closable
         self._drag_start: QPoint | None = None
 
         self.setObjectName("workspacePanel")
@@ -73,6 +75,12 @@ class WorkspacePanel(QFrame):
         self.title_label.setObjectName("workspacePanelTitle")
         self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents)
 
+        self.title_edit = QLineEdit(title, self.header)
+        self.title_edit.setObjectName("workspacePanelTitleEdit")
+        self.title_edit.setFrame(False)
+        self.title_edit.hide()
+        self.title_edit.editingFinished.connect(self._finish_rename)
+
         self.close_button = QPushButton("×", self.header)
         self.close_button.setObjectName("workspacePanelClose")
         self.close_button.setFixedSize(28, 28)
@@ -81,6 +89,7 @@ class WorkspacePanel(QFrame):
         self.close_button.setVisible(closable)
 
         header_layout.addWidget(self.title_label, 1)
+        header_layout.addWidget(self.title_edit, 1)
         header_layout.addWidget(self.close_button)
 
         self._layout.addWidget(self.header)
@@ -135,8 +144,34 @@ class WorkspacePanel(QFrame):
     def set_title(self, title: str) -> None:
         """Update the panel title."""
 
+        title = title.strip() or self.title
         self.title = title
         self.title_label.setText(title)
+        self.title_edit.setText(title)
+
+    def set_renamable(self, enabled: bool) -> None:
+        """Enable or disable inline title editing."""
+        self.renamable = enabled
+
+    def _begin_rename(self) -> None:
+        if not self.renamable:
+            return
+
+        self.title_edit.setText(self.title)
+        self.title_label.hide()
+        self.title_edit.show()
+        self.title_edit.selectAll()
+        self.title_edit.setFocus(Qt.MouseFocusReason)
+
+    def _finish_rename(self) -> None:
+        if not self.title_edit.isVisible():
+            return
+
+        previous = self.title
+        self.set_title(self.title_edit.text())
+        self.title_edit.hide()
+        self.title_label.show()
+        self.title_changed.emit(previous, self.title)
 
     def eventFilter(self, watched, event):
         if watched is self.header:
@@ -158,6 +193,12 @@ class WorkspacePanel(QFrame):
 
             elif event.type() == event.Type.MouseButtonRelease:
                 self._drag_start = None
+
+            elif event.type() == event.Type.MouseButtonDblClick:
+                if event.button() == Qt.LeftButton:
+                    self._drag_start = None
+                    self._begin_rename()
+                    return True
 
         return super().eventFilter(watched, event)
 
@@ -398,11 +439,13 @@ class Workspace(QWidget):
         previous = getattr(self, "_primary_panel_id", None)
         if previous in self._panels and previous != panel_id:
             self._panels[previous].closable = True
+            self._panels[previous].set_renamable(True)
             self._panels[previous].close_button.setVisible(True)
 
         self._primary_panel_id = panel_id
         panel = self._panels[panel_id]
         panel.closable = False
+        panel.set_renamable(False)
         panel.close_button.setVisible(False)
         return True
 
