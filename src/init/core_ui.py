@@ -76,6 +76,7 @@ from src.init.desktop.clipboard import (
     register_clipboard_handler,
     unregister_clipboard_handler,
 )
+from src.init.desktop.task_progress import TaskProgressPill
 
 # noinspection PyBroadException
 class ArloWindow(QMainWindow):
@@ -300,6 +301,8 @@ class ArloWindow(QMainWindow):
         navigation.addStretch()
 
         container_layout.addLayout(navigation)
+        self.task_progress = TaskProgressPill(container)
+        container_layout.addWidget(self.task_progress)
         self.pages.setObjectName("mainPages")
 
         root = QWidget()
@@ -495,6 +498,7 @@ class ArloWindow(QMainWindow):
         self.worker.audio.connect(self.on_audio)
         self.worker.speaking.connect(self.on_speaking)
         self.worker.phase.connect(self.on_phase)
+        self.worker.phase.connect(self.task_progress.on_phase)
         self.worker.permission_denied.connect(self.on_permission_denied)
         self.worker.subtitle.connect(self.on_subtitle)
         self.worker.finished.connect(self.on_finished)
@@ -563,6 +567,7 @@ class ArloWindow(QMainWindow):
         if self.stopping:
             self.worker.resolve_confirmation(False)
             return
+        self.task_progress.awaiting_permission(turn_id)
         self.set_orbs_visual_state(Orb.State.AWAITING_PERMISSION)
         dialog = QMessageBox(self)
         dialog.setWindowTitle(tr("command.title"))
@@ -575,6 +580,7 @@ class ArloWindow(QMainWindow):
         dialog.setDefaultButton(QMessageBox.No)
 
         accepted = dialog.exec() == QMessageBox.Yes
+        self.task_progress.awaiting_permission(turn_id, waiting=False)
         self.worker.resolve_confirmation(accepted)
 
     def set_status(self, key):
@@ -631,6 +637,7 @@ class ArloWindow(QMainWindow):
         if language == self.active_language:
             return
         self.active_language = language
+        self.task_progress.refresh_language(language)
         self.settings_view.refresh_language()
         self.attachment_tray.refresh()
         self.settings_button.setToolTip(tr("ui.settings"))
@@ -764,6 +771,7 @@ class ArloWindow(QMainWindow):
     def on_request_rejected(self, turn_id, error):
         if turn_id != self.turn_id:
             return
+        self.task_progress.finish(turn_id, failed=True)
         self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
         self.finish_wake_command("failed", error)
         self.submitting = None
@@ -819,6 +827,9 @@ class ArloWindow(QMainWindow):
 
     def start_prompt(self, prompt):
         self.turn_id += 1
+        title = (prompt.transcript if isinstance(prompt, DesktopVoiceMessage)
+                 else prompt.display_text)
+        self.task_progress.begin(self.turn_id, title)
         self.showing_greeting = False
         self.worker.cancel_event = threading.Event()
         self.stopping = False
@@ -917,6 +928,7 @@ class ArloWindow(QMainWindow):
 
     def stop_response(self):
         self.stopping = True
+        self.task_progress.finish(self.turn_id, interrupted=True)
         self.worker.interrupt()
         self.speaking = False
         self.orb.clear()
@@ -999,6 +1011,8 @@ class ArloWindow(QMainWindow):
     @Slot(str)
     def on_finished(self, reply):
         interrupted = self.stopping
+        self.task_progress.finish(self.turn_id, interrupted=interrupted,
+                                  failed=self.permission_denied_state)
         self.finish_wake_command("failed" if interrupted else "completed",
                                  "Interrupted" if interrupted else "")
         if self.worker.command_reply:
@@ -1059,6 +1073,7 @@ class ArloWindow(QMainWindow):
 
     @Slot(str)
     def on_error(self, error):
+        self.task_progress.finish(self.turn_id, failed=True)
         self.finish_wake_command("failed", error)
         self.showing_greeting = False
         self.update_subtitles(tr("ui.error", error=error))
