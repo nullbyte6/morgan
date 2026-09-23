@@ -290,9 +290,6 @@ class ArloWindow(DesktopWindow):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
 
-        self.task_progress = TaskProgressPill(container)
-        container_layout.addWidget(self.task_progress)
-
         root = QWidget()
         root.setObjectName("root")
 
@@ -425,9 +422,17 @@ class ArloWindow(DesktopWindow):
         )
 
         self.chat_scroll.setMinimumWidth(300)
+        main_content = QWidget()
+        main_content.setObjectName("mainWorkspaceContent")
+        main_layout = QVBoxLayout(main_content)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        self.task_progress = TaskProgressPill(main_content)
+        main_layout.addWidget(self.task_progress)
+        main_layout.addWidget(self.chat_scroll, 1)
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=f"Arlo {load_dev_file()["version"]}",
-            content=self.chat_scroll,
+            content=main_content,
             panel_id="main",
         )
         self.workspace.set_primary_panel(self.main_workspace_panel_id)

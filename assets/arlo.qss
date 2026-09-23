@@ -445,6 +445,7 @@ QToolButton#privacyIndicator:hover {
     border-color: rgba(134, 239, 172, 0.55);
 }
 
+QWidget#mainWorkspaceContent,
 QWidget#taskProgressHost {
     background: transparent;
 }
@@ -453,7 +454,7 @@ QFrame#taskProgressPill {
     background-color: #363a4f;
     border: 2px solid #494d64;
     border-radius: 24px;
-    min-width: 360px;
+    min-width: 0;
     max-width: 440px;
 }
 
@@ -461,15 +462,14 @@ QLabel#taskProgressTitle {
     background: transparent;
     color: #cad3f5;
     border: none;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 16px;
 }
 
 QLabel#taskProgressStep {
     background: transparent;
     color: #b8c0e0;
     border: none;
-    font-size: 12px;
+    font-size: 16px;
 }
 
 QProgressBar#taskProgressBar {
@@ -513,12 +513,11 @@ QPushButton#taskProgressClose {
 
 QPushButton#taskProgressClose:hover,
 QPushButton#taskProgressClose:focus {
-    background-color: #494d64;
+    background-color: transparent;
     color: #cad3f5;
 }
 
 QPushButton#taskProgressClose:pressed {
-    background-color: #5b6078;
     color: #ed8796;
 }
 

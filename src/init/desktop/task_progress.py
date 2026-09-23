@@ -37,11 +37,12 @@ class TaskProgressPill(QWidget):
         self.order_title = ""
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(20, 14, 20, 12)
+        row.setContentsMargins(12, 8, 12, 8)
         row.setSpacing(0)
         self.pill = QFrame(self)
         self.pill.setObjectName("taskProgressPill")
         self.pill.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.pill.setMinimumWidth(0)
         body = QVBoxLayout(self.pill)
         body.setContentsMargins(20, 12, 16, 14)
         body.setSpacing(8)
@@ -66,9 +67,10 @@ class TaskProgressPill(QWidget):
         self.step.setObjectName("taskProgressStep")
         self.step.setTextFormat(Qt.PlainText)
         self.step.setWordWrap(True)
+        self.step.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         body.addWidget(self.step)
-        row.addWidget(self.pill)
-        row.addStretch(1)
+        row.addWidget(self.pill, 1)
+        row.addStretch(0)
         self.refresh_language()
         self.hide()
 
