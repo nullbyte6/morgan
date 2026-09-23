@@ -44,12 +44,14 @@ Arlo panels using that account.
 
 ### Extensions
 
-The browser's **… Extensions** button opens its extension manager. Install a
+The browser's **… Extensions** button opens its extension manager in a workspace panel.
+Opening it again focuses the existing panel. Buttons stack in narrow panels, and
+short panels scroll vertically to keep every control accessible. Install a
 Manifest V3 extension from a folder containing `manifest.json` or a ZIP with that
 file at its root. Installed extensions are enabled, copied into Arlo's profile,
 and restored at startup with their last enabled/disabled state. Select an
 extension to enable, disable or remove it; **Open panel** opens its action popup
-when one is available. All browser panels share the same extensions.
+in another workspace panel when one is available. All browser panels share the same extensions.
 
 Extensions require Qt WebEngine 6.10 or newer. Compatibility depends on the
 extension APIs supported by Qt WebEngine; not every Chrome extension will work.

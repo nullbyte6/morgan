@@ -1,9 +1,27 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Persistent extension preferences and the embedded browser's extension manager."""
 
 from PySide6.QtCore import QObject, QSettings, Qt, Signal, Slot
 from PySide6.QtWidgets import (
-    QDialog, QFileDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QVBoxLayout,
+    QBoxLayout, QFileDialog, QLabel, QListWidget, QListWidgetItem,
+    QPushButton, QVBoxLayout, QWidget, QScrollArea, QLayout, QSizePolicy,
 )
 
 
@@ -73,47 +91,57 @@ class BrowserExtensions(QObject):
         self.settings.sync()
 
 
-class ExtensionsDialog(QDialog):
-    def __init__(self, browser):
-        super().__init__(browser)
-        self.setObjectName('browserExtensionsDialog')
-        self.setWindowTitle('Browser extensions')
-        self.setAttribute(Qt.WA_DeleteOnClose)
-        self.resize(600, 460)
-        self.browser = browser
-        self.controller = browser.session.extensions
+class ExtensionsView(QWidget):
+    """Resizable workspace content sharing the application's browser session."""
+
+    def __init__(self, session, workspace):
+        super().__init__()
+        self.setObjectName('browserExtensionsPage')
+        self.setProperty('workspaceViewKey', 'browser_extensions')
+        self.session = session
+        self.workspace = workspace
+        self.controller = session.extensions
         self.manager = self.controller.manager
-        root = QVBoxLayout(self)
-        root.setContentsMargins(20, 20, 20, 20)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self.scroll = QScrollArea(self)
+        self.scroll.setObjectName('browserExtensionsScroll')
+        self.scroll.setWidgetResizable(True)
+        content = QWidget()
+        content.setObjectName('browserExtensionsContent')
+        self.scroll.setWidget(content)
+        outer.addWidget(self.scroll)
+        root = QVBoxLayout(content)
+        root.setSizeConstraint(QLayout.SetMinimumSize)
+        root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(12)
-        title = QLabel('Extensions', self)
-        title.setObjectName('browserExtensionsTitle')
-        root.addWidget(title)
         hint = QLabel('Install Chromium Manifest V3 extensions from a folder or ZIP.\n'
                       'Extensions and their enabled state are saved across restarts.', self)
         hint.setWordWrap(True)
         root.addWidget(hint)
-        install = QHBoxLayout()
+        install = QBoxLayout(QBoxLayout.LeftToRight)
+        self.install_layout = install
         for label, handler in (('Install folder', self._install_folder), ('Install ZIP', self._install_zip)):
             button = self._button(label, handler)
             install.addWidget(button)
-        install.addStretch()
         root.addLayout(install)
         self.list = QListWidget(self)
         self.list.setObjectName('browserExtensionsList')
+        self.list.setMinimumSize(0, 100)
+        self.list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.list.currentItemChanged.connect(self._selection_changed)
         root.addWidget(self.list, 1)
         self.details = QLabel(self)
         self.details.setWordWrap(True)
         self.details.setTextFormat(Qt.PlainText)
         root.addWidget(self.details)
-        actions = QHBoxLayout()
+        actions = QBoxLayout(QBoxLayout.LeftToRight)
+        self.actions_layout = actions
         self.toggle = self._button('Enable', self._toggle)
         self.popup = self._button('Open panel', self._popup)
         self.remove = self._button('Remove', self._remove)
         for button in (self.toggle, self.popup, self.remove):
             actions.addWidget(button)
-        actions.addStretch()
         root.addLayout(actions)
         self.status = QLabel('Ready', self)
         self.status.setWordWrap(True)
@@ -122,6 +150,12 @@ class ExtensionsDialog(QDialog):
         self.controller.changed.connect(self.refresh)
         self.controller.message.connect(self.status.setText)
         self.refresh()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        direction = QBoxLayout.TopToBottom if self.width() < 420 else QBoxLayout.LeftToRight
+        self.install_layout.setDirection(direction)
+        self.actions_layout.setDirection(direction)
 
     def _button(self, label, handler):
         button = QPushButton(label, self)
@@ -191,16 +225,30 @@ class ExtensionsDialog(QDialog):
         extension = self._selected()
         if extension and extension.isEnabled() and not extension.actionPopupUrl().isEmpty():
             from PySide6.QtWebEngineWidgets import QWebEngineView
-            popup = QDialog(self.browser)
+            key = f'browser_extension:{extension.id()}'
+            for panel_id in self.workspace.panel_ids:
+                panel = self.workspace.get_panel(panel_id)
+                if (panel.property('workspaceViewKey') == key
+                        and panel_id not in self.workspace._closing_panels):
+                    self.workspace.focus_panel(panel_id)
+                    return
+            popup = QWidget()
             popup.setObjectName('browserExtensionPopup')
-            popup.setWindowTitle(extension.name())
-            popup.setAttribute(Qt.WA_DeleteOnClose)
-            popup.resize(440, 520)
+            popup.setProperty('workspaceViewKey', key)
             layout = QVBoxLayout(popup)
             layout.setContentsMargins(8, 8, 8, 8)
             view = QWebEngineView(popup)
-            view.setPage(self.browser.session.create_page(view))
-            view.page().newWindowRequested.connect(self.browser._open_new_window)
+            view.setPage(self.session.create_page(view))
+            def open_web_link(request):
+                from .browser_bridge import open_embedded_url
+                url = request.requestedUrl()
+                if url.scheme() in ('http', 'https'):
+                    try:
+                        open_embedded_url(url.toString())
+                    except (RuntimeError, ValueError) as error:
+                        view.setToolTip(str(error))
+
+            view.page().newWindowRequested.connect(open_web_link)
             layout.addWidget(view)
             view.setUrl(extension.actionPopupUrl())
-            popup.show()
+            self.workspace.open_panel(title=extension.name(), content=popup)

@@ -67,7 +67,6 @@ class BrowserView(QWidget):
         self.extensions_button.setEnabled(False)
         self.extensions_button.clicked.connect(self._show_extensions)
         toolbar.addWidget(self.extensions_button)
-        self._extensions_dialog = None
         self.status = QLabel("Ready", self)
         self.status.setObjectName("browserStatus")
         self.status.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -107,16 +106,26 @@ class BrowserView(QWidget):
             self.navigate(initial_url)
 
     def _show_extensions(self):
-        from .browser_extensions import ExtensionsDialog
-        if self._extensions_dialog is None:
-            self._extensions_dialog = ExtensionsDialog(self)
-            self._extensions_dialog.destroyed.connect(self._extensions_closed)
-        self._extensions_dialog.show()
-        self._extensions_dialog.raise_()
-        self._extensions_dialog.activateWindow()
-
-    def _extensions_closed(self):
-        self._extensions_dialog = None
+        from .browser_extensions import ExtensionsView
+        from .workspace import Workspace, WorkspacePanel
+        workspace = self.parentWidget()
+        target_id = None
+        while workspace is not None and not isinstance(workspace, Workspace):
+            if isinstance(workspace, WorkspacePanel):
+                target_id = workspace.panel_id
+            workspace = workspace.parentWidget()
+        if workspace is None:
+            self.status.setText("Open the browser in an Arlo workspace to manage extensions")
+            return
+        for panel_id in workspace.panel_ids:
+            panel = workspace.get_panel(panel_id)
+            if (panel.property("workspaceViewKey") == "browser_extensions"
+                    and panel_id not in workspace._closing_panels):
+                workspace.focus_panel(panel_id)
+                return
+        workspace.open_panel(title="Extensions",
+                             content=ExtensionsView(self.session, workspace),
+                             target_id=target_id)
 
     def _open_new_window(self, request):
         """Keep links requesting a new window inside this browser panel."""
