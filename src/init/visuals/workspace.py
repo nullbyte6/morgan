@@ -301,6 +301,7 @@ class Workspace(QWidget):
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
 
+        self.manual_content_factory = None
         self._shortcut_counter = 0
         self._animations: dict[QSplitter, SplitterAnimation] = {}
         self._install_shortcuts()
@@ -343,11 +344,9 @@ class Workspace(QWidget):
         if panel_id in self._panels:
             raise ValueError(f"Panel already exists: {panel_id}")
 
-        if content is not None and content.isWindow():
+        if content is not None and content.parentWidget() is not None:
             raise ValueError(
-                "Workspace content must be an embedded QWidget, "
-                "not a top-level window"
-            )
+                "Workspace content must not belong to another widget")
 
         if target_id is not None and target_id not in self._panels:
             raise ValueError(f"Unknown target panel: {target_id}")
@@ -381,12 +380,9 @@ class Workspace(QWidget):
             )
 
         self._panels[panel_id] = panel
-
         self.focus_panel(panel_id)
-
         self.panel_opened.emit(panel_id)
         self.layout_changed.emit()
-
         return panel_id
 
 
@@ -658,9 +654,9 @@ class Workspace(QWidget):
         if panel is None:
             return False
 
-        if content.isWindow():
+        if content.parentWidget() is not None:
             raise ValueError(
-                "Workspace content must be an embedded QWidget")
+                "Workspace content must not belong to another widget")
 
         panel.set_content(content)
 
@@ -702,10 +698,18 @@ class Workspace(QWidget):
             self._shortcuts.append(shortcut)
 
     def _open_shortcut_panel(self) -> None:
-        """Open a numbered placeholder panel."""
+        """Open a manually created workspace."""
+        counter = getattr(self, "_shortcut_counter", 0) + 1
+        self._shortcut_counter = counter
 
-        self._shortcut_counter += 1
-        self.open_panel(f"Workspace {self._shortcut_counter}")
+        content = (
+            self.manual_content_factory()
+            if self.manual_content_factory is not None
+            else None)
+
+        self.open_panel(
+            title=f"Workspace {counter}",
+            content=content)
 
     def close_active_panel(self) -> None:
         """Close the currently selected panel."""

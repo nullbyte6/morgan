@@ -271,48 +271,6 @@ class ArloWindow(QMainWindow):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
 
-        navigation = QHBoxLayout()
-        navigation.setContentsMargins(20, 8, 20, 0)
-        navigation.setSpacing(8)
-
-        self.chat_button.setObjectName("chatNav")
-        self.chat_button.setCheckable(True)
-        self.chat_button.setChecked(True)
-        self.chat_button.setFixedSize(48, 48)
-        self.chat_button.setToolTip("Arlo")
-
-        self.logs_button.setObjectName("logsNav")
-        self.logs_button.setCheckable(True)
-        self.logs_button.setFixedSize(48, 48)
-        self.logs_button.setToolTip("Logs")
-
-        self.settings_button.setObjectName("settingsNav")
-        self.settings_button.setCheckable(True)
-        self.settings_button.setChecked(False)
-        self.settings_button.setFixedSize(48, 48)
-        self.settings_button.setToolTip(tr("ui.settings"))
-
-        self.editor_button.setObjectName("editorNav")
-        self.editor_button.setCheckable(True)
-        self.editor_button.setFixedSize(48, 48)
-        self.editor_button.setToolTip("Editor")
-
-        self.navigation_group = QButtonGroup(self)
-        self.navigation_group.setExclusive(True)
-        for button in (
-                self.chat_button,
-                self.logs_button,
-                self.settings_button,
-                self.editor_button):
-            self.navigation_group.addButton(button)
-
-        navigation.addWidget(self.chat_button)
-        navigation.addWidget(self.logs_button)
-        navigation.addWidget(self.settings_button)
-        navigation.addWidget(self.editor_button)
-        navigation.addStretch()
-
-        container_layout.addLayout(navigation)
         self.task_progress = TaskProgressPill(container)
         container_layout.addWidget(self.task_progress)
         self.pages.setObjectName("mainPages")
@@ -445,6 +403,10 @@ class ArloWindow(QMainWindow):
         self.chat_workspace_splitter.setHandleWidth(8)
 
         self.workspace = Workspace(self.chat_workspace_splitter)
+        self.workspace.manual_content_factory = (
+            self.workspace_content
+        )
+
         self.workspace.setMinimumWidth(260)
         self.workspace.hide()
 
@@ -475,6 +437,43 @@ class ArloWindow(QMainWindow):
         self.load_stylesheet()
         self.refresh_language()
         self.set_status("")
+
+    def workspace_content(self) -> QWidget:
+        """Create navigation controls for a manually opened workspace."""
+        content = QWidget()
+        content.setObjectName("manualWorkspaceContent")
+
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(12)
+
+        navigation = QHBoxLayout()
+        navigation.setContentsMargins(0, 0, 0, 0)
+        navigation.setSpacing(8)
+
+        buttons = (
+            ("󰭹", "chatNav", "Arlo", 0),
+            ("", "logsNav", "Logs", 1),
+            ("", "settingsNav", tr("ui.settings"), 2),
+            ("󰨞", "editorNav", "Editor", 3))
+
+        for icon, object_name, tooltip, page_index in buttons:
+            button = QPushButton(icon, content)
+            button.setObjectName(object_name)
+            button.setFixedSize(48, 48)
+            button.setToolTip(tooltip)
+            button.setCursor(Qt.PointingHandCursor)
+            button.clicked.connect(
+                lambda checked=False, index=page_index: self.show_page(index))
+            navigation.addWidget(button)
+
+        navigation.addStretch()
+        layout.addLayout(navigation)
+        placeholder = QLabel("Select a workspace type", content)
+        placeholder.setObjectName("workspacePlaceholderLabel")
+        placeholder.setAlignment(Qt.AlignCenter)
+        layout.addWidget(placeholder, 1)
+        return content
 
     def ensure_composer_visible(self):
         QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(
@@ -548,9 +547,14 @@ class ArloWindow(QMainWindow):
 
     @Slot()
     def open_workspace(self) -> None:
-        """Open a workspace panel from the main Arlo window."""
+        """Open a manually created workspace from the main window."""
         self.show_page(0)
-        self.workspace._open_shortcut_panel()
+        try:
+            self.workspace._open_shortcut_panel()
+        except Exception:
+            logging.getLogger("arlo.workspace").exception(
+                "Failed to open a workspace")
+            raise
 
     @Slot(str)
     def on_workspace_opened(self, panel_id: str) -> None:
