@@ -64,7 +64,7 @@ WORKSPACE_VIEW_CONFIG = {
     "settings": {
         "title": "Settings",
         "shortcut": "Ctrl+N, 3",
-        "icon": "⚙",
+        "icon": "",
     },
 }
 
@@ -133,7 +133,7 @@ class ArloWindow(QMainWindow):
         self.composer_orb.hide()
         self.chat_button = QPushButton("󰭹")
         self.logs_button = QPushButton("")
-        self.settings_button = QPushButton("⚙")
+        self.settings_button = QPushButton("")
         self.editor_button = QPushButton("󰨞")
         self.has_text = False
         self.recording = False
