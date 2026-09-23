@@ -7,6 +7,7 @@ Workspaces are managed entirely through keyboard shortcuts, keeping the interfac
 | Shortcut         | Action                                |
 |------------------|---------------------------------------|
 | `Ctrl + N`       | Open a new workspace panel.           |
+| `Ctrl + N`, then `←` / `→` / `↑` / `↓` | Open a panel in that direction from the active panel. |
 | `Ctrl + W`       | Close the active panel.               |
 | `Ctrl + N`, then `4` | Open an embedded terminal.        |
 | `Ctrl + Alt + ←` | Focus the nearest panel to the left.  |
@@ -18,6 +19,10 @@ Workspaces are managed entirely through keyboard shortcuts, keeping the interfac
 | `Ctrl + 0`      | Restore 100% interface zoom.          |
 
 The active panel is highlighted, and closing it automatically selects another available panel.
+
+After `Ctrl + N`, press an arrow or a workspace number within 700 ms. You can
+keep Ctrl held while pressing the second key. The chord opens only one panel;
+without a second key, a new workspace opens automatically when that interval ends.
 
 Interface zoom changes in 10% steps, from 50% to 200%, and is remembered between
 sessions. `Ctrl + =` also enlarges the interface on keyboards where `+` requires

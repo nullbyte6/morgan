@@ -520,17 +520,36 @@ class ArloWindow(DesktopWindow):
             self.input.setFocus()
 
     def eventFilter(self, watched, event):
+        if event.type() == QEvent.WindowDeactivate and watched is self:
+            self._workspace_chord_timer.stop()
+            self._workspace_chord_pending = False
+        if (event.type() == QEvent.ShortcutOverride and
+                QApplication.activeWindow() == self and
+                ((event.key() == Qt.Key_N and event.modifiers() == Qt.ControlModifier)
+                 or (self._workspace_chord_pending and
+                     event.modifiers() in (Qt.NoModifier, Qt.ControlModifier) and
+                     event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down,
+                                     *range(Qt.Key_0, Qt.Key_9 + 1))))):
+            event.accept()
+            return True
         if (event.type() == QEvent.KeyPress and
                 QApplication.activeWindow() == self):
             modifiers = event.modifiers()
             if event.key() == Qt.Key_N and modifiers == Qt.ControlModifier:
+                if event.isAutoRepeat():
+                    return True
                 self._workspace_chord_pending = True
                 self._workspace_chord_timer.start()
-                self.open_workspace()
                 event.accept()
                 return True
             if (self._workspace_chord_pending and
                     modifiers in (Qt.NoModifier, Qt.ControlModifier)):
+                if event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
+                    self._workspace_chord_timer.stop()
+                    self._workspace_chord_pending = False
+                    self.open_workspace(direction=event.key())
+                    event.accept()
+                    return True
                 key_code = int(event.key())
                 key = str(key_code - int(Qt.Key_0))
                 view_key = self._workspace_shortcut_map.get(key)
@@ -548,7 +567,10 @@ class ArloWindow(DesktopWindow):
         return super().eventFilter(watched, event)
 
     def _open_pending_workspace(self):
+        pending = self._workspace_chord_pending
         self._workspace_chord_pending = False
+        if pending and QApplication.activeWindow() == self:
+            self.open_workspace()
 
     def load_stylesheet(self):
         stylesheet = get_stylesheet()
@@ -596,10 +618,10 @@ class ArloWindow(DesktopWindow):
             self.on_confirmation_requested)
 
     @Slot()
-    def open_workspace(self) -> None:
+    def open_workspace(self, direction: Qt.Key | None = None) -> None:
         """Open a manually created workspace from the main window."""
         try:
-            self.workspace._open_shortcut_panel()
+            self.workspace._open_shortcut_panel(direction=direction)
         except Exception:
             logging.getLogger("arlo.workspace").exception(
                 "Failed to open a workspace")

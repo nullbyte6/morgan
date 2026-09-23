@@ -440,9 +440,15 @@ class Workspace(QWidget):
         *,
         panel_id: str | None = None,
         target_id: str | None = None,
-        orientation: Qt.Orientation | None = None) -> str:
+        orientation: Qt.Orientation | None = None,
+        direction: Qt.Key | None = None) -> str:
         """Insert a new panel by splitting an existing workspace leaf."""
 
+        if direction is not None:
+            if direction not in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
+                raise ValueError(f"Invalid split direction: {direction}")
+            orientation = (Qt.Horizontal if direction in (Qt.Key_Left, Qt.Key_Right)
+                           else Qt.Vertical)
         panel_id = panel_id or uuid.uuid4().hex
 
 
@@ -477,7 +483,8 @@ class Workspace(QWidget):
             if orientation is None:
                 orientation = self._next_orientation
 
-            self._insert_panel(target, panel, orientation)
+            self._insert_panel(target, panel, orientation,
+                               before=direction in (Qt.Key_Left, Qt.Key_Up))
 
             self._next_orientation = (
                 Qt.Vertical
@@ -567,7 +574,8 @@ class Workspace(QWidget):
         self,
         target: WorkspacePanel,
         panel: WorkspacePanel,
-        orientation: Qt.Orientation) -> None:
+        orientation: Qt.Orientation,
+        *, before: bool = False) -> None:
         """Insert a panel and animate the new binary split."""
         parent = target.parentWidget()
 
@@ -598,6 +606,8 @@ class Workspace(QWidget):
             self._layout.addWidget(split)
 
         split.splitterMoved.connect(self._on_splitter_moved)
+        if before:
+            split.insertWidget(0, panel)
 
         available = (
             split.width()
@@ -614,6 +624,8 @@ class Workspace(QWidget):
         minimum = min(minimum, available // 2)
 
         start_sizes = [available - minimum, minimum]
+        if before:
+            start_sizes.reverse()
         end_sizes = [available // 2, available - available // 2]
 
         split.setSizes(start_sizes)
@@ -835,7 +847,7 @@ class Workspace(QWidget):
             shortcut.activated.connect(callback)
             self._shortcuts.append(shortcut)
 
-    def _open_shortcut_panel(self) -> None:
+    def _open_shortcut_panel(self, direction: Qt.Key | None = None) -> None:
         """Open a manually created workspace."""
         counter = getattr(self, "_shortcut_counter", 0) + 1
         self._shortcut_counter = counter
@@ -847,7 +859,8 @@ class Workspace(QWidget):
 
         self.open_panel(
             title=f"Workspace {counter}",
-            content=content)
+            content=content,
+            direction=direction)
 
     def close_active_panel(self) -> None:
         """Close the currently selected panel."""
