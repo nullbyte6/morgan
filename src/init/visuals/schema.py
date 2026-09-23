@@ -32,9 +32,17 @@ Description = Annotated[str, StringConstraints(strip_whitespace=True, max_length
 class FlowchartNode(BaseModel):
     """A named process, decision or terminal node."""
     model_config = ConfigDict(extra="forbid", frozen=True)
+    id: NodeId = Field(
+        description=(
+            "Unique machine-readable identifier. Use ASCII snake_case, "
+            "such as 'productos_finales'. Never use spaces, accents, "
+            "or display labels as IDs."))
 
-    id: NodeId
-    label: Label
+    label: Label = Field(
+        description=(
+            "Human-readable node title. Spaces and accented characters "
+            "are allowed, such as 'Productos Finales'."))
+
     kind: Literal["process", "decision", "terminal"] = "process"
     description: Description | None = None
 
@@ -43,8 +51,12 @@ class FlowchartEdge(BaseModel):
     """A directed connection between two node IDs."""
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    source: NodeId
-    target: NodeId
+    source: NodeId = Field(
+        description="Exact ID of an existing source node, not its label.")
+
+    target: NodeId = Field(
+        description="Exact ID of an existing target node, not its label.")
+
     label: Label | None = None
     description: Description | None = None
 
