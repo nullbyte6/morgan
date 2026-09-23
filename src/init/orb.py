@@ -441,7 +441,7 @@ class Orb(QWidget):
                              (0.25 if self.visual_state == self.State.IDLE else 0.8))
                 voice_expansion = (self.amplitude * 14.0)
 
-                radius = (base_radius + deformation + idle + breathing +
+                radius = (base_radius + idle + breathing +
                           ripple + voice_expansion + click_effect +
                           double_effect + expansion)
 
