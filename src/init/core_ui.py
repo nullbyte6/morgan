@@ -203,6 +203,13 @@ class ArloWindow(DesktopWindow):
             options["shortcut"].rsplit("+", 1)[-1]: view_key
             for view_key, options in WORKSPACE_VIEW_CONFIG.items()
         }
+        self._workspace_shortcuts = []
+        for view_key, options in WORKSPACE_VIEW_CONFIG.items():
+            shortcut = QShortcut(QKeySequence(options["shortcut"]), self)
+            shortcut.setContext(Qt.ApplicationShortcut)
+            shortcut.activated.connect(
+                lambda view_key=view_key: self.open_workspace_view(view_key))
+            self._workspace_shortcuts.append(shortcut)
 
         self._workspace_chord_pending = False
         self._workspace_chord_timer = QTimer(self)

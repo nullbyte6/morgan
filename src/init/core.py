@@ -27,6 +27,8 @@ from contextlib import nullcontext
 from datetime import datetime
 from getpass import getuser
 
+from pydantic_ai import Agent, Tool, UsageLimits
+
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
 
@@ -137,7 +139,6 @@ class Assistant:
             self.audio_model_name = None
 
             if self.agent is not None:
-                from pydantic_ai import Agent, Tool
                 from pydantic_ai.models.ollama import OllamaModel
                 from src.init.tools import TOOLS
 
@@ -390,12 +391,9 @@ class Assistant:
         turn_model = None
         turn_model_settings = {"temperature": brain.load_config()["temperature"]}
         model_prompt = attachments.prompt() if attachments else prompt
-        voice_model_active = audio_input is not None or any(
-            getattr(content, "is_audio", False)
-            for message in history
-            for part in message.parts
-            if isinstance(part, UserPromptPart)
-            for content in (part.content if isinstance(part.content, list) else []))
+        # Select the audio model only for a turn that actually contains audio.
+        # Looking through history makes a later text turn inherit audio mode.
+        voice_model_active = audio_input is not None
         if audio_input is not None:
             model_prompt = [BinaryContent(data=audio_input, media_type="audio/wav")]
         if voice_model_active:
@@ -453,11 +451,19 @@ class Assistant:
                 return
             execution_started = True
             result = await self.agent.run(
-                model_prompt, message_history=history, toolsets=attachment_tools,
+                model_prompt,
+                message_history=history,
+                toolsets=attachment_tools,
                 model=turn_model,
                 model_settings=turn_model_settings,
                 cancellation_token=cancellation_token,
-                event_stream_handler=stream_events)
+                event_stream_handler=stream_events,
+                usage_limits=UsageLimits(
+                    request_limit=4,
+                    tool_calls_limit=1,
+                ),
+            )
+
             completed_history = result.all_messages()
             for phrase in buffer.finish():
                 if not cancel_event.is_set():
