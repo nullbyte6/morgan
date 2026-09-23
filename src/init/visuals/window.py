@@ -1,9 +1,27 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Standalone viewer. Run with python -m src.init.visuals.window."""
 
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QPainter
 from PySide6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView, QMainWindow
 
@@ -14,17 +32,26 @@ from src.init.visuals.schema import Flowchart
 
 
 def demo_flowchart() -> Flowchart:
-    """Return the fixed three-node example for this milestone."""
+    """Return a branching file-analysis workflow with a shared finish step."""
     return Flowchart.model_validate({
         "title": "File Analysis",
         "nodes": [
             {"id": "start", "label": "Start", "kind": "terminal"},
             {"id": "read_file", "label": "Read File", "kind": "process"},
+            {"id": "valid_file", "label": "Valid File?", "kind": "decision"},
             {"id": "analyze_data", "label": "Analyze Data", "kind": "process"},
+            {"id": "report_error", "label": "Report Error", "kind": "process"},
+            {"id": "finish_task", "label": "Finish Task", "kind": "process"},
+            {"id": "end", "label": "End", "kind": "terminal"},
         ],
         "edges": [
             {"source": "start", "target": "read_file"},
-            {"source": "read_file", "target": "analyze_data"},
+            {"source": "read_file", "target": "valid_file"},
+            {"source": "valid_file", "target": "analyze_data", "label": "Yes"},
+            {"source": "valid_file", "target": "report_error", "label": "No"},
+            {"source": "analyze_data", "target": "finish_task"},
+            {"source": "report_error", "target": "finish_task"},
+            {"source": "finish_task", "target": "end"},
         ],
     })
 
@@ -74,6 +101,22 @@ class FlowchartWindow(QMainWindow):
         self.view = FlowchartView(self.scene, self)
         self.setCentralWidget(self.view)
         self.view.centerOn(self.scene.itemsBoundingRect().center())
+        self._initial_view_pending = True
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._initial_view_pending:
+            self._initial_view_pending = False
+            QTimer.singleShot(0, self._fit_initial_view)
+
+    def _fit_initial_view(self):
+        """Frame the initial graph once without resetting later user navigation."""
+        bounds = self.scene.itemsBoundingRect().adjusted(-40, -40, 40, 40)
+        viewport = self.view.viewport().rect()
+        scale = max(0.25, min(1.0, viewport.width() / bounds.width(), viewport.height() / bounds.height()))
+        self.view.resetTransform()
+        self.view.scale(scale, scale)
+        self.view.centerOn(bounds.center())
 
 
 def main() -> int:

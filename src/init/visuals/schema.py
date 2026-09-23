@@ -1,3 +1,21 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Validated, bounded input for local flowcharts."""
 
 from typing import Annotated, Literal
@@ -12,7 +30,6 @@ Label = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, ma
 
 class FlowchartNode(BaseModel):
     """A named process, decision or terminal node."""
-
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: NodeId
@@ -22,18 +39,16 @@ class FlowchartNode(BaseModel):
 
 class FlowchartEdge(BaseModel):
     """A directed connection between two node IDs."""
-
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     source: NodeId
     target: NodeId
+    label: Label | None = None
 
 
 class Flowchart(BaseModel):
     """An immutable chart of at most 100 nodes and 200 directed edges."""
-
     model_config = ConfigDict(extra="forbid", frozen=True)
-
     title: Label = "Flowchart"
     nodes: tuple[FlowchartNode, ...] = Field(min_length=1, max_length=100)
     edges: tuple[FlowchartEdge, ...] = Field(default=(), max_length=200)
