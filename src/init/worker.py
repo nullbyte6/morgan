@@ -62,7 +62,6 @@ class VoiceInputWorker(QThread):
                 if self.isInterruptionRequested():
                     return
             if recording is None:
-                self.error = tr("voice.not_detected")
                 return
             self.processing.emit()
             self.audio_wav = recording_to_wav(*recording)

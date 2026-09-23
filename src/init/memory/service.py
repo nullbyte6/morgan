@@ -24,6 +24,7 @@ import uuid
 from datetime import datetime, timezone
 
 from .database import Database, timestamp
+from . import lexical
 from .retrieval import UNTRUSTED, bounded, search_history, search_memories
 
 CATEGORIES = {"preference", "fact", "project", "goal", "other"}
@@ -229,16 +230,103 @@ class MemoryService:
                 (include_inactive, timestamp(), category, category, limit, max(0, offset)))]
         return bounded(rows, self.recall_chars)
 
-    def recall(self, query, *, history=True, limit=None):
+    @staticmethod
+    def _retrieval_options(session_id=None, role=None, since=None, until=None):
+        if role not in (None, "user", "assistant"):
+            raise ValueError("Role must be user or assistant")
+        since = valid_time(since) if since is not None else None
+        until = valid_time(until) if until is not None else None
+        if since is not None and until is not None and since >= until:
+            raise ValueError("since must precede until")
+        return dict(session_id=session_id, role=role, since=since, until=until)
+
+    def _page_limit(self, limit, offset):
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("Offset must be a non-negative integer")
+        if limit is None:
+            return self.max_results
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("Limit must be a positive integer")
+        return min(limit, self.max_results)
+
+    def recall(self, query, *, history=True, limit=None, mode="any",
+               session_id=None, role=None, since=None, until=None):
         limit = min(self.max_results, max(1, limit or self.max_results))
+        options = self._retrieval_options(session_id, role, since, until)
         with self.db.connect() as db:
-            memories = search_memories(db, query, limit)
-            conversations = search_history(db, query, limit) if history else []
+            memories = search_memories(db, query, limit, mode=mode, **options)
+            conversations = search_history(db, query, limit, mode=mode, **options) if history else []
         budget = self.recall_chars - len(UNTRUSTED) - 100
         selected = bounded(memories, budget // 2 if conversations else budget)
         remaining = budget - len(json.dumps(selected, ensure_ascii=False))
         return {"warning": UNTRUSTED, "memories": selected,
                 "conversations": bounded(conversations, remaining)}
+
+    def search_words(self, prefix="", *, scope="history", limit=None, offset=0,
+                     session_id=None, role=None, since=None, until=None):
+        limit = self._page_limit(limit, offset)
+        options = self._retrieval_options(session_id, role, since, until)
+        with self.db.connect() as db:
+            return lexical.search_words(db, prefix, scope=scope, options=options,
+                                        limit=limit, offset=offset, max_chars=self.recall_chars)
+
+    def word_instances(self, word, *, scope="history", limit=None, offset=0,
+                       session_id=None, role=None, since=None, until=None):
+        limit = self._page_limit(limit, offset)
+        options = self._retrieval_options(session_id, role, since, until)
+        with self.db.connect() as db:
+            return lexical.word_instances(db, word, scope=scope, options=options,
+                                          limit=limit, offset=offset, max_chars=self.recall_chars)
+
+    def read_conversation(self, session_id, *, after=0, limit=None):
+        """Read completed dialogue in sequence; clipped messages can be opened by ID."""
+        limit = self._page_limit(limit, after)
+        with self.db.connect() as db:
+            session = db.execute("SELECT id,started_at,ended_at,kind FROM sessions WHERE id=?",
+                                 (session_id,)).fetchone()
+            if session is None:
+                raise ValueError("Conversation does not exist")
+            rows = [dict(row) for row in db.execute("""SELECT * FROM messages
+                WHERE session_id=? AND sequence>? AND status='completed'
+                  AND role IN ('user','assistant') ORDER BY sequence LIMIT ?""",
+                (session_id, after, limit + 1))]
+        result = {"warning": UNTRUSTED, "session": dict(session), "messages": [], "next_after": None}
+        for row in rows[:limit]:
+            # Reserve space for pagination and the response envelope. Never skip a row.
+            remaining = self.recall_chars - len(json.dumps(result, ensure_ascii=False)) - 40
+            selected = bounded([row], remaining)
+            if not selected:
+                break
+            result["messages"].extend(selected)
+        if rows and not result["messages"]:
+            raise ValueError("Message metadata exceeds recall_chars; increase the configured budget")
+        if len(rows) > len(result["messages"]):
+            result["next_after"] = result["messages"][-1]["sequence"]
+        return result
+
+    def read_memory_message(self, message_id, *, offset=0):
+        """Read every character of a stored message through bounded chunks."""
+        self._page_limit(None, offset)
+        with self.db.connect() as db:
+            row = db.execute("""SELECT * FROM messages WHERE id=? AND status='completed'
+                AND role IN ('user','assistant')""", (message_id,)).fetchone()
+        if row is None:
+            raise ValueError("Completed conversation message does not exist")
+        message = dict(row)
+        content = message.pop("content")
+        result = {"warning": UNTRUSTED, "message": message, "offset": offset,
+                  "total_chars": len(content), "next_offset": None}
+        available = self.recall_chars - len(json.dumps(result, ensure_ascii=False)) - 80
+        if available <= 0:
+            raise ValueError("Message metadata exceeds recall_chars; increase the configured budget")
+        chunk = content[offset:offset + available]
+        # Escaped control characters can consume more than one JSON character.
+        while len(json.dumps({**result, "content": chunk}, ensure_ascii=False)) > self.recall_chars - 20:
+            chunk = chunk[:len(chunk) // 2]
+        result["content"] = chunk
+        if offset + len(chunk) < len(content):
+            result["next_offset"] = offset + len(chunk)
+        return result
 
     def context(self, query=""):
         with self.db.connect() as db:
