@@ -51,24 +51,29 @@ from src.init.visuals.workspace import Workspace, WorkspacePanel
 
 
 WORKSPACE_VIEW_CONFIG = {
+    "browser" : {
+        "title": "Browser",
+        "shortcut": "Ctrl+B",
+        "icon": ""
+    },
     "logs": {
         "title": "Logs",
-        "shortcut": "Ctrl+Alt+1",
+        "shortcut": "Ctrl+L",
         "icon": "",
     },
     "editor": {
         "title": "Editor",
-        "shortcut": "Ctrl+Alt+2",
+        "shortcut": "Ctrl+E",
         "icon": "󰨞",
     },
     "settings": {
         "title": "Settings",
-        "shortcut": "Ctrl+Alt+3",
+        "shortcut": "Ctrl+Alt+S",
         "icon": "",
     },
     "terminal": {
         "title": "Terminal",
-        "shortcut": "Ctrl+Alt+4",
+        "shortcut": "Ctrl+T",
         "icon": "",
     },
 }
@@ -602,6 +607,9 @@ class ArloWindow(DesktopWindow):
         if view_key == "terminal":
             from src.init.terminal import TerminalView
             return TerminalView()
+        if view_key == "browser":
+            from src.init.visuals.browser import BrowserView
+            return BrowserView()
         if view_key == "settings":
             view = SettingsView(
                 self.subtitles_enabled,
