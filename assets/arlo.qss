@@ -541,6 +541,10 @@ QSplitter#workspaceSplitter::handle {
     background-color: transparent;
 }
 
+QSplitter#workspaceSplitter::handle:hover {
+    background-color: #8aadf4;
+}
+
 QToolButton#privacyIndicator {
     color: #86EFAC;
     background-color: rgba(34, 197, 94, 0.08);
