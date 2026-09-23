@@ -1,13 +1,29 @@
-from PySide6.QtCore import Qt, Slot
-from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QSizePolicy,
-    QVBoxLayout, QWidget,
-)
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtWidgets import *
+
+from src.init.lang import tr
 
 class TaskProgressPill(QWidget):
     """A dismissible view of the desktop's existing execution-phase signals."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("taskProgressHost")
@@ -18,7 +34,6 @@ class TaskProgressPill(QWidget):
         self.active = False
         self.dismissed = False
         self.state = "running"
-        self.language = "spanish"
         self.order_title = ""
 
         row = QHBoxLayout(self)
@@ -54,7 +69,7 @@ class TaskProgressPill(QWidget):
         body.addWidget(self.step)
         row.addWidget(self.pill)
         row.addStretch(1)
-        self.refresh_language(self.language)
+        self.refresh_language()
         self.hide()
 
     def begin(self, turn_id, title):
@@ -102,39 +117,27 @@ class TaskProgressPill(QWidget):
         self.dismissed = True
         self.hide()
 
-    def refresh_language(self, language):
-        self.language = language
-        spanish = language != "english"
-        close = "Ocultar progreso (la tarea continúa)" if spanish else "Hide progress (task continues)"
+    def refresh_language(self, _language=None):
+        close = tr("task_progress.hide")
         self.close_button.setToolTip(close)
         self.close_button.setAccessibleName(close)
-        self.bar.setToolTip(
-            "Pasos realizados de los detectados hasta ahora; Arlo puede añadir más."
-            if spanish else "Finished steps out of those detected so far; Arlo may add more.")
+        self.bar.setToolTip(tr("task_progress.progress_hint"))
         self._render()
 
     def _render(self):
-        spanish = self.language != "english"
-        title = self.order_title or ("Orden de voz" if spanish else "Voice request")
+        title = self.order_title or tr("task_progress.voice_request")
         self.title.setToolTip(title)
         self.title.setAccessibleName(title)
         self.title.setText(self.title.fontMetrics().elidedText(
             title, Qt.ElideRight, max(1, self.title.width())))
-        count = (f"{self.completed} de {self.started} pasos realizados" if spanish
-                 else f"{self.completed} of {self.started} steps finished")
-        labels = ({"waiting": "Esperando permiso", "stopped": "Detenida",
-                   "error": "Finalizada con incidencias", "finished": "Ejecución finalizada"}
-                  if spanish else
-                  {"waiting": "Awaiting permission", "stopped": "Stopped",
-                   "error": "Finished with issues", "finished": "Execution finished"})
+        count = tr("task_progress.step_count", completed=self.completed, total=self.started)
         if self.state == "running":
-            detail = ((f"Ejecutando paso {self.completed + 1}" if spanish
-                       else f"Executing step {self.completed + 1}")
+            detail = (tr("task_progress.executing", step=self.completed + 1)
                       if self.completed < self.started else
-                      ("Revisando resultados…" if spanish else "Reviewing results…"))
+                      tr("task_progress.reviewing"))
         else:
-            detail = labels[self.state]
-        self.step.setText(f"{detail} · {count}")
+            detail = tr("task_progress." + self.state)
+        self.step.setText(tr("task_progress.summary", detail=detail, count=count))
         self.bar.setRange(0, max(1, self.started))
         self.bar.setValue(self.completed)
         self.bar.setAccessibleName(self.step.text())

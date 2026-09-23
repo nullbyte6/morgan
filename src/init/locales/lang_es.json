@@ -478,5 +478,16 @@
   "scoring.review_windows_security_and_confirm_which_antivirus_is_providing": "Revisa Seguridad de Windows y confirma qué antivirus proporciona protección.",
   "scoring.defender_signatures_are_over_seven_days_old": "Las firmas de Defender tienen más de siete días.",
   "scoring.review_signature_updates_in_windows_security": "Revisa las actualizaciones de firmas en Seguridad de Windows.",
-  "windows.unexpected_antivirus_data": "Datos de antivirus inesperados"
+  "windows.unexpected_antivirus_data": "Datos de antivirus inesperados",
+  "task_progress.hide": "Ocultar progreso (la tarea continúa)",
+  "task_progress.progress_hint": "Pasos realizados de los detectados hasta ahora; Arlo puede añadir más.",
+  "task_progress.voice_request": "Orden de voz",
+  "task_progress.step_count": "{completed} de {total} pasos realizados",
+  "task_progress.waiting": "Esperando permiso",
+  "task_progress.stopped": "Detenida",
+  "task_progress.error": "Finalizada con incidencias",
+  "task_progress.finished": "Ejecución finalizada",
+  "task_progress.executing": "Ejecutando paso {step}",
+  "task_progress.reviewing": "Revisando resultados…",
+  "task_progress.summary": "{detail} · {count}"
 }

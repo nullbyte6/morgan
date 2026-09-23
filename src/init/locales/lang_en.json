@@ -478,5 +478,16 @@
   "scoring.review_windows_security_and_confirm_which_antivirus_is_providing": "Review Windows Security and confirm which antivirus is providing protection.",
   "scoring.defender_signatures_are_over_seven_days_old": "Defender signatures are over seven days old.",
   "scoring.review_signature_updates_in_windows_security": "Review signature updates in Windows Security.",
-  "windows.unexpected_antivirus_data": "Unexpected antivirus data"
+  "windows.unexpected_antivirus_data": "Unexpected antivirus data",
+  "task_progress.hide": "Hide progress (task continues)",
+  "task_progress.progress_hint": "Finished steps out of those detected so far; Arlo may add more.",
+  "task_progress.voice_request": "Voice request",
+  "task_progress.step_count": "{completed} of {total} steps finished",
+  "task_progress.waiting": "Awaiting permission",
+  "task_progress.stopped": "Stopped",
+  "task_progress.error": "Finished with issues",
+  "task_progress.finished": "Execution finished",
+  "task_progress.executing": "Executing step {step}",
+  "task_progress.reviewing": "Reviewing results…",
+  "task_progress.summary": "{detail} · {count}"
 }
