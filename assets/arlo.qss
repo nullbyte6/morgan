@@ -491,6 +491,83 @@ QScrollArea#logScroll {
     border: none;
 }
 
+QWidget#taskProgressHost {
+    background: transparent;
+}
+
+QFrame#taskProgressPill {
+    background-color: #363a4f;
+    border: 1px solid #494d64;
+    border-radius: 24px;
+    min-width: 360px;
+    max-width: 440px;
+}
+
+QLabel#taskProgressTitle {
+    background: transparent;
+    color: #cad3f5;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#taskProgressStep {
+    background: transparent;
+    color: #b8c0e0;
+    border: none;
+    font-size: 12px;
+}
+
+QProgressBar#taskProgressBar {
+    background-color: #24273a;
+    border: none;
+    border-radius: 4px;
+    min-height: 8px;
+    max-height: 8px;
+}
+
+QProgressBar#taskProgressBar::chunk {
+    background-color: #8aadf4;
+    border-radius: 4px;
+}
+
+QProgressBar#taskProgressBar[state="finished"]::chunk {
+    background-color: #a6da95;
+}
+
+QProgressBar#taskProgressBar[state="waiting"]::chunk,
+QProgressBar#taskProgressBar[state="stopped"]::chunk {
+    background-color: #eed49f;
+}
+
+QProgressBar#taskProgressBar[state="error"]::chunk {
+    background-color: #ed8796;
+}
+
+QPushButton#taskProgressClose {
+    background: transparent;
+    color: #a5adcb;
+    border: none;
+    border-radius: 12px;
+    min-width: 24px;
+    max-width: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    padding: 0;
+    font-size: 20px;
+}
+
+QPushButton#taskProgressClose:hover,
+QPushButton#taskProgressClose:focus {
+    background-color: #494d64;
+    color: #cad3f5;
+}
+
+QPushButton#taskProgressClose:pressed {
+    background-color: #5b6078;
+    color: #ed8796;
+}
+
 QScrollArea#logScroll QScrollBar:vertical {
     background: transparent;
     width: 0px;
