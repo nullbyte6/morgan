@@ -10,7 +10,7 @@
   "voice.recording": "Escuchando… Pulsa detener para terminar la grabación.",
   "voice.transcribing": "Transcribiendo",
   "voice.processing": "Procesando audio…",
-  "voice.timeout": "El servicio de voz no ha producido audio durante 120 segundos. Reinicia el servicio TTS de Arlo.",
+  "voice.timeout": "El servicio de voz no ha producido audio durante 240 segundos. Reinicia el servicio TTS de Arlo.",
   "ui.attach_files": "Adjuntar Archivos",
   "ui.remove_attachment": "Eliminar Adjunto: {name}",
   "ui.attachment_count": "Puedes adjuntar un máximo de {count} archivos.",

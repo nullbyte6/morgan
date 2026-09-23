@@ -54,7 +54,7 @@ class VoiceClient:
         self._error = None
         self._closed = False
         self._last_progress = time.monotonic()
-        self._progress_timeout = 120.0
+        self._progress_timeout = 240.0
 
         self._thread = threading.Thread(
             target=self._listen,
