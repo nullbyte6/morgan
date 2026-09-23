@@ -77,6 +77,7 @@ from src.init.desktop.clipboard import (
     unregister_clipboard_handler,
 )
 from src.init.desktop.task_progress import TaskProgressPill
+from src.init.visuals.bridge import FlowchartBridge
 
 # noinspection PyBroadException
 class ArloWindow(QMainWindow):
@@ -154,6 +155,7 @@ class ArloWindow(QMainWindow):
         register_capture_handler(self.capture_handler)
         self.clipboard_handler = self.worker.clipboard_requested.emit
         register_clipboard_handler(self.clipboard_handler)
+        self.flowchart_bridge = FlowchartBridge(self)
         self.chat_scroll = QScrollArea()
         self.thread = QThread(self)
 
@@ -1116,6 +1118,7 @@ class ArloWindow(QMainWindow):
 
         unregister_capture_handler(self.capture_handler)
         unregister_clipboard_handler(self.clipboard_handler)
+        self.flowchart_bridge.shutdown()
         if self.voice_thread is not None:
             self.closing_after_voice = True
             self.voice_thread.requestInterruption()

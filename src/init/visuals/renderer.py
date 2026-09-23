@@ -18,6 +18,8 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Render selectable flowchart nodes and arrows in Arlo's Macchiato colors."""
 
+from html import escape
+
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsPathItem, QGraphicsScene, QGraphicsSimpleTextItem
@@ -56,7 +58,8 @@ class NodeItem(QGraphicsPathItem):
         self.setPen(QPen(BORDER, 2))
         self.setBrush(SURFACE)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
-        self.setToolTip(node.label)
+        tooltip = node.label + ("\n" + node.description if node.description else "")
+        self.setToolTip("<qt>" + escape(tooltip).replace("\n", "<br/>") + "</qt>")
         self.setData(0, node.id)
         self.setCursor(Qt.PointingHandCursor)
         self.setZValue(1)
@@ -155,6 +158,9 @@ def render_flowchart(scene: QGraphicsScene, chart: Flowchart) -> dict[str, NodeI
             path.lineTo(point)
         line = scene.addPath(path, QPen(ACCENT, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         line.setAcceptedMouseButtons(Qt.NoButton)
+        tooltip = "\n".join(text for text in (edge.label, edge.description) if text)
+        tooltip = "<qt>" + escape(tooltip).replace("\n", "<br/>") + "</qt>" if tooltip else ""
+        line.setToolTip(tooltip)
         tip = points[-1]
         direction = tip - points[-2]
         length = (direction.x() ** 2 + direction.y() ** 2) ** 0.5
@@ -164,11 +170,12 @@ def render_flowchart(scene: QGraphicsScene, chart: Flowchart) -> dict[str, NodeI
             tip, tip - direction * 11 + normal * 6, tip - direction * 11 - normal * 6,
         ]), QPen(ACCENT), ACCENT)
         arrow.setAcceptedMouseButtons(Qt.NoButton)
+        arrow.setToolTip(tooltip)
         if edge.label is not None:
             label = EdgeLabelItem(label_metrics.elidedText(edge.label, Qt.ElideRight, 160))
             label.setFont(label_font)
             label.setBrush(TEXT)
-            label.setToolTip(edge.label)
+            label.setToolTip(tooltip)
             label.setAcceptedMouseButtons(Qt.NoButton)
             label.setZValue(2)
             labels.append((label, route.label_anchor))

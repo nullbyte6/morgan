@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 NodeId = Annotated[str, StringConstraints(
     strip_whitespace=True, min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")]
 Label = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+Description = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
 
 
 class FlowchartNode(BaseModel):
@@ -35,6 +36,7 @@ class FlowchartNode(BaseModel):
     id: NodeId
     label: Label
     kind: Literal["process", "decision", "terminal"] = "process"
+    description: Description | None = None
 
 
 class FlowchartEdge(BaseModel):
@@ -44,12 +46,14 @@ class FlowchartEdge(BaseModel):
     source: NodeId
     target: NodeId
     label: Label | None = None
+    description: Description | None = None
 
 
 class Flowchart(BaseModel):
     """An immutable chart of at most 100 nodes and 200 directed edges."""
     model_config = ConfigDict(extra="forbid", frozen=True)
     title: Label = "Flowchart"
+    description: Description | None = None
     nodes: tuple[FlowchartNode, ...] = Field(min_length=1, max_length=100)
     edges: tuple[FlowchartEdge, ...] = Field(default=(), max_length=200)
 

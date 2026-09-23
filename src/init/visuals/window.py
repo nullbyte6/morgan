@@ -19,6 +19,7 @@
 """Standalone viewer. Run with python -m src.init.visuals.window."""
 
 import sys
+from html import escape
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, Qt
@@ -97,9 +98,15 @@ class FlowchartWindow(QMainWindow):
         self.resize(800, 720)
         self.setMinimumSize(400, 360)
         self.scene = QGraphicsScene(self)
-        self.nodes = render_flowchart(self.scene, self.chart)
+        try:
+            self.nodes = render_flowchart(self.scene, self.chart)
+        except Exception:
+            self.deleteLater()
+            raise
         self.view = FlowchartView(self.scene, self)
         self.setCentralWidget(self.view)
+        if self.chart.description:
+            self.setToolTip("<qt>" + escape(self.chart.description).replace("\n", "<br/>") + "</qt>")
         self.view.centerOn(self.scene.itemsBoundingRect().center())
         self._initial_view_pending = True
 

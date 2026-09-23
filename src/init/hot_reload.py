@@ -44,6 +44,8 @@ _PRESERVED = {
     "src.init.steam",
     "src.init.desktop.capture",
     "src.init.desktop.clipboard",
+    "src.init.visuals.bridge",
+    "src.init.visuals.schema",
 }
 _PRESERVED_PREFIXES = ("src.init.memory.",)
 _RELOAD_LAST = ("src.init.brain", "src.init.rules", "src.init.tools")
