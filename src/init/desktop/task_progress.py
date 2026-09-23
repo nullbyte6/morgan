@@ -107,7 +107,6 @@ class TaskProgressPill(QWidget):
         if turn_id != self.turn_id or not self.active:
             return
         self.active = False
-        # Never invent completion for a step whose result has not arrived.
         self.state = ("stopped" if interrupted else "error" if failed
                       else "finished" if self.completed == self.started else "stopped")
         self._render()
