@@ -53,22 +53,22 @@ from src.init.visuals.workspace import Workspace, WorkspacePanel
 WORKSPACE_VIEW_CONFIG = {
     "logs": {
         "title": "Logs",
-        "shortcut": "Ctrl+Alt+N+1",
+        "shortcut": "Ctrl+Alt+1",
         "icon": "",
     },
     "editor": {
         "title": "Editor",
-        "shortcut": "Ctrl+Alt+N+2",
+        "shortcut": "Ctrl+Alt+2",
         "icon": "󰨞",
     },
     "settings": {
         "title": "Settings",
-        "shortcut": "Ctrl+Alt+N+3",
+        "shortcut": "Ctrl+Alt+3",
         "icon": "",
     },
     "terminal": {
         "title": "Terminal",
-        "shortcut": "Ctrl+Alt+N+4",
+        "shortcut": "Ctrl+Alt+4",
         "icon": "",
     },
 }
