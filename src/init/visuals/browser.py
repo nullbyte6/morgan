@@ -80,6 +80,9 @@ class BrowserView(QWidget):
             self.status.setText("Browser unavailable")
             return
         self.web_view = QWebEngineView(self)
+        from .browser_session import get_browser_session
+        self.session = get_browser_session()
+        self.web_view.setPage(self.session.create_page(self.web_view))
         self.web_view.setObjectName("browserWebView")
         self.web_view.urlChanged.connect(self._on_url_changed)
         self.web_view.loadStarted.connect(lambda: self.status.setText("Loading…"))
