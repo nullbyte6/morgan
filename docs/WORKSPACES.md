@@ -36,7 +36,7 @@ Panels can be focused, resized, moved, and closed individually. Their content re
 ### Terminal
 
 The Terminal button sits immediately to the right of Settings in a new workspace.
-It opens an independent, persistent shell inside the panel: CMD on Windows,
+It opens an independent, persistent shell inside the panel: PowerShell 7 (`pwsh.exe`) on Windows,
 starting in `%USERPROFILE%`, or the user's shell in their home directory on Unix.
 Directory changes and environment variables persist within that terminal only.
 Commands run with the same permissions as Arlo.

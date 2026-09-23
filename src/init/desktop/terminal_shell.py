@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Start CMD with normal Ctrl+C handling, even from a detached GUI parent."""
+"""Start PowerShell with normal Ctrl+C handling from a detached GUI parent."""
 import ctypes
 import subprocess
 import sys
@@ -40,7 +40,7 @@ def main():
 
     if not kernel.SetConsoleCtrlHandler(handle_control, True):
         raise ctypes.WinError(ctypes.get_last_error())
-    return subprocess.call([sys.argv[1], "/D"])
+    return subprocess.call([sys.argv[1], "-NoLogo", "-NoProfile"])
 
 
 if __name__ == "__main__":

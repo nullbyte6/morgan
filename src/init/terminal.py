@@ -75,9 +75,11 @@ class TerminalSession(QThread):
             if os.name == "nt":
                 from winpty import PTY
                 process = PTY(self.columns, self.rows, timeout=3000)
-                shell = os.environ.get("COMSPEC", r"C:\Program Files\PowerShell\7\pwsh.exe")
+                shell = shutil.which("pwsh.exe") or str(
+                    Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+                    / "PowerShell" / "7" / "pwsh.exe")
                 if not Path(shell).is_file():
-                    raise FileNotFoundError(f"Shell not found: {shell}")
+                    raise FileNotFoundError(f"PowerShell 7 (pwsh.exe) not found: {shell}")
                 python = Path(sys.executable)
                 if python.name.lower() == "pythonw.exe":
                     python = python.with_name("python.exe")
@@ -187,6 +189,7 @@ class TerminalDisplay(QPlainTextEdit):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
+        menu.setObjectName("terminalMenu")
         copy = menu.addAction("Copy", self.copy)
         copy.setEnabled(self.textCursor().hasSelection())
         menu.addAction("Paste", self.paste)

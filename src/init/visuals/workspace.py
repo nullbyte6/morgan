@@ -152,6 +152,9 @@ class WorkspacePanel(QFrame):
 
         self.content = content
         self.content_layout.addWidget(content)
+        self.setProperty("workspaceViewKey", content.property("workspaceViewKey"))
+        self.style().unpolish(self)
+        self.style().polish(self)
         if content.property("workspaceViewKey") == "editor":
             content.windowTitleChanged.connect(self.set_title)
             self.set_title(content.windowTitle())

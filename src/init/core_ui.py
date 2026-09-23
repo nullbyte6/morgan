@@ -132,9 +132,6 @@ class ArloWindow(DesktopWindow):
         self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
         self.mascot_shortcut.activated.connect(self.show_mascot)
 
-        self.composer_orb = Orb(self, size=84, line_width=4.0, fill_ratio=0.54)
-        self.composer_orb.set_speech_pulse_enabled(orb_speech_pulse)
-        self.composer_orb.hide()
         self.has_text = False
         self.recording = False
         self.voice_thread = None
@@ -162,7 +159,6 @@ class ArloWindow(DesktopWindow):
         self.status = QLabel()
         self.command_output = QPlainTextEdit()
         self.active_language = None
-        self.pages = QStackedWidget()
         self.greeting_key = f"greeting.{random.randrange(6)}"
         self.subtitles = QLabel(self.startup_greeting)
 
@@ -180,8 +176,6 @@ class ArloWindow(DesktopWindow):
         self.thread = QThread(self)
 
         self.log_dir = Path.home() / ".arlo" / ".log"
-        self.log_view = LogView(self.log_dir, self)
-        self.editor_view = EditorView(self)
 
         self.busy = False
         self.ready = False
@@ -197,20 +191,10 @@ class ArloWindow(DesktopWindow):
         self.wake_inbox = None
         self.wake_command_id = None
 
-        self.settings_view = SettingsView(
-            subtitles_enabled,
-            orb_speech_pulse,
-            self)
-        self.settings_view.subtitles_changed.connect(self.toggle_subtitles)
-        self.settings_view.orb_pulse_changed.connect(
-            self.toggle_orb_speech_pulse)
-        self.settings_view.language_changed.connect(self.change_language)
         self.build_ui()
-        self.workspace.panel_opened.connect(
-            lambda _panel_id: self.show_page(0))
 
         self._workspace_shortcut_map = {
-            options["shortcut"]: view_key
+            options["shortcut"].rsplit("+", 1)[-1]: view_key
             for view_key, options in WORKSPACE_VIEW_CONFIG.items()
         }
 
@@ -221,16 +205,6 @@ class ArloWindow(DesktopWindow):
         self._workspace_chord_timer.timeout.connect(
             self._open_pending_workspace)
         QApplication.instance().installEventFilter(self)
-
-        self.next_page_shortcut = QShortcut(QKeySequence("Ctrl+Tab"), self)
-        self.next_page_shortcut.setContext(Qt.WindowShortcut)
-        self.next_page_shortcut.activated.connect(lambda: self.switch_page(1))
-
-        self.previous_page_shortcut = QShortcut(QKeySequence("Ctrl+Shift+Tab"),
-                                                self)
-        self.previous_page_shortcut.setContext(Qt.WindowShortcut)
-        self.previous_page_shortcut.activated.connect(
-            lambda: self.switch_page(-1))
 
         self.build_worker()
         self.set_status("status.waking")
@@ -303,7 +277,6 @@ class ArloWindow(DesktopWindow):
 
         self.task_progress = TaskProgressPill(container)
         container_layout.addWidget(self.task_progress)
-        self.pages.setObjectName("mainPages")
 
         root = QWidget()
         root.setObjectName("root")
@@ -399,7 +372,6 @@ class ArloWindow(DesktopWindow):
         self.send.clicked.connect(self.on_send_clicked)
         self.send.hide()
 
-        composer.addWidget(self.composer_orb, 0, Qt.AlignBottom)
         composer.addWidget(input_group, 1)
         composer.addWidget(self.send, 0, Qt.AlignBottom)
 
@@ -448,14 +420,8 @@ class ArloWindow(DesktopWindow):
         self.workspace.panel_opened.connect(self.on_workspace_opened)
         self.workspace.panel_closed.connect(self.on_workspace_closed)
 
-        self.pages.addWidget(self.workspace)
-        self.pages.addWidget(self.log_view)
-        self.pages.addWidget(self.settings_view)
-        self.pages.addWidget(self.editor_view)
+        container_layout.addWidget(self.workspace, 1)
 
-        container_layout.addWidget(self.pages, 1)
-
-        self.show_page(0)
         self.set_enabled(False)
         self.load_stylesheet()
         self.refresh_language()
@@ -485,7 +451,7 @@ class ArloWindow(DesktopWindow):
             button.setToolTip(tooltip)
             button.setCursor(Qt.PointingHandCursor)
             if view_key is None:
-                button.clicked.connect(lambda checked=False: self.show_page(0))
+                button.clicked.connect(self.focus_main_workspace)
             else:
                 button.clicked.connect(
                     lambda checked=False, key=view_key, source=button:
@@ -525,24 +491,10 @@ class ArloWindow(DesktopWindow):
         if self.orb.sizeHint().width() != target:
             self.orb.set_size(target)
 
-    def show_page(self, index: int):
-        self.pages.setCurrentIndex(index)
-        self.composer_orb.setVisible(index != 0)
-
-        if index == 1:
-            self.log_view.refresh()
-
-        if index == 0 and self.ready:
+    def focus_main_workspace(self):
+        self.workspace.focus_panel(self.main_workspace_panel_id)
+        if self.ready:
             self.input.setFocus()
-
-    def switch_page(self, direction: int):
-        count = self.pages.count()
-        if count <= 1:
-            return
-
-        current = self.pages.currentIndex()
-        next_index = (current + direction) % count
-        self.show_page(next_index)
 
     def eventFilter(self, watched, event):
         if (event.type() == QEvent.KeyPress and
@@ -583,7 +535,7 @@ class ArloWindow(DesktopWindow):
         return tr(self.greeting_key, username=self.username, name="Arlo")
 
     def set_orbs_thinking(self, thinking: bool):
-        for orb in (self.orb, self.composer_orb, self.mascot):
+        for orb in (self.orb, self.mascot):
             orb.set_thinking(thinking)
 
     def build_worker(self):
@@ -621,7 +573,6 @@ class ArloWindow(DesktopWindow):
     @Slot()
     def open_workspace(self) -> None:
         """Open a manually created workspace from the main window."""
-        self.show_page(0)
         try:
             self.workspace._open_shortcut_panel()
         except Exception:
@@ -640,8 +591,8 @@ class ArloWindow(DesktopWindow):
             return TerminalView()
         if view_key == "settings":
             view = SettingsView(
-                self.settings_view.subtitles_switch.isChecked(),
-                self.settings_view.orb_pulse_switch.isChecked())
+                self.subtitles_enabled,
+                self.settings.value("orb_speech_pulse", True, type=bool))
             view.subtitles_changed.connect(self.toggle_subtitles)
             view.orb_pulse_changed.connect(self.toggle_orb_speech_pulse)
             view.language_changed.connect(self.change_language)
@@ -653,7 +604,6 @@ class ArloWindow(DesktopWindow):
         options = WORKSPACE_VIEW_CONFIG.get(view_key)
         if options is None:
             raise ValueError(f"Unknown workspace view: {view_key}")
-        self.show_page(0)
         sender = source
         panel = None
         while sender is not None:
@@ -810,7 +760,7 @@ class ArloWindow(DesktopWindow):
         try:
             set_language(language)
         except (OSError, ValueError) as error:
-            self.settings_view.refresh_language()
+            self.refresh_settings_workspaces()
             QMessageBox.warning(self, tr("ui.settings"),
                                 tr("ui.error", error=error))
             return
@@ -822,12 +772,21 @@ class ArloWindow(DesktopWindow):
             return
         self.active_language = language
         self.task_progress.refresh_language(language)
-        self.settings_view.refresh_language()
+        self.refresh_settings_workspaces()
         self.attachment_tray.refresh()
         self.set_status(self.status_key)
         self.update_send_button()
         if self.showing_greeting:
             self.update_subtitles(self.startup_greeting)
+
+    def refresh_settings_workspaces(self):
+        for view in self.findChildren(SettingsView):
+            with QSignalBlocker(view.subtitles_switch):
+                view.subtitles_switch.setChecked(self.subtitles_enabled)
+            with QSignalBlocker(view.orb_pulse_switch):
+                view.orb_pulse_switch.setChecked(
+                    self.settings.value("orb_speech_pulse", True, type=bool))
+            view.refresh_language()
 
     def refresh_privacy_indicator(self):
         private = self.worker.session.private
@@ -880,23 +839,25 @@ class ArloWindow(DesktopWindow):
         self.subtitles.setVisible(enabled and self.ready)
         self.sync_mascot_subtitle()
         self.settings.setValue("subtitles", enabled)
+        self.refresh_settings_workspaces()
 
     def toggle_orb_speech_pulse(self, enabled: bool):
-        for orb in (self.orb, self.composer_orb, self.mascot):
+        for orb in (self.orb, self.mascot):
             orb.set_speech_pulse_enabled(enabled)
         self.settings.setValue("orb_speech_pulse", enabled)
+        self.refresh_settings_workspaces()
 
     def set_orbs_speaking(self, speaking: bool):
-        for orb in (self.orb, self.composer_orb, self.mascot):
+        for orb in (self.orb, self.mascot):
             orb.set_speaking(speaking)
         self.sync_mascot_subtitle()
 
     def set_orbs_listening(self, listening: bool):
-        for orb in (self.orb, self.composer_orb, self.mascot):
+        for orb in (self.orb, self.mascot):
             orb.set_listening(listening)
 
     def set_orbs_visual_state(self, state, *, fade_in=180, fade_out=180):
-        for orb in (self.orb, self.composer_orb, self.mascot):
+        for orb in (self.orb, self.mascot):
             orb.set_visual_state(state, fade_in=fade_in, fade_out=fade_out)
 
     def sync_mascot_subtitle(self):
@@ -1086,7 +1047,6 @@ class ArloWindow(DesktopWindow):
         self.voice_thread = VoiceInputWorker(self, automatic=automatic)
         self.voice_thread.levels.connect(self.input_meter.set_levels)
         self.voice_thread.levels.connect(self.mascot.set_levels)
-        self.voice_thread.levels.connect(self.composer_orb.set_levels)
         self.voice_thread.levels.connect(self.orb.set_levels)
         self.voice_thread.processing.connect(self.on_voice_processing)
         self.voice_thread.finished.connect(self.on_voice_finished)
@@ -1140,7 +1100,6 @@ class ArloWindow(DesktopWindow):
         self.worker.interrupt()
         self.speaking = False
         self.orb.clear()
-        self.composer_orb.clear()
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
         self.update_send_button()
@@ -1181,7 +1140,6 @@ class ArloWindow(DesktopWindow):
         self.current_reply += chunk
         if not self.speaking:
             self.set_orbs_visual_state(Orb.State.WRITING)
-        self.composer_orb.setToolTip(self.current_reply)
 
     @Slot(int, str)
     def on_subtitle(self, turn_id, text):
@@ -1192,7 +1150,6 @@ class ArloWindow(DesktopWindow):
     def on_audio(self, turn_id, levels):
         if (turn_id == self.turn_id and (self.busy or not self.ready)
                 and not self.stopping):
-            self.composer_orb.set_levels(levels)
             self.mascot.set_levels(levels)
             self.orb.set_levels(levels)
 
@@ -1238,7 +1195,6 @@ class ArloWindow(DesktopWindow):
         self.speaking = False
         self.stopping = False
         self.orb.clear()
-        self.composer_orb.clear()
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
         result_state = (Orb.State.DENIED_ERROR if self.permission_denied_state
@@ -1290,7 +1246,6 @@ class ArloWindow(DesktopWindow):
         self.speaking = False
         self.stopping = False
         self.orb.clear()
-        self.composer_orb.clear()
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
         self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
@@ -1463,15 +1418,11 @@ def main():
         app.setFont(QFont(main_font, 11))
         window = ArloWindow()
         window.show()
-        window.log_view.code_font_family = nerd_font
-        banner_font = QFont(nerd_font, 11)
-        banner_font.setStyleHint(QFont.Monospace)
         icon_font = QFont(nerd_font, 18)
 
         for button in (
                 window.send,
-                window.attach,
-                window.log_view.refresh_button,):
+                window.attach,):
             button.setFont(icon_font)
 
         def activate_existing_window():

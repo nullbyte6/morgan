@@ -95,11 +95,6 @@ QWidget#windowContainer {
     background-color: transparent;
 }
 
-QStackedWidget#mainPages {
-    background-color: transparent;
-    border: none;
-}
-
 QPushButton#settingsNav,
 QPushButton#chatNav,
 QPushButton#logsNav,
@@ -434,7 +429,8 @@ QPlainTextEdit#codeEditor QScrollBar::sub-page:horizontal {
     background: transparent;
 }
 
-QWidget#editorPage QPushButton {
+QWidget#editorPage QPushButton,
+QWidget#terminalPage QPushButton {
     background-color: #363a4f;
     color: #cad3f5;
     border: 1px solid #494d64;
@@ -442,17 +438,20 @@ QWidget#editorPage QPushButton {
     padding: 8px 16px;
 }
 
-QWidget#editorPage QPushButton:hover {
+QWidget#editorPage QPushButton:hover,
+QWidget#terminalPage QPushButton:hover {
     background-color: #494d64;
     border-color: #8aadf4;
 }
 
-QWidget#editorPage QPushButton:pressed {
+QWidget#editorPage QPushButton:pressed,
+QWidget#terminalPage QPushButton:pressed {
     background-color: #8aadf4;
     color: #24273a;
 }
 
-QWidget#editorPage QPushButton:disabled {
+QWidget#editorPage QPushButton:disabled,
+QWidget#terminalPage QPushButton:disabled {
     background-color: #363a4f;
     color: #6e738d;
     border-color: #494d64;
@@ -701,4 +700,59 @@ QTextBrowser#logMessageBody {
 QTextBrowser#logMessageBody QScrollBar {
     width: 0;
     height: 0;
+}
+
+#workspacePanel[workspaceViewKey="terminal"] {
+    background-color: #1e2030;
+}
+
+QWidget#terminalPage {
+    background: transparent;
+}
+
+QPlainTextEdit#terminalOutput QScrollBar:vertical {
+    background: #181926;
+    width: 10px;
+    margin: 2px;
+    border: none;
+}
+
+QPlainTextEdit#terminalOutput QScrollBar::handle:vertical {
+    background: #494d64;
+    min-height: 24px;
+    border-radius: 3px;
+}
+
+QPlainTextEdit#terminalOutput QScrollBar::handle:vertical:hover {
+    background: #6e738d;
+}
+
+QPlainTextEdit#terminalOutput QScrollBar::add-line:vertical,
+QPlainTextEdit#terminalOutput QScrollBar::sub-line:vertical {
+    height: 0;
+    border: none;
+}
+
+QPlainTextEdit#terminalOutput QScrollBar::add-page:vertical,
+QPlainTextEdit#terminalOutput QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+QMenu#terminalMenu {
+    background-color: #24273a;
+    color: #cad3f5;
+    border: 1px solid #494d64;
+    padding: 4px;
+}
+
+QMenu#terminalMenu::item {
+    padding: 6px 18px;
+}
+
+QMenu#terminalMenu::item:selected {
+    background-color: #494d64;
+}
+
+QMenu#terminalMenu::item:disabled {
+    color: #6e738d;
 }
