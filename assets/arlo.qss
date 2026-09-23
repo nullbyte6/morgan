@@ -1,6 +1,6 @@
 QWidget#root,
 QWidget#settingsPage {
-    background-color: #24273a;
+    background-color: transparent;
     color: #cad3f5;
 }
 
@@ -90,12 +90,13 @@ ToggleSwitch {
     qproperty-thumbColor: #cad3f5;
 }
 
+QMainWindow#arloWindow,
 QWidget#windowContainer {
-    background-color: #24273a;
+    background-color: transparent;
 }
 
 QStackedWidget#mainPages {
-    background-color: #24273a;
+    background-color: transparent;
     border: none;
 }
 
@@ -473,11 +474,11 @@ QMessageBox QLabel {
 }
 
 #arloWorkspace {
-    background: transparent;
+    background-color: transparent;
 }
 
 #workspacePanel {
-    background: transparent;
+    background-color: #24273a;
     border: 2px solid #494d64;
     border-radius: 12px;
 }
@@ -523,11 +524,7 @@ QMessageBox QLabel {
 }
 
 QSplitter#workspaceSplitter::handle {
-    background: #24273a;
-}
-
-QSplitter#workspaceSplitter::handle:hover {
-    background: #8aadf4;
+    background-color: transparent;
 }
 
 QToolButton#privacyIndicator {

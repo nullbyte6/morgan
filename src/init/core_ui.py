@@ -97,10 +97,11 @@ from src.init.desktop.clipboard import (
     unregister_clipboard_handler,
 )
 from src.init.desktop.task_progress import TaskProgressPill
+from src.init.desktop.window import DesktopWindow
 from src.init.visuals.bridge import FlowchartBridge
 
 # noinspection PyBroadException
-class ArloWindow(QMainWindow):
+class ArloWindow(DesktopWindow):
     """Arlo window class, not its brain, which is somewhere else"""
     request = Signal(int, object)
     username = getuser().capitalize()
@@ -113,9 +114,6 @@ class ArloWindow(QMainWindow):
         self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
         icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "arlo.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
-        self.setWindowState(Qt.WindowMaximized)
-        self.setMinimumSize(600, 480)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
 
         self.mascot = Orb(
             size=120, floating=True, line_width=4.2, fill_ratio=0.54)
@@ -1476,6 +1474,7 @@ def main():
         nerd_font = load_font("JetBrainsMonoNLNerdFontMono-Medium.ttf")
         app.setFont(QFont(main_font, 11))
         window = ArloWindow()
+        window.show()
         window.log_view.code_font_family = nerd_font
         banner_font = QFont(nerd_font, 11)
         banner_font.setStyleHint(QFont.Monospace)
