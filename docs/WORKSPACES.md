@@ -42,6 +42,20 @@ This profile does not import Chrome/Edge sessions or saved passwords, and it doe
 not provide a password manager. Logging out on a website also logs out the other
 Arlo panels using that account.
 
+### Extensions
+
+The browser's **… Extensions** button opens its extension manager. Install a
+Manifest V3 extension from a folder containing `manifest.json` or a ZIP with that
+file at its root. Installed extensions are enabled, copied into Arlo's profile,
+and restored at startup with their last enabled/disabled state. Select an
+extension to enable, disable or remove it; **Open panel** opens its action popup
+when one is available. All browser panels share the same extensions.
+
+Extensions require Qt WebEngine 6.10 or newer. Compatibility depends on the
+extension APIs supported by Qt WebEngine; not every Chrome extension will work.
+Direct Chrome Web Store installation, CRX files, Chrome Sync and Manifest V2 are
+not supported by this manager.
+
 Web searches and website requests from the assistant open in the embedded Browser
 workspace. Arlo reuses an existing browser panel or creates one, and restores the
 main window if it is hidden. Search results remain available to the assistant for

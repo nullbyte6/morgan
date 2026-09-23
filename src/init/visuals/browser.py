@@ -58,6 +58,16 @@ class BrowserView(QWidget):
         self.back_button.setEnabled(False)
         self.forward_button.setEnabled(False)
         toolbar.addWidget(self.address_bar, 1)
+        self.extensions_button = QPushButton("…", self)
+        self.extensions_button.setObjectName("browserExtensions")
+        self.extensions_button.setFixedSize(40, 40)
+        self.extensions_button.setToolTip("Extensions")
+        self.extensions_button.setAccessibleName("Extensions")
+        self.extensions_button.setCursor(Qt.PointingHandCursor)
+        self.extensions_button.setEnabled(False)
+        self.extensions_button.clicked.connect(self._show_extensions)
+        toolbar.addWidget(self.extensions_button)
+        self._extensions_dialog = None
         self.status = QLabel("Ready", self)
         self.status.setObjectName("browserStatus")
         self.status.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -83,6 +93,9 @@ class BrowserView(QWidget):
         from .browser_session import get_browser_session
         self.session = get_browser_session()
         self.web_view.setPage(self.session.create_page(self.web_view))
+        self.extensions_button.setEnabled(self.session.extensions is not None)
+        if self.session.extensions is None:
+            self.extensions_button.setToolTip("Extensions require Qt WebEngine 6.10 or newer")
         self.web_view.setObjectName("browserWebView")
         self.web_view.urlChanged.connect(self._on_url_changed)
         self.web_view.loadStarted.connect(lambda: self.status.setText("Loading…"))
@@ -92,6 +105,18 @@ class BrowserView(QWidget):
         self.web_view.page().newWindowRequested.connect(self._open_new_window)
         if initial_url:
             self.navigate(initial_url)
+
+    def _show_extensions(self):
+        from .browser_extensions import ExtensionsDialog
+        if self._extensions_dialog is None:
+            self._extensions_dialog = ExtensionsDialog(self)
+            self._extensions_dialog.destroyed.connect(self._extensions_closed)
+        self._extensions_dialog.show()
+        self._extensions_dialog.raise_()
+        self._extensions_dialog.activateWindow()
+
+    def _extensions_closed(self):
+        self._extensions_dialog = None
 
     def _open_new_window(self, request):
         """Keep links requesting a new window inside this browser panel."""

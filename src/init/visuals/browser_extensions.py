@@ -1,0 +1,206 @@
+"""Persistent extension preferences and the embedded browser's extension manager."""
+
+from PySide6.QtCore import QObject, QSettings, Qt, Signal, Slot
+from PySide6.QtWidgets import (
+    QDialog, QFileDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+    QPushButton, QVBoxLayout,
+)
+
+
+class BrowserExtensions(QObject):
+    changed = Signal()
+    message = Signal(str)
+
+    def __init__(self, session):
+        super().__init__(session)
+        self.manager = session.profile.extensionManager()
+        self._closed = False
+        self.settings = QSettings(str(session.data_path / 'extensions.ini'), QSettings.IniFormat)
+        # Handle completion after Qt has returned from its registry callbacks.
+        self.manager.loadFinished.connect(self._loaded, Qt.QueuedConnection)
+        self.manager.installFinished.connect(self._installed, Qt.QueuedConnection)
+        self.manager.uninstallFinished.connect(self._uninstalled, Qt.QueuedConnection)
+        self.manager.unloadFinished.connect(self._loaded, Qt.QueuedConnection)
+        for extension in self.manager.extensions():
+            self._restore(extension)
+
+    def _restore(self, extension):
+        if extension.isLoaded() and extension.isInstalled():
+            enabled = self.settings.value(f'enabled/{extension.id()}', False, type=bool)
+            self.manager.setExtensionEnabled(extension, enabled)
+
+    @Slot(object)
+    def _loaded(self, extension):
+        if self._closed:
+            return
+        if extension.error():
+            self.message.emit(extension.error())
+        else:
+            self._restore(extension)
+        self.changed.emit()
+
+    @Slot(object)
+    def _installed(self, extension):
+        if self._closed:
+            return
+        if extension.error() or not extension.isInstalled():
+            self.message.emit(extension.error() or 'Could not install extension')
+        else:
+            self.set_enabled(extension, True)
+            self.message.emit(f'Installed: {extension.name()}')
+        self.changed.emit()
+
+    @Slot(object)
+    def _uninstalled(self, extension):
+        if self._closed:
+            return
+        if extension.error():
+            self.message.emit(extension.error())
+        else:
+            self.settings.remove(f'enabled/{extension.id()}')
+            self.settings.sync()
+            self.message.emit('Extension removed')
+        self.changed.emit()
+
+    def set_enabled(self, extension, enabled):
+        self.manager.setExtensionEnabled(extension, enabled)
+        self.settings.setValue(f'enabled/{extension.id()}', enabled)
+        self.settings.sync()
+        self.changed.emit()
+
+    def shutdown(self):
+        self._closed = True
+        self.settings.sync()
+
+
+class ExtensionsDialog(QDialog):
+    def __init__(self, browser):
+        super().__init__(browser)
+        self.setObjectName('browserExtensionsDialog')
+        self.setWindowTitle('Browser extensions')
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.resize(600, 460)
+        self.browser = browser
+        self.controller = browser.session.extensions
+        self.manager = self.controller.manager
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 20, 20, 20)
+        root.setSpacing(12)
+        title = QLabel('Extensions', self)
+        title.setObjectName('browserExtensionsTitle')
+        root.addWidget(title)
+        hint = QLabel('Install Chromium Manifest V3 extensions from a folder or ZIP.\n'
+                      'Extensions and their enabled state are saved across restarts.', self)
+        hint.setWordWrap(True)
+        root.addWidget(hint)
+        install = QHBoxLayout()
+        for label, handler in (('Install folder', self._install_folder), ('Install ZIP', self._install_zip)):
+            button = self._button(label, handler)
+            install.addWidget(button)
+        install.addStretch()
+        root.addLayout(install)
+        self.list = QListWidget(self)
+        self.list.setObjectName('browserExtensionsList')
+        self.list.currentItemChanged.connect(self._selection_changed)
+        root.addWidget(self.list, 1)
+        self.details = QLabel(self)
+        self.details.setWordWrap(True)
+        self.details.setTextFormat(Qt.PlainText)
+        root.addWidget(self.details)
+        actions = QHBoxLayout()
+        self.toggle = self._button('Enable', self._toggle)
+        self.popup = self._button('Open panel', self._popup)
+        self.remove = self._button('Remove', self._remove)
+        for button in (self.toggle, self.popup, self.remove):
+            actions.addWidget(button)
+        actions.addStretch()
+        root.addLayout(actions)
+        self.status = QLabel('Ready', self)
+        self.status.setWordWrap(True)
+        self.status.setTextFormat(Qt.PlainText)
+        root.addWidget(self.status)
+        self.controller.changed.connect(self.refresh)
+        self.controller.message.connect(self.status.setText)
+        self.refresh()
+
+    def _button(self, label, handler):
+        button = QPushButton(label, self)
+        button.setCursor(Qt.PointingHandCursor)
+        button.clicked.connect(handler)
+        return button
+
+    def _selected(self):
+        item = self.list.currentItem()
+        if item is not None:
+            return next((ext for ext in self.manager.extensions()
+                         if ext.id() == item.data(Qt.UserRole)), None)
+        return None
+
+    @Slot()
+    def refresh(self):
+        selected = self._selected()
+        selected_id = selected.id() if selected else None
+        self.list.clear()
+        for extension in self.manager.extensions():
+            # The built-in PDF and Hangouts components are not user installs.
+            if not extension.isInstalled():
+                continue
+            state = 'Enabled' if extension.isEnabled() else 'Disabled'
+            item = QListWidgetItem(f'{extension.name()}  ·  {state}')
+            item.setData(Qt.UserRole, extension.id())
+            self.list.addItem(item)
+            if extension.id() == selected_id:
+                self.list.setCurrentItem(item)
+        if self.list.currentItem() is None and self.list.count():
+            self.list.setCurrentRow(0)
+        self._selection_changed()
+
+    def _selection_changed(self, *_):
+        extension = self._selected()
+        self.toggle.setEnabled(extension is not None)
+        self.remove.setEnabled(extension is not None)
+        self.popup.setEnabled(extension is not None and extension.isEnabled()
+                              and not extension.actionPopupUrl().isEmpty())
+        self.toggle.setText('Disable' if extension and extension.isEnabled() else 'Enable')
+        self.details.setText(extension.description() if extension else 'No extensions installed')
+
+    def _install_folder(self):
+        path = QFileDialog.getExistingDirectory(self, 'Select extension folder')
+        if path:
+            self.status.setText('Installing…')
+            self.manager.installExtension(path)
+
+    def _install_zip(self):
+        path, _ = QFileDialog.getOpenFileName(self, 'Select extension ZIP', '', 'Extension ZIP (*.zip)')
+        if path:
+            self.status.setText('Installing…')
+            self.manager.installExtension(path)
+
+    def _toggle(self):
+        extension = self._selected()
+        if extension:
+            self.controller.set_enabled(extension, not extension.isEnabled())
+
+    def _remove(self):
+        extension = self._selected()
+        if extension:
+            self.status.setText('Removing…')
+            self.manager.uninstallExtension(extension)
+
+    def _popup(self):
+        extension = self._selected()
+        if extension and extension.isEnabled() and not extension.actionPopupUrl().isEmpty():
+            from PySide6.QtWebEngineWidgets import QWebEngineView
+            popup = QDialog(self.browser)
+            popup.setObjectName('browserExtensionPopup')
+            popup.setWindowTitle(extension.name())
+            popup.setAttribute(Qt.WA_DeleteOnClose)
+            popup.resize(440, 520)
+            layout = QVBoxLayout(popup)
+            layout.setContentsMargins(8, 8, 8, 8)
+            view = QWebEngineView(popup)
+            view.setPage(self.browser.session.create_page(view))
+            view.page().newWindowRequested.connect(self.browser._open_new_window)
+            layout.addWidget(view)
+            view.setUrl(extension.actionPopupUrl())
+            popup.show()

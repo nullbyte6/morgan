@@ -16,13 +16,27 @@ class BrowserSession(QObject):
         super().__init__(parent)
         self.data_path = Path(data_path or Path.home() / '.arlo' / 'browser')
         self.data_path.mkdir(parents=True, exist_ok=True)
-        self.profile = QWebEngineProfile('arlo-browser', self)
-        self.profile.setPersistentStoragePath(str(self.data_path / 'storage'))
-        self.profile.setCachePath(str(self.data_path / 'cache'))
-        self.profile.setHttpCacheType(QWebEngineProfile.DiskHttpCache)
-        self.profile.setPersistentCookiesPolicy(QWebEngineProfile.ForcePersistentCookies)
+        try:
+            from PySide6.QtWebEngineCore import QWebEngineProfileBuilder
+        except ImportError:
+            builder = None
+            settings = QWebEngineProfile('arlo-browser', self)
+        else:
+            builder = QWebEngineProfileBuilder()
+            settings = builder
+        settings.setPersistentStoragePath(str(self.data_path / 'storage'))
+        settings.setCachePath(str(self.data_path / 'cache'))
+        settings.setHttpCacheType(QWebEngineProfile.DiskHttpCache)
+        settings.setPersistentCookiesPolicy(QWebEngineProfile.ForcePersistentCookies)
+        # Configure storage before Chromium initializes extension services.
+        self.profile = builder.createProfile('arlo-browser', self) if builder else settings
+        if self.profile is None:
+            raise RuntimeError('The Arlo browser profile is already in use')
         self._pages = WeakSet()
         self._closed = False
+        from .browser_extensions import BrowserExtensions
+        self.extensions = (BrowserExtensions(self)
+                           if hasattr(self.profile, 'extensionManager') else None)
         parent.aboutToQuit.connect(self.shutdown)
 
     def create_page(self, parent):
@@ -36,6 +50,8 @@ class BrowserSession(QObject):
         if self._closed:
             return
         self._closed = True
+        if self.extensions is not None:
+            self.extensions.shutdown()
         for page in tuple(self._pages):
             if isValid(page):
                 delete(page)

@@ -771,7 +771,8 @@ QWidget#browserView {
     color: #cad3f5;
 }
 
-QWidget#browserView QPushButton {
+QWidget#browserView QPushButton,
+QDialog#browserExtensionsDialog QPushButton {
     background-color: #363a4f;
     color: #cad3f5;
     border: 1px solid #494d64;
@@ -781,17 +782,21 @@ QWidget#browserView QPushButton {
 }
 
 QWidget#browserView QPushButton:hover,
-QWidget#browserView QPushButton:focus {
+QDialog#browserExtensionsDialog QPushButton:hover,
+QWidget#browserView QPushButton:focus,
+QDialog#browserExtensionsDialog QPushButton:focus {
     background-color: #494d64;
     border-color: #8aadf4;
 }
 
-QWidget#browserView QPushButton:pressed {
+QWidget#browserView QPushButton:pressed,
+QDialog#browserExtensionsDialog QPushButton:pressed {
     background-color: #8aadf4;
     color: #24273a;
 }
 
-QWidget#browserView QPushButton:disabled {
+QWidget#browserView QPushButton:disabled,
+QDialog#browserExtensionsDialog QPushButton:disabled {
     background-color: #363a4f;
     color: #6e738d;
     border-color: #494d64;
@@ -828,4 +833,53 @@ QLabel#browserUnavailable {
 
 QLabel#browserUnavailable {
     font-size: 16px;
+}
+
+
+QDialog#browserExtensionsDialog,
+QDialog#browserExtensionPopup {
+    background-color: #24273a;
+    color: #cad3f5;
+}
+
+QDialog#browserExtensionsDialog QPushButton {
+    font-size: 14px;
+    padding: 8px 14px;
+    min-height: 22px;
+}
+
+QDialog#browserExtensionsDialog QLabel {
+    background: transparent;
+    color: #a5adcb;
+    border: none;
+    font-size: 14px;
+}
+
+QDialog#browserExtensionsDialog QLabel#browserExtensionsTitle {
+    color: #cad3f5;
+    font-size: 20px;
+}
+
+QListWidget#browserExtensionsList {
+    background-color: #1e2030;
+    color: #cad3f5;
+    border: 1px solid #494d64;
+    border-radius: 10px;
+    padding: 6px;
+    font-size: 14px;
+    outline: none;
+}
+
+QListWidget#browserExtensionsList::item {
+    padding: 10px 12px;
+    border-radius: 6px;
+}
+
+QListWidget#browserExtensionsList::item:hover {
+    background-color: #363a4f;
+}
+
+QListWidget#browserExtensionsList::item:selected {
+    background-color: #494d64;
+    color: #cad3f5;
 }
