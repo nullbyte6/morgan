@@ -47,6 +47,7 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
 from src.init.indicators import PrivacyIndicator, WorkingDirectory
+from src.init.visuals.workspace import Workspace
 
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
@@ -185,6 +186,11 @@ class ArloWindow(QMainWindow):
             self.toggle_orb_speech_pulse)
         self.settings_view.language_changed.connect(self.change_language)
         self.build_ui()
+        self.workspace.panel_opened.connect(lambda: self.show_page(0))
+
+        self.new_workspace_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
+        self.new_workspace_shortcut.setContext(Qt.WindowShortcut)
+        self.new_workspace_shortcut.activated.connect(self.open_workspace)
 
         self.next_page_shortcut = QShortcut(QKeySequence("Ctrl+Tab"), self)
         self.next_page_shortcut.setContext(Qt.WindowShortcut)
@@ -432,10 +438,30 @@ class ArloWindow(QMainWindow):
         self.attachment_tray.changed.connect(self.ensure_composer_visible)
         self.input.textChanged.connect(self.ensure_composer_visible)
         self.input.textChanged.connect(self.update_send_button)
-        self.pages.addWidget(self.chat_scroll)
+
+        self.chat_workspace_splitter = QSplitter(Qt.Horizontal)
+        self.chat_workspace_splitter.setObjectName("chatWorkspaceSplitter")
+        self.chat_workspace_splitter.setChildrenCollapsible(False)
+        self.chat_workspace_splitter.setHandleWidth(8)
+
+        self.workspace = Workspace(self.chat_workspace_splitter)
+        self.workspace.setMinimumWidth(260)
+        self.workspace.hide()
+
+        self.chat_scroll.setMinimumWidth(300)
+        self.chat_workspace_splitter.addWidget(self.chat_scroll)
+        self.chat_workspace_splitter.addWidget(self.workspace)
+        self.chat_workspace_splitter.setStretchFactor(0, 1)
+        self.chat_workspace_splitter.setStretchFactor(1, 1)
+
+        self.workspace.panel_opened.connect(self.on_workspace_opened)
+        self.workspace.panel_closed.connect(self.on_workspace_closed)
+
+        self.pages.addWidget(self.chat_workspace_splitter)
         self.pages.addWidget(self.log_view)
         self.pages.addWidget(self.settings_view)
         self.pages.addWidget(self.editor_view)
+
 
         container_layout.addWidget(self.pages, 1)
         container_layout.addWidget(self.composer_widget)
@@ -519,6 +545,28 @@ class ArloWindow(QMainWindow):
 
         self.worker.confirmation_requested.connect(
             self.on_confirmation_requested)
+
+    @Slot()
+    def open_workspace(self) -> None:
+        """Open a workspace panel from the main Arlo window."""
+        self.show_page(0)
+        self.workspace._open_shortcut_panel()
+
+    @Slot(str)
+    def on_workspace_opened(self, panel_id: str) -> None:
+        """Reveal the embedded workspace when its first panel opens."""
+        if self.workspace.panel_count != 1:
+            return
+
+        self.workspace.show()
+        self.chat_workspace_splitter.setSizes([420, 580])
+
+    @Slot(str)
+    def on_workspace_closed(self, panel_id: str) -> None:
+        """Restore the full chat area when the last panel closes."""
+        if self.workspace.panel_count == 0:
+            self.workspace.hide()
+
 
     @Slot(object)
     def on_screenshot_requested(self, request: CaptureRequest):

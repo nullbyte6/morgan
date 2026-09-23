@@ -472,6 +472,63 @@ QMessageBox QLabel {
     background: transparent;
 }
 
+#arloWorkspace {
+    background: transparent;
+}
+
+#workspacePanel {
+    background: transparent;
+    border: 1px solid #494d64;
+    border-radius: 12px;
+}
+
+#workspacePanel[active="true"] {
+    border: 1px solid #8aadf4;
+}
+
+#workspacePanelHeader {
+    background: transparent;
+    border: none;
+}
+
+#workspacePanelTitle {
+    color: #cad3f5;
+    font-size: 16px;
+    border: none;
+}
+
+#workspacePanelClose {
+    color: #cad3f5;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+}
+
+#workspacePanelClose:hover {
+    background-color: transparent;
+    color: #ed8796;
+}
+
+#workspacePanelContent,
+#workspacePlaceholder {
+    background: transparent;
+    border: none;
+}
+
+#workspacePlaceholderLabel {
+    color: #8087a2;
+    font-size: 13px;
+    border: none;
+}
+
+QSplitter#workspaceSplitter::handle {
+    background: #24273a;
+}
+
+QSplitter#workspaceSplitter::handle:hover {
+    background: #8aadf4;
+}
 
 QToolButton#privacyIndicator {
     color: #86EFAC;

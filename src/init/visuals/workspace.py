@@ -19,13 +19,11 @@
 """Embedded tiling workspace for Arlo's desktop interface."""
 from __future__ import annotations
 
-import sys
 import uuid
 
 from PySide6.QtCore import *
-from PySide6.QtWidgets import *
 from PySide6.QtGui import *
-
+from PySide6.QtWidgets import *
 
 
 class WorkspacePanel(QFrame):
@@ -688,7 +686,6 @@ class Workspace(QWidget):
     def _install_shortcuts(self) -> None:
         """Install keyboard shortcuts for the active workspace."""
         shortcuts = {
-            "Ctrl+N": self._open_shortcut_panel,
             "Ctrl+W": self.close_active_panel,
             "Ctrl+Alt+Left": lambda: self.focus_neighbor(Qt.LeftArrow),
             "Ctrl+Alt+Right": lambda: self.focus_neighbor(Qt.RightArrow),
@@ -808,109 +805,3 @@ class Workspace(QWidget):
         self.layout_changed.emit()
 
         return True
-
-
-WORKSPACE_STYLESHEET = """
-#arloWorkspace {
-    background: #24273a;
-}
-
-#workspacePanel {
-    background: #363a4f;
-    border: 1px solid #494d64;
-    border-radius: 12px;
-}
-
-#workspacePanel[active="true"] {
-    border: 1px solid #b7bdf8;
-}
-
-#workspacePanelHeader {
-    background: transparent;
-    border: none;
-}
-
-#workspacePanelTitle {
-    color: #cad3f5;
-    font-size: 12px;
-    font-weight: 600;
-    border: none;
-}
-
-#workspacePanelClose {
-    color: #a5adcb;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    font-size: 19px;
-}
-
-#workspacePanelClose:hover {
-    color: #ed8796;
-    background: #494d64;
-}
-
-#workspacePanelContent,
-#workspacePlaceholder {
-    background: transparent;
-    border: none;
-}
-
-#workspacePlaceholderLabel {
-    color: #8087a2;
-    font-size: 13px;
-    border: none;
-}
-
-QSplitter#workspaceSplitter::handle {
-    background: #24273a;
-}
-
-QSplitter#workspaceSplitter::handle:hover {
-    background: #8aadf4;
-}
-"""
-
-
-def main() -> int:
-    """Run a standalone demonstration of the embedded tiling workspace."""
-
-    app = QApplication(sys.argv)
-    app.setStyle("Fusion")
-    app.setStyleSheet(WORKSPACE_STYLESHEET)
-
-    window = QMainWindow()
-    window.setWindowTitle("Arlo Workspace")
-    window.resize(1200, 800)
-
-    root = QWidget()
-    root_layout = QVBoxLayout(root)
-    root_layout.setContentsMargins(12, 12, 12, 12)
-    root_layout.setSpacing(10)
-
-    workspace = Workspace()
-    root_layout.addWidget(workspace, 1)
-    window.setCentralWidget(root)
-
-    counter = 0
-
-    def add_workspace() -> None:
-        nonlocal counter
-
-        counter += 1
-
-        workspace.open_panel(
-            title=f"Workspace {counter}",
-        )
-
-    def close_active() -> None:
-        if workspace.active_panel_id is not None:
-            workspace.close_panel(workspace.active_panel_id)
-
-    add_workspace()
-    window.show()
-    return app.exec()
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
