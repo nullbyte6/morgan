@@ -341,6 +341,7 @@ class Workspace(QWidget):
 
         panel_id = panel_id or uuid.uuid4().hex
 
+
         if panel_id in self._panels:
             raise ValueError(f"Panel already exists: {panel_id}")
 
@@ -662,6 +663,14 @@ class Workspace(QWidget):
 
         return True
 
+    def open_registered_panel(self, key: str, title: str,
+                              content_factory, *,
+                              orientation: Qt.Orientation | None = None) -> str:
+        """Open a fresh configured panel instance in this workspace."""
+        content = content_factory()
+        content.setProperty("workspaceViewKey", key)
+        return self.open_panel(title=title, content=content,
+                               orientation=orientation)
 
     def close_all(self) -> None:
         """Remove all panels and cancel pending layout animations."""
@@ -693,7 +702,7 @@ class Workspace(QWidget):
 
         for sequence, callback in shortcuts.items():
             shortcut = QShortcut(QKeySequence(sequence), self)
-            shortcut.setContext(Qt.WindowShortcut)
+            shortcut.setContext(Qt.ApplicationShortcut)
             shortcut.activated.connect(callback)
             self._shortcuts.append(shortcut)
 

@@ -49,6 +49,25 @@ from src.init.chat import ChatInput
 from src.init.indicators import PrivacyIndicator, WorkingDirectory
 from src.init.visuals.workspace import Workspace
 
+
+WORKSPACE_VIEW_CONFIG = {
+    "logs": {
+        "title": "Logs",
+        "shortcut": "Ctrl+N, 1",
+        "icon": "",
+    },
+    "editor": {
+        "title": "Editor",
+        "shortcut": "Ctrl+N, 2",
+        "icon": "󰨞",
+    },
+    "settings": {
+        "title": "Settings",
+        "shortcut": "Ctrl+N, 3",
+        "icon": "",
+    },
+}
+
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
 from src.init.brain import kill_self
@@ -174,6 +193,7 @@ class ArloWindow(QMainWindow):
         self.showing_greeting = True
         self.current_reply = None
         self.subtitle_text = ""
+        self._startup_reveal_animations = []
         self.wake_inbox = None
         self.wake_command_id = None
 
@@ -188,9 +208,17 @@ class ArloWindow(QMainWindow):
         self.build_ui()
         self.workspace.panel_opened.connect(lambda: self.show_page(0))
 
-        self.new_workspace_shortcut = QShortcut(QKeySequence("Ctrl+N"), self)
-        self.new_workspace_shortcut.setContext(Qt.WindowShortcut)
-        self.new_workspace_shortcut.activated.connect(self.open_workspace)
+        self._workspace_shortcut_map = {
+            options["shortcut"].rsplit(",", 1)[-1].strip(): view_key
+            for view_key, options in WORKSPACE_VIEW_CONFIG.items()
+        }
+        self._workspace_chord_pending = False
+        self._workspace_chord_timer = QTimer(self)
+        self._workspace_chord_timer.setSingleShot(True)
+        self._workspace_chord_timer.setInterval(700)
+        self._workspace_chord_timer.timeout.connect(
+            self._open_pending_workspace)
+        QApplication.instance().installEventFilter(self)
 
         self.next_page_shortcut = QShortcut(QKeySequence("Ctrl+Tab"), self)
         self.next_page_shortcut.setContext(Qt.WindowShortcut)
@@ -297,9 +325,9 @@ class ArloWindow(QMainWindow):
         self.subtitles.setWordWrap(True)
         self.subtitles.setTextFormat(Qt.RichText)
         self.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.subtitles.setFixedHeight(90)
-        self.subtitles.setVisible(
-            self.settings_view.subtitles_switch.isChecked())
+        self.subtitles.setMinimumHeight(0)
+        self.subtitles.setMaximumHeight(0)
+        self.subtitles.setVisible(False)
         main.addWidget(self.subtitles)
 
         self.command_output.setObjectName("commandOutput")
@@ -354,6 +382,9 @@ class ArloWindow(QMainWindow):
         input_group = QWidget()
         input_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         input_group.setLayout(input_column)
+        self.input_group = input_group
+        self.input_group.setMaximumHeight(0)
+        self.input_group.setVisible(False)
 
         self.attachment_tray.changed.connect(self.update_send_button)
 
@@ -451,20 +482,21 @@ class ArloWindow(QMainWindow):
         navigation.setContentsMargins(0, 0, 0, 0)
         navigation.setSpacing(8)
 
-        buttons = (
-            ("󰭹", "chatNav", "Arlo", 0),
-            ("", "logsNav", "Logs", 1),
-            ("", "settingsNav", tr("ui.settings"), 2),
-            ("󰨞", "editorNav", "Editor", 3))
+        buttons = [("󰭹", "chatNav", "Arlo", None)]
+        buttons.extend((options["icon"], f"{view_key}Nav", options["title"], view_key)
+                       for view_key, options in WORKSPACE_VIEW_CONFIG.items())
 
-        for icon, object_name, tooltip, page_index in buttons:
+        for icon, object_name, tooltip, view_key in buttons:
             button = QPushButton(icon, content)
             button.setObjectName(object_name)
             button.setFixedSize(48, 48)
             button.setToolTip(tooltip)
             button.setCursor(Qt.PointingHandCursor)
-            button.clicked.connect(
-                lambda checked=False, index=page_index: self.show_page(index))
+            if view_key is None:
+                button.clicked.connect(lambda checked=False: self.show_page(0))
+            else:
+                button.clicked.connect(
+                    lambda checked=False, key=view_key: self.open_workspace_view(key))
             navigation.addWidget(button)
 
         navigation.addStretch()
@@ -501,6 +533,38 @@ class ArloWindow(QMainWindow):
         current = self.pages.currentIndex()
         next_index = (current + direction) % count
         self.show_page(next_index)
+
+    def eventFilter(self, watched, event):
+        if (event.type() == QEvent.KeyPress and
+                QApplication.activeWindow() == self):
+            modifiers = event.modifiers()
+            if event.key() == Qt.Key_N and modifiers == Qt.ControlModifier:
+                self._workspace_chord_pending = True
+                self._workspace_chord_timer.start()
+                event.accept()
+                return True
+            if (self._workspace_chord_pending and
+                    modifiers in (Qt.NoModifier, Qt.ControlModifier)):
+                key_code = int(event.key())
+                key = str(key_code - int(Qt.Key_0))
+                view_key = self._workspace_shortcut_map.get(key)
+                if key == "0":
+                    view_key = None
+                if view_key is not None or key == "0":
+                    self._workspace_chord_timer.stop()
+                    self._workspace_chord_pending = False
+                    if view_key is None:
+                        self.open_workspace()
+                    else:
+                        self.open_workspace_view(view_key)
+                    event.accept()
+                    return True
+        return super().eventFilter(watched, event)
+
+    def _open_pending_workspace(self):
+        if self._workspace_chord_pending:
+            self._workspace_chord_pending = False
+            self.open_workspace()
 
     def load_stylesheet(self):
         self.setStyleSheet(get_stylesheet())
@@ -556,6 +620,44 @@ class ArloWindow(QMainWindow):
                 "Failed to open a workspace")
             raise
 
+    def _workspace_view_factory(self, view_key: str) -> QWidget:
+        """Create a fresh view instance for one workspace panel."""
+        if view_key == "logs":
+            return LogView(self.log_dir)
+        if view_key == "editor":
+            return EditorView()
+        if view_key == "settings":
+            view = SettingsView(
+                self.settings_view.subtitles_switch.isChecked(),
+                self.settings_view.orb_pulse_switch.isChecked())
+            view.subtitles_changed.connect(self.toggle_subtitles)
+            view.orb_pulse_changed.connect(self.toggle_orb_speech_pulse)
+            view.language_changed.connect(self.change_language)
+            return view
+        raise ValueError(f"Unknown workspace view: {view_key}")
+
+    @Slot(str)
+    def open_workspace_view(self, view_key: str) -> None:
+        """Open a new configured view instance in the embedded workspace."""
+        options = WORKSPACE_VIEW_CONFIG.get(view_key)
+        if options is None:
+            raise ValueError(f"Unknown workspace view: {view_key}")
+        self.show_page(0)
+        count = getattr(self, "_workspace_view_counts", {}).get(view_key, 0) + 1
+        if not hasattr(self, "_workspace_view_counts"):
+            self._workspace_view_counts = {}
+        self._workspace_view_counts[view_key] = count
+        title = options["title"] if count == 1 else f"{options['title']} {count}"
+        try:
+            self.workspace.open_registered_panel(
+                view_key,
+                title,
+                lambda: self._workspace_view_factory(view_key))
+        except Exception:
+            logging.getLogger("arlo.workspace").exception(
+                "Failed to open workspace view %s", view_key)
+            return
+
     @Slot(str)
     def on_workspace_opened(self, panel_id: str) -> None:
         """Reveal the embedded workspace when its first panel opens."""
@@ -563,7 +665,12 @@ class ArloWindow(QMainWindow):
             return
 
         self.workspace.show()
-        self.chat_workspace_splitter.setSizes([420, 580])
+        total = max(self.chat_workspace_splitter.width(), 2)
+        start_sizes = [total, 0]
+        end_sizes = [max(300, total // 2), max(260, total - max(300, total // 2))]
+        self.chat_workspace_splitter.setSizes(start_sizes)
+        self.workspace.animate_splitter(
+            self.chat_workspace_splitter, start_sizes, end_sizes, duration=220)
 
     @Slot(str)
     def on_workspace_closed(self, panel_id: str) -> None:
@@ -715,14 +822,43 @@ class ArloWindow(QMainWindow):
         self.set_status("")
         self.set_orbs_visual_state(Orb.State.IDLE)
         self.set_enabled(True)
+        self._reveal_startup_controls()
 
         if self.isVisible():
             self.input.setFocus()
 
+    def _reveal_startup_controls(self):
+        """Slide the composer and subtitles into view after startup."""
+        for animation in self._startup_reveal_animations:
+            animation.stop()
+            animation.deleteLater()
+        self._startup_reveal_animations.clear()
+
+        self.input_group.setVisible(True)
+        self.subtitles.setVisible(self.subtitles_enabled)
+        self.subtitles.setMaximumHeight(0)
+
+        input_target = max(self.input_group.sizeHint().height(), 48)
+        subtitle_target = 90
+        targets = (
+            (self.input_group, input_target),
+            (self.subtitles, subtitle_target),
+        )
+        for widget, target in targets:
+            animation = QPropertyAnimation(widget, b"maximumHeight", self)
+            animation.setDuration(260)
+            animation.setStartValue(0)
+            animation.setEndValue(target)
+            animation.setEasingCurve(QEasingCurve.OutCubic)
+            animation.finished.connect(
+                lambda widget=widget: widget.setMaximumHeight(16777215))
+            animation.start()
+            self._startup_reveal_animations.append(animation)
+
     @Slot(bool)
     def toggle_subtitles(self, enabled: bool):
         self.subtitles_enabled = enabled
-        self.subtitles.setVisible(enabled)
+        self.subtitles.setVisible(enabled and self.ready)
         self.sync_mascot_subtitle()
         self.settings.setValue("subtitles", enabled)
 
