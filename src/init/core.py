@@ -385,12 +385,11 @@ class Assistant:
         turn_model_settings = {"temperature": brain.load_config()["temperature"]}
         model_prompt = attachments.prompt() if attachments else prompt
         voice_model_active = audio_input is not None or any(
-            isinstance(content, [BinaryContent]) and content.is_audio
+            getattr(content, "is_audio", False)
             for message in history
             for part in message.parts
             if isinstance(part, UserPromptPart)
-            for content in (part.content if isinstance(part.content, list) else [])
-        )
+            for content in (part.content if isinstance(part.content, list) else []))
         if audio_input is not None:
             model_prompt = [BinaryContent(data=audio_input, media_type="audio/wav")]
         if voice_model_active:
@@ -405,9 +404,6 @@ class Assistant:
                     profile={"openai_chat_supports_multiple_system_messages": False},
                     settings={"openai_reasoning_effort": "low"})
             turn_model = self.audio_model
-            # Gemma needs reasoning to select and chain actions from the full
-            # registry. Disabling it produced promises and notification calls
-            # in place of the requested actions. Thinking is never sent to TTS.
             turn_model_settings["openai_reasoning_effort"] = "low"
         attachment_tools = [attachments.toolset()] if attachments else []
 
