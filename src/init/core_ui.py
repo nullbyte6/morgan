@@ -51,15 +51,15 @@ from src.init.visuals.workspace import Workspace, WorkspacePanel
 
 
 WORKSPACE_VIEW_CONFIG = {
-    "browser" : {
-        "title": "Browser",
-        "shortcut": "Ctrl+B",
-        "icon": ""
-    },
     "logs": {
         "title": "Logs",
         "shortcut": "Ctrl+L",
         "icon": "",
+    },
+    "browser" : {
+        "title": "Browser",
+        "shortcut": "Ctrl+B",
+        "icon": ""
     },
     "editor": {
         "title": "Editor",
