@@ -113,8 +113,9 @@ class ArloWindow(QMainWindow):
         self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
         icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "arlo.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
-        self.resize(900, 720)
+        self.setWindowState(Qt.WindowMaximized)
         self.setMinimumSize(600, 480)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
 
         self.mascot = Orb(
             size=120, floating=True, line_width=4.2, fill_ratio=0.54)
@@ -439,7 +440,7 @@ class ArloWindow(QMainWindow):
 
         self.chat_scroll.setMinimumWidth(300)
         self.main_workspace_panel_id = self.workspace.open_panel(
-            title="Arlo",
+            title=f"Arlo {load_dev_file()["version"]}",
             content=self.chat_scroll,
             panel_id="main",
         )
