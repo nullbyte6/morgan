@@ -16,42 +16,44 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-
 """Embedded tiling workspace for Arlo's desktop interface."""
 from __future__ import annotations
 
 import sys
 import uuid
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import *
 from PySide6.QtWidgets import *
+from PySide6.QtGui import *
+
+
 
 class WorkspacePanel(QFrame):
-    """An independently closable container for embedded content."""
+    """An independently closable and draggable embedded panel."""
 
     close_requested = Signal(str)
     focus_requested = Signal(str)
+    move_requested = Signal(str, str)
+    MIME_TYPE = "application/x-arlo-workspace-panel"
 
     def __init__(
         self,
         panel_id: str,
         title: str,
         content: QWidget | None = None,
-        parent: QWidget | None = None,
-    ):
+        parent: QWidget | None = None):
         super().__init__(parent)
 
         self.panel_id = panel_id
         self.title = title
+        self._drag_start: QPoint | None = None
 
         self.setObjectName("workspacePanel")
         self.setProperty("workspacePanel", True)
         self.setFrameShape(QFrame.NoFrame)
         self.setMinimumSize(180, 140)
-        self.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Expanding,
-        )
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setAcceptDrops(True)
 
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
@@ -60,6 +62,8 @@ class WorkspacePanel(QFrame):
         self.header = QWidget(self)
         self.header.setObjectName("workspacePanelHeader")
         self.header.setFixedHeight(38)
+        self.header.setCursor(Qt.OpenHandCursor)
+        self.header.installEventFilter(self)
 
         header_layout = QHBoxLayout(self.header)
         header_layout.setContentsMargins(12, 0, 6, 0)
@@ -67,9 +71,7 @@ class WorkspacePanel(QFrame):
 
         self.title_label = QLabel(title, self.header)
         self.title_label.setObjectName("workspacePanelTitle")
-        self.title_label.setTextInteractionFlags(
-            Qt.TextSelectableByMouse
-        )
+        self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents)
 
         self.close_button = QPushButton("×", self.header)
         self.close_button.setObjectName("workspacePanelClose")
@@ -92,19 +94,14 @@ class WorkspacePanel(QFrame):
         self._layout.addWidget(self.content_host, 1)
 
         self.content: QWidget | None = None
-
-        if content is None:
-            content = self._create_placeholder()
-
-        self.set_content(content)
+        self.set_content(content or self._create_placeholder())
 
         self.close_button.clicked.connect(
             lambda: self.close_requested.emit(self.panel_id)
         )
 
     def _create_placeholder(self) -> QWidget:
-        """Create an empty visual surface for the initial milestone."""
-
+        """Create an empty surface for the standalone demonstration."""
         placeholder = QWidget()
         placeholder.setObjectName("workspacePlaceholder")
 
@@ -120,7 +117,7 @@ class WorkspacePanel(QFrame):
         return placeholder
 
     def set_content(self, content: QWidget) -> None:
-        """Replace the embedded widget without creating a top-level window."""
+        """Replace the embedded content."""
 
         if self.content is content:
             return
@@ -135,10 +132,93 @@ class WorkspacePanel(QFrame):
         self.content_layout.addWidget(content)
 
     def set_title(self, title: str) -> None:
-        """Update the visible panel title."""
+        """Update the panel title."""
 
         self.title = title
         self.title_label.setText(title)
+
+    def eventFilter(self, watched, event):
+        if watched is self.header:
+            if event.type() == event.Type.MouseButtonPress:
+                if event.button() == Qt.LeftButton:
+                    self._drag_start = event.position().toPoint()
+                    self.focus_requested.emit(self.panel_id)
+
+            elif event.type() == event.Type.MouseMove:
+                if self._drag_start is not None:
+                    distance = (
+                        event.position().toPoint() - self._drag_start
+                    ).manhattanLength()
+
+                    if distance >= QApplication.startDragDistance():
+                        self._drag_start = None
+                        self._start_drag()
+                        return True
+
+            elif event.type() == event.Type.MouseButtonRelease:
+                self._drag_start = None
+
+        return super().eventFilter(watched, event)
+
+    def _start_drag(self) -> None:
+        """Start a local drag containing this panel's stable identifier."""
+
+        drag = QDrag(self)
+        mime = QMimeData()
+        mime.setData(self.MIME_TYPE, QByteArray(self.panel_id.encode()))
+        drag.setMimeData(mime)
+
+        self.header.setCursor(Qt.ClosedHandCursor)
+
+        try:
+            drag.exec(Qt.MoveAction)
+        finally:
+            self.header.setCursor(Qt.OpenHandCursor)
+
+    def dragEnterEvent(self, event):
+        if self._accepts_drag(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if self._accepts_drag(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        self.setProperty("dropTarget", False)
+        self._refresh_style()
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        if not self._accepts_drag(event):
+            event.ignore()
+            return
+
+        source_id = bytes(
+            event.mimeData().data(self.MIME_TYPE)
+        ).decode()
+
+        self.move_requested.emit(source_id, self.panel_id)
+        event.acceptProposedAction()
+
+    def _accepts_drag(self, event) -> bool:
+        mime = event.mimeData()
+
+        if not mime.hasFormat(self.MIME_TYPE):
+            return False
+
+        source_id = bytes(mime.data(self.MIME_TYPE)).decode(
+            errors="replace"
+        )
+
+        return source_id != self.panel_id
+
+    def _refresh_style(self) -> None:
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def mousePressEvent(self, event):
         self.focus_requested.emit(self.panel_id)
@@ -166,9 +246,44 @@ class WorkspaceSplitter(QSplitter):
         )
 
 
+class SplitterAnimation(QVariantAnimation):
+    """Animate splitter sizes without modifying child widget geometry."""
+
+    def __init__(
+        self,
+        splitter: QSplitter,
+        start_sizes: list[int],
+        end_sizes: list[int],
+        duration: int = 220,
+        parent: QObject | None = None,
+    ):
+        super().__init__(parent)
+
+        self.splitter = splitter
+        self.start_sizes = start_sizes
+        self.end_sizes = end_sizes
+
+        self.setStartValue(0.0)
+        self.setEndValue(1.0)
+        self.setDuration(duration)
+        self.setEasingCurve(QEasingCurve.OutCubic)
+
+        self.valueChanged.connect(self._update_sizes)
+
+    def _update_sizes(self, progress: float) -> None:
+        if self.splitter is None:
+            return
+
+        sizes = [
+            round(start + (end - start) * progress)
+            for start, end in zip(self.start_sizes, self.end_sizes)
+        ]
+
+        self.splitter.setSizes(sizes)
+
+
 class Workspace(QWidget):
     """Manage automatically tiled panels inside one existing Qt window."""
-
     panel_opened = Signal(str)
     panel_closed = Signal(str)
     panel_focused = Signal(str)
@@ -187,6 +302,12 @@ class Workspace(QWidget):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
+
+        self._shortcut_counter = 0
+        self._animations: dict[QSplitter, SplitterAnimation] = {}
+        self._install_shortcuts()
+
+        self._closing_panels: set[str] = set()
 
         self.setSizePolicy(
             QSizePolicy.Expanding,
@@ -210,15 +331,13 @@ class Workspace(QWidget):
 
         return self._panels.get(panel_id)
 
-    def open_panel(
-        self,
+    def open_panel(self,
         title: str = "Workspace",
         content: QWidget | None = None,
         *,
         panel_id: str | None = None,
         target_id: str | None = None,
-        orientation: Qt.Orientation | None = None,
-    ) -> str:
+        orientation: Qt.Orientation | None = None) -> str:
         """Insert a new panel by splitting an existing workspace leaf."""
 
         panel_id = panel_id or uuid.uuid4().hex
@@ -243,6 +362,7 @@ class Workspace(QWidget):
 
         panel.close_requested.connect(self.close_panel)
         panel.focus_requested.connect(self.focus_panel)
+        panel.move_requested.connect(self.swap_panels)
 
         if self._root is None:
             self._root = panel
@@ -271,10 +391,49 @@ class Workspace(QWidget):
 
         return panel_id
 
+
+
+    def animate_splitter(
+        self,
+        splitter: QSplitter,
+        start_sizes: list[int],
+        end_sizes: list[int],
+        duration: int = 220,
+        on_finished=None) -> None:
+        """Animate splitter sizes and invoke an optional completion callback."""
+        previous = self._animations.pop(splitter, None)
+
+        if previous is not None:
+            previous.stop()
+            previous.deleteLater()
+
+        animation = SplitterAnimation(
+            splitter,
+            start_sizes,
+            end_sizes,
+            duration,
+            self)
+
+        self._animations[splitter] = animation
+
+        def finish() -> None:
+            if self._animations.get(splitter) is not animation:
+                return
+
+            self._animations.pop(splitter)
+            splitter.setSizes(end_sizes)
+
+            if on_finished is not None:
+                on_finished()
+
+            animation.deleteLater()
+
+        animation.finished.connect(finish)
+        animation.start()
+
     def _select_target(
         self,
-        target_id: str | None,
-    ) -> WorkspacePanel:
+        target_id: str | None) -> WorkspacePanel:
         """Choose the leaf that receives the next split."""
 
         if target_id is not None:
@@ -285,14 +444,13 @@ class Workspace(QWidget):
 
         return next(iter(self._panels.values()))
 
+
     def _insert_panel(
         self,
         target: WorkspacePanel,
         panel: WorkspacePanel,
-        orientation: Qt.Orientation,
-    ) -> None:
-        """Replace a leaf with a splitter containing the old and new leaves."""
-
+        orientation: Qt.Orientation) -> None:
+        """Insert a panel and animate the new binary split."""
         parent = target.parentWidget()
 
         if isinstance(parent, QSplitter):
@@ -304,7 +462,6 @@ class Workspace(QWidget):
             split = WorkspaceSplitter(orientation)
             split.addWidget(target)
             split.addWidget(panel)
-            split.setSizes([1, 1])
 
             parent.insertWidget(index, split)
 
@@ -322,13 +479,81 @@ class Workspace(QWidget):
             self._root = split
             self._layout.addWidget(split)
 
-            split.setSizes([1, 1])
-
         split.splitterMoved.connect(self._on_splitter_moved)
 
-    def close_panel(self, panel_id: str) -> bool:
-        """Remove a leaf and promote its surviving sibling."""
+        available = (
+            split.width()
+            if orientation == Qt.Horizontal
+            else split.height()) - split.handleWidth()
 
+        available = max(available, 360)
+
+        minimum = (
+            panel.minimumWidth()
+            if orientation == Qt.Horizontal
+            else panel.minimumHeight())
+
+        minimum = min(minimum, available // 2)
+
+        start_sizes = [available - minimum, minimum]
+        end_sizes = [available // 2, available - available // 2]
+
+        split.setSizes(start_sizes)
+
+        self.animate_splitter(
+            split,
+            start_sizes,
+            end_sizes)
+
+
+    def close_panel(self, panel_id: str) -> bool:
+        """Animate panel removal and promote the surviving sibling."""
+
+        panel = self._panels.get(panel_id)
+
+        if panel is None:
+            return False
+
+        if panel_id in self._closing_panels:
+            return False
+
+        parent = panel.parentWidget()
+
+        if not isinstance(parent, QSplitter):
+            return self._remove_panel(panel_id)
+
+        index = parent.indexOf(panel)
+        sibling_index = 1 - index
+
+        sizes = parent.sizes()
+        total = sum(sizes)
+
+        minimum = (
+            panel.minimumWidth()
+            if parent.orientation() == Qt.Horizontal
+            else panel.minimumHeight()
+        )
+
+        minimum = min(minimum, total // 2)
+
+        end_sizes = [0, 0]
+        end_sizes[index] = minimum
+        end_sizes[sibling_index] = total - minimum
+
+        self._closing_panels.add(panel_id)
+        panel.close_button.setEnabled(False)
+
+        self.animate_splitter(
+            parent,
+            sizes,
+            end_sizes,
+            on_finished=lambda: self._remove_panel(panel_id),
+        )
+
+        return True
+
+    def _remove_panel(self, panel_id: str) -> bool:
+        """Remove a panel after its closing animation."""
         panel = self._panels.get(panel_id)
 
         if panel is None:
@@ -346,8 +571,7 @@ class Workspace(QWidget):
 
             if len(siblings) != 1:
                 raise RuntimeError(
-                    "Workspace split must contain exactly two children"
-                )
+                    "Workspace split must contain exactly two children")
 
             sibling = siblings[0]
 
@@ -383,6 +607,7 @@ class Workspace(QWidget):
             self._root = None
 
         del self._panels[panel_id]
+        self._closing_panels.discard(panel_id)
 
         panel.deleteLater()
 
@@ -399,7 +624,6 @@ class Workspace(QWidget):
 
     def focus_panel(self, panel_id: str) -> bool:
         """Mark one panel as active without changing its camera or content."""
-
         if panel_id not in self._panels:
             return False
 
@@ -428,8 +652,7 @@ class Workspace(QWidget):
     def replace_content(
         self,
         panel_id: str,
-        content: QWidget,
-    ) -> bool:
+        content: QWidget) -> bool:
         """Replace one panel's content without affecting neighboring panels."""
 
         panel = self._panels.get(panel_id)
@@ -439,21 +662,152 @@ class Workspace(QWidget):
 
         if content.isWindow():
             raise ValueError(
-                "Workspace content must be an embedded QWidget"
-            )
+                "Workspace content must be an embedded QWidget")
 
         panel.set_content(content)
 
         return True
 
+
     def close_all(self) -> None:
-        """Close every registered panel."""
+        """Remove all panels and cancel pending layout animations."""
+        for animation in tuple(self._animations.values()):
+            animation.stop()
+            animation.deleteLater()
+
+        self._animations.clear()
 
         for panel_id in tuple(self._panels):
-            self.close_panel(panel_id)
+            self._remove_panel(panel_id)
 
     def _on_splitter_moved(self, position: int, index: int) -> None:
         self.layout_changed.emit()
+
+
+
+    def _install_shortcuts(self) -> None:
+        """Install keyboard shortcuts for the active workspace."""
+        shortcuts = {
+            "Ctrl+N": self._open_shortcut_panel,
+            "Ctrl+W": self.close_active_panel,
+            "Ctrl+Alt+Left": lambda: self.focus_neighbor(Qt.LeftArrow),
+            "Ctrl+Alt+Right": lambda: self.focus_neighbor(Qt.RightArrow),
+            "Ctrl+Alt+Up": lambda: self.focus_neighbor(Qt.UpArrow),
+            "Ctrl+Alt+Down": lambda: self.focus_neighbor(Qt.DownArrow),
+        }
+
+        self._shortcuts: list[QShortcut] = []
+
+        for sequence, callback in shortcuts.items():
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(Qt.WindowShortcut)
+            shortcut.activated.connect(callback)
+            self._shortcuts.append(shortcut)
+
+    def _open_shortcut_panel(self) -> None:
+        """Open a numbered placeholder panel."""
+
+        self._shortcut_counter += 1
+        self.open_panel(f"Workspace {self._shortcut_counter}")
+
+    def close_active_panel(self) -> None:
+        """Close the currently selected panel."""
+
+        if self._active_panel_id is not None:
+            self.close_panel(self._active_panel_id)
+
+    def focus_neighbor(self, direction: Qt.Key) -> bool:
+        """Focus the nearest panel in the requested screen direction."""
+
+        current = self._panels.get(self._active_panel_id)
+
+        if current is None:
+            return False
+
+        origin = current.mapToGlobal(current.rect().center())
+        candidates = []
+
+        for panel_id, panel in self._panels.items():
+            if panel is current:
+                continue
+
+            position = panel.mapToGlobal(panel.rect().center())
+            dx = position.x() - origin.x()
+            dy = position.y() - origin.y()
+
+            if direction == Qt.LeftArrow and dx >= 0:
+                continue
+
+            if direction == Qt.RightArrow and dx <= 0:
+                continue
+
+            if direction == Qt.UpArrow and dy >= 0:
+                continue
+
+            if direction == Qt.DownArrow and dy <= 0:
+                continue
+
+            primary = abs(dx) if direction in (
+                Qt.LeftArrow, Qt.RightArrow
+            ) else abs(dy)
+
+            secondary = abs(dy) if direction in (
+                Qt.LeftArrow, Qt.RightArrow
+            ) else abs(dx)
+
+            candidates.append((primary + secondary * 2, panel_id))
+
+        if not candidates:
+            return False
+
+        _, panel_id = min(candidates)
+        return self.focus_panel(panel_id)
+
+    def swap_panels(self, source_id: str, target_id: str) -> bool:
+        """Exchange two leaves while preserving their embedded widgets."""
+
+        if source_id == target_id:
+            return False
+
+        source = self._panels.get(source_id)
+        target = self._panels.get(target_id)
+
+        if source is None or target is None:
+            return False
+
+        source_parent = source.parentWidget()
+        target_parent = target.parentWidget()
+
+        if not isinstance(source_parent, QSplitter):
+            return False
+
+        if not isinstance(target_parent, QSplitter):
+            return False
+
+        source_index = source_parent.indexOf(source)
+        target_index = target_parent.indexOf(target)
+
+        if source_parent is target_parent:
+            source_parent.insertWidget(source_index, target)
+            source_parent.insertWidget(target_index, source)
+
+        else:
+            source_sizes = source_parent.sizes()
+            target_sizes = target_parent.sizes()
+
+            source.setParent(None)
+            target.setParent(None)
+
+            source_parent.insertWidget(source_index, target)
+            target_parent.insertWidget(target_index, source)
+
+            source_parent.setSizes(source_sizes)
+            target_parent.setSizes(target_sizes)
+
+        self.focus_panel(source_id)
+        self.layout_changed.emit()
+
+        return True
 
 
 WORKSPACE_STYLESHEET = """
@@ -534,24 +888,8 @@ def main() -> int:
     root_layout.setContentsMargins(12, 12, 12, 12)
     root_layout.setSpacing(10)
 
-    toolbar = QWidget()
-    toolbar_layout = QHBoxLayout(toolbar)
-    toolbar_layout.setContentsMargins(0, 0, 0, 0)
-
-    add_button = QPushButton("New workspace")
-    close_button = QPushButton("Close active")
-    reset_button = QPushButton("Reset")
-
-    toolbar_layout.addWidget(add_button)
-    toolbar_layout.addWidget(close_button)
-    toolbar_layout.addWidget(reset_button)
-    toolbar_layout.addStretch()
-
     workspace = Workspace()
-
-    root_layout.addWidget(toolbar)
     root_layout.addWidget(workspace, 1)
-
     window.setCentralWidget(root)
 
     counter = 0
@@ -569,14 +907,8 @@ def main() -> int:
         if workspace.active_panel_id is not None:
             workspace.close_panel(workspace.active_panel_id)
 
-    add_button.clicked.connect(add_workspace)
-    close_button.clicked.connect(close_active)
-    reset_button.clicked.connect(workspace.close_all)
-
     add_workspace()
-
     window.show()
-
     return app.exec()
 
 
