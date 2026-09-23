@@ -258,7 +258,8 @@ class TerminalView(QWidget):
         self.display = TerminalDisplay(self)
         self.screen = TerminalScreen(self.send_input)
         self.stream = pyte.Stream(self.screen)
-        self.status = self.directory
+        self.status = QLabel(str(self.directory))
+        self.status.setObjectName("terminalStatus")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 12)
@@ -281,7 +282,6 @@ class TerminalView(QWidget):
         self.screen.reset()
         self.stream = pyte.Stream(self.screen)
         self.status.setText(str(self.directory))
-        self.restart_button.setEnabled(False)
         self.session = TerminalSession(self.directory, *self.display.terminal_size())
         self.session.output.connect(self.receive_output)
         self.session.failed.connect(self.show_error)
@@ -320,7 +320,6 @@ class TerminalView(QWidget):
         if not self.status.text().startswith("Terminal error:"):
             self.status.setText(f"Session ended ({code})")
         self.session = None
-        self.restart_button.setEnabled(True)
 
     @Slot(int, int)
     def resize_terminal(self, columns, rows):
