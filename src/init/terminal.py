@@ -31,10 +31,7 @@ from pathlib import Path
 import pyte
 from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QKeySequence, QTextCharFormat, QTextCursor
-from PySide6.QtWidgets import (
-    QApplication, QHBoxLayout, QLabel, QMenu, QPlainTextEdit, QPushButton,
-    QTextEdit, QVBoxLayout, QWidget,
-)
+from PySide6.QtWidgets import *
 
 
 class TerminalSession(QThread):
@@ -261,6 +258,7 @@ class TerminalView(QWidget):
         self.display = TerminalDisplay(self)
         self.screen = TerminalScreen(self.send_input)
         self.stream = pyte.Stream(self.screen)
+        self.status = self.directory
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 12)
