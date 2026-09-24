@@ -53,11 +53,14 @@ class WorkspacePanel(QFrame):
         self.setObjectName("workspacePanel")
         self.setProperty("workspacePanel", True)
         self.setFrameShape(QFrame.NoFrame)
-        self.setMinimumSize(180, 140)
+        # Let the splitter shrink the surface to zero; child painting is clipped
+        # by the panel instead of imposing content minimums on the whole tree.
+        self.setMinimumSize(0, 0)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAcceptDrops(True)
 
         self._layout = QVBoxLayout(self)
+        self._layout.setSizeConstraint(QLayout.SetNoConstraint)
         self._layout.setContentsMargins(6, 6, 6, 6)
         self._layout.setSpacing(6)
 
@@ -118,6 +121,9 @@ class WorkspacePanel(QFrame):
         self.close_button.clicked.connect(
             lambda: self.close_requested.emit(self.panel_id)
         )
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, 0)
 
     def _create_placeholder(self) -> QWidget:
         """Create an empty surface for the standalone demonstration."""
@@ -411,6 +417,7 @@ class Workspace(QWidget):
         self._install_shortcuts()
 
         self._closing_panels: set[str] = set()
+        self._pending_closes: list[str] = []
 
         self.setSizePolicy(
             QSizePolicy.Expanding,
@@ -561,13 +568,15 @@ class Workspace(QWidget):
         target_id: str | None) -> WorkspacePanel:
         """Choose the leaf that receives the next split."""
 
-        if target_id is not None:
+        if target_id is not None and target_id not in self._closing_panels:
             return self._panels[target_id]
 
-        if self._active_panel_id in self._panels:
+        if (self._active_panel_id in self._panels
+                and self._active_panel_id not in self._closing_panels):
             return self._panels[self._active_panel_id]
 
-        return next(iter(self._panels.values()))
+        return next(panel for key, panel in self._panels.items()
+                    if key not in self._closing_panels)
 
 
     def _insert_panel(
@@ -578,57 +587,46 @@ class Workspace(QWidget):
         *, before: bool = False) -> None:
         """Insert a panel and animate the new binary split."""
         parent = target.parentWidget()
+        focus = QApplication.focusWidget()
+        extent = target.width() if orientation == Qt.Horizontal else target.height()
+        split = WorkspaceSplitter(orientation)
 
         if isinstance(parent, QSplitter):
             index = parent.indexOf(target)
             original_sizes = parent.sizes()
 
-            target.setParent(None)
-
-            split = WorkspaceSplitter(orientation)
+            parent.replaceWidget(index, split)
             split.addWidget(target)
             split.addWidget(panel)
-
-            parent.insertWidget(index, split)
 
             if len(original_sizes) == parent.count():
                 parent.setSizes(original_sizes)
 
         else:
-            self._layout.removeWidget(target)
-            target.setParent(None)
-
-            split = WorkspaceSplitter(orientation)
+            self._layout.replaceWidget(target, split)
             split.addWidget(target)
             split.addWidget(panel)
 
             self._root = split
-            self._layout.addWidget(split)
 
         split.splitterMoved.connect(self._on_splitter_moved)
         if before:
             split.insertWidget(0, panel)
 
-        available = (
-            split.width()
-            if orientation == Qt.Horizontal
-            else split.height()) - split.handleWidth()
-
-        available = max(available, 360)
-
-        minimum = (
-            panel.minimumWidth()
-            if orientation == Qt.Horizontal
-            else panel.minimumHeight())
-
-        minimum = min(minimum, available // 2)
-
-        start_sizes = [available - minimum, minimum]
+        # setSizes uses relative weights. Keep enough precision even when a
+        # rapid split targets a surface still growing from zero in its parent.
+        available = max(1000, extent - split.handleWidth())
+        start_sizes = [available, 0]
         if before:
             start_sizes.reverse()
         end_sizes = [available // 2, available - available // 2]
 
         split.setSizes(start_sizes)
+        split.show()
+        target.show()
+        panel.show()
+        if focus is not None and target.isAncestorOf(focus):
+            focus.setFocus(Qt.OtherFocusReason)
 
         self.animate_splitter(
             split,
@@ -647,8 +645,14 @@ class Workspace(QWidget):
         if panel_id == getattr(self, "_primary_panel_id", None):
             return False
 
-        if panel_id in self._closing_panels:
+        if panel_id in self._closing_panels or panel_id in self._pending_closes:
             return False
+
+        # A removal can promote a whole subtree. Finish it before starting
+        # another close, so no callback retains a deleted parent splitter.
+        if self._closing_panels:
+            self._pending_closes.append(panel_id)
+            return True
 
         parent = panel.parentWidget()
 
@@ -661,17 +665,8 @@ class Workspace(QWidget):
         sizes = parent.sizes()
         total = sum(sizes)
 
-        minimum = (
-            panel.minimumWidth()
-            if parent.orientation() == Qt.Horizontal
-            else panel.minimumHeight()
-        )
-
-        minimum = min(minimum, total // 2)
-
         end_sizes = [0, 0]
-        end_sizes[index] = minimum
-        end_sizes[sibling_index] = total - minimum
+        end_sizes[sibling_index] = total
 
         self._closing_panels.add(panel_id)
         panel.close_button.setEnabled(False)
@@ -693,6 +688,9 @@ class Workspace(QWidget):
             return False
 
         parent = panel.parentWidget()
+        focus = QApplication.focusWidget()
+        restore_focus = (focus is not None and focus is not panel
+                         and not panel.isAncestorOf(focus))
 
         if isinstance(parent, QSplitter):
             grandparent = parent.parentWidget()
@@ -734,6 +732,10 @@ class Workspace(QWidget):
                 self._root = sibling
                 self._layout.addWidget(sibling)
 
+            sibling.show()
+            if restore_focus:
+                focus.setFocus(Qt.OtherFocusReason)
+
         else:
             self._layout.removeWidget(panel)
             panel.setParent(None)
@@ -753,6 +755,10 @@ class Workspace(QWidget):
 
         self.panel_closed.emit(panel_id)
         self.layout_changed.emit()
+
+        while self._pending_closes and not self._closing_panels:
+            next_id = self._pending_closes.pop(0)
+            self.close_panel(next_id)
 
         return True
 
@@ -818,6 +824,8 @@ class Workspace(QWidget):
             animation.deleteLater()
 
         self._animations.clear()
+        self._pending_closes.clear()
+        self._closing_panels.clear()
 
         primary_id = getattr(self, "_primary_panel_id", None)
         for panel_id in tuple(self._panels):
@@ -919,6 +927,9 @@ class Workspace(QWidget):
         """Exchange two leaves while preserving their embedded widgets."""
 
         if source_id == target_id:
+            return False
+
+        if source_id in self._closing_panels or target_id in self._closing_panels:
             return False
 
         source = self._panels.get(source_id)
