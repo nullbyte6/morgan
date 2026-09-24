@@ -50,6 +50,8 @@ class WorkspacePanel(QFrame):
         self.closable = closable
         self.renamable = closable
         self._drag_start: QPoint | None = None
+        self._dragging = False
+        self._drag_target = None
 
         self.setObjectName("workspacePanel")
         self.setProperty("workspacePanel", True)
@@ -213,6 +215,8 @@ class WorkspacePanel(QFrame):
                 if event.button() == Qt.LeftButton:
                     self._drag_start = event.position().toPoint()
                     self.focus_requested.emit(self.panel_id)
+                    event.accept()
+                    return True
 
             elif event.type() == event.Type.MouseMove:
                 if self._drag_start is not None:
@@ -220,13 +224,20 @@ class WorkspacePanel(QFrame):
                         event.position().toPoint() - self._drag_start
                     ).manhattanLength()
 
-                    if distance >= QApplication.startDragDistance():
-                        self._drag_start = None
-                        self._start_drag()
+                    if self._dragging or distance >= QApplication.startDragDistance():
+                        self._dragging = True
+                        self.header.setCursor(Qt.ClosedHandCursor)
+                        self._update_panel_drag(event.position().toPoint())
                         return True
 
             elif event.type() == event.Type.MouseButtonRelease:
                 self._drag_start = None
+                target = self._drag_target
+                self._clear_panel_drag()
+                if target is not None:
+                    self.move_requested.emit(self.panel_id, target.panel_id)
+                event.accept()
+                return True
 
             elif event.type() == event.Type.MouseButtonDblClick:
                 if event.button() == Qt.LeftButton:
@@ -236,27 +247,33 @@ class WorkspacePanel(QFrame):
 
         return super().eventFilter(watched, event)
 
-    def _start_drag(self) -> None:
-        """Start a local drag containing this panel's stable identifier."""
+    def _update_panel_drag(self, position: QPoint) -> None:
+        """Use logical widget coordinates, also inside a scaled graphics proxy."""
+        workspace = self.parentWidget()
+        while workspace is not None and not isinstance(workspace, Workspace):
+            workspace = workspace.parentWidget()
+        if workspace is None or workspace._closing_panels:
+            self._clear_panel_drag()
+            return
+        workspace._stop_opening_animations()
+        target = workspace.childAt(self.header.mapTo(workspace, position))
+        while target is not None and not isinstance(target, WorkspacePanel):
+            target = target.parentWidget()
+        if self._drag_target is not None:
+            self._drag_target._clear_drop_preview()
+        self._drag_target = target if target is not self else None
+        if self._drag_target is not None:
+            preview = self._drag_target.drop_preview
+            preview.setGeometry(self._drag_target.rect().adjusted(6, 6, -6, -6))
+            preview.show()
+            preview.raise_()
 
-        drag = QDrag(self)
-        mime = QMimeData()
-        mime.setData(self.MIME_TYPE, QByteArray(self.panel_id.encode()))
-        drag.setMimeData(mime)
-        scale = (self.window().property("uiZoom") or 100) / 100.0
-        pixmap = self.grab()
-        if scale != 1.0:
-            pixmap = pixmap.scaled(
-                pixmap.size() * scale, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        drag.setPixmap(pixmap)
-        drag.setHotSpot(self.mapFromGlobal(QCursor.pos()) * scale)
-
-        self.header.setCursor(Qt.ClosedHandCursor)
-
-        try:
-            drag.exec(Qt.MoveAction)
-        finally:
-            self.header.setCursor(Qt.OpenHandCursor)
+    def _clear_panel_drag(self) -> None:
+        if self._drag_target is not None:
+            self._drag_target._clear_drop_preview()
+        self._drag_target = None
+        self._dragging = False
+        self.header.setCursor(Qt.OpenHandCursor)
 
     def dragEnterEvent(self, event):
         if self._accepts_drag(event):
@@ -334,6 +351,39 @@ class WorkspacePanel(QFrame):
         super().mousePressEvent(event)
 
 
+class WorkspaceSplitterHandle(QSplitterHandle):
+    """Resize in local coordinates; native global positions ignore UI zoom."""
+
+    def mousePressEvent(self, event):
+        self._offset = None
+        if event.button() == Qt.LeftButton:
+            workspace = self.splitter().parentWidget()
+            while workspace is not None and not isinstance(workspace, Workspace):
+                workspace = workspace.parentWidget()
+            if workspace is not None:
+                if workspace._closing_panels:
+                    event.ignore()
+                    return
+                workspace._stop_opening_animations()
+            self._offset = event.position().toPoint()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if getattr(self, "_offset", None) is not None and event.buttons() & Qt.LeftButton:
+            position = self.mapTo(self.splitter(), event.position().toPoint() - self._offset)
+            value = position.x() if self.orientation() == Qt.Horizontal else position.y()
+            self.moveSplitter(value)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._offset = None
+        super().mouseReleaseEvent(event)
+
+
 class WorkspaceSplitter(QSplitter):
     """A movable split in the workspace layout tree."""
 
@@ -353,6 +403,9 @@ class WorkspaceSplitter(QSplitter):
             QSizePolicy.Expanding,
             QSizePolicy.Expanding,
         )
+
+    def createHandle(self):
+        return WorkspaceSplitterHandle(self.orientation(), self)
 
 
 class SplitterAnimation(QVariantAnimation):
@@ -640,7 +693,7 @@ class Workspace(QWidget):
         *, before: bool = False) -> None:
         """Insert a panel and animate the new binary split."""
         parent = target.parentWidget()
-        focus = QApplication.focusWidget()
+        focus = self.focusWidget()
         extent = target.width() if orientation == Qt.Horizontal else target.height()
         split = WorkspaceSplitter(orientation)
 
@@ -649,6 +702,9 @@ class Workspace(QWidget):
             original_sizes = parent.sizes()
 
             parent.replaceWidget(index, split)
+            # replaceWidget preserves geometry but PySide does not transfer
+            # Python ownership of the replacement. insertWidget does both.
+            parent.insertWidget(index, split)
             split.addWidget(target)
             split.addWidget(panel)
 
@@ -718,6 +774,8 @@ class Workspace(QWidget):
         end_sizes[sibling_index] = total
 
         self._closing_panels.add(panel_id)
+        for other in self._panels.values():
+            other._clear_panel_drag()
         panel.close_button.setEnabled(False)
 
         self.animate_splitter(
@@ -737,7 +795,7 @@ class Workspace(QWidget):
             return False
 
         parent = panel.parentWidget()
-        focus = QApplication.focusWidget()
+        focus = self.focusWidget()
         restore_focus = (focus is not None and focus is not panel
                          and not panel.isAncestorOf(focus))
 
@@ -978,7 +1036,7 @@ class Workspace(QWidget):
         if source_id == target_id:
             return False
 
-        if source_id in self._closing_panels or target_id in self._closing_panels:
+        if self._closing_panels:
             return False
 
         source = self._panels.get(source_id)
@@ -986,6 +1044,9 @@ class Workspace(QWidget):
 
         if source is None or target is None:
             return False
+
+        self._stop_opening_animations()
+        focus = self.focusWidget()
 
         source_parent = source.parentWidget()
         target_parent = target.parentWidget()
@@ -1013,14 +1074,16 @@ class Workspace(QWidget):
             self._layout.replaceWidget(target, target_placeholder)
 
         if source_is_splitter:
+            source_parent.replaceWidget(source_index, target)
             source_parent.insertWidget(source_index, target)
         else:
-            self._layout.insertWidget(source_index, target)
+            self._layout.replaceWidget(source_placeholder, target)
             self._root = target
         if target_is_splitter:
+            target_parent.replaceWidget(target_index, source)
             target_parent.insertWidget(target_index, source)
         else:
-            self._layout.insertWidget(target_index, source)
+            self._layout.replaceWidget(target_placeholder, source)
             self._root = source
 
         if source_is_splitter:
@@ -1039,6 +1102,10 @@ class Workspace(QWidget):
                 placeholder.setParent(None)
         source_placeholder.deleteLater()
         target_placeholder.deleteLater()
+        source.show()
+        target.show()
+        if focus is not None:
+            focus.setFocus(Qt.OtherFocusReason)
 
         self.focus_panel(source_id)
         self.layout_changed.emit()

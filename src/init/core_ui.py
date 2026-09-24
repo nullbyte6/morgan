@@ -713,7 +713,8 @@ class ArloWindow(DesktopWindow):
     @Slot(str)
     def on_workspace_closed(self, panel_id: str) -> None:
         """Keep the permanent main panel available after other panels close."""
-        self.workspace.focus_panel(self.main_workspace_panel_id)
+        if self.workspace.active_panel_id is None:
+            self.workspace.focus_panel(self.main_workspace_panel_id)
 
 
     @Slot(object)
