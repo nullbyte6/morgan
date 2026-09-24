@@ -47,8 +47,8 @@ from src.init.orb_subtitles import MascotSubtitleBubble
 from src.init.audio_visualizer import AudioVisualizer
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
-from src.init.indicators import (AgentModeIndicator, GitBranchIndicator,
-                                 PrivacyIndicator, WorkingDirectory)
+from src.init.indicators import (GitBranchIndicator, PrivacyIndicator,
+                                 WorkingDirectory)
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
 
@@ -176,7 +176,6 @@ class ArloWindow(DesktopWindow):
         self.attach = QPushButton("")
         self.directory_indicator = WorkingDirectory(self)
         self.branch_indicator = GitBranchIndicator(self)
-        self.agent_mode_indicator = AgentModeIndicator(self)
         self.privacy_indicator = PrivacyIndicator(self)
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
         self.submitting = None
@@ -404,7 +403,6 @@ class ArloWindow(DesktopWindow):
         indicator_row.addWidget(self.response_timer_display)
         indicator_row.addWidget(self.directory_indicator)
         indicator_row.addWidget(self.branch_indicator)
-        indicator_row.addWidget(self.agent_mode_indicator)
         indicator_row.addWidget(self.privacy_indicator)
         indicator_row.addStretch()
         self.indicator_row = QWidget()
@@ -1095,8 +1093,7 @@ class ArloWindow(DesktopWindow):
         if self.submitting is not None or not self.attachment_tray.can_send:
             return
         message = DesktopMessage(
-            self.input.toPlainText().strip(), self.attachment_tray.snapshot(),
-            agent_mode=self.agent_mode_indicator.isChecked())
+            self.input.toPlainText().strip(), self.attachment_tray.snapshot())
         if not message.text and not message.attachments:
             return
         if self.busy and self.stopping:

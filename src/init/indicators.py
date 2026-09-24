@@ -82,18 +82,6 @@ class GitBranchIndicator(QToolButton):
         self.setVisible(bool(branch))
 
 
-class AgentModeIndicator(QToolButton):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("agentModeIndicator")
-        self.setText(f"󰢛 {tr("agent.mode")}")
-        self.setCheckable(True)
-        self.setAutoRaise(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip("Plan, execute, observe, and verify multi-step tasks")
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-
-
 class PrivacyIndicator(QToolButton):
     def __init__(self, parent=None):
         super().__init__(parent)
