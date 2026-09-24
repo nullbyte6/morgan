@@ -485,6 +485,26 @@ class PydanticAgentBackend:
             file_write_requested=False,
         )
 
+    @staticmethod
+    def _validate_project_argument(tool_name: str, arguments: dict,
+                                    project_context: ProjectContext | None) -> None:
+        if project_context is None or tool_name not in {"read_file", "list_files"}:
+            return
+        path = arguments.get("path")
+        if not isinstance(path, str) or not path.strip():
+            return
+        root = Path(project_context.working_directory).resolve(strict=True)
+        target = Path(path).expanduser()
+        if not target.is_absolute():
+            target = root / target
+        target = target.resolve(strict=False)
+        try:
+            relative = target.relative_to(root).as_posix()
+        except ValueError as error:
+            raise ValueError("Tool path is outside the current project") from error
+        if tool_name == "read_file" and relative not in project_context.discovered_files:
+            raise ValueError("Tool path is not in the discovered project inventory")
+
     async def plan(self, task: str,
             max_steps: int, project_context: ProjectContext | None = None,
             validation_feedback: str | None = None,
@@ -584,6 +604,8 @@ class PydanticAgentBackend:
                     step,
                     trace_model,
                     project_context)
+                self._validate_project_argument(
+                    step.tool_name, arguments, project_context)
 
                 steps.append(
                     PlanStep(
