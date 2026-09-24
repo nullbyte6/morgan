@@ -149,8 +149,7 @@ class TerminalBridge(QObject):
         status = ("timeout" if session.timed_out else "error" if request.error else
                   "cancelled" if session.cancelled else
                   "completed" if code == 0 else "failed")
-        # PTYs merge stdout/stderr and contain terminal control sequences.
-        output = re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]",
+        output = re.sub(r"\x1b][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]",
                         "", request.output).replace("\r\n", "\n")
         self._complete(request, status=status, exit_code=code,
                        stdout=output, stderr="", output_streams_merged=True,
