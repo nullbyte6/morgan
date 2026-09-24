@@ -19,6 +19,7 @@
 import asyncio
 import json
 import logging
+import re
 import threading
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -66,6 +67,15 @@ def requests_response_workspace(prompt: str) -> bool:
         "espacio de trabajo de respuesta",
         "panel de respuesta",
     ))
+
+
+def confirmation_reply(prompt: str) -> bool | None:
+    normalized = re.sub(r"[^\w]+", " ", prompt.casefold()).strip()
+    if normalized in {"confirmo", "confirmar", "confirm", "confirmed", "yes", "sí", "si"}:
+        return True
+    if normalized in {"no confirmo", "rechazo", "deny", "denied", "no"}:
+        return False
+    return None
 
 
 def select_response_surface(prompt: str, model_name: str) -> str | None:
@@ -216,6 +226,8 @@ class AssistantWorker(QObject):
         self.session = SessionLog()
         self.confirmation_event = threading.Event()
         self.confirmation_answer = False
+        self._confirmation_lock = threading.Lock()
+        self._pending_confirmation = None
         self.cancel_event = threading.Event()
         self.command_reply = False
         self.event_loop = None
@@ -325,6 +337,18 @@ class AssistantWorker(QObject):
             self.command_reply = False
             if cancel_event.is_set():
                 self.finished.emit("")
+                return
+            if (isinstance(message, DesktopMessage) and message.agent_mode
+                    and not message.attachments
+                    and confirmation_reply(prompt) is not None):
+                self.session.write(self.assistant.username, message.log_text())
+                resumed = self.resolve_confirmation_reply(prompt)
+                reply = (
+                    "La aprobación se aplicó a la operación pendiente de Forge."
+                    if resumed else
+                    "No hay ninguna operación de Forge pendiente de aprobación.")
+                self.session.write(self.assistant.name, reply)
+                self.finished.emit(reply)
                 return
             privacy_result = (self.session.handle_command(prompt)
                               if not voice_input and not message.attachments
@@ -457,17 +481,28 @@ class AssistantWorker(QObject):
                 logging.getLogger("arlo.response").exception(
                     "Unable to open the requested agent response workspace")
 
+        approval_context = {}
+
         def event_received(event):
             if event.type == EventType.STATE_CHANGED:
                 phase = AGENT_PHASES.get(event.payload.get("to"))
                 if phase:
                     self.phase.emit(turn_id, phase)
+            elif event.type == EventType.APPROVAL_REQUESTED:
+                approval_context.clear()
+                approval_context.update({
+                    "run_id": event.run_id,
+                    "step_id": event.step_id,
+                    "tool_name": event.payload.get("tool_name"),
+                })
+            elif event.type == EventType.APPROVAL_RESOLVED:
+                approval_context.clear()
 
         result = self.event_loop.run_until_complete(self.agent_orchestrator.run(
             prompt,
             cancel_event=cancel_event,
             approval=lambda message: self.confirm_command(
-                message, cancel_event, turn_id),
+                message, cancel_event, turn_id, approval_context),
             on_event=event_received,
             working_directory=str(Path.cwd()),
         ))
@@ -513,23 +548,45 @@ class AssistantWorker(QObject):
             self.event_loop.close()
 
     def confirm_command(self, message: str, cancel_event=None,
-                        turn_id=0) -> bool:
+                        turn_id=0, context=None) -> bool:
         cancel_event = self.cancel_event if cancel_event is None else cancel_event
         if cancel_event.is_set():
             return False
         self.confirmation_answer = False
         self.confirmation_event.clear()
+        pending = {"turn_id": turn_id, "message": message,
+                   **(context or {})}
+        with self._confirmation_lock:
+            self._pending_confirmation = pending
         if cancel_event.is_set():
+            with self._confirmation_lock:
+                if self._pending_confirmation is pending:
+                    self._pending_confirmation = None
             return False
         self.confirmation_requested.emit(turn_id, message)
-        while not self.confirmation_event.wait(0.05):
-            if cancel_event.is_set():
-                return False
-        accepted = self.confirmation_answer and not cancel_event.is_set()
+        try:
+            while not self.confirmation_event.wait(0.05):
+                if cancel_event.is_set():
+                    return False
+            accepted = self.confirmation_answer and not cancel_event.is_set()
+        finally:
+            with self._confirmation_lock:
+                if self._pending_confirmation is pending:
+                    self._pending_confirmation = None
         if not accepted:
             self.permission_denied.emit(turn_id)
         return accepted
 
     def resolve_confirmation(self, accepted: bool):
-        self.confirmation_answer = accepted
-        self.confirmation_event.set()
+        with self._confirmation_lock:
+            if self._pending_confirmation is None:
+                return False
+            self.confirmation_answer = accepted
+            self.confirmation_event.set()
+            return True
+
+    def resolve_confirmation_reply(self, prompt: str) -> bool:
+        accepted = confirmation_reply(prompt)
+        if accepted is None:
+            return False
+        return self.resolve_confirmation(accepted)
