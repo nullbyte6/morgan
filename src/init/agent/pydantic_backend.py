@@ -31,7 +31,8 @@ class PydanticAgentBackend:
         tool_descriptions = []
         for function in tools:
             signature = inspect.signature(function)
-            description = (inspect.getdoc(function) or "").splitlines()[0]
+            documentation = (inspect.getdoc(function) or "").splitlines()
+            description = documentation[0] if documentation else "No description"
             tool_descriptions.append(
                 f"- {function.__name__}{signature}: {description[:180]}"
             )
