@@ -36,7 +36,8 @@ SCHEMA = (
         id TEXT PRIMARY KEY, task TEXT NOT NULL, state TEXT NOT NULL,
         working_directory TEXT NOT NULL, created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL, completed_at TEXT, final_response TEXT,
-        error TEXT, max_steps INTEGER NOT NULL, max_retries INTEGER NOT NULL
+        error TEXT, failure_phase TEXT, plan_json TEXT,
+        max_steps INTEGER NOT NULL, max_retries INTEGER NOT NULL
     )""",
     """CREATE TABLE IF NOT EXISTS agent_steps (
         run_id TEXT NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
@@ -67,6 +68,11 @@ class AgentStore:
         with self.connect(write=True) as db:
             for statement in SCHEMA:
                 db.execute(statement)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(agent_runs)")}
+            if "failure_phase" not in columns:
+                db.execute("ALTER TABLE agent_runs ADD COLUMN failure_phase TEXT")
+            if "plan_json" not in columns:
+                db.execute("ALTER TABLE agent_runs ADD COLUMN plan_json TEXT")
 
     @contextmanager
     def connect(self, *, write: bool = False):
@@ -97,7 +103,8 @@ class AgentStore:
             )
 
     def set_state(self, run_id: str, state: ExecutionState, *,
-                  response: str | None = None, error: str | None = None) -> None:
+                  response: str | None = None, error: str | None = None,
+                  failure_phase: str | None = None) -> None:
         completed = timestamp() if state in {
             ExecutionState.COMPLETED, ExecutionState.FAILED,
             ExecutionState.CANCELLED,
@@ -107,12 +114,18 @@ class AgentStore:
                 """UPDATE agent_runs SET state=?, updated_at=?,
                 completed_at=COALESCE(?,completed_at),
                 final_response=COALESCE(?,final_response),
-                error=COALESCE(?,error) WHERE id=?""",
-                (state, timestamp(), completed, response, error, run_id),
+                error=COALESCE(?,error),
+                failure_phase=COALESCE(?,failure_phase) WHERE id=?""",
+                (state, timestamp(), completed, response, error,
+                 failure_phase, run_id),
             )
 
     def save_plan(self, run_id: str, plan: ExecutionPlan) -> None:
         with self.connect(write=True) as db:
+            db.execute(
+                "UPDATE agent_runs SET plan_json=?, updated_at=? WHERE id=?",
+                (plan.model_dump_json(), timestamp(), run_id),
+            )
             for position, step in enumerate(plan.steps, 1):
                 db.execute(
                     """INSERT INTO agent_steps

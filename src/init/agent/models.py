@@ -38,6 +38,7 @@ class EventType(StrEnum):
     RUN_CREATED = "run_created"
     STATE_CHANGED = "state_changed"
     PLAN_CREATED = "plan_created"
+    PLAN_VALIDATED = "plan_validated"
     STEP_STARTED = "step_started"
     TOOL_CALLED = "tool_called"
     TOOL_RESULT = "tool_result"
@@ -46,6 +47,9 @@ class EventType(StrEnum):
     APPROVAL_RESOLVED = "approval_resolved"
     VERIFICATION_COMPLETED = "verification_completed"
     ERROR = "error"
+    PLANNING_FAILED = "planning_failed"
+    EXECUTION_FAILED = "execution_failed"
+    VERIFICATION_FAILED = "verification_failed"
     FINAL_RESULT = "final_result"
 
 
@@ -59,6 +63,8 @@ class PlanStep(BaseModel):
 
 
 class ExecutionPlan(BaseModel):
+    request_id: str = Field(min_length=32, max_length=32,
+                            pattern=r"^[a-f0-9]{32}$")
     goal: str = Field(min_length=1, max_length=4000)
     steps: list[PlanStep] = Field(min_length=1)
 
@@ -89,5 +95,6 @@ class RunResult(BaseModel):
     state: ExecutionState
     response: str = ""
     error: str | None = None
+    failure_phase: str | None = None
     plan: ExecutionPlan | None = None
     steps: list[StepResult] = Field(default_factory=list)

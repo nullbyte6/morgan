@@ -19,6 +19,7 @@
 
 import asyncio
 import inspect
+import json
 import logging
 import os
 import uuid
@@ -39,6 +40,8 @@ from .persistence import AgentStore
 
 class AgentBackend(Protocol):
     async def plan(self, task: str, max_steps: int) -> ExecutionPlan: ...
+    async def validate_plan(self, task: str,
+                            plan: ExecutionPlan) -> VerificationResult: ...
     async def execute(self, instruction: str, observations: list[str]) -> str: ...
     async def verify(self, task: str, plan: ExecutionPlan,
                      observations: list[str]) -> VerificationResult: ...
@@ -122,6 +125,14 @@ class AgentOrchestrator:
             self.store.save_plan(run_id, plan)
             self._emit(run_id, EventType.PLAN_CREATED, on_event,
                        plan.model_dump(mode="json"))
+            plan_validation = await self._await_cancellable(
+                self.backend.validate_plan(task, plan), cancel_event)
+            self._emit(run_id, EventType.PLAN_VALIDATED, on_event,
+                       plan_validation.model_dump(mode="json"))
+            if not plan_validation.success:
+                raise RuntimeError(
+                    "Plan validation failed: "
+                    + (plan_validation.summary or "plan does not match the request"))
             self._transition(run_id, ExecutionState.EXECUTING, on_event)
 
             for step in plan.steps:
@@ -152,7 +163,9 @@ class AgentOrchestrator:
                 results.append(result)
                 if not result.success:
                     raise RuntimeError(result.error or f"Step {step.id} failed")
-                observations.append(f"{step.title}: {result.output}")
+                observations.append(
+                    f"Tool {step.tool_name} completed step {step.id} "
+                    f"({step.title}) successfully. Result: {result.output}")
 
             self._transition(run_id, ExecutionState.VERIFYING, on_event)
             self._check_cancelled(cancel_event)
@@ -179,11 +192,17 @@ class AgentOrchestrator:
                 "Agent run %s failed in state %s", run_id,
                 self._states[run_id].value)
             message = f"{type(error).__name__}: {error}"
-            self._emit(run_id, EventType.ERROR, on_event,
-                       {"error": message, "type": type(error).__name__})
-            self._transition(run_id, ExecutionState.FAILED, on_event, error=message)
+            failed_state = self._states[run_id]
+            phase, event_type = self._failure_details(failed_state)
+            payload = {"error": message, "type": type(error).__name__,
+                       "phase": phase}
+            self._emit(run_id, event_type, on_event, payload)
+            self._emit(run_id, EventType.ERROR, on_event, payload)
+            self._transition(run_id, ExecutionState.FAILED, on_event,
+                             error=message, failure_phase=phase)
             return RunResult(run_id=run_id, state=ExecutionState.FAILED,
-                             error=message, plan=plan, steps=results)
+                             error=message, failure_phase=phase,
+                             plan=plan, steps=results)
         finally:
             self._states.pop(run_id, None)
 
@@ -206,9 +225,19 @@ class AgentOrchestrator:
                     output = tool(**step.tool_args)
                     if inspect.isawaitable(output):
                         output = await self._await_cancellable(output, cancel_event)
-                    output = str(output)
+                    success, output, tool_error = self._tool_result(output)
                     self._emit(run_id, EventType.TOOL_RESULT, on_event,
-                               {"tool_name": step.tool_name, "output": output}, step.id)
+                               {"tool_name": step.tool_name, "success": success,
+                                "output": output, "error": tool_error}, step.id)
+                    if not success:
+                        self.store.finish_step(
+                            run_id, step.id, success=False, output=output,
+                            error=tool_error)
+                        result = StepResult(
+                            success=False, output=output, error=tool_error)
+                        self._emit(run_id, EventType.STEP_COMPLETED, on_event,
+                                   result.model_dump(mode="json"), step.id)
+                        return result
                 else:
                     output = await self._await_cancellable(
                         self.backend.execute(step.instruction, observations),
@@ -228,7 +257,7 @@ class AgentOrchestrator:
                 raise
             except Exception as error:
                 last_error = str(error)
-                if attempt > self.max_retries:
+                if step.tool_name or attempt > self.max_retries:
                     self.store.finish_step(
                         run_id, step.id, success=False, error=last_error)
                     result = StepResult(success=False, error=last_error)
@@ -242,12 +271,14 @@ class AgentOrchestrator:
 
     def _transition(self, run_id: str, state: ExecutionState, on_event,
                     *, response: str | None = None,
-                    error: str | None = None) -> None:
+                    error: str | None = None,
+                    failure_phase: str | None = None) -> None:
         current = self._states[run_id]
         if state not in TRANSITIONS[current]:
             raise RuntimeError(f"Invalid agent transition: {current} -> {state}")
         self._states[run_id] = state
-        self.store.set_state(run_id, state, response=response, error=error)
+        self.store.set_state(run_id, state, response=response, error=error,
+                             failure_phase=failure_phase)
         self._emit(run_id, EventType.STATE_CHANGED, on_event,
                    {"from": current, "to": state})
 
@@ -265,6 +296,42 @@ class AgentOrchestrator:
                          error="Execution cancelled")
         return RunResult(run_id=run_id, state=ExecutionState.CANCELLED,
                          error="Execution cancelled", plan=plan, steps=results)
+
+    @staticmethod
+    def _failure_details(state: ExecutionState) -> tuple[str, EventType]:
+        if state is ExecutionState.PLANNING:
+            return "planning", EventType.PLANNING_FAILED
+        if state is ExecutionState.VERIFYING:
+            return "verification", EventType.VERIFICATION_FAILED
+        return "execution", EventType.EXECUTION_FAILED
+
+    @staticmethod
+    def _tool_result(value: Any) -> tuple[bool, str, str | None]:
+        if value is False or value is None:
+            return False, str(value), "Tool did not return a successful result"
+        structured = value if isinstance(value, dict) else None
+        output = (json.dumps(value, ensure_ascii=False) if isinstance(value, dict)
+                  else str(value))
+        if structured is None and isinstance(value, str):
+            try:
+                candidate = json.loads(value)
+                if isinstance(candidate, dict):
+                    structured = candidate
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+        if structured is not None:
+            status = str(structured.get("status", "")).casefold()
+            exit_code = structured.get("exit_code")
+            if status in {"denied", "error", "failed", "timeout", "cancelled"}:
+                detail = (structured.get("error") or structured.get("stderr")
+                          or structured.get("note") or status)
+                return False, output, str(detail)
+            if isinstance(exit_code, int) and exit_code != 0:
+                detail = structured.get("stderr") or f"exit code {exit_code}"
+                return False, output, str(detail)
+        if output.lstrip().casefold().startswith("error:"):
+            return False, output, output.strip()
+        return True, output, None
 
     @staticmethod
     def _cancelled(cancel_event) -> bool:

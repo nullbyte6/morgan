@@ -19,6 +19,7 @@
 
 import inspect
 import json
+import uuid
 from collections.abc import Iterable
 
 from pydantic_ai import Agent, ModelRetry, NativeOutput
@@ -42,54 +43,49 @@ class PydanticAgentBackend:
             )
         catalog = "\n".join(tool_descriptions)
         base = list(base_instructions)
-        self.planner = Agent(
+        self.model = model
+        self.tool_names = tool_names
+        self.tool_signatures = tool_signatures
+        self.planner_instructions = [*base, (
+            "Create a bounded execution plan for a local autonomous agent. "
+            "Every plan step must call exactly one available tool. Final "
+            "reasoning and synthesis happen after the plan executes. "
+            "Derive the plan only from ORIGINAL_REQUEST in the current prompt. "
+            "Never reuse examples, filenames, goals, or actions from another task. "
+            "Use the exact Python parameter names "
+            "and JSON-compatible argument values. Mark operations that delete, "
+            "overwrite, send, publish, install, uninstall, terminate, or make "
+            "system changes as requiring approval. Never create or modify a file "
+            "unless the current request explicitly requires it. Do not invent tools. "
+            "Keep the plan minimal and order dependent work correctly.\n\n"
+            f"Available tools:\n{catalog}\n\n"
+            "Tool selection rules:\n"
+            "- For Git state or status, use git_status.\n"
+            "- Use list_code only to list source entries.\n"
+            "- Use read_code only for a specific source file, never a directory.\n"
+            "- Repository inspection must use list_code/read_code or list_files/read_file.\n"
+            "- Python syntax checks must execute a read-only check and must not create unrelated files.\n"
+            "- A request to display the result in a response workspace is handled by the host; "
+            "plan only the work needed to produce the result."
+        )]
+        self.plan_validator = Agent(
             model=model,
             output_type=NativeOutput(
-                ExecutionPlan,
-                name="execution_plan",
-                description="A bounded ordered plan using available tools.",
+                VerificationResult,
+                name="plan_assessment",
+                description="Whether a proposed plan directly addresses its original request.",
                 strict=True,
             ),
             retries={"tools": 1, "output": 2},
             instructions=[*base, (
-                "Create a bounded execution plan for a local autonomous agent. "
-                "Every plan step must call exactly one available tool. Final "
-                "reasoning and synthesis happen after the plan executes. "
-                "Use the exact Python parameter names "
-                "and JSON-compatible argument values. Mark operations that delete, "
-                "overwrite, send, publish, install, uninstall, terminate, or make "
-                "system changes as requiring approval. Do not invent tools. Keep "
-                "the plan minimal and order dependent work correctly.\n\n"
-                f"Available tools:\n{catalog}\n\n"
-                "Tool selection rules:\n"
-                "- For Git state or status, use git_status.\n"
-                "- Use list_code only to list source entries.\n"
-                "- Use read_code only for a specific source file, never a directory."
+                "Compare ORIGINAL_REQUEST with PROPOSED_PLAN before execution. "
+                "Return success=false if the goal, filenames, tool choices, or actions "
+                "are unrelated, invented, insufficient to produce evidence, or include "
+                "side effects not explicitly required. A syntax-check request must run "
+                "an actual syntax check. Repository claims must be backed by file or "
+                "repository inspection tools. Return a concrete diagnostic summary."
             )],
         )
-
-        @self.planner.output_validator
-        def validate_execution_plan(plan: ExecutionPlan) -> ExecutionPlan:
-            step_ids = [step.id for step in plan.steps]
-            if len(step_ids) != len(set(step_ids)):
-                raise ModelRetry("Every plan step must have a unique id.")
-            unknown = sorted({step.tool_name for step in plan.steps
-                              if step.tool_name not in tool_names})
-            if unknown:
-                raise ModelRetry(
-                    "Use only available tool names. Unknown: "
-                    + ", ".join(unknown))
-            invalid_arguments = []
-            for step in plan.steps:
-                try:
-                    tool_signatures[step.tool_name].bind(**step.tool_args)
-                except TypeError as error:
-                    invalid_arguments.append(f"{step.id}: {error}")
-            if invalid_arguments:
-                raise ModelRetry(
-                    "Correct the tool arguments using the listed signatures. "
-                    + " | ".join(invalid_arguments))
-            return plan
         self.reasoner = Agent(
             model=model,
             instructions=[*base, (
@@ -116,13 +112,66 @@ class PydanticAgentBackend:
             model=model,
             instructions=[*base, (
                 "Produce the final response for the user from a completed autonomous "
-                "run. Report confirmed results and any relevant limitations concisely."
+                "run. Report confirmed results and any relevant limitations concisely. "
+                "Never say that a file was inspected, a command or test was run, or an "
+                "external action occurred unless a successful tool observation explicitly "
+                "records it. Do not add filenames, components, or results absent from the "
+                "observations."
             )],
         )
 
     async def plan(self, task: str, max_steps: int) -> ExecutionPlan:
-        result = await self.planner.run(
-            f"Task: {task}\nMaximum steps: {max_steps}"
+        request_id = uuid.uuid4().hex
+        planner = Agent(
+            model=self.model,
+            output_type=NativeOutput(
+                ExecutionPlan,
+                name="execution_plan",
+                description="A bounded ordered plan using available tools.",
+                strict=True,
+            ),
+            retries={"tools": 1, "output": 2},
+            instructions=self.planner_instructions,
+        )
+
+        @planner.output_validator
+        def validate_execution_plan(plan: ExecutionPlan) -> ExecutionPlan:
+            if plan.request_id != request_id:
+                raise ModelRetry("Copy REQUEST_ID exactly from the current prompt.")
+            step_ids = [step.id for step in plan.steps]
+            if len(step_ids) != len(set(step_ids)):
+                raise ModelRetry("Every plan step must have a unique id.")
+            unknown = sorted({step.tool_name for step in plan.steps
+                              if step.tool_name not in self.tool_names})
+            if unknown:
+                raise ModelRetry(
+                    "Use only available tool names. Unknown: "
+                    + ", ".join(unknown))
+            invalid_arguments = []
+            for step in plan.steps:
+                try:
+                    self.tool_signatures[step.tool_name].bind(**step.tool_args)
+                except TypeError as error:
+                    invalid_arguments.append(f"{step.id}: {error}")
+            if invalid_arguments:
+                raise ModelRetry(
+                    "Correct the tool arguments using the listed signatures. "
+                    + " | ".join(invalid_arguments))
+            return plan
+
+        result = await planner.run(
+            f"REQUEST_ID: {request_id}\nORIGINAL_REQUEST:\n{task}\n"
+            f"MAXIMUM_STEPS: {max_steps}"
+        )
+        return result.output
+
+    async def validate_plan(self, task: str,
+                            plan: ExecutionPlan) -> VerificationResult:
+        result = await self.plan_validator.run(
+            json.dumps({
+                "ORIGINAL_REQUEST": task,
+                "PROPOSED_PLAN": plan.model_dump(mode="json"),
+            }, ensure_ascii=False)
         )
         return result.output
 
