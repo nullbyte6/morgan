@@ -24,6 +24,7 @@ import re
 import random
 import sys
 import threading
+import tempfile
 from getpass import getuser
 
 from src.init.identity import register_assistant
@@ -122,6 +123,23 @@ class ArloWindow(DesktopWindow):
 
     def __init__(self):
         super().__init__()
+        log_path = Path(tempfile.gettempdir()) / "arlo" / "agent.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        root_logger = logging.getLogger()
+        if not any(isinstance(handler, logging.FileHandler)
+                and Path(handler.baseFilename) == log_path
+                for handler in root_logger.handlers):
+            handler = logging.FileHandler(log_path, encoding="utf-8")
+            handler.setFormatter(logging.Formatter(
+                "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+                datefmt="%H:%M:%S",
+            ))
+            root_logger.addHandler(handler)
+
+        root_logger.setLevel(logging.INFO)
+        logging.getLogger("arlo.desktop").info(
+            "Desktop backend logging initialized")
+
         self.settings = QSettings("ARLO", "desktop")
         self.muted = self.settings.value("muted", False, type=bool)
         subtitles_enabled = self.settings.value("subtitles", True, type=bool)

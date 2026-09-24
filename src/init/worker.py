@@ -21,6 +21,7 @@ import json
 import logging
 import threading
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 from PySide6.QtCore import *
 
@@ -34,6 +35,79 @@ from src.init.lang import tr
 from src.init.session_log import SessionLog
 from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
+
+
+def select_response_surface(prompt: str, model_name: str) -> str | None:
+    """Let the local LLM choose the output surface before generation."""
+    if not prompt.strip():
+        return None
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "surface": {
+                "type": "string",
+                "enum": ["chat", "response_view"],
+            },
+            "title": {"type": "string"},
+        },
+        "required": ["surface", "title"],
+        "additionalProperties": False,
+    }
+
+    payload = {
+        "model": model_name,
+        "stream": False,
+        "think": False,
+        "format": schema,
+        "options": {
+            "temperature": 0,
+            "num_predict": 96,
+        },
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Choose how a local desktop assistant should display "
+                    "its next answer. Return only the requested JSON. "
+                    "Choose response_view when the user explicitly requests "
+                    "a separate response workspace, or when a substantial "
+                    "explanation, tutorial, documentation, or multiple code "
+                    "examples would benefit from a document-like view. "
+                    "Choose chat for ordinary conversation, short answers, "
+                    "and operational commands. Respect requests to remain "
+                    "in the main chat. Interpret the user's meaning in any "
+                    "language, not specific keywords. If unsure, choose chat. "
+                    "For response_view, provide a short relevant panel title. "
+                    "Do not answer the user's actual question."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+    }
+
+    request = Request(
+        "http://127.0.0.1:11434/api/chat",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with urlopen(request, timeout=30) as response:
+        result = json.load(response)
+
+    decision = json.loads(result["message"]["content"])
+    surface = decision["surface"]
+    title = str(decision.get("title") or "").strip()[:72]
+
+    logging.getLogger("arlo.response").info(
+        "Surface decision: %s; title=%r", surface, title
+    )
+
+    if surface == "response_view":
+        return title or "Response"
+
+    return None
 
 
 class VoiceInputWorker(QThread):
@@ -240,6 +314,26 @@ class AssistantWorker(QObject):
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
+
+
+            response_title = None
+
+            try:
+                response_title = select_response_surface(
+                    prompt, self.assistant.MODEL_NAME)
+            except Exception:
+                logging.getLogger("arlo.response").exception(
+                    "Unable to select response surface; falling back to chat")
+
+            if cancel_event.is_set():
+                self.finished.emit("")
+                return
+
+            if response_title is not None:
+                from src.init.visuals.response import request_response_workspace
+                result = request_response_workspace(response_title)
+                logging.getLogger("arlo.response").info(
+                    "Response workspace result: %s", result)
 
             def speaking_changed(speaking):
                 if speaking:
