@@ -191,29 +191,17 @@ class ResponseView(QWidget):
         except ClassNotFound:
             lexer = TextLexer(stripall=False)
 
-        formatter = HtmlFormatter(nowrap=True)
+        formatter = HtmlFormatter(noclasses=True, nowrap=True, style="monokai")
         highlighted = highlight(code, lexer, formatter)
 
-        return f"""
-        <div style="
-            background: #181926;
-            border: 2px solid #494d64;
-            border-radius: 12px;
-            padding: 12px 14px;
-            margin: 10px 0;
-        ">
-            <pre style="
-                margin: 0;
-                padding: 0;
-                background: transparent;
-                color: #cad3f5;
-                font-family: 'JetBrains Mono NL', 'JetBrains Mono', 'Cascadia Code', monospace;
-                font-size: 16px;
-                line-height: 1.5;
-                white-space: pre-wrap;
-            "><code>{highlighted}</code></pre>
-        </div>
-        """
+        return (
+            '<pre style="background-color:#1e2030; color:#cad3f5; '
+            'border:2px solid #494d64; padding:12px 14px; margin:10px 0; '
+            "font-family:'JetBrains Mono NL', 'JetBrains Mono', monospace; "
+            'font-size:14px; white-space:pre-wrap;">'
+            + highlighted
+            + '</pre>'
+        )
 
     @property
     def source(self):
