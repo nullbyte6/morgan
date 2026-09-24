@@ -33,6 +33,7 @@ from .models import (
     EventType,
     ExecutionPlan,
     ExecutionState,
+    ProjectContext,
     RunResult,
     StepResult,
     VerificationResult,
@@ -41,7 +42,9 @@ from .persistence import AgentStore
 
 
 class AgentBackend(Protocol):
-    async def plan(self, task: str, max_steps: int) -> ExecutionPlan: ...
+    async def inspect_project(self, task: str, working_directory: str) -> ProjectContext: ...
+    async def plan(self, task: str, max_steps: int,
+                   project_context: ProjectContext | None = None) -> ExecutionPlan: ...
     async def validate_plan(self, task: str,
                             plan: ExecutionPlan) -> VerificationResult: ...
     async def execute(self, instruction: str, observations: list[str]) -> str: ...
@@ -191,10 +194,23 @@ class AgentOrchestrator:
         observations: list[str] = []
         try:
             self._check_cancelled(cancel_event)
+            project_context = None
+            inspector = getattr(self.backend, "inspect_project", None)
+            if inspector is not None:
+                project_context = await self._await_cancellable(
+                    inspector(task, working_directory or os.getcwd()), cancel_event)
+                self._emit(run_id, EventType.PROJECT_INSPECTED, on_event,
+                           project_context.model_dump(mode="json"))
+                observations.append(project_context.model_dump_json())
             plan_validation = None
             for planning_attempt in range(2):
+                planning = (self.backend.plan(task, self.max_steps,
+                                              project_context=project_context)
+                            if project_context is not None
+                            else self.backend.plan(task, self.max_steps))
                 plan = await self._await_cancellable(
-                    self.backend.plan(task, self.max_steps), cancel_event)
+                    planning, cancel_event)
+                plan.project_context = project_context
                 if len(plan.steps) > self.max_steps:
                     plan_validation = VerificationResult(
                         success=False, summary="Plan exceeds the step limit")
@@ -327,7 +343,8 @@ class AgentOrchestrator:
                 raise RuntimeError("Write target changed since approval was requested")
         self._states[run_id] = ExecutionState.AWAITING_APPROVAL
         results = []
-        observations = []
+        observations = ([plan.project_context.model_dump_json()]
+                        if plan.project_context is not None else [])
         for stored, planned in zip(self.store.get_steps(run_id), plan.steps):
             if stored["state"] != "COMPLETED":
                 break
