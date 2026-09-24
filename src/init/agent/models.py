@@ -96,12 +96,17 @@ class ProjectFileSelection(BaseModel):
     paths: list[str] = Field(default_factory=list, max_length=8)
 
 
+class RequestCapabilities(BaseModel):
+    file_write_requested: bool = False
+
+
 class ExecutionPlan(BaseModel):
     request_id: str = Field(min_length=32, max_length=32,
                             pattern=r"^[a-f0-9]{32}$")
     goal: str = Field(min_length=1, max_length=4000)
     steps: list[PlanStep] = Field(min_length=1)
     project_context: ProjectContext | None = None
+    file_write_requested: bool = False
 
 
 class StepResult(BaseModel):

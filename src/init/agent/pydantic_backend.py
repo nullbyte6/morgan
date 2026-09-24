@@ -34,7 +34,8 @@ from pydantic_ai.models.wrapper import WrapperModel
 from pydantic import ConfigDict, ValidationError, create_model
 
 from .models import (ExecutionPlan, ExecutionPlanDraft, PlanStep,
-                     ProjectContext, ProjectFileSelection, VerificationResult)
+                     ProjectContext, ProjectFileSelection, RequestCapabilities,
+                     VerificationResult)
 from .project import discover_project, inspect_project_files
 
 
@@ -297,6 +298,24 @@ class PydanticAgentBackend:
             )],
         )
 
+        self.capability_classifier = Agent(
+            model=model,
+            output_type=NativeOutput(RequestCapabilities, strict=True),
+            retries={"tools": 1, "output": 2},
+            instructions=(
+                "Classify whether ORIGINAL_REQUEST explicitly asks to create, "
+                "modify, append, replace, or delete filesystem content. Assess "
+                "only ORIGINAL_REQUEST. A display destination or UI workspace is "
+                "not a filesystem mutation. Set file_write_requested true only "
+                "for an explicit filesystem-content change."),
+        )
+
+    async def request_capabilities(self, task: str) -> RequestCapabilities:
+        result = await self.capability_classifier.run(
+            json.dumps({"ORIGINAL_REQUEST": task}, ensure_ascii=False),
+            model_settings={"max_tokens": 128})
+        return result.output
+
     def _planning_catalog(self, task: str, forbidden_tools: set[str]) -> str:
         words = set(re.findall(r"[a-z0-9_]{3,}", task.casefold()))
         aliases = {
@@ -447,7 +466,8 @@ class PydanticAgentBackend:
     async def plan(self, task: str,
             max_steps: int, project_context: ProjectContext | None = None,
             validation_feedback: str | None = None,
-            forbidden_tools: set[str] | None = None) -> ExecutionPlan:
+            forbidden_tools: set[str] | None = None,
+            file_write_requested: bool = False) -> ExecutionPlan:
         """Generate and validate a bounded execution plan."""
 
         if not task.strip():
@@ -553,6 +573,7 @@ class PydanticAgentBackend:
                 goal=draft.goal,
                 steps=steps,
                 project_context=project_context,
+                file_write_requested=file_write_requested,
             )
 
         except Exception as error:
@@ -594,17 +615,6 @@ class PydanticAgentBackend:
             return VerificationResult(success=False, summary="Invalid step count")
         if len({step.id for step in plan.steps}) != len(plan.steps):
             return VerificationResult(success=False, summary="Duplicate step IDs")
-        # An approval request is not satisfied by a conversational draft.
-        approval_requested = any(term in task.casefold() for term in (
-            "aprobación", "aprobacion", "aprue", "approval", "confirmación",
-            "confirmacion", "before writing", "antes de escribir"))
-        file_change_requested = any(term in task.casefold() for term in (
-            "modific", "edit", "escrib", "write", "añad", "add", "crea",
-            "create", "reemplaz", "replace", "append"))
-        if approval_requested and file_change_requested and not any(
-                step.tool_name in write_tools for step in plan.steps):
-            return VerificationResult(success=False,
-                                      summary="Approval requested but no real write step was planned")
         for step in plan.steps:
             if step.tool_name not in self.tools:
                 return VerificationResult(success=False,
@@ -616,18 +626,12 @@ class PydanticAgentBackend:
                 return VerificationResult(success=False,
                                           summary=f"Invalid arguments for {step.tool_name}: {error}")
             if step.tool_name in write_tools:
-                if ("añad" in task.casefold() or "append" in task.casefold()
-                        or "add section" in task.casefold()) and step.tool_name != "append_file":
+                if not plan.file_write_requested:
                     return VerificationResult(success=False,
-                                              summary="Adding a section requires append_file, not file replacement")
+                                              summary="File writing is not authorized for this request")
                 if not step.requires_approval:
                     return VerificationResult(success=False,
                                               summary=f"Write step {step.id} lacks approval")
-                if not any(term in task.casefold() for term in (
-                        "modific", "edit", "escrib", "write", "añad", "add",
-                        "crea", "create", "reemplaz", "replace", "append")):
-                    return VerificationResult(success=False,
-                                              summary="Unrequested file write")
                 for name, value in step.tool_args.items():
                     if isinstance(value, str) and name in {
                             "content", "text", "new_content", "replacement"}:
