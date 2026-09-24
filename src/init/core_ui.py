@@ -399,6 +399,12 @@ class ArloWindow(DesktopWindow):
         indicator_row.addWidget(self.branch_indicator)
         indicator_row.addWidget(self.agent_mode_indicator)
         indicator_row.addWidget(self.privacy_indicator)
+        self.response_timer_display.setObjectName("responseTimer")
+        self.response_timer_display.setAlignment(Qt.AlignCenter)
+        self.response_timer_display.setText("0m 00.0s")
+        self.response_timer_display.setSizePolicy(
+            QSizePolicy.Fixed, QSizePolicy.Fixed)
+        indicator_row.addWidget(self.response_timer_display)
         indicator_row.addStretch()
         input_column.addLayout(indicator_row)
         input_column.addWidget(input_frame)
@@ -465,13 +471,6 @@ class ArloWindow(DesktopWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         self.task_progress = TaskProgressPill(main_content)
-        self.response_timer_display.setParent(main_content)
-        self.response_timer_display.setObjectName("responseTimer")
-        self.response_timer_display.setAlignment(Qt.AlignmentFlag.AlignCenter |
-                                                 Qt.AlignmentFlag.AlignTop)
-        self.response_timer_display.setText("0m 00s")
-        self.response_timer_display.show()
-        main_content.installEventFilter(self)
         main_layout.addWidget(self.chat_scroll, 1)
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=f"Arlo {load_dev_file()["version"]}",
@@ -559,32 +558,20 @@ class ArloWindow(DesktopWindow):
         if root is not None and root.minimumHeight() != viewport_height:
             root.setMinimumHeight(max(0, viewport_height))
         self._layout_task_progress()
-        self._layout_response_timer()
         QTimer.singleShot(0, self._update_orb_scale)
-
-    def _layout_response_timer(self):
-        """Keep the response latency text in the workspace corner."""
-        label = getattr(self, "response_timer_display", None)
-        host = label.parentWidget() if label is not None else None
-        if host is None:
-            return
-        label.adjustSize()
-        label.move(host.width() - label.width() - 12, 8)
-        label.raise_()
 
     def _update_response_timer(self):
         if not self.response_timer_running:
             return
         self.response_timer_display.setText(
-            f"{self.response_timer.elapsed() / 1000:.2f} s")
-        self._layout_response_timer()
+            f"{self.response_timer.elapsed() // 60000}m "
+            f"{self.response_timer.elapsed() / 1000 % 60:04.1f}s")
 
     def _start_response_timer(self):
         self.response_timer.start()
         self.response_timer_running = True
-        self.response_timer_display.setText("0.00 s")
+        self.response_timer_display.setText("0m 00.0s")
         self.response_timer_tick.start()
-        self._layout_response_timer()
 
     def _stop_response_timer(self):
         if self.response_timer_running:
@@ -595,8 +582,7 @@ class ArloWindow(DesktopWindow):
     def _reset_response_timer(self):
         self.response_timer_running = False
         self.response_timer_tick.stop()
-        self.response_timer_display.setText("0.00 s")
-        self._layout_response_timer()
+        self.response_timer_display.setText("0m 00.0s")
 
     def _layout_task_progress(self):
         """Keep task progress over the chat surface without changing its layout."""
@@ -629,10 +615,6 @@ class ArloWindow(DesktopWindow):
             self.input.setFocus()
 
     def eventFilter(self, watched, event):
-        timer_host = (self.response_timer_display.parentWidget()
-                      if hasattr(self, "response_timer_display") else None)
-        if (watched is self.response_timer_display or watched is timer_host) and event.type() == QEvent.Resize:
-            self._layout_response_timer()
         if event.type() == QEvent.WindowDeactivate and watched is self:
             self._workspace_chord_timer.stop()
             self._workspace_chord_pending = False
