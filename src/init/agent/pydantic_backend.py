@@ -487,134 +487,128 @@ class PydanticAgentBackend:
         self.tool_signatures[tool_name].bind(**arguments)
         return arguments
 
-    async def plan(self, task: str, max_steps: int) -> ExecutionPlan:
+    async def plan(self, task: str,
+            max_steps: int) -> ExecutionPlan:
+        """Generate and validate a bounded execution plan."""
+
+        if not task.strip():
+            raise ValueError("The task must not be empty.")
+
+        if max_steps < 1:
+            raise ValueError("max_steps must be greater than zero.")
+
         request_id = uuid.uuid4().hex
         plan_step_limit = min(max_steps, MAX_PLAN_STEPS)
-        normalized = task.strip().casefold()
-        if normalized in {"haz cd a tu repositorio", "haz cd a tu repositorio.",
-                          "cd a tu repositorio", "cd a tu repositorio.",
-                          "go to your repository", "go to your repository."}:
-            if "change_directory" not in self.tools:
-                raise PlanningOutputError("change_directory is not registered")
-            root = str(REPOSITORY_ROOT)
-            arguments = {"path": root}
-            try:
-                self.tool_signatures["change_directory"].bind(**arguments)
-            except TypeError as error:
-                raise PlanningOutputError(f"Invalid change_directory signature: {error}") from None
-            return ExecutionPlan(request_id=request_id, goal="Open repository root",
-                                 steps=[PlanStep(id="repo_root", title="Open repository",
-                                                 instruction="Change to repository root",
-                                                 tool_name="change_directory",
-                                                 tool_args=arguments)])
-        trace_model = _PlanningTraceModel(self.model, self.tool_names)
+
+        trace_model = _PlanningTraceModel(
+            self.model,
+            self.tool_names)
+
         source_hints = self._source_hints(task)
+
         planner = Agent(
             model=trace_model,
             output_type=NativeOutput(
                 ExecutionPlanDraft,
                 name="execution_plan",
                 description="A bounded ordered plan using available tools.",
-                strict=True,
-            ),
-            retries={"tools": 1, "output": 2},
-            instructions=self.planner_instructions,
-        )
+                strict=True),
+            retries={
+                "tools": 1,
+                "output": 2,
+            },
+            instructions=self.planner_instructions)
 
         @planner.output_validator
-        def validate_execution_plan(plan: ExecutionPlanDraft) -> ExecutionPlanDraft:
+        def validate_execution_plan(
+                plan: ExecutionPlanDraft) -> ExecutionPlanDraft:
             if plan.request_id != request_id:
-                raise ModelRetry("Copy REQUEST_ID exactly from the current prompt.")
-            if len(plan.steps) > plan_step_limit:
-                raise ModelRetry(f"Use no more than {plan_step_limit} steps.")
+                raise ModelRetry(
+                    "The request ID does not match the current request.")
+
+            if not 1 <= len(plan.steps) <= plan_step_limit:
+                raise ModelRetry(
+                    f"The plan must contain between 1 and "
+                    f"{plan_step_limit} steps.")
+
             step_ids = [step.id for step in plan.steps]
+
             if len(step_ids) != len(set(step_ids)):
-                raise ModelRetry("Every plan step must have a unique id.")
-            unknown = sorted({step.tool_name for step in plan.steps
-                              if step.tool_name not in self.tool_names})
-            if unknown:
                 raise ModelRetry(
-                    "Use only available tool names. Unknown: "
-                    + ", ".join(unknown))
-            discovery = self._python_file_discovery(task)
-            if discovery is not None:
-                if not any(step.tool_name in {"list_code", "list_files"}
-                           for step in plan.steps):
-                    raise ModelRetry(
-                        "Use list_code or list_files for Python-file discovery.")
-                forbidden = sorted({
-                    step.tool_name for step in plan.steps
-                    if step.tool_name in {"execute_command", "send_message"}
-                })
-                if forbidden:
-                    raise ModelRetry(
-                        "File discovery must use the existing listing tools without "
-                        "approval or messaging. Remove: " + ", ".join(forbidden))
-            final_step_terms = {
-                "synthesize", "synthesis", "summarize", "summary",
-                "final response", "report findings",
+                    "Every plan step must have a unique ID.")
+
+            unknown_tools = {
+                step.tool_name
+                for step in plan.steps
+                if step.tool_name not in self.tool_names
             }
-            invalid_final_steps = [
-                step.id for step in plan.steps
-                if any(term in f"{step.title} {step.instruction}".casefold()
-                       for term in final_step_terms)
-            ]
-            if invalid_final_steps:
+
+            if unknown_tools:
                 raise ModelRetry(
-                    "Remove synthesis, summary, report, and final-response steps. "
-                    "Only plan evidence-producing tool calls; the host writes the "
-                    "final answer after execution.")
-            normalized_task = task.casefold()
-            syntax_request = (
-                "python" in normalized_task
-                and any(term in normalized_task for term in (
-                    "syntax", "sintaxis", "syntaxe", "sintaxe")))
-            if (syntax_request and "execute_command" in self.tool_names
-                    and not any(step.tool_name == "execute_command"
-                                for step in plan.steps)):
-                raise ModelRetry(
-                    "This request requires an execute_command step for an actual "
-                    "read-only Python syntax check.")
-            write_tools = {"edit_file", "append_file", "replace_in_file",
-                           "write_binary_file", "create_file"}
-            for step in plan.steps:
-                if step.tool_name in write_tools and not step.requires_approval:
-                    raise ModelRetry("File-writing steps must set requires_approval=true.")
+                    "The plan contains unregistered tools: "
+                    + ", ".join(sorted(unknown_tools)))
+
             return plan
 
         try:
-            result = await planner.run(
-                f"REQUEST_ID: {request_id}\nORIGINAL_REQUEST:\n{task}\n"
-                f"MAXIMUM_STEPS: {plan_step_limit}\n"
-                f"{self._planning_catalog(task)}\n"
-                f"TASK_SPECIFIC_GUIDANCE:\n{self._planning_guidance(task)}\n"
-                f"SOURCE_PATH_HINTS:\n{source_hints}",
-                model_settings={"max_tokens": 1024},
-            )
+            result = await planner.run((
+                    f"REQUEST_ID: {request_id}\n"
+                    f"ORIGINAL_REQUEST:\n{task}\n"
+                    f"MAXIMUM_STEPS: {plan_step_limit}\n"
+                    f"{self._planning_catalog(task)}\n"
+                    f"SOURCE_PATH_HINTS:\n{source_hints}"),
+                model_settings={
+                    "max_tokens": 2048,
+                })
+
             draft = result.output
             steps = []
+
             for step in draft.steps:
                 arguments = await self._plan_arguments(
-                    task, step, trace_model, source_hints)
-                steps.append(PlanStep(
-                    **step.model_dump(mode="json"), tool_args=arguments))
+                    task,
+                    step,
+                    trace_model,
+                    source_hints)
+
+                steps.append(
+                    PlanStep(
+                        **step.model_dump(mode="json"),
+                        tool_args=arguments))
+
             return ExecutionPlan(
-                request_id=draft.request_id, goal=draft.goal, steps=steps)
+                request_id=draft.request_id,
+                goal=draft.goal,
+                steps=steps,
+            )
+
         except Exception as error:
             errors = _safe_exception_chain(error)
+
             frames = [
-                {"file": Path(frame.filename).name,
-                 "line": frame.lineno, "function": frame.name}
+                {
+                    "file": Path(frame.filename).name,
+                    "line": frame.lineno,
+                    "function": frame.name,
+                }
                 for frame in traceback.extract_tb(error.__traceback__)
             ]
+
             LOGGER.error(
                 "Structured planning failed request=%s attempts=%d "
                 "outputs=%s errors=%s traceback=%s",
-                request_id[:8], trace_model.attempts,
-                trace_model.records[-3:], errors, frames)
+                request_id[:8],
+                trace_model.attempts,
+                trace_model.records[-3:],
+                errors,
+                frames)
+
             summary = " | ".join(
-                f"{item['type']}: {item['detail']}" for item in errors)
-            raise PlanningOutputError(summary[:4000]) from None
+                f"{item['type']}: {item['detail']}"
+                for item in errors)
+
+            raise PlanningOutputError(
+                summary[:4000]) from error
 
     async def validate_plan(self, task: str,
                             plan: ExecutionPlan) -> VerificationResult:
