@@ -125,7 +125,21 @@ class Assistant:
         self.agent.instructions(self.working_directory_instructions)
         from src.init.memory.integration import memory_instructions
         self.agent.instructions(memory_instructions)
-        self.agent.instructions("When the user explicitly requests a flowchart, diagram, workflow, decision tree, or process visualization, call render_flowchart with newly supplied nodes and edges. It does not require an existing diagram. Do not claim this capability is unavailable.")
+        self.agent.instructions(
+            "When the user explicitly requests a flowchart, diagram, "
+            "workflow, decision tree, or process visualization, call "
+            "render_flowchart with newly supplied nodes and edges. "
+            "It does not require an existing diagram. Do not claim "
+            "this capability is unavailable.")
+
+        self.agent.instructions(
+            "You can open a dedicated response workspace using the "
+            "open_response_view tool. When the user explicitly asks to "
+            "display your response in a workspace, call open_response_view "
+            "BEFORE generating the explanation. Use it when a separate "
+            "document-like view would make a substantial response easier "
+            "to read. Do not merely say that you opened the workspace: "
+            "actually call the tool.")
 
     def reload_source(self) -> str:
         """Reload source modules and rebuild the model and tools for next turn."""
@@ -155,7 +169,22 @@ class Assistant:
                 self.agent.instructions(self.working_directory_instructions)
                 from src.init.memory.integration import memory_instructions
                 self.agent.instructions(memory_instructions)
-                self.agent.instructions("When the user explicitly requests a flowchart, diagram, workflow, decision tree, or process visualization, call render_flowchart with newly supplied nodes and edges. It does not require an existing diagram. Do not claim this capability is unavailable.")
+
+                self.agent.instructions(
+                    "When the user explicitly requests a flowchart, diagram, "
+                    "workflow, decision tree, or process visualization, call "
+                    "render_flowchart with newly supplied nodes and edges. "
+                    "It does not require an existing diagram. Do not claim "
+                    "this capability is unavailable.")
+
+                self.agent.instructions(
+                    "You can open a dedicated response workspace using the "
+                    "open_response_view tool. When the user explicitly asks to "
+                    "display your response in a workspace, call open_response_view "
+                    "BEFORE generating the explanation. Use it when a separate "
+                    "document-like view would make a substantial response easier "
+                    "to read. Do not merely say that you opened the workspace: "
+                    "actually call the tool.")
 
             summary = f"Reloaded {len(reloaded)} source modules"
             if errors:
