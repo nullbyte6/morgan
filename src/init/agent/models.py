@@ -50,10 +50,10 @@ class EventType(StrEnum):
 
 
 class PlanStep(BaseModel):
-    id: str = Field(min_length=1, max_length=64)
+    id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     title: str = Field(min_length=1, max_length=200)
     instruction: str = Field(min_length=1, max_length=4000)
-    tool_name: str | None = None
+    tool_name: str = Field(min_length=1, max_length=100)
     tool_args: dict[str, Any] = Field(default_factory=dict)
     requires_approval: bool = False
 

@@ -21,13 +21,17 @@ import inspect
 import json
 from collections.abc import Iterable
 
-from pydantic_ai import Agent
+from pydantic_ai import Agent, ModelRetry, NativeOutput
 
 from .models import ExecutionPlan, VerificationResult
 
 
 class PydanticAgentBackend:
     def __init__(self, model, tools: Iterable, *, base_instructions=()):
+        tools = list(tools)
+        tool_names = {function.__name__ for function in tools}
+        tool_signatures = {function.__name__: inspect.signature(function)
+                           for function in tools}
         tool_descriptions = []
         for function in tools:
             signature = inspect.signature(function)
@@ -40,18 +44,52 @@ class PydanticAgentBackend:
         base = list(base_instructions)
         self.planner = Agent(
             model=model,
-            output_type=ExecutionPlan,
+            output_type=NativeOutput(
+                ExecutionPlan,
+                name="execution_plan",
+                description="A bounded ordered plan using available tools.",
+                strict=True,
+            ),
+            retries={"tools": 1, "output": 2},
             instructions=[*base, (
                 "Create a bounded execution plan for a local autonomous agent. "
-                "Each step must either call exactly one available tool or perform "
-                "a reasoning-only operation. Use the exact Python parameter names "
+                "Every plan step must call exactly one available tool. Final "
+                "reasoning and synthesis happen after the plan executes. "
+                "Use the exact Python parameter names "
                 "and JSON-compatible argument values. Mark operations that delete, "
                 "overwrite, send, publish, install, uninstall, terminate, or make "
                 "system changes as requiring approval. Do not invent tools. Keep "
                 "the plan minimal and order dependent work correctly.\n\n"
-                f"Available tools:\n{catalog}"
+                f"Available tools:\n{catalog}\n\n"
+                "Tool selection rules:\n"
+                "- For Git state or status, use git_status.\n"
+                "- Use list_code only to list source entries.\n"
+                "- Use read_code only for a specific source file, never a directory."
             )],
         )
+
+        @self.planner.output_validator
+        def validate_execution_plan(plan: ExecutionPlan) -> ExecutionPlan:
+            step_ids = [step.id for step in plan.steps]
+            if len(step_ids) != len(set(step_ids)):
+                raise ModelRetry("Every plan step must have a unique id.")
+            unknown = sorted({step.tool_name for step in plan.steps
+                              if step.tool_name not in tool_names})
+            if unknown:
+                raise ModelRetry(
+                    "Use only available tool names. Unknown: "
+                    + ", ".join(unknown))
+            invalid_arguments = []
+            for step in plan.steps:
+                try:
+                    tool_signatures[step.tool_name].bind(**step.tool_args)
+                except TypeError as error:
+                    invalid_arguments.append(f"{step.id}: {error}")
+            if invalid_arguments:
+                raise ModelRetry(
+                    "Correct the tool arguments using the listed signatures. "
+                    + " | ".join(invalid_arguments))
+            return plan
         self.reasoner = Agent(
             model=model,
             instructions=[*base, (
@@ -62,7 +100,13 @@ class PydanticAgentBackend:
         )
         self.verifier = Agent(
             model=model,
-            output_type=VerificationResult,
+            output_type=NativeOutput(
+                VerificationResult,
+                name="verification_result",
+                description="Whether the observations satisfy the task.",
+                strict=True,
+            ),
+            retries={"tools": 1, "output": 2},
             instructions=[*base, (
                 "Verify whether the execution observations satisfy the requested "
                 "task. Be strict about tool failures and missing required results."
