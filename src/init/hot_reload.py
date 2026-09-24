@@ -45,6 +45,7 @@ _PRESERVED = {
     "src.init.desktop.capture",
     "src.init.desktop.clipboard",
     "src.init.visuals.bridge",
+    "src.init.visuals.response",
     "src.init.visuals.browser_bridge",
     "src.init.visuals.browser_session",
     "src.init.visuals.browser_extensions",
