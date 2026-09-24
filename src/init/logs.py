@@ -292,7 +292,7 @@ class LogView(QWidget):
 
         self.last_content: str | None = None
         self.messages: list[LogMessage] = []
-        self.code_font_family = "JetBrainsMonoNL NFM Medium,monospace"
+        self.code_font_family = "JetBrains Mono NL"
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 12)
