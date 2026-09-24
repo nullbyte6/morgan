@@ -1655,7 +1655,7 @@ def main():
 
         for button in (
                 window.send,
-                window.attach,):
+                window.attach):
             button.setFont(icon_font)
 
         def activate_existing_window():

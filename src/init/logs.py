@@ -25,9 +25,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import (QDesktopServices, QFont, QFontDatabase,
-                           QTextCharFormat, QTextCursor)
+from PySide6.QtCore import *
+from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
 ENTRY_HEADER = re.compile(
@@ -172,10 +171,10 @@ class LogMessageCard(QFrame):
         self.copy_button.setObjectName("logCopyNav")
 
         icon_font = QFont(self.code_font_family)
-        icon_font.setPixelSize(12)
+        icon_font.setPixelSize(16)
 
         self.copy_button.setFont(icon_font)
-        self.copy_button.setFixedSize(20, 20)
+        self.copy_button.setFixedSize(24, 24)
         self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.copy_button.clicked.connect(self.copy_log)
 
