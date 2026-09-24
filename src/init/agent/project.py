@@ -53,16 +53,21 @@ def _target(directory: Path, path: str) -> Path:
     return target
 
 
+def _repository_root(path: Path) -> Path:
+    return Path(_git(path, "rev-parse", "--show-toplevel")
+                .decode("utf-8").strip()).resolve(strict=True)
+
+
 def discover_project(working_directory: str) -> ProjectContext:
     directory = Path(working_directory).expanduser().resolve(strict=True)
     if not directory.is_dir():
         raise ValueError("Inspection requires a working directory")
     context = ProjectContext(working_directory=str(directory))
     try:
-        root = Path(_git(directory, "rev-parse", "--show-toplevel")
-                    .decode("utf-8").strip()).resolve(strict=True)
+        root = _repository_root(directory)
         directory.relative_to(root)
         context.repository_root = str(root)
+        repository_roots: dict[Path, Path | None] = {}
         entries = _git(directory, "ls-files", "--cached", "--others",
                        "--exclude-standard", "-z", "--", ".").split(b"\0")
         for entry in sorted(set(entries)):
@@ -73,8 +78,16 @@ def discover_project(working_directory: str) -> ProjectContext:
                 break
             try:
                 path = entry.decode("utf-8")
-                _target(directory, path)
-            except (OSError, ValueError):
+                target = _target(directory, path)
+                parent = target.parent
+                if parent not in repository_roots:
+                    try:
+                        repository_roots[parent] = _repository_root(parent)
+                    except (OSError, subprocess.SubprocessError):
+                        repository_roots[parent] = None
+                if repository_roots[parent] != root:
+                    continue
+            except (OSError, ValueError, subprocess.SubprocessError):
                 continue
             context.discovered_files.append(path)
         context.limitations.append(
@@ -92,8 +105,7 @@ def inspect_project_files(context: ProjectContext, paths: list[str]) -> ProjectC
     for path in dict.fromkeys(paths):
         try:
             target = _target(directory, path)
-            root = Path(_git(target.parent, "rev-parse", "--show-toplevel")
-                        .decode("utf-8").strip()).resolve(strict=True)
+            root = _repository_root(target.parent)
             if str(root) != context.repository_root:
                 raise ValueError("File belongs to another repository")
             with target.open("rb") as stream:
