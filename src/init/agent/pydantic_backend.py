@@ -197,7 +197,28 @@ class PydanticAgentBackend:
             "Use no more than six steps. Keep the goal, titles, and instructions "
             "short; do not restate the request or tool catalog. "
             "Choose tool names from the compact catalog in the current prompt. "
+            
             "Tool arguments are generated and validated separately after the plan.\n\n"
+            "File modification and approval contract:\n"
+            "- A request to prepare a change and ask approval BEFORE writing is an "
+            "approval-gated write request. Include the real write step; never "
+            "replace it with a conversational promise.\n"
+            "- If ORIGINAL_REQUEST requests a file change, including approval-gated changes, "
+            "include the appropriate registered write tool as an actual plan step. "
+            "Do not replace that step with a conversational draft or an approval "
+            "request in the final response.\n"
+            "- Set requires_approval=true on every file-writing step. The host "
+            "persists the exact tool and arguments and pauses before execution. "
+            "Including a write step in the plan does NOT execute it.\n"
+            "- Never include send_message or another communication tool merely "
+            "to request approval. Approval is handled by the host.\n"
+            "- For an ADD SECTION request, prefer append_file with only the new section, "
+            "not edit_file or create_file. Preserve the existing file verbatim.\n"
+            "- When a write operation depends on content that must first be read "
+            "or computed, do not invent its contents or claim that a previous "
+            "step's output will automatically become a later tool argument. "
+            "Only plan an executable write with concrete, valid arguments.\n\n"
+            
             "Tool selection rules:\n"
             "- For Git state or status, use git_status.\n"
             "- Use list_code only to list source entries.\n"
@@ -208,14 +229,28 @@ class PydanticAgentBackend:
             "- A request to display the result in a response workspace is handled by the host; "
             "plan only the work needed to produce the result."
         )]
+
         self.plan_validator_instructions = [*base, (
-                "Compare ORIGINAL_REQUEST with PROPOSED_PLAN before execution. "
-                "Return success=false if the goal, filenames, tool choices, or actions "
-                "are unrelated, invented, insufficient to produce evidence, or include "
-                "side effects not explicitly required. A syntax-check request must run "
-                "an actual syntax check. Repository claims must be backed by file or "
-                "repository inspection tools. Return a concrete diagnostic summary."
-            )]
+            "Validate ORIGINAL_REQUEST against PROPOSED_PLAN. "
+            "Reject unrelated goals, invented files or tools, unnecessary "
+            "side effects, and operations that cannot satisfy the request. "
+            "A request to prepare a change and obtain approval before writing "
+            "may include the actual write operation in the plan. Planning "
+            "that operation does not execute it. "
+            "Approval is represented by the PlanStep.requires_approval field, "
+            "NOT by an argument passed to the write tool. "
+            "For every file-writing step, require requires_approval=true. "
+            "The host orchestrator must pause in AWAITING_APPROVAL before "
+            "invoking the tool. Never require a send_message step or a "
+            "conversational approval request. "
+            "Reject missing, placeholder, truncated, or fabricated write "
+            "arguments. Do not assume that output from an earlier step "
+            "automatically becomes an argument of a later step. "
+            "A syntax-check request must execute an actual syntax check. "
+            "Repository claims require repository or file inspection evidence. "
+            "Return a concise, concrete diagnostic summary."
+        )]
+
         self.reasoner = Agent(
             model=model,
             instructions=[*base, (
@@ -453,6 +488,23 @@ class PydanticAgentBackend:
     async def plan(self, task: str, max_steps: int) -> ExecutionPlan:
         request_id = uuid.uuid4().hex
         plan_step_limit = min(max_steps, MAX_PLAN_STEPS)
+        normalized = task.strip().casefold()
+        if normalized in {"haz cd a tu repositorio", "haz cd a tu repositorio.",
+                          "cd a tu repositorio", "cd a tu repositorio.",
+                          "go to your repository", "go to your repository."}:
+            if "change_directory" not in self.tools:
+                raise PlanningOutputError("change_directory is not registered")
+            root = str(REPOSITORY_ROOT)
+            arguments = {"path": root}
+            try:
+                self.tool_signatures["change_directory"].bind(**arguments)
+            except TypeError as error:
+                raise PlanningOutputError(f"Invalid change_directory signature: {error}") from None
+            return ExecutionPlan(request_id=request_id, goal="Open repository root",
+                                 steps=[PlanStep(id="repo_root", title="Open repository",
+                                                 instruction="Change to repository root",
+                                                 tool_name="change_directory",
+                                                 tool_args=arguments)])
         trace_model = _PlanningTraceModel(self.model, self.tool_names)
         source_hints = self._source_hints(task)
         planner = Agent(
@@ -521,22 +573,11 @@ class PydanticAgentBackend:
                 raise ModelRetry(
                     "This request requires an execute_command step for an actual "
                     "read-only Python syntax check.")
-            modification_request = any(term in normalized_task for term in (
-                "modify the file", "modificarlo", "modificar el archivo",
-                "add a section", "añade una sección", "añadir una sección",
-                "write the change", "escribir el cambio",
-            ))
-            write_tools = {
-                "edit_file", "append_file", "replace_in_file",
-                "write_binary_file", "create_file",
-            }
-            if (modification_request
-                    and not any(step.tool_name in write_tools
-                                for step in plan.steps)):
-                raise ModelRetry(
-                    "The request explicitly requires a file change. Include the "
-                    "appropriate registered write tool; do not merely describe a "
-                    "draft or ask for approval in the final response.")
+            write_tools = {"edit_file", "append_file", "replace_in_file",
+                           "write_binary_file", "create_file"}
+            for step in plan.steps:
+                if step.tool_name in write_tools and not step.requires_approval:
+                    raise ModelRetry("File-writing steps must set requires_approval=true.")
             return plan
 
         try:
@@ -575,42 +616,61 @@ class PydanticAgentBackend:
 
     async def validate_plan(self, task: str,
                             plan: ExecutionPlan) -> VerificationResult:
-        trace_model = _PlanningTraceModel(self.model, self.tool_names)
-        validator = Agent(
-            model=trace_model,
-            output_type=NativeOutput(
-                VerificationResult,
-                name="plan_assessment",
-                description="Whether the proposed plan addresses the current request.",
-                strict=True,
-            ),
-            retries={"tools": 1, "output": 2},
-            instructions=self.plan_validator_instructions,
-        )
-        try:
-            result = await validator.run(
-                json.dumps({
-                    "ORIGINAL_REQUEST": task,
-                    "PROPOSED_PLAN": plan.model_dump(mode="json"),
-                }, ensure_ascii=False),
-                model_settings={"max_tokens": 256},
-            )
-            return result.output
-        except Exception as error:
-            errors = _safe_exception_chain(error)
-            frames = [
-                {"file": Path(frame.filename).name,
-                 "line": frame.lineno, "function": frame.name}
-                for frame in traceback.extract_tb(error.__traceback__)
-            ]
-            LOGGER.error(
-                "Plan validation failed request=%s attempts=%d outputs=%s "
-                "errors=%s traceback=%s",
-                plan.request_id[:8], trace_model.attempts,
-                trace_model.records[-3:], errors, frames)
-            summary = " | ".join(
-                f"{item['type']}: {item['detail']}" for item in errors)
-            raise PlanningOutputError(summary[:4000]) from None
+        """Enforce execution invariants in Python, not with an LLM judge."""
+        write_tools = {
+            "create_file", "edit_file", "append_file", "replace_in_file",
+            "write_binary_file",
+        }
+        if not plan.steps or len(plan.steps) > MAX_PLAN_STEPS:
+            return VerificationResult(success=False, summary="Invalid step count")
+        if len({step.id for step in plan.steps}) != len(plan.steps):
+            return VerificationResult(success=False, summary="Duplicate step IDs")
+        # An approval request is not satisfied by a conversational draft.
+        approval_requested = any(term in task.casefold() for term in (
+            "aprobación", "aprobacion", "aprue", "approval", "confirmación",
+            "confirmacion", "before writing", "antes de escribir"))
+        file_change_requested = any(term in task.casefold() for term in (
+            "modific", "edit", "escrib", "write", "añad", "add", "crea",
+            "create", "reemplaz", "replace", "append"))
+        if approval_requested and file_change_requested and not any(
+                step.tool_name in write_tools for step in plan.steps):
+            return VerificationResult(success=False,
+                                      summary="Approval requested but no real write step was planned")
+        for step in plan.steps:
+            if step.tool_name not in self.tools:
+                return VerificationResult(success=False,
+                                          summary=f"Unknown tool: {step.tool_name}")
+            try:
+                self.tool_signatures[step.tool_name].bind(**step.tool_args)
+                self._argument_model(step.tool_name).model_validate(step.tool_args)
+            except (TypeError, ValueError, ValidationError) as error:
+                return VerificationResult(success=False,
+                                          summary=f"Invalid arguments for {step.tool_name}: {error}")
+            if step.tool_name in write_tools:
+                if ("añad" in task.casefold() or "append" in task.casefold()
+                        or "add section" in task.casefold()) and step.tool_name != "append_file":
+                    return VerificationResult(success=False,
+                                              summary="Adding a section requires append_file, not file replacement")
+                if not step.requires_approval:
+                    return VerificationResult(success=False,
+                                              summary=f"Write step {step.id} lacks approval")
+                if not any(term in task.casefold() for term in (
+                        "modific", "edit", "escrib", "write", "añad", "add",
+                        "crea", "create", "reemplaz", "replace", "append")):
+                    return VerificationResult(success=False,
+                                              summary="Unrequested file write")
+                for name, value in step.tool_args.items():
+                    if isinstance(value, str) and name in {
+                            "content", "text", "new_content", "replacement"}:
+                        if not value.strip() or value.rstrip().endswith(("```", "\\")):
+                            return VerificationResult(success=False,
+                                                      summary="Empty or incomplete write content")
+            if step.tool_name == "change_directory":
+                path = step.tool_args.get("path")
+                if not isinstance(path, str) or not Path(path).expanduser().is_dir():
+                    return VerificationResult(success=False,
+                                              summary="Directory does not exist")
+        return VerificationResult(success=True, summary="Plan invariants validated")
 
     async def execute(self, instruction: str, observations: list[str]) -> str:
         result = await self.reasoner.run(

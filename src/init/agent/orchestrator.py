@@ -18,6 +18,8 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+import hashlib
+from pathlib import Path
 import inspect
 import json
 import logging
@@ -84,18 +86,51 @@ class AgentOrchestrator:
         self.store = store
         self.max_steps = max_steps
         self.max_retries = max_retries
-        self.destructive_tools = destructive_tools or {
+        mandatory_approval_tools = {
+            "create_file", "edit_file", "append_file", "replace_in_file",
+            "write_binary_file", "delete_file", "delete_directory",
+        }
+
+        self.destructive_tools = mandatory_approval_tools | (destructive_tools if destructive_tools is not None else {
             "delete_directory", "delete_file", "empty_recycle_bin",
             "shutdown_computer", "kill_process", "uninstall_app",
             "clean_app_residue", "git_push", "update_repo", "execute_command",
             "send_email", "send_email_draft", "send_message", "edit_file",
-            "append_file", "replace_in_file", "write_binary_file", "git_add",
-            "git_commit", "git_pull", "git_switch", "install_app",
-            "close_application", "schedule_notification", "start_timer",
+            "create_file", "append_file", "replace_in_file",
+            "write_binary_file", "git_add", "git_commit", "git_pull",
+            "git_switch", "install_app", "close_application",
+            "schedule_notification", "start_timer",
             "delete_email", "forget", "update_config", "git_fetch",
             "kill_self", "cancel_timer", "send_notification",
-        }
+        })
         self._states: dict[str, ExecutionState] = {}
+
+    @staticmethod
+    def _append_target(step, working_directory: str):
+        """Fail closed: validate an append-only operation before approval/execution."""
+        if step.tool_name != "append_file":
+            return None
+        args = step.tool_args
+        path = args.get("path")
+        content = args.get("content", args.get("text"))
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("append_file requires a concrete path")
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("append_file requires non-empty content")
+        target = Path(path).expanduser()
+        if not target.is_absolute():
+            target = Path(working_directory) / target
+        target = target.resolve(strict=True)
+        if not target.is_file() or target.is_symlink():
+            raise ValueError("append_file target must be an existing regular file")
+        return target
+
+    @classmethod
+    def _append_snapshot(cls, step, working_directory: str):
+        target = cls._append_target(step, working_directory)
+        if target is None:
+            return None
+        return hashlib.sha256(target.read_bytes()).hexdigest()
 
     async def run(self, task: str, *, cancel_event=None,
                   pause_event=None,
@@ -143,6 +178,9 @@ class AgentOrchestrator:
                 if needs_approval:
                     self._transition(run_id, ExecutionState.AWAITING_APPROVAL, on_event)
                     message = f"{step.title}: {step.instruction}"
+                    snapshot = self._append_snapshot(step, working_directory or os.getcwd())
+                    if snapshot is not None:
+                        message += f"\nAPPEND_SHA256:{snapshot}\nAPPEND_CONTENT:{step.tool_args.get('content', step.tool_args.get('text'))}"
                     self.store.register_approval(
                         run_id, step.id, step.tool_name, step.tool_args, message)
                     self._emit(run_id, EventType.APPROVAL_REQUESTED, on_event,
@@ -162,6 +200,9 @@ class AgentOrchestrator:
                                {"accepted": bool(accepted)}, step.id)
                     if not accepted:
                         raise PermissionError(f"Approval denied for step {step.id}")
+                    if snapshot is not None and self._append_snapshot(
+                            step, working_directory or os.getcwd()) != snapshot:
+                        raise RuntimeError("Append target changed during approval")
                     self._transition(run_id, ExecutionState.EXECUTING, on_event)
 
                 result = await self._run_step(
@@ -228,6 +269,10 @@ class AgentOrchestrator:
         if (step.tool_name != pending["tool_name"]
                 or step.tool_args != pending["tool_args"]):
             raise RuntimeError("Stored approval does not match the planned operation")
+        if step.tool_name == "append_file":
+            expected = pending["proposed_change"].split("APPEND_SHA256:")[-1].splitlines()[0] if "APPEND_SHA256:" in pending["proposed_change"] else None
+            if not expected or self._append_snapshot(step, pending["working_directory"]) != expected:
+                raise RuntimeError("Append target changed since approval was requested")
         self._states[run_id] = ExecutionState.AWAITING_APPROVAL
         results = []
         observations = []
@@ -256,6 +301,9 @@ class AgentOrchestrator:
                     self._transition(
                         run_id, ExecutionState.AWAITING_APPROVAL, on_event)
                     message = f"{current.title}: {current.instruction}"
+                    snapshot = self._append_snapshot(current, pending["working_directory"])
+                    if snapshot is not None:
+                        message += f"\nAPPEND_SHA256:{snapshot}\nAPPEND_CONTENT:{current.tool_args.get('content', current.tool_args.get('text'))}"
                     self.store.register_approval(
                         run_id, current.id, current.tool_name,
                         current.tool_args, message)
@@ -325,7 +373,27 @@ class AgentOrchestrator:
                     self._emit(run_id, EventType.TOOL_CALLED, on_event,
                                {"tool_name": step.tool_name,
                                 "arguments": step.tool_args}, step.id)
-                    output = tool(**step.tool_args)
+                    if step.tool_name in {"edit_file", "replace_in_file", "write_binary_file"}:
+                        raise PermissionError("Full-file replacement is disabled in Forge; use a reviewed incremental edit")
+                    if step.tool_name == "create_file":
+                        run = self.store.get_run(run_id)
+                        path = step.tool_args.get("path")
+                        if not isinstance(path, str) or not path.strip():
+                            raise ValueError("create_file requires a concrete path")
+                        target = Path(path).expanduser()
+                        if not target.is_absolute():
+                            target = Path(run["working_directory"]) / target
+                        if target.exists():
+                            raise FileExistsError(f"Forge cannot overwrite existing file: {target}")
+                    if step.tool_name == "append_file":
+                        run = self.store.get_run(run_id)
+                        target = self._append_target(step, run["working_directory"])
+                        content = step.tool_args.get("content", step.tool_args.get("text"))
+                        with target.open("a", encoding="utf-8", newline="") as stream:
+                            stream.write(content)
+                        output = f"Appended {len(content)} characters to {target}"
+                    else:
+                        output = tool(**step.tool_args)
                     if inspect.isawaitable(output):
                         output = await self._await_cancellable(output, cancel_event)
                     success, output, tool_error = self._tool_result(output)
