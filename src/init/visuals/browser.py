@@ -130,7 +130,7 @@ class BrowserView(QWidget):
     def _open_new_window(self, request):
         """Keep links requesting a new window inside this browser panel."""
         url = request.requestedUrl()
-        if url.scheme() in ("http", "https"):
+        if url.scheme() not in ("http", "https") and url.toString() != "chrome://qt":
             self.web_view.setUrl(url)
 
     @Slot()

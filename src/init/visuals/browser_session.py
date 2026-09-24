@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 from shiboken6 import delete, isValid
 
 
+# noinspection PyUnusedImports
 class BrowserSession(QObject):
     """Own the profile until every page has been destroyed and data flushed."""
 
@@ -28,8 +29,16 @@ class BrowserSession(QObject):
         settings.setCachePath(str(self.data_path / 'cache'))
         settings.setHttpCacheType(QWebEngineProfile.DiskHttpCache)
         settings.setPersistentCookiesPolicy(QWebEngineProfile.ForcePersistentCookies)
-        # Configure storage before Chromium initializes extension services.
         self.profile = builder.createProfile('arlo-browser', self) if builder else settings
+
+        from PySide6.QtWebEngineCore import qWebEngineChromiumVersion
+        chromium_major = qWebEngineChromiumVersion().split(".")[0]
+        self.profile.setHttpUserAgent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            f"Chrome/{chromium_major}.0.0.0 Safari/537.36"
+        )
+
         if self.profile is None:
             raise RuntimeError('The Arlo browser profile is already in use')
         self._pages = WeakSet()
