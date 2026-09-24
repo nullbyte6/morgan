@@ -372,7 +372,7 @@ class ArloWindow(DesktopWindow):
             QSizePolicy.Expanding,
             QSizePolicy.Fixed
         )
-        input_frame.setMinimumHeight(48)
+        input_frame.setFixedHeight(48)
         input_layout = QHBoxLayout(input_frame)
         input_layout.setContentsMargins(16, 0, 0, 0)
         input_layout.setSpacing(0)
