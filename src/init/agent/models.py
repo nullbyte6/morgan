@@ -72,8 +72,6 @@ class PlanDraftStep(BaseModel):
 
 
 class ExecutionPlanDraft(BaseModel):
-    request_id: str = Field(min_length=32, max_length=32,
-                            pattern=r"^[a-f0-9]{32}$")
     goal: str = Field(min_length=1, max_length=320)
     steps: list[PlanDraftStep] = Field(min_length=1, max_length=6)
 

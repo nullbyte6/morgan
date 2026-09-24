@@ -40,6 +40,7 @@ from .project import discover_project, inspect_project_files
 
 LOGGER = logging.getLogger("arlo.agent.planning")
 MAX_PLAN_STEPS = 6
+STRUCTURED_OUTPUT_MAX_TOKENS = 4096
 
 
 class PlanningOutputError(RuntimeError):
@@ -138,13 +139,16 @@ class _PlanningTraceModel(WrapperModel):
                 "characters": len(content),
                 "input_tokens": usage.input_tokens,
                 "output_tokens": usage.output_tokens,
+                "max_tokens": model_settings.get("max_tokens"),
                 "output": redacted,
             })
             LOGGER.debug(
                 "Planning model output attempt=%d finish_reason=%s "
-                "characters=%d input_tokens=%s output_tokens=%s output=%s",
+                "characters=%d input_tokens=%s output_tokens=%s "
+                "max_tokens=%s output=%s",
                 self.attempts, response.finish_reason, len(content),
                 usage.input_tokens, usage.output_tokens,
+                model_settings.get("max_tokens"),
                 redacted)
         if response.finish_reason == "length":
             LOGGER.warning(
@@ -428,7 +432,7 @@ class PydanticAgentBackend:
                 context,
                 ensure_ascii=False,
             ),
-            model_settings={"max_tokens": 2048,})
+            model_settings={"max_tokens": STRUCTURED_OUTPUT_MAX_TOKENS})
 
         arguments = result.output.model_dump(mode="json")
 
@@ -468,10 +472,6 @@ class PydanticAgentBackend:
         @planner.output_validator
         def validate_execution_plan(
                 plan: ExecutionPlanDraft) -> ExecutionPlanDraft:
-            if plan.request_id != request_id:
-                raise ModelRetry(
-                    "The request ID does not match the current request.")
-
             if not 1 <= len(plan.steps) <= plan_step_limit:
                 raise ModelRetry(
                     f"The plan must contain between 1 and "
@@ -498,13 +498,12 @@ class PydanticAgentBackend:
 
         try:
             result = await planner.run((
-                    f"REQUEST_ID: {request_id}\n"
                     f"ORIGINAL_REQUEST:\n{task}\n"
                     f"MAXIMUM_STEPS: {plan_step_limit}\n"
                     f"{self._planning_catalog(task)}\n"
                     f"PROJECT_CONTEXT:\n{project_context.model_dump_json() if project_context else 'null'}"),
                 model_settings={
-                    "max_tokens": 2048,
+                    "max_tokens": STRUCTURED_OUTPUT_MAX_TOKENS,
                 })
 
             draft = result.output
@@ -540,7 +539,7 @@ class PydanticAgentBackend:
                         tool_args=arguments))
 
             return ExecutionPlan(
-                request_id=draft.request_id,
+                request_id=request_id,
                 goal=draft.goal,
                 steps=steps,
                 project_context=project_context,
