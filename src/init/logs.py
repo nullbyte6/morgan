@@ -26,7 +26,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QFont, QTextCharFormat, QTextCursor
+from PySide6.QtGui import (QDesktopServices, QFont, QFontDatabase,
+                           QTextCharFormat, QTextCursor)
 from PySide6.QtWidgets import *
 
 ENTRY_HEADER = re.compile(
@@ -206,12 +207,11 @@ class LogMessageCard(QFrame):
             block_format = block.blockFormat()
 
             if block_format.nonBreakableLines():
-                block_font = QFont(self.code_font_family)
-
                 cursor = QTextCursor(block)
                 cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
 
                 char_format = QTextCharFormat()
+                char_format.setFont(QFont(self.code_font_family))
                 char_format.setFontFamilies(
                     [self.code_font_family])
 
@@ -233,6 +233,7 @@ class LogMessageCard(QFrame):
                             QTextCursor.MoveMode.KeepAnchor)
 
                         code_format = QTextCharFormat()
+                        code_format.setFont(QFont(self.code_font_family))
                         code_format.setFontFamilies(
                             [self.code_font_family])
                         code_format.setFontFixedPitch(True)
@@ -292,7 +293,10 @@ class LogView(QWidget):
 
         self.last_content: str | None = None
         self.messages: list[LogMessage] = []
-        self.code_font_family = "JetBrains Mono NL"
+        self.code_font_family = next(
+            (family for family in QFontDatabase.families()
+             if "jetbrains" in family.casefold()),
+            "JetBrains Mono NL")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 12)
