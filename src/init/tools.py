@@ -92,6 +92,7 @@ from src.init.memory.tools import (remember, recall, forget, list_memories,
                                    read_memory_message)
 from src.init.desktop.clipboard import read_clipboard
 from src.init.visuals.bridge import render_flowchart
+from src.init.visuals.response import open_response_view
 from src.init.reader import analyze_image, analyze_screen
 
 TOOLS = [
@@ -107,6 +108,7 @@ TOOLS = [
     open_in_editor,
     read_clipboard,
     render_flowchart,
+    open_response_view,
     close_application,
     execute_command,
     list_quick_commands,

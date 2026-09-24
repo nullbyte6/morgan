@@ -21,7 +21,6 @@ import html
 import logging
 import os
 import random
-import re
 import sys
 import threading
 from getpass import getuser
@@ -48,7 +47,7 @@ from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
 from src.init.indicators import PrivacyIndicator, WorkingDirectory
 from src.init.visuals.workspace import Workspace, WorkspacePanel
-from src.init.visuals.response import ResponseView
+from src.init.visuals.response import ResponseBridge
 
 
 WORKSPACE_VIEW_CONFIG = {
@@ -184,6 +183,7 @@ class ArloWindow(DesktopWindow):
         self.flowchart_bridge = FlowchartBridge(self)
         self.browser_bridge = BrowserBridge(self)
         self.terminal_bridge = TerminalBridge(self)
+        self.response_bridge = ResponseBridge(self)
         self.chat_scroll = QScrollArea()
         self.thread = QThread(self)
 
@@ -1111,13 +1111,6 @@ class ArloWindow(DesktopWindow):
 
         self.current_reply = ""
         self.current_response_view = None
-        if self.should_open_response_workspace(title):
-            response_view = ResponseView()
-            self.workspace.open_panel(title="Response", content=response_view,
-                                      target_id=self.main_workspace_panel_id)
-            self.current_response_view = response_view
-            response_view.destroyed.connect(
-                lambda: self._forget_response_view(response_view))
         self.update_subtitles(prompt.display_text)
 
         self.busy = True
@@ -1255,28 +1248,6 @@ class ArloWindow(DesktopWindow):
     def _forget_response_view(self, response_view):
         if self.current_response_view is response_view:
             self.current_response_view = None
-
-    @staticmethod
-    def should_open_response_workspace(prompt):
-        """Reserve response panels for requests that benefit from long-form output."""
-        normalized = " ".join(str(prompt).casefold().split())
-        explicit = re.search(
-            r"\b(?:in|into|inside|on|within) (?:a |the )?workspace\b|"
-            r"\bworkspace (?:panel|view|response)\b|"
-            r"\b(?:display|show|open|render) (?:it|this|the response|your response) "
-            r"(?:in|on|inside) (?:a |the )?workspace\b",
-            normalized)
-        long_form = re.search(
-            r"\b(?:extensive|in-depth|detailed|comprehensive|step-by-step|"
-            r"thorough) (?:explanation|guide|walkthrough|response|answer)\b|"
-            r"\b(?:explain|describe|document)\b.{0,50}\b"
-            r"(?:extensively|thoroughly|in detail|step by step)\b|"
-            r"\b(?:write|create|generate|provide) (?:the |a |an )?"
-            r"(?:documentation|technical documentation|tutorial|code examples?)\b|"
-            r"\b(?:show|give|provide) (?:me )?(?:some |multiple )?code examples?\b|"
-            r"\b(?:include|with|using) (?:multiple )?code examples?\b",
-            normalized)
-        return bool(explicit or long_form)
 
     @Slot(int, str)
     def on_subtitle(self, turn_id, text):
@@ -1423,6 +1394,7 @@ class ArloWindow(DesktopWindow):
         self.flowchart_bridge.shutdown()
         self.browser_bridge.shutdown()
         self.terminal_bridge.shutdown()
+        self.response_bridge.shutdown()
         if self.voice_thread is not None:
             self.closing_after_voice = True
             self.voice_thread.requestInterruption()
