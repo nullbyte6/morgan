@@ -26,12 +26,151 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
+import time
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pyte
-from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QKeySequence, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import *
+
+
+@dataclass(eq=False)
+class TerminalRequest:
+    argv: list[str]
+    directory: str
+    command: str
+    timeout: int | None
+    started: threading.Event = field(default_factory=threading.Event)
+    completed: threading.Event = field(default_factory=threading.Event)
+    result: dict | None = None
+    panel_id: str | None = None
+    output: str = ""
+    output_length: int = 0
+    error: str | None = None
+
+
+class TerminalBridge(QObject):
+    """Run assistant commands in real terminal panels on the GUI thread."""
+    requested = Signal(object)
+    cancel_requested = Signal(object)
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self._lock = threading.RLock()
+        self._pending = set()
+        self._sessions = {}
+        self._closed = False
+        self.requested.connect(self._open, Qt.QueuedConnection)
+        self.cancel_requested.connect(self._cancel, Qt.QueuedConnection)
+        QApplication.instance().aboutToQuit.connect(self.shutdown)
+        from .commands import set_terminal_executor
+        set_terminal_executor(self.execute)
+
+    def execute(self, argv, directory, command, timeout):
+        if QThread.currentThread() == self.thread():
+            raise RuntimeError("Terminal commands must be requested from the assistant worker")
+        request = TerminalRequest(argv, directory, command, timeout)
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Arlo's terminal is shutting down")
+            self._pending.add(request)
+        self.requested.emit(request)
+        if not request.started.wait(15):
+            with self._lock:
+                if not request.started.is_set():
+                    self._complete(request, status="error", error="Terminal did not open; request cancelled")
+                    self.cancel_requested.emit(request)
+        if not request.completed.wait(None if timeout is None else timeout + 15):
+            self._complete(request, status="timeout", error="Terminal command did not finish in time")
+            self.cancel_requested.emit(request)
+        return request.result
+
+    def _complete(self, request, **result):
+        with self._lock:
+            if request.completed.is_set():
+                return
+            request.result = dict(result, terminal_panel_id=request.panel_id)
+            self._pending.discard(request)
+            request.started.set()
+            request.completed.set()
+
+    @Slot(object)
+    def _open(self, request):
+        with self._lock:
+            if self._closed or request.completed.is_set():
+                return
+            view = None
+            try:
+                workspace = self.parent().workspace
+                view = TerminalView(directory=request.directory, argv=request.argv,
+                                    timeout=request.timeout, autostart=False)
+                view.setProperty("workspaceViewKey", "terminal")
+                request.panel_id = workspace.open_panel(title="Terminal", content=view)
+                self.parent().restore_from_mascot()
+                view.start_session(on_created=lambda session: self._watch_session(session, request))
+                view.receive_output(request.command.replace("\n", "\r\n") + "\r\n")
+                request.started.set()
+            except Exception as error:
+                if view is not None:
+                    view.dispose()
+                    if view.parentWidget() is None:
+                        view.deleteLater()
+                self._complete(request, status="error", error=str(error))
+
+    def _watch_session(self, session, request):
+        self._sessions[session] = request
+        session.output.connect(self._receive_output)
+        session.failed.connect(self._failed)
+        session.exited.connect(self._exited)
+
+    @Slot(str)
+    def _receive_output(self, text):
+        request = self._sessions.get(self.sender())
+        if request is not None:
+            request.output_length += len(text)
+            request.output = (request.output + text)[-32000:]
+
+    @Slot(str)
+    def _failed(self, error):
+        request = self._sessions.get(self.sender())
+        if request is not None:
+            request.error = error
+
+    @Slot(int)
+    def _exited(self, code):
+        session = self.sender()
+        request = self._sessions.pop(session, None)
+        if request is None:
+            return
+        status = ("timeout" if session.timed_out else "error" if request.error else
+                  "cancelled" if session.cancelled else
+                  "completed" if code == 0 else "failed")
+        # PTYs merge stdout/stderr and contain terminal control sequences.
+        output = re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]",
+                        "", request.output).replace("\r\n", "\n")
+        self._complete(request, status=status, exit_code=code,
+                       stdout=output, stderr="", output_streams_merged=True,
+                       output_truncated=request.output_length > 32000,
+                       **({"error": request.error} if request.error else {}))
+
+    @Slot(object)
+    def _cancel(self, request):
+        for session, pending in tuple(self._sessions.items()):
+            if pending is request:
+                session.stop()
+
+    @Slot()
+    def shutdown(self):
+        with self._lock:
+            self._closed = True
+            for request in tuple(self._pending):
+                self._complete(request, status="cancelled", error="Arlo's terminal was closed")
+            for session in self._sessions:
+                session.stop()
 
 
 class TerminalSession(QThread):
@@ -41,12 +180,16 @@ class TerminalSession(QThread):
     failed = Signal(str)
     exited = Signal(int)
 
-    def __init__(self, directory: Path, columns=80, rows=24):
+    def __init__(self, directory: Path, columns=80, rows=24, *, argv=None, timeout=None):
         super().__init__(QApplication.instance())
         self.directory = directory
         self.columns, self.rows = columns, rows
         self.commands = queue.Queue()
         self.pid = None
+        self.argv = argv
+        self.timeout = timeout
+        self.timed_out = False
+        self.cancelled = False
         QApplication.instance().aboutToQuit.connect(self.shutdown)
 
     def write(self, text):
@@ -57,6 +200,7 @@ class TerminalSession(QThread):
 
     @Slot()
     def stop(self):
+        self.cancelled = True
         self.requestInterruption()
 
     @Slot()
@@ -72,27 +216,36 @@ class TerminalSession(QThread):
             if os.name == "nt":
                 from winpty import PTY
                 process = PTY(self.columns, self.rows, timeout=3000)
-                shell = shutil.which("pwsh.exe") or str(
-                    Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-                    / "PowerShell" / "7" / "pwsh.exe")
-                if not Path(shell).is_file():
-                    raise FileNotFoundError(f"PowerShell 7 (pwsh.exe) not found: {shell}")
+                argv = self.argv
+                if argv is None:
+                    shell = shutil.which("pwsh.exe") or str(
+                        Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+                        / "PowerShell" / "7" / "pwsh.exe")
+                    if not Path(shell).is_file():
+                        shell = shutil.which("powershell.exe")
+                    if shell is None:
+                        raise FileNotFoundError("PowerShell is unavailable")
+                    argv = [shell, "-NoLogo", "-NoProfile"]
                 python = Path(sys.executable)
                 if python.name.lower() == "pythonw.exe":
                     python = python.with_name("python.exe")
                 bootstrap = Path(__file__).with_name("desktop") / "terminal_shell.py"
                 process.spawn(str(python),
-                              cmdline=" " + subprocess.list2cmdline([str(bootstrap), shell]),
+                              cmdline=" " + subprocess.list2cmdline([str(bootstrap), *argv]),
                               cwd=str(self.directory),
                               env="\0".join(f"{k}={v}" for k, v in environment.items()) + "\0")
             else:
                 from ptyprocess import PtyProcessUnicode
                 shell = os.environ.get("SHELL") or shutil.which("sh") or "/bin/sh"
                 process = PtyProcessUnicode.spawn(
-                    [shell, "-i"], cwd=str(self.directory), env=environment,
+                    self.argv or [shell, "-i"], cwd=str(self.directory), env=environment,
                     dimensions=(self.rows, self.columns))
             self.pid = process.pid
+            started = time.monotonic()
             while not self.isInterruptionRequested():
+                if self.timeout is not None and time.monotonic() - started >= self.timeout:
+                    self.timed_out = True
+                    break
                 for _ in range(64):
                     try:
                         action, value = self.commands.get_nowait()
@@ -118,7 +271,15 @@ class TerminalSession(QThread):
                     break
                 self.msleep(10)
         except EOFError:
-            exit_code = 0
+            if process is not None:
+                # ConPTY can close its output pipe just before the bootstrap
+                # process exits. Wait for its real status instead of guessing.
+                deadline = time.monotonic() + 5
+                while (process.isalive() and not self.isInterruptionRequested()
+                       and time.monotonic() < deadline):
+                    self.msleep(10)
+                code = (process.get_exitstatus() if os.name == "nt" else process.exitstatus)
+                exit_code = code if code is not None else -1
         except Exception as error:
             if not self.isInterruptionRequested():
                 self.failed.emit(str(error))
@@ -249,10 +410,12 @@ class TerminalView(QWidget):
          "#8bd5ca", "#cad3f5", "#6e738d", "#f5a9b8", "#bce6af", "#f5e0b5",
          "#b7bdf8", "#d5b8ff", "#a6e3db", "#ffffff")))
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, directory=None, argv=None, timeout=None, autostart=True):
         super().__init__(parent)
         self.setObjectName("terminalPage")
-        self.directory = Path(os.environ.get("USERPROFILE") or Path.home())
+        self.directory = Path(directory or os.environ.get("USERPROFILE") or Path.home())
+        self.argv = argv
+        self.timeout = timeout
         self.session = None
         self._disposed = False
         self.display = TerminalDisplay(self)
@@ -264,6 +427,7 @@ class TerminalView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 12)
         layout.addWidget(self.display, 1)
+        layout.addWidget(self.status)
         self.display.input_received.connect(self.send_input)
         self.display.resized.connect(self.resize_terminal)
         self.render_timer = QTimer(self)
@@ -271,10 +435,11 @@ class TerminalView(QWidget):
         self.render_timer.setInterval(33)
         self.render_timer.timeout.connect(self.render_screen)
         self.setFocusProxy(self.display)
-        QTimer.singleShot(0, self.start_session)
+        if autostart:
+            QTimer.singleShot(0, self.start_session)
 
     @Slot()
-    def start_session(self):
+    def start_session(self, *, on_created=None):
         if self._disposed:
             return
         if self.session is not None and self.session.isRunning():
@@ -282,15 +447,19 @@ class TerminalView(QWidget):
         self.screen.reset()
         self.stream = pyte.Stream(self.screen)
         self.status.setText(str(self.directory))
-        self.session = TerminalSession(self.directory, *self.display.terminal_size())
+        self.session = TerminalSession(self.directory, *self.display.terminal_size(),
+                                       argv=self.argv, timeout=self.timeout)
         self.session.output.connect(self.receive_output)
         self.session.failed.connect(self.show_error)
         self.session.exited.connect(self.session_exited)
         self.destroyed.connect(self.session.stop)
         self.session.finished.connect(self.session.deleteLater)
         self.resize_terminal(*self.display.terminal_size())
+        if on_created is not None:
+            on_created(self.session)
         self.session.start()
-        self.display.setFocus()
+        if self.isVisible():
+            self.display.setFocus()
 
     def dispose(self):
         """Stop promptly on panel removal, before Qt's deferred deletion."""
@@ -318,7 +487,8 @@ class TerminalView(QWidget):
     @Slot(int)
     def session_exited(self, code):
         if not self.status.text().startswith("Terminal error:"):
-            self.status.setText(f"Session ended ({code})")
+            timed_out = self.session is not None and self.session.timed_out
+            self.status.setText("Command timed out" if timed_out else f"Session ended ({code})")
         self.session = None
 
     @Slot(int, int)

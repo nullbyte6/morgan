@@ -36,6 +36,15 @@ from .brain import get_working_directory
 
 
 _confirmation = ContextVar("command_confirmation", default=None)
+_terminal_executor = None
+
+
+def set_terminal_executor(executor) -> None:
+    """Attach the desktop's GUI-thread terminal dispatcher."""
+    global _terminal_executor
+    _terminal_executor = executor
+
+
 def set_confirmation_handler(handler: Callable[[str], bool] | None) -> None:
     _confirmation.set(handler)
 
@@ -101,13 +110,16 @@ def _windows_elevated(argv: list[str], cwd: str) -> subprocess.CompletedProcess:
 def execute_command(command: str, working_directory: str = ".",
                     shell: str = "auto", elevated: bool = False,
                     timeout_seconds: int = 120) -> str:
-    """Run any local shell command after direct terminal consent.
+    """Open a built-in terminal workspace and execute a command after consent.
+    In desktop mode the command runs in the visible terminal, with live output.
+    Without the desktop, capture output directly in the current CLI session.
     Supports pipelines, scripts, shell builtins and installed executables.
     shell: auto, powershell, pwsh, cmd, sh or bash (case-insensitive). On Windows auto is
     PowerShell. elevated asks separately for sudo (Windows and POSIX).
     Never retry failed commands automatically: they may have partially run.
     Windows sudo must be enabled and uses the user's configured mode.
-    Commands have closed stdin except POSIX sudo and Windows new-window mode.
+    Desktop commands accept input in their terminal panel. CLI commands have
+    closed stdin except POSIX sudo and Windows new-window mode.
     Windows elevated output may appear in a separate window;
     elevated commands wait until completion without a timeout.
     """
@@ -146,6 +158,13 @@ def execute_command(command: str, working_directory: str = ".",
         if elevated and not is_elevated():
             if not _confirm(tr("command.elevated")):
                 return result("denied")
+            if _terminal_executor is not None:
+                sudo = shutil.which("sudo.exe" if os.name == "nt" else "sudo")
+                if not sudo:
+                    raise ValueError(tr("command.sudo_unavailable" if os.name == "nt"
+                                        else "command.sudo_missing"))
+                prefix = [sudo, "--chdir", cwd, "--"] if os.name == "nt" else [sudo, "--"]
+                return result(**_terminal_executor(prefix + argv, cwd, command, None))
             if os.name == "nt":
                 completed = _windows_elevated(argv, cwd)
                 return result("completed" if completed.returncode == 0 else "failed",
@@ -160,6 +179,8 @@ def execute_command(command: str, working_directory: str = ".",
             completed = subprocess.run([sudo, "--", *argv], cwd=cwd)
             return result("completed" if completed.returncode == 0 else "failed",
                           exit_code=completed.returncode, output_captured=False)
+        if _terminal_executor is not None:
+            return result(**_terminal_executor(argv, cwd, command, timeout_seconds))
         completed = subprocess.run(
             argv, cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True,
             text=True, errors="replace", timeout=timeout_seconds,
@@ -170,5 +191,5 @@ def execute_command(command: str, working_directory: str = ".",
                       output_truncated=max(len(completed.stdout), len(completed.stderr)) > 32000)
     except subprocess.TimeoutExpired:
         return result("timeout", note=tr("command.timeout_note"))
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, RuntimeError) as error:
         return result("error", error=str(error))

@@ -40,7 +40,7 @@ def main():
 
     if not kernel.SetConsoleCtrlHandler(handle_control, True):
         raise ctypes.WinError(ctypes.get_last_error())
-    return subprocess.call([sys.argv[1], "-NoLogo", "-NoProfile"])
+    return subprocess.call(sys.argv[1:])
 
 
 if __name__ == "__main__":
