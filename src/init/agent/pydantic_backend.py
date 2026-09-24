@@ -27,6 +27,15 @@ from pydantic_ai import Agent, ModelRetry, NativeOutput
 from .models import ExecutionPlan, VerificationResult
 
 
+PYTHON_SYNTAX_COMMAND = (
+    "python -c \"import pathlib,subprocess; "
+    "files=subprocess.check_output(['git','ls-files','*.py'], "
+    "text=True).splitlines(); "
+    "[compile(pathlib.Path(p).read_text(encoding='utf-8-sig'), p, 'exec') "
+    "for p in files]\""
+)
+
+
 class PydanticAgentBackend:
     def __init__(self, model, tools: Iterable, *, base_instructions=()):
         tools = list(tools)
@@ -64,7 +73,8 @@ class PydanticAgentBackend:
             "- Use list_code only to list source entries.\n"
             "- Use read_code only for a specific source file, never a directory.\n"
             "- Repository inspection must use list_code/read_code or list_files/read_file.\n"
-            "- Python syntax checks must execute a read-only check and must not create unrelated files.\n"
+            "- For a generic Python syntax check, call execute_command with this exact "
+            f"cross-platform read-only command: {PYTHON_SYNTAX_COMMAND}\n"
             "- A request to display the result in a response workspace is handled by the host; "
             "plan only the work needed to produce the result."
         )]
@@ -157,6 +167,28 @@ class PydanticAgentBackend:
                 raise ModelRetry(
                     "Correct the tool arguments using the listed signatures. "
                     + " | ".join(invalid_arguments))
+            normalized_task = task.casefold()
+            syntax_request = (
+                "python" in normalized_task
+                and any(term in normalized_task for term in (
+                    "syntax", "sintaxis", "syntaxe", "sintaxe")))
+            if (syntax_request and "execute_command" in self.tool_names
+                    and not any(step.tool_name == "execute_command"
+                                for step in plan.steps)):
+                raise ModelRetry(
+                    "This request requires an actual read-only Python syntax check. "
+                    "Add an execute_command step that checks the project sources "
+                    "without creating or modifying project files.")
+            syntax_commands = [
+                step.tool_args.get("command") for step in plan.steps
+                if step.tool_name == "execute_command"
+            ]
+            if (syntax_request and "execute_command" in self.tool_names
+                    and PYTHON_SYNTAX_COMMAND not in syntax_commands):
+                raise ModelRetry(
+                    "Use the exact cross-platform read-only syntax command from the "
+                    "instructions. Do not use find, py_compile, compileall, or mask "
+                    "a failed exit status.")
             return plan
 
         result = await planner.run(
