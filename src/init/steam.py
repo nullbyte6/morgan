@@ -19,7 +19,6 @@
 """Browses the local Steam library and checks whether the installed games
 match the game requested by the user, managed by a Steam account"""
 
-from src.init.lang import tr
 import os
 import re
 import winreg
@@ -34,7 +33,7 @@ class SteamManager:
         self.steam_path = self._find_steam_path()
 
     @staticmethod
-    def _find_steam_path() -> Path:
+    def _find_steam_path() -> Path | None:
         """Finds the local Steam installation path"""
         keys = (
             (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam"),
@@ -45,14 +44,25 @@ class SteamManager:
             try:
                 with winreg.OpenKey(root, key_path) as key:
                     value, _ = winreg.QueryValueEx(key, "SteamPath")
-                    return Path(value)
+                    path = Path(value)
+                    if (path / "steam.exe").is_file():
+                        return path
             except OSError:
                 continue
 
-        raise FileNotFoundError(tr('steam.steam_installation_not_found'))
+        system_drive = Path(os.environ.get("SystemDrive", "C:") + os.sep)
+        candidates = [
+            system_drive / "Steam",
+            Path(os.environ.get("ProgramFiles", system_drive / "Program Files")) / "Steam",
+            Path(os.environ.get("ProgramFiles(x86)", system_drive / "Program Files (x86)")) / "Steam",
+        ]
+        return next((path for path in candidates
+                     if (path / "steam.exe").is_file()), None)
 
     def _library_paths(self) -> list[Path]:
         """Returns a list of paths to local Steam libraries"""
+        if self.steam_path is None:
+            return []
         paths = [self.steam_path]
         vdf = self.steam_path / "steamapps" / "libraryfolders.vdf"
 
