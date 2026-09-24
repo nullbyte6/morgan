@@ -104,7 +104,7 @@
   "date.weekday.4": "Fri",
   "date.weekday.5": "Sat",
   "date.weekday.6": "Sun",
-  "agent.mode": "Forge ",
+  "agent.mode": "Forge",
   "agent.arlo_is_awake": "Arlo is awake",
   "agent.processing_request": "Processing request",
   "agent.trace_1_before_run_stream_sync": "TRACE 1: Before run_stream_sync",

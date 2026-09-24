@@ -473,17 +473,17 @@ QToolButton#branchIndicator {
 }
 
 QToolButton#agentModeIndicator {
-    color: #b8c0e0;
     background-color: rgba(184, 192, 224, 0.06);
+    color: #cad3f5;
     border: 2px solid #494d64;
     border-radius: 16px;
     padding: 4px 10px;
 }
 
 QToolButton#agentModeIndicator:checked {
-    color: #c6a0f6;
     background-color: rgba(198, 160, 246, 0.12);
     border-color: rgba(198, 160, 246, 0.65);
+    color: #c6a0f6;
 }
 
 QToolButton#privacyIndicator:hover {
