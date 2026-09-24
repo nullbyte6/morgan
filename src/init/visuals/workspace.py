@@ -71,6 +71,7 @@ class WorkspacePanel(QFrame):
         self.header.setObjectName("workspacePanelHeader")
         self.header.setFixedHeight(38)
         self.header.setCursor(Qt.OpenHandCursor)
+        self.header.setMouseTracking(True)
         self.header.installEventFilter(self)
 
         header_layout = QHBoxLayout(self.header)
@@ -374,7 +375,8 @@ class WorkspaceSplitterHandle(QSplitterHandle):
         if getattr(self, "_offset", None) is not None and event.buttons() & Qt.LeftButton:
             position = self.mapTo(self.splitter(), event.position().toPoint() - self._offset)
             value = position.x() if self.orientation() == Qt.Horizontal else position.y()
-            self.moveSplitter(value)
+            splitter = self.splitter()
+            splitter.moveSplitter(splitter.indexOf(self), value)
             event.accept()
             return
         super().mouseMoveEvent(event)
