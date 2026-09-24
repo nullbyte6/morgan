@@ -48,6 +48,7 @@ from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
 from src.init.indicators import PrivacyIndicator, WorkingDirectory
 from src.init.visuals.workspace import Workspace, WorkspacePanel
+from src.init.visuals.response import ResponseView
 
 
 WORKSPACE_VIEW_CONFIG = {
@@ -197,6 +198,7 @@ class ArloWindow(DesktopWindow):
         self.status_key = "status.waking"
         self.showing_greeting = True
         self.current_reply = None
+        self.current_response_view = None
         self.subtitle_text = ""
         self._startup_reveal_animations = []
         self._workspace_hiding = False
@@ -1108,6 +1110,14 @@ class ArloWindow(DesktopWindow):
         self.command_output.clear()
 
         self.current_reply = ""
+        self.current_response_view = None
+        if self.should_open_response_workspace(title):
+            response_view = ResponseView()
+            self.workspace.open_panel(title="Response", content=response_view,
+                                      target_id=self.main_workspace_panel_id)
+            self.current_response_view = response_view
+            response_view.destroyed.connect(
+                lambda: self._forget_response_view(response_view))
         self.update_subtitles(prompt.display_text)
 
         self.busy = True
@@ -1233,12 +1243,40 @@ class ArloWindow(DesktopWindow):
 
     @Slot(int, str)
     def on_chunk(self, turn_id, chunk):
-        if turn_id != self.turn_id or self.current_reply is None or self.stopping:
+        if turn_id != self.turn_id or self.current_reply is None:
             return
 
         self.current_reply += chunk
+        if self.current_response_view is not None:
+            self.current_response_view.append_chunk(chunk)
         if not self.speaking:
             self.set_orbs_visual_state(Orb.State.WRITING)
+
+    def _forget_response_view(self, response_view):
+        if self.current_response_view is response_view:
+            self.current_response_view = None
+
+    @staticmethod
+    def should_open_response_workspace(prompt):
+        """Reserve response panels for requests that benefit from long-form output."""
+        normalized = " ".join(str(prompt).casefold().split())
+        explicit = re.search(
+            r"\b(?:in|into|inside|on|within) (?:a |the )?workspace\b|"
+            r"\bworkspace (?:panel|view|response)\b|"
+            r"\b(?:display|show|open|render) (?:it|this|the response|your response) "
+            r"(?:in|on|inside) (?:a |the )?workspace\b",
+            normalized)
+        long_form = re.search(
+            r"\b(?:extensive|in-depth|detailed|comprehensive|step-by-step|"
+            r"thorough) (?:explanation|guide|walkthrough|response|answer)\b|"
+            r"\b(?:explain|describe|document)\b.{0,50}\b"
+            r"(?:extensively|thoroughly|in detail|step by step)\b|"
+            r"\b(?:write|create|generate|provide) (?:the |a |an )?"
+            r"(?:documentation|technical documentation|tutorial|code examples?)\b|"
+            r"\b(?:show|give|provide) (?:me )?(?:some |multiple )?code examples?\b|"
+            r"\b(?:include|with|using) (?:multiple )?code examples?\b",
+            normalized)
+        return bool(explicit or long_form)
 
     @Slot(int, str)
     def on_subtitle(self, turn_id, text):
@@ -1277,6 +1315,8 @@ class ArloWindow(DesktopWindow):
     @Slot(str)
     def on_finished(self, reply):
         interrupted = self.stopping
+        if self.current_response_view is not None:
+            self.current_response_view.finish(reply)
         self.task_progress.finish(self.turn_id, interrupted=interrupted,
                                   failed=self.permission_denied_state)
         self.finish_wake_command("failed" if interrupted else "completed",
@@ -1292,6 +1332,7 @@ class ArloWindow(DesktopWindow):
             self.update_subtitles("")
 
         self.current_reply = None
+        self.current_response_view = None
         self.busy = False
         self.speaking = False
         self.stopping = False
@@ -1343,6 +1384,9 @@ class ArloWindow(DesktopWindow):
         self.showing_greeting = False
         self.update_subtitles(tr("ui.error", error=error))
         self.current_reply = None
+        if self.current_response_view is not None:
+            self.current_response_view.finish()
+        self.current_response_view = None
         self.busy = False
         self.speaking = False
         self.stopping = False

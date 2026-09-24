@@ -434,6 +434,20 @@ QMessageBox QLabel {
     border: none;
 }
 
+#responseView,
+#responseDocument,
+#responseDocument QAbstractScrollArea::viewport {
+    color: #cad3f5;
+    background-color: #24273a;
+    border: none;
+}
+
+#responseDocument QScrollBar:vertical,
+#responseDocument QScrollBar:horizontal {
+    background: #24273a;
+    border: none;
+}
+
 QSplitter#workspaceSplitter::handle {
     background-color: transparent;
 }
