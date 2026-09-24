@@ -104,7 +104,7 @@
   "date.weekday.4": "vie",
   "date.weekday.5": "sáb",
   "date.weekday.6": "dom",
-  "agent.mode": "Forja",
+  "agent.mode": "Forja (Beta)",
   "agent.arlo_is_awake": "Arlo está despierto",
   "agent.processing_request": "Procesando solicitud",
   "agent.trace_1_before_run_stream_sync": "TRAZA 1: Antes de run_stream_sync",
