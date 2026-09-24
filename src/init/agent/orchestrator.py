@@ -41,11 +41,18 @@ from .models import (
 from .persistence import AgentStore
 
 
+FILE_WRITE_TOOLS = frozenset({
+    "create_file", "edit_file", "append_file", "replace_in_file",
+    "write_binary_file",
+})
+
+
 class AgentBackend(Protocol):
     async def inspect_project(self, task: str, working_directory: str) -> ProjectContext: ...
     async def plan(self, task: str, max_steps: int,
                    project_context: ProjectContext | None = None,
-                   validation_feedback: str | None = None) -> ExecutionPlan: ...
+                   validation_feedback: str | None = None,
+                   forbidden_tools: set[str] | None = None) -> ExecutionPlan: ...
     async def validate_plan(self, task: str,
                             plan: ExecutionPlan) -> VerificationResult: ...
     async def execute(self, instruction: str, observations: list[str]) -> str: ...
@@ -194,6 +201,7 @@ class AgentOrchestrator:
         results: list[StepResult] = []
         observations: list[str] = []
         validation_feedback = None
+        forbidden_tools: set[str] = set()
         try:
             self._check_cancelled(cancel_event)
             project_context = None
@@ -208,10 +216,12 @@ class AgentOrchestrator:
             for planning_attempt in range(2):
                 planning = (self.backend.plan(task, self.max_steps,
                                               project_context=project_context,
-                                              validation_feedback=validation_feedback)
+                                              validation_feedback=validation_feedback,
+                                              forbidden_tools=forbidden_tools)
                             if project_context is not None
                             else self.backend.plan(task, self.max_steps,
-                                                   validation_feedback=validation_feedback))
+                                                   validation_feedback=validation_feedback,
+                                                   forbidden_tools=forbidden_tools))
                 plan = await self._await_cancellable(
                     planning, cancel_event)
                 plan.project_context = project_context
@@ -236,6 +246,8 @@ class AgentOrchestrator:
                 if plan_validation.success:
                     break
                 validation_feedback = plan_validation.summary
+                if plan_validation.summary == "Unrequested file write":
+                    forbidden_tools.update(FILE_WRITE_TOOLS)
             if plan is None or not plan_validation.success:
                 raise RuntimeError(
                     "Plan validation failed: "

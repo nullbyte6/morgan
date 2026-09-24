@@ -297,7 +297,7 @@ class PydanticAgentBackend:
             )],
         )
 
-    def _planning_catalog(self, task: str) -> str:
+    def _planning_catalog(self, task: str, forbidden_tools: set[str]) -> str:
         words = set(re.findall(r"[a-z0-9_]{3,}", task.casefold()))
         aliases = {
             "archivo": "file", "archivos": "file", "codigo": "code",
@@ -310,12 +310,14 @@ class PydanticAgentBackend:
         words.update(aliases[word] for word in tuple(words) if word in aliases)
         scored = []
         for name, description in self.tool_descriptions.items():
+            if name in forbidden_tools:
+                continue
             searchable = f"{name.replace('_', ' ')} {description}".casefold()
             score = sum(1 for word in words if word in searchable)
             if score:
                 scored.append((score, name, description))
         scored.sort(key=lambda item: (-item[0], item[1]))
-        names = ", ".join(sorted(self.tool_names))
+        names = ", ".join(sorted(self.tool_names - forbidden_tools))
         details = "\n".join(
             f"- {name}: {description}" for _, name, description in scored[:16]
         )
@@ -444,7 +446,8 @@ class PydanticAgentBackend:
 
     async def plan(self, task: str,
             max_steps: int, project_context: ProjectContext | None = None,
-            validation_feedback: str | None = None) -> ExecutionPlan:
+            validation_feedback: str | None = None,
+            forbidden_tools: set[str] | None = None) -> ExecutionPlan:
         """Generate and validate a bounded execution plan."""
 
         if not task.strip():
@@ -455,6 +458,7 @@ class PydanticAgentBackend:
 
         request_id = uuid.uuid4().hex
         plan_step_limit = min(max_steps, MAX_PLAN_STEPS)
+        forbidden_tools = set(forbidden_tools or ())
 
         trace_model = _PlanningTraceModel(
             self.model,
@@ -490,12 +494,12 @@ class PydanticAgentBackend:
             unknown_tools = {
                 step.tool_name
                 for step in plan.steps
-                if step.tool_name not in self.tool_names
+                if step.tool_name not in self.tool_names or step.tool_name in forbidden_tools
             }
 
             if unknown_tools:
                 raise ModelRetry(
-                    "The plan contains unregistered tools: "
+                    "The plan contains unavailable tools: "
                     + ", ".join(sorted(unknown_tools)))
 
             return plan
@@ -504,7 +508,8 @@ class PydanticAgentBackend:
             result = await planner.run((
                     f"ORIGINAL_REQUEST:\n{task}\n"
                     f"MAXIMUM_STEPS: {plan_step_limit}\n"
-                    f"{self._planning_catalog(task)}\n"
+                    f"{self._planning_catalog(task, forbidden_tools)}\n"
+                    f"FORBIDDEN_TOOL_NAMES:\n{sorted(forbidden_tools)}\n"
                     f"PREVIOUS_VALIDATION_FEEDBACK:\n{validation_feedback or 'null'}\n"
                     f"PROJECT_CONTEXT:\n{project_context.model_dump_json() if project_context else 'null'}"),
                 model_settings={
