@@ -172,6 +172,19 @@ class ResponseView(QWidget):
         self.document_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.document_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.document_view.document().setDocumentMargin(8)
+        self.document_view.document().setDefaultStyleSheet("""
+            code {
+                font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
+                font-size: 14px;
+                color: #f5c2e7;
+                background-color: #303244;
+            }
+
+            pre {
+                font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
+                font-size: 14px;
+            }
+        """)
         layout.addWidget(self.document_view)
 
         self._source = ""
