@@ -23,6 +23,7 @@ import ctypes
 from ctypes import wintypes as wt
 import json
 import os
+import time
 
 
 def is_taskbar_window(visible, cloaked, style, owner, shell):
@@ -59,6 +60,8 @@ def get_open_windows():
     open_process = bind(kernel, "OpenProcess", [wt.DWORD, wt.BOOL, wt.DWORD], wt.HANDLE)
     image_name = bind(kernel, "QueryFullProcessImageNameW",
                       [wt.HANDLE, wt.DWORD, wt.LPWSTR, ctypes.POINTER(wt.DWORD)], wt.BOOL)
+    application_id = bind(kernel, "GetApplicationUserModelId",
+                          [wt.HANDLE, ctypes.POINTER(wt.UINT), wt.LPWSTR], wt.LONG)
     close = bind(kernel, "CloseHandle", [wt.HANDLE], wt.BOOL)
     windows = []
     errors = []
@@ -80,16 +83,25 @@ def get_open_windows():
             pid = wt.DWORD()
             get_pid(hwnd, ctypes.byref(pid))
             executable = None
+            executable_path = None
+            app_id = None
             process = open_process(0x1000, False, pid.value)
             if process:
                 try:
                     size = wt.DWORD(32768)
                     path = ctypes.create_unicode_buffer(size.value)
                     if image_name(process, 0, path, ctypes.byref(size)):
+                        executable_path = path.value
                         executable = path.value.rsplit("\\", 1)[-1]
+                    app_size = wt.UINT(1024)
+                    app_buffer = ctypes.create_unicode_buffer(app_size.value)
+                    if application_id(process, ctypes.byref(app_size), app_buffer) == 0:
+                        app_id = app_buffer.value
                 finally:
                     close(process)
             windows.append({"hwnd": int(hwnd), "title": title.value, "executable": executable,
+                            "executable_path": executable_path,
+                            "app_id": app_id,
                             "pid": pid.value, "minimized": bool(minimized(hwnd))})
         except Exception as error:
             errors.append(error)
@@ -104,6 +116,71 @@ def get_open_windows():
             raise ctypes.WinError(error_code)
         raise OSError(tr('windows.windows_could_not_enumerate_windows_in_this_desktop_session'))
     return windows
+
+
+def launch_application(target, timeout=8.0):
+    """Submit a Shell launch and confirm a window belonging to its process."""
+    class ShellExecuteInfo(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wt.DWORD), ("fMask", wt.ULONG), ("hwnd", wt.HWND),
+            ("lpVerb", wt.LPCWSTR), ("lpFile", wt.LPCWSTR),
+            ("lpParameters", wt.LPCWSTR), ("lpDirectory", wt.LPCWSTR),
+            ("nShow", ctypes.c_int), ("hInstApp", wt.HINSTANCE),
+            ("lpIDList", ctypes.c_void_p), ("lpClass", wt.LPCWSTR),
+            ("hkeyClass", wt.HKEY), ("dwHotKey", wt.DWORD),
+            ("hIcon", wt.HANDLE), ("hProcess", wt.HANDLE),
+        ]
+
+    shell = ctypes.WinDLL("shell32", use_last_error=True)
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    ole = ctypes.WinDLL("ole32")
+    ole.CoInitializeEx.argtypes = [ctypes.c_void_p, wt.DWORD]
+    ole.CoInitializeEx.restype = ctypes.c_long
+    ole.CoUninitialize.argtypes = []
+    ole.CoUninitialize.restype = None
+    initialized = ole.CoInitializeEx(None, 2)
+    shell.ShellExecuteExW.argtypes = [ctypes.POINTER(ShellExecuteInfo)]
+    shell.ShellExecuteExW.restype = wt.BOOL
+    kernel.GetProcessId.argtypes = [wt.HANDLE]
+    kernel.GetProcessId.restype = wt.DWORD
+    kernel.CloseHandle.argtypes = [wt.HANDLE]
+    kernel.CloseHandle.restype = wt.BOOL
+    info = ShellExecuteInfo()
+    info.cbSize = ctypes.sizeof(info)
+    info.fMask = 0x40 | 0x100 | 0x400
+    info.lpVerb = "open"
+    info.lpFile = target
+    info.lpDirectory = os.path.dirname(target) if os.path.isfile(target) else None
+    info.nShow = 1
+    try:
+        if not shell.ShellExecuteExW(ctypes.byref(info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        pid = kernel.GetProcessId(info.hProcess) if info.hProcess else None
+        expected_path = os.path.normcase(os.path.abspath(target)) if os.path.isfile(target) else None
+        expected_app_id = target.removeprefix("shell:AppsFolder\\") if target.startswith("shell:AppsFolder\\") else None
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                windows = get_open_windows()
+            except Exception as error:
+                return {"status": "error", "opened": False,
+                        "launch_requested": True, "error": str(error)}
+            for window in windows:
+                path = window.get("executable_path")
+                if ((pid and window["pid"] == pid)
+                        or (expected_app_id and window.get("app_id") == expected_app_id)
+                        or (expected_path and path and os.path.normcase(path) == expected_path)):
+                    return {"status": "completed", "opened": True, "window": window}
+            if time.monotonic() >= deadline:
+                return {"status": "timeout", "opened": False,
+                        "launch_requested": True,
+                        "error": "Windows accepted the launch but no matching application window was confirmed. Do not claim it opened or automatically launch it again."}
+            time.sleep(0.2)
+    finally:
+        if info.hProcess:
+            kernel.CloseHandle(info.hProcess)
+        if initialized in (0, 1):
+            ole.CoUninitialize()
 
 
 def request_window_close(hwnd, expected_pid):

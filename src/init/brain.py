@@ -1226,10 +1226,13 @@ def list_open_applications() -> str:
 
 
 def _launch_application(app):
-    if app["Source"] == "registered":
-        os.startfile(f"shell:AppsFolder\\{app['AppID']}")
-    else:
-        os.startfile(app["Path"])
+    from src.init.windows import launch_application
+
+    target = app.get("Path") or app.get("AppID")
+    if app["Source"] == "registered" and not Path(target).is_file():
+        target = f"shell:AppsFolder\\{target}"
+    result = launch_application(target)
+    return json.dumps({"application": app["Name"], **result}, ensure_ascii=False)
 
 
 def launch_steam_game(game: str) -> str:
@@ -1256,7 +1259,10 @@ def find_steam_game(game: str) -> str:
 
 
 def open_application(application: str) -> str:
-    """Open an app, consulting persistent apps.json before expensive discovery."""
+    """Launch an app using apps.json first. Only opened=true confirms a window.
+
+    A timeout is unconfirmed, not success; do not automatically launch again.
+    """
     from src.init.folders import FOLDER_ALIASES
 
     raw_application = application.strip().strip('"').strip("'")
@@ -1270,9 +1276,9 @@ def open_application(application: str) -> str:
             app = {"Name": path_candidate.stem, "Source": "file",
                    "Path": str(path_candidate)}
             try:
-                _launch_application(app)
+                result = _launch_application(app)
                 remember_app(normalize_application_name(path_candidate.stem), app)
-                return tr('brain.opened_application_78a6fd', value0=path_candidate.stem)
+                return result
             except Exception as error:
                 return tr('brain.error_opening_application_path', raw_application=raw_application, error=error)
         return tr('brain.application_path_not_found_or_is_not_an_executable_file', raw_application=raw_application)
@@ -1285,8 +1291,7 @@ def open_application(application: str) -> str:
     app = cached_app(normalized_query)
     if app:
         try:
-            _launch_application(app)
-            return tr('brain.opened_application_78a6fd', value0=app['Name'])
+            return _launch_application(app)
         except Exception:
             forget_app(normalized_query)
     _APPLICATION_SEARCH_CACHE.pop(normalized_query, None)
@@ -1296,17 +1301,25 @@ def open_application(application: str) -> str:
         for app in get_applications()
         if normalized_query in normalize_application_name(app["Name"])
     ]
-    matches = registered + find_applications_on_all_drives(application)
+    matches = registered or find_applications_on_all_drives(application)
     if not matches:
         return tr('brain.application_not_found', application=application)
 
-    app = min(matches, key=lambda candidate:
-    application_rank(candidate, normalized_query))
+    ranked = sorted(matches, key=lambda candidate: application_rank(candidate, normalized_query))
+    app = ranked[0]
+    alternatives = [candidate for candidate in ranked
+                    if application_rank(candidate, normalized_query)[:2]
+                    == application_rank(app, normalized_query)[:2]
+                    and normalize_application_name(candidate["Name"])
+                    != normalize_application_name(app["Name"])]
+    if alternatives:
+        return json.dumps({"status": "error", "opened": False,
+                           "error": "Multiple applications match. Ask the user to choose.",
+                           "candidates": [app, *alternatives]}, ensure_ascii=False)
     try:
-        _launch_application(app)
-        saved = remember_app(normalized_query, app)
-        note = "" if saved else tr('brain.could_not_update_apps_json_cache')
-        return tr('brain.opened_application', value0=app['Name'], note=note)
+        result = _launch_application(app)
+        remember_app(normalized_query, app)
+        return result
     except Exception as error:
         return f"Error: {error}"
 
