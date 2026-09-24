@@ -117,8 +117,7 @@ QPushButton#chatNav,
 QPushButton#logsNav,
 QPushButton#editorNav,
 QPushButton#terminalNav,
-QPushButton#browserNav,
-QPushButton#logCopyNav {
+QPushButton#browserNav {
     background-color: transparent;
     color: #a5adcb;
     border: 2px solid transparent;
@@ -126,12 +125,29 @@ QPushButton#logCopyNav {
     font-size: 32px;
 }
 
+QPushButton#logCopyNav {
+    background-color: transparent;
+    color: #a5adcb;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    font-size: 14px;
+    padding: 0;
+    min-width: 20px;
+    max-width: 20px;
+    min-height: 20px;
+    max-height: 20px;
+}
+
 QPushButton#settingsNav:hover,
 QPushButton#chatNav:hover,
 QPushButton#logsNav:hover,
 QPushButton#editorNav:hover,
 QPushButton#terminalNav:hover,
-QPushButton#browserNav:hover,
+QPushButton#browserNav:hover {
+    background-color: #363a4f;
+    color: #cad3f5;
+}
+
 QPushButton#logCopyNav:hover {
     background-color: #363a4f;
     color: #cad3f5;

@@ -172,10 +172,10 @@ class LogMessageCard(QFrame):
         self.copy_button.setObjectName("logCopyNav")
 
         icon_font = QFont(self.code_font_family)
-        icon_font.setPixelSize(18)
+        icon_font.setPixelSize(12)
 
         self.copy_button.setFont(icon_font)
-        self.copy_button.setFixedSize(32, 32)
+        self.copy_button.setFixedSize(20, 20)
         self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.copy_button.clicked.connect(self.copy_log)
 
