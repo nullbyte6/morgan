@@ -132,15 +132,6 @@ class Assistant:
             "It does not require an existing diagram. Do not claim "
             "this capability is unavailable.")
 
-        self.agent.instructions(
-            "You can open a dedicated response workspace using the "
-            "open_response_view tool. When the user explicitly asks to "
-            "display your response in a workspace, call open_response_view "
-            "BEFORE generating the explanation. Use it when a separate "
-            "document-like view would make a substantial response easier "
-            "to read. Do not merely say that you opened the workspace: "
-            "actually call the tool.")
-
     def reload_source(self) -> str:
         """Reload source modules and rebuild the model and tools for next turn."""
         with self._reload_lock:
@@ -176,15 +167,6 @@ class Assistant:
                     "render_flowchart with newly supplied nodes and edges. "
                     "It does not require an existing diagram. Do not claim "
                     "this capability is unavailable.")
-
-                self.agent.instructions(
-                    "You can open a dedicated response workspace using the "
-                    "open_response_view tool. When the user explicitly asks to "
-                    "display your response in a workspace, call open_response_view "
-                    "BEFORE generating the explanation. Use it when a separate "
-                    "document-like view would make a substantial response easier "
-                    "to read. Do not merely say that you opened the workspace: "
-                    "actually call the tool.")
 
             summary = f"Reloaded {len(reloaded)} source modules"
             if errors:
@@ -300,48 +282,6 @@ class Assistant:
             return read_file(path)
 
         return None
-
-    def browser_cmd(self, command: str) -> str | None:
-        """Open URLs from explicit navigation commands without relying on the model."""
-        normalized = " ".join(command.casefold().split())
-        normalized = re.sub(r"^[¿¡\s]*(?:arlo[,;:\s]+)?", "", normalized)
-        intent = re.match(
-            r"(?:(?:please|por favor)[,;:\s]+)*"
-            r"(?:(?:can|could|would|will) you\s+|(?:puedes|podrías)\s+)?"
-            r"(?:open|navigate to|go to|abre|ábreme|abrir|navega a|ve a)\b",
-            normalized)
-        if intent is None:
-            return None
-
-        url_pattern = re.compile(
-            r"https?://[^\s<>\"']+|"
-            r"(?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,62})\.)+"
-            r"[a-z]{2,63}"
-            r"(?::\d{1,5})?(?:/[^\s<>\"']*)?",
-            re.IGNORECASE)
-        file_extensions = {
-            "bat", "c", "cpp", "css", "csv", "doc", "docx", "h", "hpp",
-            "html", "ini", "java", "js", "json", "log", "md", "pdf", "ps1",
-            "py", "rs", "sh", "sql", "toml", "ts", "txt", "xml", "yaml", "yml",
-        }
-        urls = []
-        for match in url_pattern.finditer(command):
-            url = match.group(0).rstrip(".,!?;:)]}")
-            if "://" not in url and url.rsplit(".", 1)[-1].casefold() in file_extensions:
-                continue
-            if url and url not in urls:
-                urls.append(url)
-        if not urls:
-            aliases = {
-                "whatsapp web": "https://web.whatsapp.com",
-                "youtube": "https://youtube.com",
-            }
-            urls = [url for name, url in aliases.items() if name in normalized]
-            if not urls:
-                return None
-
-        from src.init.brain import open_browser
-        return "\n".join(open_browser(url) for url in urls)
 
     def printlns(self, content: str) -> None:
         if self.terminal_ui is not None:

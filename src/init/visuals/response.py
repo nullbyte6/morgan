@@ -147,14 +147,6 @@ def request_response_workspace(title: str = "Response") -> str:
         raise RuntimeError("The response workspace requires the running Arlo desktop")
     return bridge.request(title)
 
-def open_response_view(title: str = "Response") -> str:
-    """Open a dedicated workspace for the current response.
-    Use this tool when a separate document-like view would make the
-    response easier to read, or when the user requests one explicitly.
-    After opening it, continue generating the response normally.
-    Its Markdown content will be streamed into the new workspace."""
-    return request_response_workspace(title)
-
 class ResponseView(QWidget):
     """An independent, progressively rendered response surface."""
 
