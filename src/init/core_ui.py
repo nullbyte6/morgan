@@ -323,10 +323,12 @@ class ArloWindow(DesktopWindow):
         main = QVBoxLayout(root)
         main.setContentsMargins(20, 12, 20, 20)
         main.setSpacing(16)
+        self.main_layout = main
 
         banner_group = QVBoxLayout()
         banner_group.setSpacing(16)
         banner_group.setAlignment(Qt.AlignCenter)
+        self.banner_group = banner_group
         banner_group.addWidget(self.orb, 0, Qt.AlignCenter)
         main.addLayout(banner_group, 1)
 
@@ -457,7 +459,6 @@ class ArloWindow(DesktopWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         self.task_progress = TaskProgressPill(main_content)
-        main_layout.addWidget(self.task_progress)
         main_layout.addWidget(self.chat_scroll, 1)
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=f"Arlo {load_dev_file()["version"]}",
@@ -544,7 +545,18 @@ class ArloWindow(DesktopWindow):
         root = self.chat_scroll.widget()
         if root is not None and root.minimumHeight() != viewport_height:
             root.setMinimumHeight(max(0, viewport_height))
+        self._layout_task_progress()
         QTimer.singleShot(0, self._update_orb_scale)
+
+    def _layout_task_progress(self):
+        """Keep task progress over the chat surface without changing its layout."""
+        if not hasattr(self, "task_progress"):
+            return
+        host = self.task_progress.parentWidget()
+        if host is None:
+            return
+        self.task_progress.setGeometry(host.rect().adjusted(0, 0, 0, 0))
+        self.task_progress.raise_()
 
     def _update_orb_scale(self):
         """Keep the main orb readable while fitting the available height."""
@@ -552,10 +564,14 @@ class ArloWindow(DesktopWindow):
             return
         available = self.chat_scroll.viewport().height()
         composer_height = self.composer_widget.sizeHint().height()
-        banner_height = max(180, available - composer_height - 150)
-        target = max(180, min(384, int(banner_height * 0.82)))
+        compact = available < composer_height + 360
+        banner_height = max(120, available - composer_height - 150)
+        target = max(120 if compact else 180,
+                     min(384, int(banner_height * (0.64 if compact else 0.82))))
         if self.orb.sizeHint().width() != target:
             self.orb.set_size(target)
+        if hasattr(self, "main_layout"):
+            self.main_layout.setStretch(0, 0 if compact else 1)
 
     def focus_main_workspace(self):
         self.workspace.focus_panel(self.main_workspace_panel_id)
@@ -1397,8 +1413,10 @@ class ArloWindow(DesktopWindow):
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
         self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
+
         QTimer.singleShot(700, lambda: self.set_orbs_visual_state(
             Orb.State.IDLE) if not self.busy else None)
+
         self.set_enabled(self.ready)
         if self.pending_wake_barge:
             self.pending_wake_barge = False

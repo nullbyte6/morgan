@@ -26,6 +26,8 @@ class TaskProgressPill(QWidget):
     """A dismissible view of the desktop's existing execution-phase signals."""
     def __init__(self, parent=None):
         super().__init__(parent)
+        if parent is not None:
+            parent.installEventFilter(self)
         self.setObjectName("taskProgressHost")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.turn_id = None
@@ -81,7 +83,7 @@ class TaskProgressPill(QWidget):
         self.active = True
         self.dismissed = False
         self.state = "running"
-        self.hide()
+        self.setVisible(False)
         self._render()
 
     @Slot(int, str)
@@ -98,7 +100,7 @@ class TaskProgressPill(QWidget):
             return
         self._render()
         if self.started >= 2 and not self.dismissed:
-            self.show()
+            self.setVisible(True)
 
     def awaiting_permission(self, turn_id, *, waiting=True):
         if turn_id == self.turn_id and self.active:
@@ -116,7 +118,7 @@ class TaskProgressPill(QWidget):
     @Slot()
     def dismiss(self):
         self.dismissed = True
-        self.hide()
+        self.setVisible(False)
 
     def refresh_language(self, _language=None):
         close = tr("task_progress.hide")
@@ -156,3 +158,9 @@ class TaskProgressPill(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self._render()
+
+    def eventFilter(self, watched, event):
+        if watched is self.parentWidget() and event.type() == event.Type.Resize:
+            self.setGeometry(watched.rect())
+            self.raise_()
+        return super().eventFilter(watched, event)
