@@ -1227,8 +1227,7 @@ def list_open_applications() -> str:
 
 def _launch_application(app):
     if app["Source"] == "registered":
-        subprocess.Popen(["explorer.exe", f"shell:AppsFolder\\{app['AppID']}"],
-                         creationflags=subprocess.CREATE_NO_WINDOW)
+        os.startfile(f"shell:AppsFolder\\{app['AppID']}")
     else:
         os.startfile(app["Path"])
 
