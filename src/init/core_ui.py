@@ -1379,6 +1379,9 @@ class ArloWindow(DesktopWindow):
 
     @Slot(str)
     def on_error(self, error):
+        if not self.ready:
+            self.status_key = ""
+            self.status.setText(tr("ui.error", error=error))
         self.task_progress.finish(self.turn_id, failed=True)
         self.finish_wake_command("failed", error)
         self.showing_greeting = False
