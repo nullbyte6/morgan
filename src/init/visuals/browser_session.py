@@ -4,7 +4,8 @@ from pathlib import Path
 from weakref import WeakSet
 
 from PySide6.QtCore import QObject, QThread
-from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
+from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
+                                     QWebEngineSettings)
 from PySide6.QtWidgets import QApplication
 from shiboken6 import delete, isValid
 
@@ -28,8 +29,15 @@ class BrowserSession(QObject):
         settings.setPersistentStoragePath(str(self.data_path / 'storage'))
         settings.setCachePath(str(self.data_path / 'cache'))
         settings.setHttpCacheType(QWebEngineProfile.DiskHttpCache)
+        settings.setHttpCacheMaximumSize(512 * 1024 * 1024)
         settings.setPersistentCookiesPolicy(QWebEngineProfile.ForcePersistentCookies)
         self.profile = builder.createProfile('arlo-browser', self) if builder else settings
+
+        web_settings = self.profile.settings()
+        web_settings.setAttribute(QWebEngineSettings.DnsPrefetchEnabled, True)
+        web_settings.setAttribute(QWebEngineSettings.BackForwardCacheEnabled, True)
+        web_settings.setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, True)
+        web_settings.setAttribute(QWebEngineSettings.WebGLEnabled, True)
 
         from PySide6.QtWebEngineCore import qWebEngineChromiumVersion
         chromium_major = qWebEngineChromiumVersion().split(".")[0]
