@@ -57,6 +57,17 @@ def handle_direct_command(assistant, prompt: str) -> str | None:
     return None
 
 
+def requests_response_workspace(prompt: str) -> bool:
+    normalized = " ".join(prompt.casefold().split())
+    return any(phrase in normalized for phrase in (
+        "response workspace",
+        "workspace de respuesta",
+        "espacio de respuesta",
+        "espacio de trabajo de respuesta",
+        "panel de respuesta",
+    ))
+
+
 def select_response_surface(prompt: str, model_name: str) -> str | None:
     """Let the local LLM choose the output surface before generation."""
     if not prompt.strip():
@@ -436,6 +447,16 @@ class AssistantWorker(QObject):
     def run_agent_mode(self, turn_id: int, prompt: str, cancel_event) -> None:
         from src.init.agent import EventType, ExecutionState
 
+        if requests_response_workspace(prompt):
+            try:
+                from src.init.visuals.response import request_response_workspace
+                result = request_response_workspace("Agent Result")
+                logging.getLogger("arlo.response").info(
+                    "Agent response workspace result: %s", result)
+            except Exception:
+                logging.getLogger("arlo.response").exception(
+                    "Unable to open the requested agent response workspace")
+
         def event_received(event):
             if event.type == EventType.STATE_CHANGED:
                 phase = AGENT_PHASES.get(event.payload.get("to"))
@@ -455,7 +476,10 @@ class AssistantWorker(QObject):
         elif result.state == ExecutionState.CANCELLED:
             reply = ""
         else:
-            reply = f"Agent run {result.state.value.lower()}: {result.error or 'No result'}"
+            phase = f" during {result.failure_phase}" if result.failure_phase else ""
+            reply = (
+                f"Agent run {result.state.value.lower()}{phase} "
+                f"(run {result.run_id}): {result.error or 'No result'}")
         if reply:
             self.chunk.emit(turn_id, reply)
             self.session.write(
