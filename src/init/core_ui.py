@@ -407,7 +407,12 @@ class ArloWindow(DesktopWindow):
         indicator_row.addWidget(self.agent_mode_indicator)
         indicator_row.addWidget(self.privacy_indicator)
         indicator_row.addStretch()
-        input_column.addLayout(indicator_row)
+        self.indicator_row = QWidget()
+        self.indicator_row.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.indicator_row.setLayout(indicator_row)
+        self.indicator_row.setMaximumHeight(0)
+        input_column.addWidget(self.indicator_row)
         input_column.addWidget(input_frame)
 
         input_group = QWidget()
@@ -971,14 +976,18 @@ class ArloWindow(DesktopWindow):
         self._startup_reveal_animations.clear()
 
         self.input_group.setVisible(True)
+        self.indicator_row.setVisible(True)
         self.send.setVisible(True)
         self.subtitles.setVisible(self.subtitles_enabled)
         self.subtitles.setMaximumHeight(0)
 
-        input_target = max(self.input_group.sizeHint().height(), 48)
+        indicator_target = self.indicator_row.sizeHint().height()
+        input_target = max(self.input_group.sizeHint().height()
+                           + indicator_target, 48)
         subtitle_target = 90
         targets = (
             (self.input_group, input_target),
+            (self.indicator_row, indicator_target),
             (self.subtitles, subtitle_target),
         )
         for widget, target in targets:
