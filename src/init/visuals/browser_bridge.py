@@ -96,8 +96,10 @@ class BrowserBridge(QObject):
                 if panel is None or not isinstance(panel.content, BrowserView):
                     panel = next((workspace.get_panel(pid) for pid in workspace.panel_ids
                                   if isinstance(workspace.get_panel(pid).content, BrowserView)
-                                  and pid not in workspace._closing_panels), None)
-                if panel is not None and panel.panel_id in workspace._closing_panels:
+                                  and pid not in workspace._closing_panels
+                                  and pid not in workspace._pending_closes), None)
+                if panel is not None and (panel.panel_id in workspace._closing_panels
+                                          or panel.panel_id in workspace._pending_closes):
                     panel = None
                 if panel is None:
                     view = BrowserView(initial_url=None)
@@ -113,10 +115,13 @@ class BrowserBridge(QObject):
                 view.open_url(request.url)
                 workspace.focus_panel(panel_id)
                 window = self.parent()
-                if (not window.isVisible() or window.isMinimized()):
-                    restore = getattr(window, "restore_from_mascot", None)
-                    if restore is not None:
-                        restore()
+                restore = getattr(window, "restore_from_mascot", None)
+                if restore is not None:
+                    restore()
+                else:
+                    window.showNormal()
+                    window.raise_()
+                    window.activateWindow()
                 self._finish(request)
             except Exception as error:
                 if view is not None and view.parentWidget() is None:

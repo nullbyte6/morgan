@@ -738,13 +738,22 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
         return browser_note + tr('brain.error_searching_the_web', error=error)
 
 
-def read_web_page(url: str, max_characters: int = 12_000) -> str:
-    """Fetch readable page text internally without launching a browser."""
+def read_web_page(url: str, max_characters: int = 12_000,
+                  show_in_browser: bool = False) -> str:
+    """Read page text; show_in_browser also opens it in Arlo's browser workspace.
+    Choose show_in_browser when inspecting a page together with the user.
+    """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return tr('brain.error_a_valid_http_or_https_url_is_required')
     if not 1_000 <= max_characters <= 30_000:
         return tr('brain.error_max_characters_must_be_between_1000_and_30000')
+    browser_note = ""
+    if show_in_browser:
+        try:
+            open_embedded_url(url)
+        except (RuntimeError, ValueError) as error:
+            browser_note = f"Embedded browser unavailable: {error}\n\n"
     try:
         from ddgs import DDGS
 
@@ -754,12 +763,12 @@ def read_web_page(url: str, max_characters: int = 12_000) -> str:
             content = content.decode("utf-8", errors="replace")
         content = str(content).strip()
         if not content:
-            return tr('brain.no_readable_content_found_at', url=url)
+            return browser_note + tr('brain.no_readable_content_found_at', url=url)
         if len(content) > max_characters:
             content = content[:max_characters] + tr('brain.content_truncated')
-        return tr('brain.source_url', url=url, content=content)
+        return browser_note + tr('brain.source_url', url=url, content=content)
     except Exception as error:
-        return tr('brain.error_reading_web_page', error=error)
+        return browser_note + tr('brain.error_reading_web_page', error=error)
 
 
 def request_json(url: str, timeout: int = 15):
