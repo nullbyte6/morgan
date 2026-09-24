@@ -38,6 +38,7 @@ class EventType(StrEnum):
     RUN_CREATED = "run_created"
     STATE_CHANGED = "state_changed"
     PLAN_CREATED = "plan_created"
+    PROJECT_INSPECTED = "project_inspected"
     PLAN_VALIDATED = "plan_validated"
     STEP_STARTED = "step_started"
     TOOL_CALLED = "tool_called"
@@ -77,11 +78,32 @@ class ExecutionPlanDraft(BaseModel):
     steps: list[PlanDraftStep] = Field(min_length=1, max_length=6)
 
 
+class InspectedFile(BaseModel):
+    path: str
+    content: str
+    bytes_read: int
+    sha256: str
+    truncated: bool = False
+
+
+class ProjectContext(BaseModel):
+    working_directory: str
+    repository_root: str | None = None
+    discovered_files: list[str] = Field(default_factory=list)
+    files: list[InspectedFile] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class ProjectFileSelection(BaseModel):
+    paths: list[str] = Field(default_factory=list, max_length=8)
+
+
 class ExecutionPlan(BaseModel):
     request_id: str = Field(min_length=32, max_length=32,
                             pattern=r"^[a-f0-9]{32}$")
     goal: str = Field(min_length=1, max_length=4000)
     steps: list[PlanStep] = Field(min_length=1)
+    project_context: ProjectContext | None = None
 
 
 class StepResult(BaseModel):
