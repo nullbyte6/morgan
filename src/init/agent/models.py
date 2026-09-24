@@ -62,6 +62,21 @@ class PlanStep(BaseModel):
     requires_approval: bool = False
 
 
+class PlanDraftStep(BaseModel):
+    id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    title: str = Field(min_length=1, max_length=200)
+    instruction: str = Field(min_length=1, max_length=4000)
+    tool_name: str = Field(min_length=1, max_length=100)
+    requires_approval: bool = False
+
+
+class ExecutionPlanDraft(BaseModel):
+    request_id: str = Field(min_length=32, max_length=32,
+                            pattern=r"^[a-f0-9]{32}$")
+    goal: str = Field(min_length=1, max_length=4000)
+    steps: list[PlanDraftStep] = Field(min_length=1)
+
+
 class ExecutionPlan(BaseModel):
     request_id: str = Field(min_length=32, max_length=32,
                             pattern=r"^[a-f0-9]{32}$")
