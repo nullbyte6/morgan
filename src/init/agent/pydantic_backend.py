@@ -73,6 +73,9 @@ class PydanticAgentBackend:
             "- Use list_code only to list source entries.\n"
             "- Use read_code only for a specific source file, never a directory.\n"
             "- Repository inspection must use list_code/read_code or list_files/read_file.\n"
+            "- For Arlo dynamic workspace inspection, read "
+            "src/init/visuals/workspace.py and src/init/visuals/response.py with "
+            "separate read_code steps before describing their components.\n"
             "- For a generic Python syntax check, call execute_command with this exact "
             f"cross-platform read-only command: {PYTHON_SYNTAX_COMMAND}\n"
             "- A request to display the result in a response workspace is handled by the host; "
@@ -159,6 +162,14 @@ class PydanticAgentBackend:
                     + ", ".join(unknown))
             invalid_arguments = []
             for step in plan.steps:
+                if (step.tool_name == "read_code"
+                        and "path" not in step.tool_args
+                        and "workspace" in task.casefold()):
+                    raise ModelRetry(
+                        "A read_code step cannot derive its path at execution time. "
+                        "Use separate read_code steps with path "
+                        "src/init/visuals/workspace.py and "
+                        "src/init/visuals/response.py.")
                 try:
                     self.tool_signatures[step.tool_name].bind(**step.tool_args)
                 except TypeError as error:
