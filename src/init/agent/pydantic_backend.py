@@ -521,6 +521,22 @@ class PydanticAgentBackend:
                 raise ModelRetry(
                     "This request requires an execute_command step for an actual "
                     "read-only Python syntax check.")
+            modification_request = any(term in normalized_task for term in (
+                "modify the file", "modificarlo", "modificar el archivo",
+                "add a section", "añade una sección", "añadir una sección",
+                "write the change", "escribir el cambio",
+            ))
+            write_tools = {
+                "edit_file", "append_file", "replace_in_file",
+                "write_binary_file", "create_file",
+            }
+            if (modification_request
+                    and not any(step.tool_name in write_tools
+                                for step in plan.steps)):
+                raise ModelRetry(
+                    "The request explicitly requires a file change. Include the "
+                    "appropriate registered write tool; do not merely describe a "
+                    "draft or ask for approval in the final response.")
             return plan
 
         try:

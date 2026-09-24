@@ -342,11 +342,23 @@ class AssistantWorker(QObject):
                     and not message.attachments
                     and confirmation_reply(prompt) is not None):
                 self.session.write(self.assistant.username, message.log_text())
-                resumed = self.resolve_confirmation_reply(prompt)
-                reply = (
-                    "La aprobación se aplicó a la operación pendiente de Forge."
-                    if resumed else
-                    "No hay ninguna operación de Forge pendiente de aprobación.")
+                pending = self.agent_orchestrator.store.pending_approvals()
+                if len(pending) == 1:
+                    operation = pending[0]
+                    result = self.event_loop.run_until_complete(
+                        self.agent_orchestrator.resume_approval(
+                            operation["run_id"], operation["step_id"],
+                            bool(confirmation_reply(prompt)),
+                            cancel_event=cancel_event))
+                    if result.state.value == "COMPLETED":
+                        reply = result.response
+                    elif result.state.value == "AWAITING_APPROVAL":
+                        next_pending = self.agent_orchestrator.store.pending_approvals()
+                        reply = next_pending[0]["proposed_change"] if next_pending else ""
+                    else:
+                        reply = result.error or "La operación de Forge no se completó."
+                else:
+                    reply = "No hay ninguna operación de Forge pendiente de aprobación."
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
@@ -501,8 +513,7 @@ class AssistantWorker(QObject):
         result = self.event_loop.run_until_complete(self.agent_orchestrator.run(
             prompt,
             cancel_event=cancel_event,
-            approval=lambda message: self.confirm_command(
-                message, cancel_event, turn_id, approval_context),
+            approval=None,
             on_event=event_received,
             working_directory=str(Path.cwd()),
         ))
@@ -510,6 +521,12 @@ class AssistantWorker(QObject):
             reply = result.response
         elif result.state == ExecutionState.CANCELLED:
             reply = ""
+        elif result.state == ExecutionState.AWAITING_APPROVAL:
+            pending = self.agent_orchestrator.store.pending_approvals()
+            operation = next((item for item in pending
+                              if item["run_id"] == result.run_id), None)
+            reply = (operation["proposed_change"] if operation else
+                     "Forge está esperando aprobación para continuar.")
         else:
             phase = f" during {result.failure_phase}" if result.failure_phase else ""
             reply = (
