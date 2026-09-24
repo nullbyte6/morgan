@@ -464,6 +464,28 @@ QToolButton#privacyIndicator {
     padding: 4px 10px;
 }
 
+QToolButton#branchIndicator {
+    color: #a6da95;
+    background-color: rgba(166, 218, 149, 0.08);
+    border: 2px solid rgba(166, 218, 149, 0.30);
+    border-radius: 14px;
+    padding: 4px 10px;
+}
+
+QToolButton#agentModeIndicator {
+    color: #b8c0e0;
+    background-color: rgba(184, 192, 224, 0.06);
+    border: 2px solid #494d64;
+    border-radius: 14px;
+    padding: 4px 10px;
+}
+
+QToolButton#agentModeIndicator:checked {
+    color: #c6a0f6;
+    background-color: rgba(198, 160, 246, 0.12);
+    border-color: rgba(198, 160, 246, 0.65);
+}
+
 QToolButton#privacyIndicator:hover {
     background-color: rgba(34, 197, 94, 0.12);
     border-color: rgba(134, 239, 172, 0.55);

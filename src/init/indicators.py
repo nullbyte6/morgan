@@ -17,6 +17,8 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from pathlib import Path
+import subprocess
+import time
 
 from PySide6.QtCore import *
 from PySide6.QtGui import *
@@ -37,6 +39,59 @@ class WorkingDirectory(QToolButton):
         path = Path(directory).resolve()
         self.setText(f" {path.name or str(path)} ")
         self.setToolTip(str(path))
+
+
+class GitBranchIndicator(QToolButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("branchIndicator")
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self.setAutoRaise(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._directory = None
+        self._updated_at = 0.0
+        self.set_directory(Path.cwd())
+
+    def set_directory(self, directory: Path | str):
+        path = str(Path(directory).resolve())
+        now = time.monotonic()
+        if path == self._directory and now - self._updated_at < 2:
+            return
+        self._directory = path
+        self._updated_at = now
+        branch = ""
+        try:
+            result = subprocess.run(
+                ["git", "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD"],
+                capture_output=True, text=True, errors="replace", timeout=1,
+            )
+            if result.returncode == 0:
+                branch = result.stdout.strip()
+            elif result.returncode == 1:
+                result = subprocess.run(
+                    ["git", "-C", path, "rev-parse", "--short", "HEAD"],
+                    capture_output=True, text=True, errors="replace", timeout=1,
+                )
+                if result.returncode == 0:
+                    branch = f"detached:{result.stdout.strip()}"
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        self.setText(f"  {branch} ")
+        self.setToolTip(branch)
+        self.setVisible(bool(branch))
+
+
+class AgentModeIndicator(QToolButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("agentModeIndicator")
+        self.setText(" Agent Mode ")
+        self.setCheckable(True)
+        self.setAutoRaise(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Plan, execute, observe, and verify multi-step tasks")
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
 
 class PrivacyIndicator(QToolButton):
