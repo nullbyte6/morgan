@@ -196,6 +196,12 @@ class AssistantWorker(QObject):
                 return
 
             self.session.write(self.assistant.username, message.log_text())
+            browser_result = (self.assistant.browser_cmd(prompt)
+                              if not message.attachments else None)
+            if browser_result is not None:
+                self.session.write(self.assistant.name, browser_result)
+                self.finished.emit(browser_result)
+                return
             from src.init.hot_reload import is_reload_command
             if (not voice_input and not message.attachments
                     and is_reload_command(prompt)):

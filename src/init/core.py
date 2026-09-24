@@ -272,6 +272,48 @@ class Assistant:
 
         return None
 
+    def browser_cmd(self, command: str) -> str | None:
+        """Open URLs from explicit navigation commands without relying on the model."""
+        normalized = " ".join(command.casefold().split())
+        normalized = re.sub(r"^[¿¡\s]*(?:arlo[,;:\s]+)?", "", normalized)
+        intent = re.match(
+            r"(?:(?:please|por favor)[,;:\s]+)*"
+            r"(?:(?:can|could|would|will) you\s+|(?:puedes|podrías)\s+)?"
+            r"(?:open|navigate to|go to|abre|ábreme|abrir|navega a|ve a)\b",
+            normalized)
+        if intent is None:
+            return None
+
+        url_pattern = re.compile(
+            r"https?://[^\s<>\"']+|"
+            r"(?:www\.)?(?:[a-z0-9](?:[a-z0-9-]{0,62})\.)+"
+            r"[a-z]{2,63}"
+            r"(?::\d{1,5})?(?:/[^\s<>\"']*)?",
+            re.IGNORECASE)
+        file_extensions = {
+            "bat", "c", "cpp", "css", "csv", "doc", "docx", "h", "hpp",
+            "html", "ini", "java", "js", "json", "log", "md", "pdf", "ps1",
+            "py", "rs", "sh", "sql", "toml", "ts", "txt", "xml", "yaml", "yml",
+        }
+        urls = []
+        for match in url_pattern.finditer(command):
+            url = match.group(0).rstrip(".,!?;:)]}")
+            if "://" not in url and url.rsplit(".", 1)[-1].casefold() in file_extensions:
+                continue
+            if url and url not in urls:
+                urls.append(url)
+        if not urls:
+            aliases = {
+                "whatsapp web": "https://web.whatsapp.com",
+                "youtube": "https://youtube.com",
+            }
+            urls = [url for name, url in aliases.items() if name in normalized]
+            if not urls:
+                return None
+
+        from src.init.brain import open_browser
+        return "\n".join(open_browser(url) for url in urls)
+
     def printlns(self, content: str) -> None:
         if self.terminal_ui is not None:
             with self.terminal_ui.suspend():
