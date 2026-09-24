@@ -292,7 +292,7 @@ class LogView(QWidget):
 
         self.last_content: str | None = None
         self.messages: list[LogMessage] = []
-        self.code_font_family = "monospace"
+        self.code_font_family = "JetBrainsMonoNL NFM Medium,monospace"
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 0, 12, 12)
@@ -300,20 +300,11 @@ class LogView(QWidget):
 
         header = QHBoxLayout()
 
-        self.title = QLabel(
-            self.current_date.strftime("%Y/%m/%d"))
+        self.title = QLabel(self.current_date.strftime("%Y/%m/%d"))
         self.title.setObjectName("logTitle")
 
         header.addWidget(self.title)
         header.addStretch()
-
-        self.refresh_button = QPushButton("󰑓")
-        self.refresh_button.setObjectName("refresh")
-        self.refresh_button.setFixedSize(48, 48)
-        self.refresh_button.clicked.connect(self.refresh)
-
-        header.addWidget(self.refresh_button)
-
         layout.addLayout(header)
 
         self.scroll = QScrollArea(self)

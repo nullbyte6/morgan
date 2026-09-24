@@ -109,8 +109,7 @@ QPushButton#chatNav,
 QPushButton#logsNav,
 QPushButton#editorNav,
 QPushButton#terminalNav,
-QPushButton#browserNav,
-QPushButton#refresh {
+QPushButton#browserNav {
     background-color: transparent;
     color: #a5adcb;
     border: 2px solid transparent;
@@ -123,8 +122,7 @@ QPushButton#chatNav:hover,
 QPushButton#logsNav:hover,
 QPushButton#editorNav:hover,
 QPushButton#terminalNav:hover,
-QPushButton#browserNav:hover,
-QPushButton#refresh:hover {
+QPushButton#browserNav:hover {
     background-color: #363a4f;
     color: #cad3f5;
 }
