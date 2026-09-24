@@ -34,6 +34,7 @@ from .models import (
     ExecutionPlan,
     ExecutionState,
     ProjectContext,
+    RequestCapabilities,
     RunResult,
     StepResult,
     VerificationResult,
@@ -48,11 +49,13 @@ FILE_WRITE_TOOLS = frozenset({
 
 
 class AgentBackend(Protocol):
+    async def request_capabilities(self, task: str) -> RequestCapabilities: ...
     async def inspect_project(self, task: str, working_directory: str) -> ProjectContext: ...
     async def plan(self, task: str, max_steps: int,
                    project_context: ProjectContext | None = None,
                    validation_feedback: str | None = None,
-                   forbidden_tools: set[str] | None = None) -> ExecutionPlan: ...
+                   forbidden_tools: set[str] | None = None,
+                   file_write_requested: bool = False) -> ExecutionPlan: ...
     async def validate_plan(self, task: str,
                             plan: ExecutionPlan) -> VerificationResult: ...
     async def execute(self, instruction: str, observations: list[str]) -> str: ...
@@ -204,6 +207,10 @@ class AgentOrchestrator:
         forbidden_tools: set[str] = set()
         try:
             self._check_cancelled(cancel_event)
+            capabilities = await self._await_cancellable(
+                self.backend.request_capabilities(task), cancel_event)
+            if not capabilities.file_write_requested:
+                forbidden_tools.update(FILE_WRITE_TOOLS)
             project_context = None
             inspector = getattr(self.backend, "inspect_project", None)
             if inspector is not None:
@@ -217,11 +224,13 @@ class AgentOrchestrator:
                 planning = (self.backend.plan(task, self.max_steps,
                                               project_context=project_context,
                                               validation_feedback=validation_feedback,
-                                              forbidden_tools=forbidden_tools)
+                                              forbidden_tools=forbidden_tools,
+                                              file_write_requested=capabilities.file_write_requested)
                             if project_context is not None
                             else self.backend.plan(task, self.max_steps,
                                                    validation_feedback=validation_feedback,
-                                                   forbidden_tools=forbidden_tools))
+                                                   forbidden_tools=forbidden_tools,
+                                                   file_write_requested=capabilities.file_write_requested))
                 plan = await self._await_cancellable(
                     planning, cancel_event)
                 plan.project_context = project_context
@@ -236,6 +245,7 @@ class AgentOrchestrator:
                             "attempt": planning_attempt + 1,
                             "proposed_plan": {
                                 "goal": plan.goal,
+                                "file_write_requested": plan.file_write_requested,
                                 "steps": [{
                                     "id": step.id,
                                     "tool_name": step.tool_name,
