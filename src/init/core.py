@@ -548,7 +548,18 @@ class Assistant:
                 "all displayed text was spoken. Tools already started may have completed; "
                 "inspect current state before retrying. Follow the user's next instruction.]")]))
             return text, safe
-        return text, completed_history
+        return text, self._merge_message_history(history, completed_history)
+
+    @staticmethod
+    def _merge_message_history(history: list, completed_history: list | None) -> list:
+        if not completed_history:
+            return list(history)
+        if not history:
+            return list(completed_history)
+        if (len(completed_history) >= len(history)
+                and completed_history[:len(history)] == history):
+            return list(completed_history)
+        return [*history, *completed_history]
 
     def cancel_active_generation(self):
         """Cancel the active PydanticAI run from the worker thread."""
