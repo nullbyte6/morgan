@@ -613,8 +613,6 @@ class Workspace(QWidget):
         if before:
             split.insertWidget(0, panel)
 
-        # setSizes uses relative weights. Keep enough precision even when a
-        # rapid split targets a surface still growing from zero in its parent.
         available = max(1000, extent - split.handleWidth())
         start_sizes = [available, 0]
         if before:
@@ -648,8 +646,6 @@ class Workspace(QWidget):
         if panel_id in self._closing_panels or panel_id in self._pending_closes:
             return False
 
-        # A removal can promote a whole subtree. Finish it before starting
-        # another close, so no callback retains a deleted parent splitter.
         if self._closing_panels:
             self._pending_closes.append(panel_id)
             return True
