@@ -24,6 +24,7 @@ import uuid
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
+from shiboken6 import isValid
 
 
 class WorkspacePanel(QFrame):
@@ -407,7 +408,21 @@ class Workspace(QWidget):
         self._root: QWidget | None = None
         self._next_orientation = Qt.Horizontal
 
-        self._layout = QVBoxLayout(self)
+        # A permanent outer split reveals the entire workspace, including the
+        # first chat panel, without moving or rebuilding any of its contents.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self._surface = QSplitter(Qt.Vertical, self)
+        self._surface.setHandleWidth(0)
+        host = QWidget()
+        host.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self._surface.addWidget(host)
+        self._surface.addWidget(QWidget())
+        self._surface.handle(1).setEnabled(False)
+        outer.addWidget(self._surface)
+        self._surface.setSizes([10000, 0])
+        self._layout = QVBoxLayout(host)
+        self._layout.setSizeConstraint(QLayout.SetNoConstraint)
         self._layout.setContentsMargins(6, 6, 6, 8)
         self._layout.setSpacing(6)
 
@@ -418,6 +433,8 @@ class Workspace(QWidget):
 
         self._closing_panels: set[str] = set()
         self._pending_closes: list[str] = []
+        self._surface_focus = None
+        self._surface_active_id = None
 
         self.setSizePolicy(
             QSizePolicy.Expanding,
@@ -427,6 +444,42 @@ class Workspace(QWidget):
     @property
     def panel_count(self) -> int:
         return len(self._panels)
+
+    def animate_visibility(self, expanded: bool, *, restart=False, on_finished=None):
+        """Reveal/collapse the intact panel tree before the window is hidden."""
+        if not expanded:
+            focus = self.focusWidget()
+            if focus is not None and self.isAncestorOf(focus):
+                self._surface_focus = focus
+                self._surface_active_id = self._active_panel_id
+
+        def finish():
+            focus = self._surface_focus
+            if (expanded and focus is not None and isValid(focus)
+                    and self._active_panel_id == self._surface_active_id
+                    and focus.isVisible()):
+                focus.setFocus(Qt.OtherFocusReason)
+            if on_finished is not None:
+                on_finished()
+
+        sizes = self._surface.sizes()
+        total = max(1, sum(sizes))
+        start = ([0, 10000] if restart else
+                 [round(size * 10000 / total) for size in sizes])
+        self._surface.setSizes(start)
+        self.animate_splitter(self._surface, start,
+                              [10000, 0] if expanded else [0, 10000],
+                              duration=260, on_finished=finish)
+
+    def _stop_opening_animations(self):
+        """Give a user dragging a handle control of the current sizes."""
+        if self._closing_panels:
+            return
+        for splitter, animation in tuple(self._animations.items()):
+            if splitter is not self._surface:
+                self._animations.pop(splitter)
+                animation.stop()
+                animation.deleteLater()
 
     @property
     def active_panel_id(self) -> str | None:

@@ -197,6 +197,8 @@ class ArloWindow(DesktopWindow):
         self.current_reply = None
         self.subtitle_text = ""
         self._startup_reveal_animations = []
+        self._workspace_hiding = False
+        self._workspace_exit_ready = False
         self.wake_inbox = None
         self.wake_command_id = None
 
@@ -501,6 +503,12 @@ class ArloWindow(DesktopWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._resize_chat_content()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if hasattr(self, "workspace"):
+            self._workspace_hiding = False
+            self.workspace.animate_visibility(True, restart=True)
 
     def _resize_chat_content(self):
         if not hasattr(self, "chat_scroll"):
@@ -1045,21 +1053,33 @@ class ArloWindow(DesktopWindow):
 
     def show_mascot(self):
         """Switch to compact desktop mode."""
-        if self.quitting:
+        if self.quitting or self._workspace_hiding:
             return
         if not self.mascot.isVisible():
             self.mascot.move_to_corner()
         self.mascot.pop_in()
+        if self.isVisible():
+            self._workspace_hiding = True
+            self.workspace.animate_visibility(False, on_finished=self._hide_workspace)
+
+    def _hide_workspace(self):
+        self._workspace_hiding = False
         self.hide()
+        if self.quitting:
+            self.close()
 
     def restore_from_mascot(self):
         """Restore the full Arlo interface."""
         if self.quitting:
             return
         self.mascot.pop_out()
+        if self._workspace_hiding:
+            self._workspace_hiding = False
+            self.workspace.animate_visibility(True)
         self.showNormal()
         self.raise_()
         self.activateWindow()
+        self.zoom_view.setFocus(Qt.OtherFocusReason)
 
     @Slot()
     def request_quit(self):
@@ -1365,6 +1385,13 @@ class ArloWindow(DesktopWindow):
             event.ignore()
             return
 
+        if self.isVisible() and not self._workspace_exit_ready:
+            event.ignore()
+            if not self._workspace_hiding:
+                self._workspace_hiding = True
+                self.workspace.animate_visibility(False, on_finished=self._finish_workspace_exit)
+            return
+
         kill_self()
         if self.thread.isRunning():
             self.thread.quit()
@@ -1373,6 +1400,11 @@ class ArloWindow(DesktopWindow):
         self.mascot.close()
         event.accept()
         QTimer.singleShot(0, QApplication.instance().quit)
+
+    def _finish_workspace_exit(self):
+        self._workspace_hiding = False
+        self._workspace_exit_ready = True
+        self.close()
 
 
 def set_windows_app_id():
