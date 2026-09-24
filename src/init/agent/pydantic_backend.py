@@ -198,24 +198,14 @@ class PydanticAgentBackend:
             "- A request to display the result in a response workspace is handled by the host; "
             "plan only the work needed to produce the result."
         )]
-        self.plan_validator = Agent(
-            model=model,
-            output_type=NativeOutput(
-                VerificationResult,
-                name="plan_assessment",
-                description="Whether a proposed plan directly addresses its original request.",
-                strict=True,
-            ),
-            retries={"tools": 1, "output": 2},
-            instructions=[*base, (
+        self.plan_validator_instructions = [*base, (
                 "Compare ORIGINAL_REQUEST with PROPOSED_PLAN before execution. "
                 "Return success=false if the goal, filenames, tool choices, or actions "
                 "are unrelated, invented, insufficient to produce evidence, or include "
                 "side effects not explicitly required. A syntax-check request must run "
                 "an actual syntax check. Repository claims must be backed by file or "
                 "repository inspection tools. Return a concrete diagnostic summary."
-            )],
-        )
+            )]
         self.reasoner = Agent(
             model=model,
             instructions=[*base, (
@@ -497,13 +487,42 @@ class PydanticAgentBackend:
 
     async def validate_plan(self, task: str,
                             plan: ExecutionPlan) -> VerificationResult:
-        result = await self.plan_validator.run(
-            json.dumps({
-                "ORIGINAL_REQUEST": task,
-                "PROPOSED_PLAN": plan.model_dump(mode="json"),
-            }, ensure_ascii=False)
+        trace_model = _PlanningTraceModel(self.model, self.tool_names)
+        validator = Agent(
+            model=trace_model,
+            output_type=NativeOutput(
+                VerificationResult,
+                name="plan_assessment",
+                description="Whether the proposed plan addresses the current request.",
+                strict=True,
+            ),
+            retries={"tools": 1, "output": 2},
+            instructions=self.plan_validator_instructions,
         )
-        return result.output
+        try:
+            result = await validator.run(
+                json.dumps({
+                    "ORIGINAL_REQUEST": task,
+                    "PROPOSED_PLAN": plan.model_dump(mode="json"),
+                }, ensure_ascii=False),
+                model_settings={"max_tokens": 256},
+            )
+            return result.output
+        except Exception as error:
+            errors = _safe_exception_chain(error)
+            frames = [
+                {"file": Path(frame.filename).name,
+                 "line": frame.lineno, "function": frame.name}
+                for frame in traceback.extract_tb(error.__traceback__)
+            ]
+            LOGGER.error(
+                "Plan validation failed request=%s attempts=%d outputs=%s "
+                "errors=%s traceback=%s",
+                plan.request_id[:8], trace_model.attempts,
+                trace_model.records[-3:], errors, frames)
+            summary = " | ".join(
+                f"{item['type']}: {item['detail']}" for item in errors)
+            raise PlanningOutputError(summary[:4000]) from None
 
     async def execute(self, instruction: str, observations: list[str]) -> str:
         result = await self.reasoner.run(
