@@ -461,8 +461,6 @@ class Workspace(QWidget):
         self._root: QWidget | None = None
         self._next_orientation = Qt.Horizontal
 
-        # Symmetric spacers reveal the entire workspace from its horizontal
-        # center without rebuilding the panel tree or its contents.
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         self._surface = QSplitter(Qt.Horizontal, self)
@@ -704,8 +702,6 @@ class Workspace(QWidget):
             original_sizes = parent.sizes()
 
             parent.replaceWidget(index, split)
-            # replaceWidget preserves geometry but PySide does not transfer
-            # Python ownership of the replacement. insertWidget does both.
             parent.insertWidget(index, split)
             split.addWidget(target)
             split.addWidget(panel)
