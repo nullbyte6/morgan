@@ -19,6 +19,7 @@
 
 import asyncio
 import inspect
+import logging
 import os
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
@@ -174,7 +175,10 @@ class AgentOrchestrator:
         except Exception as error:
             if self._cancelled(cancel_event):
                 return self._cancel(run_id, plan, results, on_event)
-            message = str(error)
+            logging.getLogger("arlo.agent").exception(
+                "Agent run %s failed in state %s", run_id,
+                self._states[run_id].value)
+            message = f"{type(error).__name__}: {error}"
             self._emit(run_id, EventType.ERROR, on_event,
                        {"error": message, "type": type(error).__name__})
             self._transition(run_id, ExecutionState.FAILED, on_event, error=message)
