@@ -467,8 +467,9 @@ class ArloWindow(DesktopWindow):
         self.task_progress = TaskProgressPill(main_content)
         self.response_timer_display.setParent(main_content)
         self.response_timer_display.setObjectName("responseTimer")
-        self.response_timer_display.setAlignment(Qt.AlignRight | Qt.AlignTop)
-        self.response_timer_display.setText("0.00 s")
+        self.response_timer_display.setAlignment(Qt.AlignmentFlag.AlignCenter |
+                                                 Qt.AlignmentFlag.AlignTop)
+        self.response_timer_display.setText("0m 00s")
         self.response_timer_display.show()
         main_content.installEventFilter(self)
         main_layout.addWidget(self.chat_scroll, 1)

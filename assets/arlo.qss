@@ -36,6 +36,14 @@ QFrame#inputFrame {
     border-radius: 24px;
 }
 
+QLabel#responseTimer {
+    background-color: transparent;
+    border: 2px solid #494d64;
+    border-radius: 16px;
+    color: #cad3f5;
+    padding: 4px 8px;
+}
+
 QTextEdit {
     background: transparent;
     border: none;
