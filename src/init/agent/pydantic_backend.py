@@ -84,7 +84,7 @@ def _redact_feedback(part: RetryPromptPart) -> str:
         } for error in part.content]
         return json.dumps(errors, ensure_ascii=False, default=str)
     feedback = str(part.content)
-    feedback = re.sub(r"[A-Za-z]:\\[^\s]+", "<redacted-path>", feedback)
+    feedback = re.sub(r"[A-Za-z]:\\\S+", "<redacted-path>", feedback)
     feedback = re.sub(r"[\w.+-]+@[\w.-]+", "<redacted-email>", feedback)
     return feedback[:2000]
 
@@ -98,7 +98,7 @@ def _safe_exception_chain(error: Exception) -> list[dict[str, Any]]:
                 include_url=False, include_context=False, include_input=False)
         else:
             message = re.sub(
-                r"input_value=.*?(?=, input_type=|\]$|$)",
+                r"input_value=.*?(?=, input_type=|]$|$)",
                 "input_value=<redacted>", str(current), flags=re.DOTALL)
             detail = message[:2000]
         chain.append({"type": type(current).__name__, "detail": detail})
@@ -113,7 +113,9 @@ class _PlanningTraceModel(WrapperModel):
         self.attempts = 0
         self.records = []
 
-    async def request(self, messages, model_settings, model_request_parameters):
+    async def request(self, messages,
+                      model_settings,
+                      model_request_parameters):
         self.attempts += 1
         feedback = [
             _redact_feedback(part)
@@ -467,23 +469,34 @@ class PydanticAgentBackend:
         signature.bind(**arguments)
         return arguments
 
-    def _readonly_fallback_plan(self, request_id: str,
-                                project_context: ProjectContext | None) -> ExecutionPlan:
-        directory = (project_context.working_directory
-                     if project_context else ".")
+    def _readonly_fallback_plan(
+            self,
+            request_id: str,
+            project_context: ProjectContext | None,
+    ) -> ExecutionPlan:
+        directory = (
+            project_context.working_directory
+            if project_context else "."
+        )
+
         return ExecutionPlan(
             request_id=request_id,
             goal="Inspect available project files",
-            steps=[PlanStep(
-                id="safe_readonly_inventory",
-                title="Inspect project files",
-                instruction="Inspect the available project files",
-                tool_name="list_files",
-                tool_args={"path": directory, "recursive": False, "suffix": ""},
-            )],
+            steps=[
+                PlanStep(
+                    id="safe_readonly_inventory",
+                    title="Inspect project files",
+                    instruction="Inspect the available project files",
+                    tool_name="list_files",
+                    tool_args={
+                        "path": directory,
+                        "recursive": False,
+                        "suffix": "",
+                    },
+                )
+            ],
             project_context=project_context,
-            file_write_requested=False,
-        )
+            file_write_requested=False)
 
     @staticmethod
     def _validate_project_argument(tool_name: str, arguments: dict,
