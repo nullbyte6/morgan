@@ -319,6 +319,9 @@ class TerminalDisplay(QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("terminalOutput")
+        self.setFrameShape(QFrame.NoFrame)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.viewport().setAutoFillBackground(False)
         self.setReadOnly(True)
         self.setUndoRedoEnabled(False)
         self.setLineWrapMode(QPlainTextEdit.NoWrap)
@@ -500,19 +503,33 @@ class TerminalView(QWidget):
 
     def _format(self, char):
         def color(name, default):
-            return QColor(default if name == "default" else
-                          self.COLORS.get(name, f"#{name}"))
+            return QColor(
+                default if name == "default"
+                else self.COLORS.get(name, f"#{name}"))
+
         foreground = color(char.fg, "#cad3f5")
-        background = color(char.bg, "#181926")
-        if char.reverse:
-            foreground, background = background, foreground
         result = QTextCharFormat()
-        result.setForeground(foreground)
-        result.setBackground(background)
-        result.setFontWeight(QFont.Bold if char.bold else QFont.Normal)
+
+        if char.bg != "default":
+            background = color(char.bg, "#181926")
+            result.setBackground(background)
+        else:
+            background = QColor("#24273a")
+            result.clearBackground()
+
+        if char.reverse:
+            result.setForeground(background)
+            result.setBackground(foreground)
+        else:
+            result.setForeground(foreground)
+
+        result.setFontWeight(
+            QFont.Bold if char.bold else QFont.Normal
+        )
         result.setFontItalic(char.italics)
         result.setFontUnderline(char.underscore)
         result.setFontStrikeOut(char.strikethrough)
+
         return result
 
     def render_screen(self):
