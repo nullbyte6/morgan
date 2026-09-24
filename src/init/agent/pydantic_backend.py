@@ -411,80 +411,69 @@ class PydanticAgentBackend:
             f"{model_name}Arguments", __config__=ConfigDict(extra="forbid"),
             **fields)
 
-    async def _plan_arguments(self, task: str, step, trace_model,
-                              source_hints: str):
+    async def _plan_arguments(self, task: str, step,
+            trace_model, source_hints: str):
+        """Generate arguments for a planned tool using its registered schema."""
         tool_name = step.tool_name
-        normalized_task = task.casefold()
-        syntax_request = (
-            "python" in normalized_task
-            and any(term in normalized_task for term in (
-                "syntax", "sintaxis", "syntaxe", "sintaxe")))
+        if tool_name not in self.tools:
+            raise PlanningOutputError(
+                f"Unregistered tool: {tool_name}")
+
         arguments_type = self._argument_model(tool_name)
         signature = self.tool_signatures[tool_name]
+
         agent = Agent(
             model=trace_model,
             output_type=NativeOutput(
                 arguments_type,
                 name=f"{tool_name}_arguments",
-                description=f"Validated arguments for {tool_name}{signature}.",
-                strict=True,
-            ),
-            retries={"tools": 1, "output": 2},
+                description=(
+                    f"Validated arguments for {tool_name}{signature}."),
+                strict=True),
+            retries={
+                "tools": 1,
+                "output": 2,
+            },
             instructions=(
-                "Generate arguments only for the selected local tool and current "
-                "request. Use concrete values, never placeholders or values from "
-                "another task. Preserve read-only intent. Return every required "
-                f"argument for {tool_name}{signature}."
-            ),
-        )
+                "Generate arguments for the selected tool using its "
+                "registered schema. Use only the current request, "
+                "planned step, and available execution context. "
+                "Preserve the user's requested operation and scope. "
+                "Do not incorporate surrounding instructions into "
+                "file paths or other resource identifiers. "
+                "Do not invent missing resources or substitute "
+                "unrelated resources. Return every required argument."
+            ))
 
         @agent.output_validator
         def validate_arguments(arguments):
             values = arguments.model_dump(mode="json")
-            discovery = self._python_file_discovery(task)
-            if (tool_name in {"list_code", "list_files"}
-                    and discovery is not None):
-                if values.get("suffix", "").casefold() not in {".py", "py"}:
-                    raise ModelRetry(
-                        "Set suffix='.py' for this Python-file discovery request.")
-                should_recurse = discovery == "recursive"
-                if bool(values.get("recursive", False)) != should_recurse:
-                    raise ModelRetry(
-                        f"Set recursive={str(should_recurse).lower()} to match the "
-                        "requested search scope.")
-            if tool_name == "read_code":
-                path = values.get("path", "")
-                try:
-                    target = (REPOSITORY_ROOT / path).resolve()
-                    target.relative_to(REPOSITORY_ROOT)
-                    exists = target.is_file()
-                except (OSError, ValueError):
-                    exists = False
-                if not exists:
-                    raise ModelRetry(
-                        "Choose an existing repository-relative source path from "
-                        "SOURCE_PATH_HINTS. The supplied path does not exist.")
-            if (tool_name == "execute_command" and syntax_request
-                    and values.get("command") != PYTHON_SYNTAX_COMMAND):
+
+            try:
+                signature.bind(**values)
+            except TypeError as error:
                 raise ModelRetry(
-                    "Use the exact cross-platform read-only syntax command from "
-                    "the instructions. Do not use py_compile or compileall.")
+                    f"Arguments do not match the "
+                    f"tool signature: {error}") from error
+
             return arguments
 
+        context = {
+            "ORIGINAL_REQUEST": task,
+            "PLANNED_STEP": step.model_dump(mode="json"),
+            "SOURCE_PATH_HINTS": source_hints,
+        }
+
         result = await agent.run(
-            json.dumps({
-                "ORIGINAL_REQUEST": task,
-                "PLANNED_STEP": step.model_dump(mode="json"),
-                "REQUIRED_SYNTAX_COMMAND": (
-                    PYTHON_SYNTAX_COMMAND
-                    if tool_name == "execute_command" and syntax_request
-                    else None),
-                "SOURCE_PATH_HINTS": source_hints,
-            }, ensure_ascii=False),
-            model_settings={"max_tokens": 512},
-        )
+            json.dumps(
+                context,
+                ensure_ascii=False,
+            ),
+            model_settings={"max_tokens": 2048,})
+
         arguments = result.output.model_dump(mode="json")
-        self.tool_signatures[tool_name].bind(**arguments)
+
+        signature.bind(**arguments)
         return arguments
 
     async def plan(self, task: str,
@@ -562,6 +551,24 @@ class PydanticAgentBackend:
                 })
 
             draft = result.output
+            print(
+                "[FORGE PLAN]",
+                json.dumps(
+                    {
+                        "request_id": request_id,
+                        "task": task,
+                        "goal": draft.goal,
+                        "steps": [
+                            step.model_dump(mode="json")
+                            for step in draft.steps
+                        ],
+                        "source_hints": source_hints,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                flush=True,
+            )
             steps = []
 
             for step in draft.steps:
