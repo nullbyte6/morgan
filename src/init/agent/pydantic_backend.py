@@ -139,22 +139,29 @@ class _PlanningTraceModel(WrapperModel):
             if isinstance(getattr(part, "content", None), str)
         ]
         for content in contents:
+            usage = response.usage
             redacted = _redact_output(content, self.tool_names)
             self.records.append({
                 "attempt": self.attempts,
                 "finish_reason": response.finish_reason,
                 "characters": len(content),
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
                 "output": redacted,
             })
             LOGGER.debug(
                 "Planning model output attempt=%d finish_reason=%s "
-                "characters=%d output=%s",
+                "characters=%d input_tokens=%s output_tokens=%s output=%s",
                 self.attempts, response.finish_reason, len(content),
+                usage.input_tokens, usage.output_tokens,
                 redacted)
         if response.finish_reason == "length":
             LOGGER.warning(
-                "Planning model output truncated attempt=%d characters=%d",
-                self.attempts, sum(len(content) for content in contents))
+                "Planning model output truncated attempt=%d characters=%d "
+                "input_tokens=%s output_tokens=%s max_tokens=%s",
+                self.attempts, sum(len(content) for content in contents),
+                response.usage.input_tokens, response.usage.output_tokens,
+                model_settings.get("max_tokens"))
         return response
 
 
