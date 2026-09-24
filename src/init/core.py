@@ -28,59 +28,10 @@ from contextlib import nullcontext
 from datetime import datetime
 from getpass import getuser
 
-from pydantic_ai import Agent, ModelRetry, RunContext, Tool
+from pydantic_ai import Agent, Tool
 
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
-
-
-def validate_application_output(ctx: RunContext, output: str) -> str:
-    """Reject simulated app calls and opening claims without tool evidence."""
-    messages = []
-    for message in reversed(ctx.messages):
-        messages.append(message)
-        if any(part.part_kind == "user-prompt" for part in message.parts):
-            break
-    requested = not isinstance(ctx.prompt, str) or re.search(
-        r"\b(?:abre|abreme|ábreme|abrir|open|launch|inicia|ejecuta)\b", ctx.prompt, re.I)
-    if not requested:
-        return output
-    if re.search(r'["\x27](?:action|tool|tool_name)["\x27]\s*:\s*["\x27]open_application["\x27]', output):
-        raise ModelRetry("Do not print an open_application JSON action. Execute the native tool if it has not already run, then report its actual result.")
-    claims = list(re.finditer(r"\b(?:abriendo|abiert[ao]s?|opening|opened|launched)\b", output, re.I))
-    claim = any(not re.search(r"\b(?:no|not|never|unable|cannot|couldn't)\b[^.!?\n]*$",
-                              output[max(0, match.start() - 100):match.start()], re.I)
-                for match in claims)
-    if not claim:
-        return output
-    results = [part for message in messages for part in message.parts
-               if part.part_kind == "tool-return"
-               and part.tool_name in {"open_application", "run_quick_command"}]
-    if not results:
-        if any(part.part_kind == "tool-return" and part.tool_name in {
-                "open_directory", "open_file", "open_browser", "open_in_editor"}
-               for message in messages for part in message.parts):
-            return output
-        raise ModelRetry("No application launch tool ran in this turn. Use open_application before claiming to open an app. If blocked, explain the blocker without claiming execution.")
-
-    def confirmed(value):
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except ValueError:
-                return False
-        if not isinstance(value, dict):
-            return False
-        if value.get("opened") is True:
-            return True
-        launches = [item for item in value.get("results", [])
-                    if isinstance(item, dict) and item.get("tool") == "open_application"]
-        return bool(launches) and all(confirmed(item.get("output")) for item in launches)
-
-    if not all(confirmed(part.content) for part in results):
-        raise ModelRetry("Application opening was not confirmed for every request. Report the error or unconfirmed status without claiming success. Do not repeat a launch that Windows already accepted.")
-    return output
-
 
 # noinspection PyBroadException
 class Assistant:
@@ -168,7 +119,6 @@ class Assistant:
         self.agent = Agent(
             model=self.model,
             tools=[Tool(function, sequential=True) for function in TOOLS])
-        self.agent.output_validator(validate_application_output)
 
         self.agent.instructions(self.current_instructions)
         self.agent.instructions(self.current_datetime_instructions)
@@ -205,7 +155,6 @@ class Assistant:
                     model=self.model,
                     tools=[Tool(function, sequential=True)
                            for function in TOOLS])
-                self.agent.output_validator(validate_application_output)
                 self.agent.instructions(self.current_instructions)
                 self.agent.instructions(self.current_datetime_instructions)
                 self.agent.instructions(self.working_directory_instructions)
@@ -334,6 +283,17 @@ class Assistant:
 
         return None
 
+    def application_opening_request(self, prompt: str) -> str | None:
+        match = re.fullmatch(
+            r"\s*(?:arlo[,:]?\s*)?(?:necesito que\s+)?(?:puedes\s+)?"
+            r"(?:abre|abreme|ábreme|abrir|open|launch|inicia|ejecuta)\s+"
+            r"(?:el|la)?\s*(.+?)\s*[.!]?\s*",
+            prompt, re.IGNORECASE)
+        if match is None:
+            return None
+        application = match.group(1).strip()
+        return application or None
+
     def printlns(self, content: str) -> None:
         if self.terminal_ui is not None:
             with self.terminal_ui.suspend():
@@ -439,6 +399,31 @@ class Assistant:
         from pydantic_ai.messages import (BinaryContent, ModelRequest,
                                           ModelResponse, TextPart,
                                           UserPromptPart)
+
+        application = self.application_opening_request(prompt)
+        if application is not None and audio_input is None and not attachments:
+            from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+            from src.init.brain import open_application
+
+            result = open_application(application)
+            try:
+                details = json.loads(result)
+            except (TypeError, json.JSONDecodeError):
+                details = None
+            if isinstance(details, dict) and details.get("opened") is True:
+                reply = f"Aplicación abierta: {details.get('application', application)}."
+            elif isinstance(details, dict) and details.get("launch_requested") is True:
+                reply = ("Windows aceptó la solicitud para abrir "
+                         f"{details.get('application', application)}.")
+            elif isinstance(details, dict):
+                reply = details.get("error", result)
+            else:
+                reply = result
+            if on_chunk is not None:
+                on_chunk(reply)
+            return reply, [*history,
+                           ModelRequest(parts=[UserPromptPart(prompt)]),
+                           ModelResponse(parts=[TextPart(reply)])]
 
         self._initialize_runtime()
         self.voice.audio_callback = on_audio
