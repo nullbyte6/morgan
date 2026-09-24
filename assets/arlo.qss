@@ -352,7 +352,7 @@ QWidget#terminalPage QPushButton:disabled {
 }
 
 QPlainTextEdit#terminalOutput {
-    background-color: #181926;
+    background-color: transparent;
     color: #cad3f5;
     border: none;
     selection-background-color: #494d64;
@@ -570,11 +570,11 @@ QTextBrowser#logMessageBody QScrollBar {
 }
 
 QWidget#terminalPage {
-    background: transparent;
+    background-color: transparent;
 }
 
 QPlainTextEdit#terminalOutput QScrollBar:vertical {
-    background: #181926;
+    background-color: transparent;
     width: 10px;
     margin: 2px;
     border: none;
