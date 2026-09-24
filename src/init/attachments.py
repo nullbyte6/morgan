@@ -79,6 +79,7 @@ class Attachment:
 class DesktopMessage:
     text: str
     attachments: tuple[Attachment, ...] = ()
+    agent_mode: bool = False
 
     @property
     def display_text(self):

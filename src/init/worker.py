@@ -37,6 +37,14 @@ from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
 
 
+AGENT_PHASES = {
+    "PLANNING": "processing",
+    "EXECUTING": "executing",
+    "VERIFYING": "processing",
+    "AWAITING_APPROVAL": "executing",
+}
+
+
 def select_response_surface(prompt: str, model_name: str) -> str | None:
     """Let the local LLM choose the output surface before generation."""
     if not prompt.strip():
@@ -188,12 +196,14 @@ class AssistantWorker(QObject):
         self.cancel_event = threading.Event()
         self.command_reply = False
         self.event_loop = None
+        self.agent_orchestrator = None
 
     @Slot()
     def initialize(self):
         try:
             self.event_loop = asyncio.new_event_loop()
             self.assistant._initialize_runtime()
+            self.initialize_agent_orchestrator()
             with self._voice_settings_lock:
                 self.assistant.voice.set_muted(self.muted)
             if self.startup_greeting:
@@ -228,6 +238,33 @@ class AssistantWorker(QObject):
             self.muted = bool(muted)
             if self.assistant.voice is not None:
                 self.assistant.voice.set_muted(self.muted)
+
+    def initialize_agent_orchestrator(self):
+        from src.init.agent import AgentOrchestrator, AgentStore
+        from src.init.agent.pydantic_backend import PydanticAgentBackend
+        from src.init.config import HOME_PATH, load_config
+        from src.init.tools import TOOLS
+
+        settings = load_config()["agent"]
+        database = Path(settings["database"])
+        if not database.is_absolute():
+            database = HOME_PATH / database
+        store = AgentStore(database)
+        interrupted = store.interrupted_runs()
+        if interrupted:
+            logging.getLogger("arlo.agent").warning(
+                "Found %d interrupted autonomous runs", len(interrupted))
+        backend = PydanticAgentBackend(
+            self.assistant.model, TOOLS,
+            base_instructions=(
+                self.assistant.current_instructions,
+                self.assistant.current_datetime_instructions,
+                self.assistant.working_directory_instructions,
+            ))
+        self.agent_orchestrator = AgentOrchestrator(
+            backend, {function.__name__: function for function in TOOLS}, store,
+            max_steps=settings["max_steps"],
+            max_retries=settings["max_retries"])
 
     @Slot(int, object)
     def ask(self, turn_id, message):
@@ -270,6 +307,15 @@ class AssistantWorker(QObject):
                 return
 
             self.session.write(self.assistant.username, message.log_text())
+
+            if isinstance(message, DesktopMessage) and message.agent_mode:
+                if self.session.private:
+                    reply = "Agent Mode is unavailable in private mode because autonomous runs persist."
+                    self.finished.emit(reply)
+                    return
+                self.run_agent_mode(
+                    turn_id, message.log_text(), cancel_event)
+                return
 
             from src.init.hot_reload import is_reload_command
             if (not voice_input and not message.attachments
@@ -370,6 +416,36 @@ class AssistantWorker(QObject):
             self.directory.emit(str(Path.cwd()))
             if self.assistant.shutdown_requested.is_set():
                 self.exit_requested.emit()
+
+    def run_agent_mode(self, turn_id: int, prompt: str, cancel_event) -> None:
+        from src.init.agent import EventType, ExecutionState
+
+        def event_received(event):
+            if event.type == EventType.STATE_CHANGED:
+                phase = AGENT_PHASES.get(event.payload.get("to"))
+                if phase:
+                    self.phase.emit(turn_id, phase)
+
+        result = self.event_loop.run_until_complete(self.agent_orchestrator.run(
+            prompt,
+            cancel_event=cancel_event,
+            approval=lambda message: self.confirm_command(
+                message, cancel_event, turn_id),
+            on_event=event_received,
+            working_directory=str(Path.cwd()),
+        ))
+        if result.state == ExecutionState.COMPLETED:
+            reply = result.response
+        elif result.state == ExecutionState.CANCELLED:
+            reply = ""
+        else:
+            reply = f"Agent run {result.state.value.lower()}: {result.error or 'No result'}"
+        if reply:
+            self.chunk.emit(turn_id, reply)
+            self.session.write(
+                self.assistant.name, reply,
+                status="completed" if result.state == ExecutionState.COMPLETED else "error")
+        self.finished.emit(reply)
 
     def report_audio(self, turn_id, samples, sample_rate):
         if not self.cancel_event.is_set():
