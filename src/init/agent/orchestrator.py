@@ -44,7 +44,8 @@ from .persistence import AgentStore
 class AgentBackend(Protocol):
     async def inspect_project(self, task: str, working_directory: str) -> ProjectContext: ...
     async def plan(self, task: str, max_steps: int,
-                   project_context: ProjectContext | None = None) -> ExecutionPlan: ...
+                   project_context: ProjectContext | None = None,
+                   validation_feedback: str | None = None) -> ExecutionPlan: ...
     async def validate_plan(self, task: str,
                             plan: ExecutionPlan) -> VerificationResult: ...
     async def execute(self, instruction: str, observations: list[str]) -> str: ...
@@ -192,6 +193,7 @@ class AgentOrchestrator:
         plan = None
         results: list[StepResult] = []
         observations: list[str] = []
+        validation_feedback = None
         try:
             self._check_cancelled(cancel_event)
             project_context = None
@@ -205,9 +207,11 @@ class AgentOrchestrator:
             plan_validation = None
             for planning_attempt in range(2):
                 planning = (self.backend.plan(task, self.max_steps,
-                                              project_context=project_context)
+                                              project_context=project_context,
+                                              validation_feedback=validation_feedback)
                             if project_context is not None
-                            else self.backend.plan(task, self.max_steps))
+                            else self.backend.plan(task, self.max_steps,
+                                                   validation_feedback=validation_feedback))
                 plan = await self._await_cancellable(
                     planning, cancel_event)
                 plan.project_context = project_context
@@ -219,9 +223,19 @@ class AgentOrchestrator:
                         self.backend.validate_plan(task, plan), cancel_event)
                 self._emit(run_id, EventType.PLAN_VALIDATED, on_event,
                            {**plan_validation.model_dump(mode="json"),
-                            "attempt": planning_attempt + 1})
+                            "attempt": planning_attempt + 1,
+                            "proposed_plan": {
+                                "goal": plan.goal,
+                                "steps": [{
+                                    "id": step.id,
+                                    "tool_name": step.tool_name,
+                                    "tool_args": step.tool_args,
+                                    "requires_approval": step.requires_approval,
+                                } for step in plan.steps],
+                            }})
                 if plan_validation.success:
                     break
+                validation_feedback = plan_validation.summary
             if plan is None or not plan_validation.success:
                 raise RuntimeError(
                     "Plan validation failed: "

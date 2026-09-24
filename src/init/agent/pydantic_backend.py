@@ -193,6 +193,9 @@ class PydanticAgentBackend:
             "overwrite, send, publish, install, uninstall, terminate, or make "
             "system changes as requiring approval. Never create or modify a file "
             "unless the current request explicitly requires it. Do not invent tools. "
+            "PREVIOUS_VALIDATION_FEEDBACK is a host constraint from an earlier "
+            "proposal. When present, revise the plan to satisfy it without changing "
+            "the user's requested scope. "
             "Keep the plan minimal and order dependent work correctly. "
             "Use no more than six steps. Keep the goal, titles, and instructions "
             "short; do not restate the request or tool catalog. "
@@ -440,7 +443,8 @@ class PydanticAgentBackend:
         return arguments
 
     async def plan(self, task: str,
-            max_steps: int, project_context: ProjectContext | None = None) -> ExecutionPlan:
+            max_steps: int, project_context: ProjectContext | None = None,
+            validation_feedback: str | None = None) -> ExecutionPlan:
         """Generate and validate a bounded execution plan."""
 
         if not task.strip():
@@ -501,6 +505,7 @@ class PydanticAgentBackend:
                     f"ORIGINAL_REQUEST:\n{task}\n"
                     f"MAXIMUM_STEPS: {plan_step_limit}\n"
                     f"{self._planning_catalog(task)}\n"
+                    f"PREVIOUS_VALIDATION_FEEDBACK:\n{validation_feedback or 'null'}\n"
                     f"PROJECT_CONTEXT:\n{project_context.model_dump_json() if project_context else 'null'}"),
                 model_settings={
                     "max_tokens": STRUCTURED_OUTPUT_MAX_TOKENS,
