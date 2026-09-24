@@ -225,7 +225,12 @@ class PydanticAgentBackend:
             retries={"tools": 1, "output": 2},
             instructions=[*base, (
                 "Verify whether the execution observations satisfy the requested "
-                "task. Be strict about tool failures and missing required results."
+                "task. Be strict about tool failures and missing required results. "
+                "list_code and list_files can filter by suffix and explicitly report "
+                "root-only or recursive scope. Treat their successful filtered output, "
+                "including a confirmed empty result, as direct evidence; do not demand "
+                "that a shell command repeat the search. Never request user approval "
+                "or propose an unplanned follow-up operation."
             )],
         )
         self.writer = Agent(
@@ -287,9 +292,40 @@ class PydanticAgentBackend:
         return ", ".join(paths) if paths else "No task-matching source paths found."
 
     @staticmethod
+    def _python_file_discovery(task: str) -> str | None:
+        normalized = task.casefold()
+        python_files = (
+            ("python" in normalized or ".py" in normalized)
+            and any(term in normalized for term in (
+                "list", "find", "show", "lista", "buscar", "muestra")))
+        if not python_files:
+            return None
+        if any(term in normalized for term in (
+                "recursive", "recursively", "every directory", "all directories",
+                "entire project", "whole project", "cada directorio",
+                "todos los directorios", "proyecto entero", "todo el proyecto")):
+            return "recursive"
+        if any(term in normalized for term in (
+                "project root", "root of the project", "repository root",
+                "raíz del proyecto", "raiz del proyecto", "raíz del repositorio",
+                "raiz del repositorio")):
+            return "root"
+        return "root"
+
+    @staticmethod
     def _planning_guidance(task: str) -> str:
         normalized = task.casefold()
         guidance = []
+        discovery = PydanticAgentBackend._python_file_discovery(task)
+        if discovery == "recursive":
+            guidance.append(
+                "Use list_code with directory='.', recursive=true, suffix='.py'. "
+                "This searches nested source directories with the existing tool; "
+                "do not use execute_command or ask for approval.")
+        elif discovery == "root":
+            guidance.append(
+                "Use list_code with directory='.', recursive=false, suffix='.py'. "
+                "Root-only means do not include files from nested directories.")
         if ("workspace" in normalized
                 and any(term in normalized for term in (
                     "inspect", "explain", "identify", "inspeccion", "explica"))):
@@ -358,6 +394,17 @@ class PydanticAgentBackend:
         @agent.output_validator
         def validate_arguments(arguments):
             values = arguments.model_dump(mode="json")
+            discovery = self._python_file_discovery(task)
+            if (tool_name in {"list_code", "list_files"}
+                    and discovery is not None):
+                if values.get("suffix", "").casefold() not in {".py", "py"}:
+                    raise ModelRetry(
+                        "Set suffix='.py' for this Python-file discovery request.")
+                should_recurse = discovery == "recursive"
+                if bool(values.get("recursive", False)) != should_recurse:
+                    raise ModelRetry(
+                        f"Set recursive={str(should_recurse).lower()} to match the "
+                        "requested search scope.")
             if tool_name == "read_code":
                 path = values.get("path", "")
                 try:
@@ -424,6 +471,20 @@ class PydanticAgentBackend:
                 raise ModelRetry(
                     "Use only available tool names. Unknown: "
                     + ", ".join(unknown))
+            discovery = self._python_file_discovery(task)
+            if discovery is not None:
+                if not any(step.tool_name in {"list_code", "list_files"}
+                           for step in plan.steps):
+                    raise ModelRetry(
+                        "Use list_code or list_files for Python-file discovery.")
+                forbidden = sorted({
+                    step.tool_name for step in plan.steps
+                    if step.tool_name in {"execute_command", "send_message"}
+                })
+                if forbidden:
+                    raise ModelRetry(
+                        "File discovery must use the existing listing tools without "
+                        "approval or messaging. Remove: " + ", ".join(forbidden))
             final_step_terms = {
                 "synthesize", "synthesis", "summarize", "summary",
                 "final response", "report findings",

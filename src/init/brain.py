@@ -232,17 +232,47 @@ def read_notes() -> str:
         notes) if notes else tr('brain.no_notes_saved_yet')
 
 
-def list_files(path: str = ".") -> str:
+def list_files(path: str = ".", recursive: bool = False,
+               suffix: str = "") -> str:
+    """List directory entries, optionally recursively and filtered by file suffix."""
     try:
         folder = resolve_safe_path(path)
         if not folder.exists():
             return tr('brain.directory_does_not_exist', folder=folder)
         if not folder.is_dir():
             return tr('brain.not_a_directory', folder=folder)
+        normalized_suffix = suffix.strip().casefold()
+        if normalized_suffix and not normalized_suffix.startswith("."):
+            normalized_suffix = "." + normalized_suffix
         items = []
-        for item in folder.iterdir():
-            kind = "DIR" if item.is_dir() else "FILE"
-            items.append(f"[{kind}] {item.name}")
+        if recursive:
+            for current, directories, files in os.walk(folder, followlinks=False):
+                directories[:] = sorted(
+                    name for name in directories
+                    if name not in {".git", ".venv", "__pycache__"}
+                    and not (Path(current) / name).is_symlink())
+                current_path = Path(current)
+                if not normalized_suffix:
+                    items.extend(
+                        f"[DIR] {(current_path / name).relative_to(folder)}"
+                        for name in directories)
+                items.extend(
+                    f"[FILE] {(current_path / name).relative_to(folder)}"
+                    for name in sorted(files)
+                    if not normalized_suffix
+                    or Path(name).suffix.casefold() == normalized_suffix)
+        else:
+            for item in folder.iterdir():
+                if (normalized_suffix
+                        and (not item.is_file()
+                             or item.suffix.casefold() != normalized_suffix)):
+                    continue
+                kind = "DIR" if item.is_dir() else "FILE"
+                items.append(f"[{kind}] {item.name}")
+        items.sort(key=str.casefold)
+        if normalized_suffix and not items:
+            scope = "recursively" if recursive else "in the directory root"
+            return f"No files ending in {normalized_suffix} were found {scope}."
         return "\n".join(items) if items else tr('brain.directory_is_empty')
     except Exception as error:
         return f"Error: {error}"

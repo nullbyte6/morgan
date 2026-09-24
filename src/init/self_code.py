@@ -61,11 +61,13 @@ def get_repo() -> str:
         ensure_ascii=False)
 
 
-def list_code(directory: str = ".") -> str:
-    """List a directory inside the assistant's source checkout without changing cwd."""
+def list_code(directory: str = ".", recursive: bool = False,
+              suffix: str = "") -> str:
+    """List source entries; recursive=False is root-only, suffix filters files."""
     from .brain import list_files
     try:
-        return list_files(str(_path(directory)))
+        return list_files(str(_path(directory)), recursive=recursive,
+                          suffix=suffix)
     except (OSError, ValueError) as error:
         return f"Error: {error}"
 
