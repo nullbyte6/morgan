@@ -143,15 +143,21 @@ class AgentOrchestrator:
                 if needs_approval:
                     self._transition(run_id, ExecutionState.AWAITING_APPROVAL, on_event)
                     message = f"{step.title}: {step.instruction}"
+                    self.store.register_approval(
+                        run_id, step.id, step.tool_name, step.tool_args, message)
                     self._emit(run_id, EventType.APPROVAL_REQUESTED, on_event,
-                               {"message": message, "tool_name": step.tool_name}, step.id)
+                               {"message": message, "tool_name": step.tool_name,
+                                "arguments": step.tool_args}, step.id)
                     if approval is None:
-                        self._transition(run_id, ExecutionState.PAUSED, on_event)
-                        return RunResult(run_id=run_id, state=ExecutionState.PAUSED,
+                        return RunResult(run_id=run_id,
+                                         state=ExecutionState.AWAITING_APPROVAL,
                                          plan=plan, steps=results)
                     accepted = approval(message)
                     if inspect.isawaitable(accepted):
                         accepted = await accepted
+                    if not self.store.resolve_approval(
+                            run_id, step.id, bool(accepted)):
+                        raise RuntimeError("Approval is no longer pending")
                     self._emit(run_id, EventType.APPROVAL_RESOLVED, on_event,
                                {"accepted": bool(accepted)}, step.id)
                     if not accepted:
@@ -194,6 +200,103 @@ class AgentOrchestrator:
             message = f"{type(error).__name__}: {error}"
             failed_state = self._states[run_id]
             phase, event_type = self._failure_details(failed_state)
+            payload = {"error": message, "type": type(error).__name__,
+                       "phase": phase}
+            self._emit(run_id, event_type, on_event, payload)
+            self._emit(run_id, EventType.ERROR, on_event, payload)
+            self._transition(run_id, ExecutionState.FAILED, on_event,
+                             error=message, failure_phase=phase)
+            return RunResult(run_id=run_id, state=ExecutionState.FAILED,
+                             error=message, failure_phase=phase,
+                             plan=plan, steps=results)
+        finally:
+            self._states.pop(run_id, None)
+
+    async def resume_approval(self, run_id: str, step_id: str, accepted: bool,
+                              *, cancel_event=None, on_event=None) -> RunResult:
+        pending = next((item for item in self.store.pending_approvals()
+                        if item["run_id"] == run_id
+                        and item["step_id"] == step_id), None)
+        if pending is None or not pending.get("plan_json"):
+            raise LookupError("Approval is stale or is not registered")
+        plan = ExecutionPlan.model_validate_json(pending["plan_json"])
+        step_index = next((index for index, step in enumerate(plan.steps)
+                           if step.id == step_id), None)
+        if step_index is None:
+            raise LookupError("Approved step is not part of the stored plan")
+        step = plan.steps[step_index]
+        if (step.tool_name != pending["tool_name"]
+                or step.tool_args != pending["tool_args"]):
+            raise RuntimeError("Stored approval does not match the planned operation")
+        self._states[run_id] = ExecutionState.AWAITING_APPROVAL
+        results = []
+        observations = []
+        for stored, planned in zip(self.store.get_steps(run_id), plan.steps):
+            if stored["state"] != "COMPLETED":
+                break
+            result = StepResult(success=True, output=stored["output"] or "")
+            results.append(result)
+            observations.append(
+                f"Tool {planned.tool_name} completed step {planned.id} "
+                f"({planned.title}) successfully. Result: {result.output}")
+        try:
+            if not self.store.resolve_approval(run_id, step_id, accepted):
+                raise LookupError("Approval is stale or was already resolved")
+            self._emit(run_id, EventType.APPROVAL_RESOLVED, on_event,
+                       {"accepted": accepted}, step_id)
+            if not accepted:
+                raise PermissionError(f"Approval denied for step {step_id}")
+            self._transition(run_id, ExecutionState.EXECUTING, on_event)
+            for index in range(step_index, len(plan.steps)):
+                current = plan.steps[index]
+                self._check_cancelled(cancel_event)
+                if index > step_index and (
+                        current.requires_approval
+                        or current.tool_name in self.destructive_tools):
+                    self._transition(
+                        run_id, ExecutionState.AWAITING_APPROVAL, on_event)
+                    message = f"{current.title}: {current.instruction}"
+                    self.store.register_approval(
+                        run_id, current.id, current.tool_name,
+                        current.tool_args, message)
+                    self._emit(
+                        run_id, EventType.APPROVAL_REQUESTED, on_event,
+                        {"message": message, "tool_name": current.tool_name,
+                         "arguments": current.tool_args}, current.id)
+                    return RunResult(
+                        run_id=run_id, state=ExecutionState.AWAITING_APPROVAL,
+                        plan=plan, steps=results)
+                result = await self._run_step(
+                    run_id, current, observations, cancel_event, on_event)
+                results.append(result)
+                if not result.success:
+                    raise RuntimeError(result.error or f"Step {current.id} failed")
+                observations.append(
+                    f"Tool {current.tool_name} completed step {current.id} "
+                    f"({current.title}) successfully. Result: {result.output}")
+            task = pending["task"]
+            self._transition(run_id, ExecutionState.VERIFYING, on_event)
+            verification = await self._await_cancellable(
+                self.backend.verify(task, plan, observations), cancel_event)
+            self._emit(run_id, EventType.VERIFICATION_COMPLETED, on_event,
+                       verification.model_dump(mode="json"))
+            if not verification.success:
+                raise RuntimeError(verification.summary or "Verification failed")
+            response = await self._await_cancellable(
+                self.backend.finalize(task, observations, verification),
+                cancel_event)
+            self._transition(run_id, ExecutionState.COMPLETED, on_event,
+                             response=response)
+            self._emit(run_id, EventType.FINAL_RESULT, on_event,
+                       {"response": response})
+            return RunResult(run_id=run_id, state=ExecutionState.COMPLETED,
+                             response=response, plan=plan, steps=results)
+        except asyncio.CancelledError:
+            return self._cancel(run_id, plan, results, on_event)
+        except Exception as error:
+            message = f"{type(error).__name__}: {error}"
+            state = self._states[run_id]
+            phase, event_type = self._failure_details(state)
             payload = {"error": message, "type": type(error).__name__,
                        "phase": phase}
             self._emit(run_id, event_type, on_event, payload)

@@ -54,6 +54,13 @@ SCHEMA = (
         event_type TEXT NOT NULL, state TEXT NOT NULL, step_id TEXT,
         payload TEXT NOT NULL, created_at TEXT NOT NULL
     )""",
+    """CREATE TABLE IF NOT EXISTS agent_approvals (
+        run_id TEXT NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+        step_id TEXT NOT NULL, tool_name TEXT NOT NULL, tool_args TEXT NOT NULL,
+        proposed_change TEXT NOT NULL, status TEXT NOT NULL,
+        created_at TEXT NOT NULL, resolved_at TEXT,
+        PRIMARY KEY (run_id, step_id)
+    )""",
     "CREATE INDEX IF NOT EXISTS agent_events_run ON agent_events(run_id, id)",
     "CREATE INDEX IF NOT EXISTS agent_runs_state ON agent_runs(state, updated_at)",
 )
@@ -166,6 +173,61 @@ class AgentStore:
             )
         return event.model_copy(update={"id": cursor.lastrowid,
                                         "created_at": created_at})
+
+    def register_approval(self, run_id: str, step_id: str, tool_name: str,
+                          tool_args: dict[str, Any], proposed_change: str) -> None:
+        with self.connect(write=True) as db:
+            db.execute(
+                """INSERT INTO agent_approvals
+                (run_id,step_id,tool_name,tool_args,proposed_change,status,created_at)
+                VALUES(?,?,?,?,?,'PENDING',?)""",
+                (run_id, step_id, tool_name,
+                 json.dumps(tool_args, ensure_ascii=False), proposed_change,
+                 timestamp()),
+            )
+
+    def pending_approvals(self) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute(
+                """SELECT a.*,r.state,r.task,r.plan_json,r.working_directory
+                FROM agent_approvals a JOIN agent_runs r ON r.id=a.run_id
+                WHERE a.status='PENDING' AND r.state=?
+                ORDER BY a.created_at""",
+                (ExecutionState.AWAITING_APPROVAL.value,),
+            ).fetchall()
+        approvals = []
+        for row in rows:
+            approval = dict(row)
+            approval["tool_args"] = json.loads(approval["tool_args"])
+            approvals.append(approval)
+        return approvals
+
+    def resolve_approval(self, run_id: str, step_id: str,
+                         accepted: bool) -> bool:
+        with self.connect(write=True) as db:
+            cursor = db.execute(
+                """UPDATE agent_approvals SET status=?,resolved_at=?
+                WHERE run_id=? AND step_id=? AND status='PENDING'
+                AND EXISTS (SELECT 1 FROM agent_runs r
+                WHERE r.id=agent_approvals.run_id
+                AND r.state=?)""",
+                ("APPROVED" if accepted else "REJECTED", timestamp(),
+                 run_id, step_id, ExecutionState.AWAITING_APPROVAL.value),
+            )
+            return cursor.rowcount == 1
+
+    def get_steps(self, run_id: str) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM agent_steps WHERE run_id=? ORDER BY position",
+                (run_id,),
+            ).fetchall()
+        steps = []
+        for row in rows:
+            step = dict(row)
+            step["tool_args"] = json.loads(step["tool_args"])
+            steps.append(step)
+        return steps
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         with self.connect() as db:
