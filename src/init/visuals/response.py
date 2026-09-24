@@ -18,15 +18,142 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Streaming Markdown responses displayed inside workspace panels."""
 
+import threading
+from dataclasses import dataclass, field
+
 from markdown_it import MarkdownIt
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import get_lexer_by_name
 from pygments.lexers.special import TextLexer
 from pygments.util import ClassNotFound
-from PySide6.QtCore import QTimer, Qt, Slot
-from PySide6.QtWidgets import QFrame, QSizePolicy, QTextBrowser, QVBoxLayout, QWidget
+from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal, Slot
+from PySide6.QtWidgets import (QApplication, QFrame, QSizePolicy,
+                               QTextBrowser, QVBoxLayout, QWidget)
 
+
+@dataclass(eq=False)
+class ResponseRequest:
+    title: str
+    completed: threading.Event = field(default_factory=threading.Event)
+    result: str | None = None
+    error: str | None = None
+
+
+_registry_lock = threading.Lock()
+_bridge = None
+
+
+class ResponseBridge(QObject):
+    requested = Signal(object)
+
+    def __init__(self, parent):
+        global _bridge
+        app = QApplication.instance()
+        if app is None or QThread.currentThread() != app.thread():
+            raise RuntimeError("ResponseBridge requires the GUI thread")
+        super().__init__(parent)
+        self._lock = threading.Lock()
+        self._pending = set()
+        self._closed = False
+        self.requested.connect(self._open, Qt.QueuedConnection)
+        app.aboutToQuit.connect(self.shutdown)
+        with _registry_lock:
+            _bridge = self
+
+    def request(self, title: str) -> str:
+        request = ResponseRequest(title.strip() or "Response")
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Arlo's response workspace is unavailable")
+            self._pending.add(request)
+        try:
+            if QThread.currentThread() == self.thread():
+                self._open(request)
+            else:
+                self.requested.emit(request)
+            if not request.completed.wait(15):
+                with self._lock:
+                    if not request.completed.is_set():
+                        self._complete(request, error="Response workspace opening timed out")
+        except Exception as error:
+            with self._lock:
+                self._complete(request, error=str(error))
+        if request.error:
+            raise RuntimeError(request.error)
+        return request.result
+
+    def _complete(self, request, *, result=None, error=None):
+        if request.completed.is_set():
+            return
+        request.result = result
+        request.error = error
+        self._pending.discard(request)
+        request.completed.set()
+
+    @Slot(object)
+    def _open(self, request):
+        with self._lock:
+            if self._closed or request.completed.is_set():
+                return
+            try:
+                window = self.parent()
+                workspace = window.workspace
+                current = window.current_response_view
+                panel = next(
+                    (workspace.get_panel(panel_id)
+                     for panel_id in workspace.panel_ids
+                     if workspace.get_panel(panel_id) is not None
+                     and workspace.get_panel(panel_id).content is current
+                     and panel_id not in workspace._closing_panels
+                     and panel_id not in workspace._pending_closes),
+                    None)
+                if panel is not None:
+                    workspace.focus_panel(panel.panel_id)
+                    window.restore_from_mascot()
+                    self._complete(request, result="Response workspace is already open.")
+                    return
+
+                view = ResponseView()
+                panel_id = workspace.open_panel(
+                    title=request.title,
+                    content=view,
+                    target_id=window.main_workspace_panel_id)
+                window.current_response_view = view
+                view.destroyed.connect(
+                    lambda: window._forget_response_view(view))
+                workspace.focus_panel(panel_id)
+                window.restore_from_mascot()
+                self._complete(request, result="Response workspace opened.")
+            except Exception as error:
+                self._complete(request, error=str(error))
+
+    @Slot()
+    def shutdown(self):
+        global _bridge
+        with _registry_lock:
+            if _bridge is self:
+                _bridge = None
+        with self._lock:
+            self._closed = True
+            for request in tuple(self._pending):
+                self._complete(request, error="Arlo's response workspace was closed")
+
+
+def request_response_workspace(title: str = "Response") -> str:
+    with _registry_lock:
+        bridge = _bridge
+    if bridge is None:
+        raise RuntimeError("The response workspace requires the running Arlo desktop")
+    return bridge.request(title)
+
+def open_response_view(title: str = "Response") -> str:
+    """Open a dedicated workspace for the current response.
+    Use this tool when a separate document-like view would make the
+    response easier to read, or when the user requests one explicitly.
+    After opening it, continue generating the response normally.
+    Its Markdown content will be streamed into the new workspace."""
+    return request_response_workspace(title)
 
 class ResponseView(QWidget):
     """An independent, progressively rendered response surface."""
@@ -57,14 +184,36 @@ class ResponseView(QWidget):
         self._renderer = MarkdownIt(
             "commonmark", {"html": False, "highlight": self._highlight})
 
-    @staticmethod
-    def _highlight(code, language, attrs=""):
+    def _highlight(self, code: str, language: str, attrs: str = "") -> str:
         try:
-            lexer = get_lexer_by_name(language) if language else TextLexer()
+            lexer = get_lexer_by_name((language or "text").strip(),
+                                      stripall=False)
         except ClassNotFound:
-            lexer = TextLexer()
-        return highlight(code, lexer, HtmlFormatter(
-            noclasses=True, nowrap=False, style="monokai"))
+            lexer = TextLexer(stripall=False)
+
+        formatter = HtmlFormatter(nowrap=True)
+        highlighted = highlight(code, lexer, formatter)
+
+        return f"""
+        <div style="
+            background: #181926;
+            border: 2px solid #494d64;
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin: 10px 0;
+        ">
+            <pre style="
+                margin: 0;
+                padding: 0;
+                background: transparent;
+                color: #cad3f5;
+                font-family: 'JetBrains Mono NL', 'JetBrains Mono', 'Cascadia Code', monospace;
+                font-size: 16px;
+                line-height: 1.5;
+                white-space: pre-wrap;
+            "><code>{highlighted}</code></pre>
+        </div>
+        """
 
     @property
     def source(self):
