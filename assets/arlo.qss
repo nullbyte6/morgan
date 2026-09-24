@@ -12,6 +12,16 @@ QLabel#subtitles {
     font-size: 16px;
 }
 
+
+QToolTip {
+    background-color: #24273a;
+    color: #cad3f5;
+    border: 2px solid #494d64;
+    padding: 2px 6px;
+    font-family: "Inter";
+    font-size: 16px;
+}
+
 QWidget#mascotSubtitleBubble {
     background-color: #24273a;
     border: 2px solid #494d64;
