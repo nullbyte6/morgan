@@ -118,7 +118,10 @@ class ResponseBridge(QObject):
                 panel_id = workspace.open_panel(
                     title=request.title,
                     content=view,
-                    target_id=window.main_workspace_panel_id)
+                    target_id=window.main_workspace_panel_id,
+                    direction=Qt.Key_Right,
+                )
+
                 window.current_response_view = view
                 view.destroyed.connect(
                     lambda: window._forget_response_view(view))
