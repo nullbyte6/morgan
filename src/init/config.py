@@ -41,11 +41,6 @@ DEFAULTS = {
         "context_chars": 4000,
         "recall_chars": 8000,
     },
-    "agent": {
-        "database": "agent/runs.sqlite3",
-        "max_steps": 12,
-        "max_retries": 2,
-    },
     "attachments": dict(DEFAULT_LIMITS),
     "lang": "spanish",
     "keep_alive": "24h",
@@ -141,20 +136,6 @@ def validate_config(config):
                               ("recall_chars", 1024, 64000)):
         if isinstance(memory[key], bool) or not isinstance(memory[key], int) or not lower <= memory[key] <= upper:
             raise ValueError(f"memory.{key} must be an integer between {lower} and {upper}")
-    agent = config.get("agent", {})
-    if not isinstance(agent, dict) or agent.keys() - DEFAULTS["agent"].keys():
-        raise ValueError("Invalid agent configuration")
-    result["agent"] = {**DEFAULTS["agent"], **agent}
-    agent_path = result["agent"]["database"]
-    if (not isinstance(agent_path, str) or not agent_path.strip()
-            or agent_path.startswith(("\\\\", "//"))
-            or (not Path(agent_path).is_absolute() and ".." in Path(agent_path).parts)):
-        raise ValueError(
-            "agent.database must be a local absolute path or a path inside .arlo")
-    for key, lower, upper in (("max_steps", 1, 100), ("max_retries", 0, 10)):
-        value = result["agent"][key]
-        if isinstance(value, bool) or not isinstance(value, int) or not lower <= value <= upper:
-            raise ValueError(f"agent.{key} must be an integer between {lower} and {upper}")
     reference = result["voice_reference"]
     if (not isinstance(reference, str) or not reference
             or Path(reference).name != reference

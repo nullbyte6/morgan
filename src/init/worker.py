@@ -19,7 +19,6 @@
 import asyncio
 import json
 import logging
-import re
 import threading
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -38,14 +37,6 @@ from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
 
 
-AGENT_PHASES = {
-    "PLANNING": "processing",
-    "EXECUTING": "executing",
-    "VERIFYING": "processing",
-    "AWAITING_APPROVAL": "executing",
-}
-
-
 def handle_direct_command(assistant, prompt: str) -> str | None:
     for handler in (
         assistant.directory_cmd,
@@ -55,26 +46,6 @@ def handle_direct_command(assistant, prompt: str) -> str | None:
         result = handler(prompt)
         if result is not None:
             return result
-    return None
-
-
-def requests_response_workspace(prompt: str) -> bool:
-    normalized = " ".join(prompt.casefold().split())
-    return any(phrase in normalized for phrase in (
-        "response workspace",
-        "workspace de respuesta",
-        "espacio de respuesta",
-        "espacio de trabajo de respuesta",
-        "panel de respuesta",
-    ))
-
-
-def confirmation_reply(prompt: str) -> bool | None:
-    normalized = re.sub(r"[^\w]+", " ", prompt.casefold()).strip()
-    if normalized in {"confirmo", "confirmar", "confirm", "confirmed", "yes", "sí", "si"}:
-        return True
-    if normalized in {"no confirmo", "rechazo", "deny", "denied", "no"}:
-        return False
     return None
 
 
@@ -223,7 +194,6 @@ class AssistantWorker(QObject):
         self.muted = bool(muted)
         self._voice_settings_lock = threading.Lock()
         self.history = []
-        self.agent_history = []
         self.session = SessionLog()
         self.confirmation_event = threading.Event()
         self.confirmation_answer = False
@@ -232,14 +202,12 @@ class AssistantWorker(QObject):
         self.cancel_event = threading.Event()
         self.command_reply = False
         self.event_loop = None
-        self.agent_orchestrator = None
 
     @Slot()
     def initialize(self):
         try:
             self.event_loop = asyncio.new_event_loop()
             self.assistant._initialize_runtime()
-            self.initialize_agent_orchestrator()
             with self._voice_settings_lock:
                 self.assistant.voice.set_muted(self.muted)
             if self.startup_greeting:
@@ -275,37 +243,6 @@ class AssistantWorker(QObject):
             if self.assistant.voice is not None:
                 self.assistant.voice.set_muted(self.muted)
 
-    def initialize_agent_orchestrator(self):
-        from src.init.agent import AgentOrchestrator, AgentStore
-        from src.init.agent.pydantic_backend import PydanticAgentBackend
-        from src.init.config import HOME_PATH, load_config
-        from src.init.tools import TOOLS
-
-        agent_tools = [
-            function for function in TOOLS
-            if function.__name__ not in {"edit_code", "update_repo"}
-        ]
-        settings = load_config()["agent"]
-        database = Path(settings["database"])
-        if not database.is_absolute():
-            database = HOME_PATH / database
-        store = AgentStore(database)
-        interrupted = store.interrupted_runs()
-        if interrupted:
-            logging.getLogger("arlo.agent").warning(
-                "Found %d interrupted autonomous runs", len(interrupted))
-        backend = PydanticAgentBackend(
-            self.assistant.model, agent_tools,
-            base_instructions=(
-                self.assistant.current_instructions,
-                self.assistant.current_datetime_instructions,
-                self.assistant.working_directory_instructions,
-            ))
-        self.agent_orchestrator = AgentOrchestrator(
-            backend, {function.__name__: function for function in agent_tools}, store,
-            max_steps=settings["max_steps"],
-            max_retries=settings["max_retries"])
-
     @Slot(int, object)
     def ask(self, turn_id, message):
         try:
@@ -338,30 +275,6 @@ class AssistantWorker(QObject):
             self.command_reply = False
             if cancel_event.is_set():
                 self.finished.emit("")
-                return
-            if (isinstance(message, DesktopMessage) and message.agent_mode
-                    and not message.attachments
-                    and confirmation_reply(prompt) is not None):
-                self.session.write(self.assistant.username, message.log_text())
-                pending = self.agent_orchestrator.store.pending_approvals()
-                if len(pending) == 1:
-                    operation = pending[0]
-                    result = self.event_loop.run_until_complete(
-                        self.agent_orchestrator.resume_approval(
-                            operation["run_id"], operation["step_id"],
-                            bool(confirmation_reply(prompt)),
-                            cancel_event=cancel_event))
-                    if result.state.value == "COMPLETED":
-                        reply = result.response
-                    elif result.state.value == "AWAITING_APPROVAL":
-                        next_pending = self.agent_orchestrator.store.pending_approvals()
-                        reply = next_pending[0]["proposed_change"] if next_pending else ""
-                    else:
-                        reply = result.error or "La operación de Forge no se completó."
-                else:
-                    reply = "No hay ninguna operación de Forge pendiente de aprobación."
-                self.session.write(self.assistant.name, reply)
-                self.finished.emit(reply)
                 return
             privacy_result = (self.session.handle_command(prompt)
                               if not voice_input and not message.attachments
@@ -410,16 +323,6 @@ class AssistantWorker(QObject):
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
-
-            if isinstance(message, DesktopMessage) and message.agent_mode:
-                if self.session.private:
-                    reply = "Agent Mode is unavailable in private mode because autonomous runs persist."
-                    self.finished.emit(reply)
-                    return
-                self.run_agent_mode(
-                    turn_id, message.log_text(), cancel_event)
-                return
-
 
             response_title = None
 
@@ -480,71 +383,6 @@ class AssistantWorker(QObject):
             self.directory.emit(str(Path.cwd()))
             if self.assistant.shutdown_requested.is_set():
                 self.exit_requested.emit()
-
-    def run_agent_mode(self, turn_id: int, prompt: str, cancel_event) -> None:
-        from src.init.agent import EventType, ExecutionState
-
-        if requests_response_workspace(prompt):
-            try:
-                from src.init.visuals.response import request_response_workspace
-                result = request_response_workspace("Agent Result")
-                logging.getLogger("arlo.response").info(
-                    "Agent response workspace result: %s", result)
-            except Exception:
-                logging.getLogger("arlo.response").exception(
-                    "Unable to open the requested agent response workspace")
-
-        approval_context = {}
-
-        def event_received(event):
-            if event.type == EventType.STATE_CHANGED:
-                phase = AGENT_PHASES.get(event.payload.get("to"))
-                if phase:
-                    self.phase.emit(turn_id, phase)
-            elif event.type == EventType.APPROVAL_REQUESTED:
-                approval_context.clear()
-                approval_context.update({
-                    "run_id": event.run_id,
-                    "step_id": event.step_id,
-                    "tool_name": event.payload.get("tool_name"),
-                })
-            elif event.type == EventType.APPROVAL_RESOLVED:
-                approval_context.clear()
-
-        result = self.event_loop.run_until_complete(self.agent_orchestrator.run(
-            prompt,
-            cancel_event=cancel_event,
-            approval=None,
-            on_event=event_received,
-            working_directory=str(Path.cwd()),
-            conversation_history=self.agent_history,
-        ))
-        if result.state == ExecutionState.COMPLETED:
-            reply = result.response
-        elif result.state == ExecutionState.CANCELLED:
-            reply = ""
-        elif result.state == ExecutionState.AWAITING_APPROVAL:
-            pending = self.agent_orchestrator.store.pending_approvals()
-            operation = next((item for item in pending
-                              if item["run_id"] == result.run_id), None)
-            reply = (operation["proposed_change"] if operation else
-                     "Forge está esperando aprobación para continuar.")
-        else:
-            phase = f" during {result.failure_phase}" if result.failure_phase else ""
-            reply = (
-                f"Agent run {result.state.value.lower()}{phase} "
-                f"(run {result.run_id}): {result.error or 'No result'}")
-        if reply:
-            self.agent_history.extend([
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": reply},
-            ])
-            self.agent_history = self.agent_history[-8:]
-            self.chunk.emit(turn_id, reply)
-            self.session.write(
-                self.assistant.name, reply,
-                status="completed" if result.state == ExecutionState.COMPLETED else "error")
-        self.finished.emit(reply)
 
     def report_audio(self, turn_id, samples, sample_rate):
         if not self.cancel_event.is_set():
@@ -608,9 +446,3 @@ class AssistantWorker(QObject):
             self.confirmation_answer = accepted
             self.confirmation_event.set()
             return True
-
-    def resolve_confirmation_reply(self, prompt: str) -> bool:
-        accepted = confirmation_reply(prompt)
-        if accepted is None:
-            return False
-        return self.resolve_confirmation(accepted)
