@@ -401,7 +401,7 @@ class ArloWindow(DesktopWindow):
         indicator_row.addWidget(self.privacy_indicator)
         self.response_timer_display.setObjectName("responseTimer")
         self.response_timer_display.setAlignment(Qt.AlignCenter)
-        self.response_timer_display.setText("0m 00.0s")
+        self.response_timer_display.setText("0s")
         self.response_timer_display.setSizePolicy(
             QSizePolicy.Fixed, QSizePolicy.Fixed)
         indicator_row.addWidget(self.response_timer_display)
@@ -563,14 +563,17 @@ class ArloWindow(DesktopWindow):
     def _update_response_timer(self):
         if not self.response_timer_running:
             return
-        self.response_timer_display.setText(
-            f"{self.response_timer.elapsed() // 60000}m "
-            f"{self.response_timer.elapsed() / 1000 % 60:04.1f}s")
+        self.response_timer_display.setText(self._response_timer_text())
+
+    def _response_timer_text(self):
+        seconds = self.response_timer.elapsed() // 1000
+        minutes, seconds = divmod(seconds, 60)
+        return f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
 
     def _start_response_timer(self):
         self.response_timer.start()
         self.response_timer_running = True
-        self.response_timer_display.setText("0m 00.0s")
+        self.response_timer_display.setText("0s")
         self.response_timer_tick.start()
 
     def _stop_response_timer(self):
@@ -582,7 +585,7 @@ class ArloWindow(DesktopWindow):
     def _reset_response_timer(self):
         self.response_timer_running = False
         self.response_timer_tick.stop()
-        self.response_timer_display.setText("0m 00.0s")
+        self.response_timer_display.setText("0s")
 
     def _layout_task_progress(self):
         """Keep task progress over the chat surface without changing its layout."""
