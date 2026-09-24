@@ -245,6 +245,10 @@ class AssistantWorker(QObject):
         from src.init.config import HOME_PATH, load_config
         from src.init.tools import TOOLS
 
+        agent_tools = [
+            function for function in TOOLS
+            if function.__name__ not in {"edit_code", "update_repo"}
+        ]
         settings = load_config()["agent"]
         database = Path(settings["database"])
         if not database.is_absolute():
@@ -255,14 +259,14 @@ class AssistantWorker(QObject):
             logging.getLogger("arlo.agent").warning(
                 "Found %d interrupted autonomous runs", len(interrupted))
         backend = PydanticAgentBackend(
-            self.assistant.model, TOOLS,
+            self.assistant.model, agent_tools,
             base_instructions=(
                 self.assistant.current_instructions,
                 self.assistant.current_datetime_instructions,
                 self.assistant.working_directory_instructions,
             ))
         self.agent_orchestrator = AgentOrchestrator(
-            backend, {function.__name__: function for function in TOOLS}, store,
+            backend, {function.__name__: function for function in agent_tools}, store,
             max_steps=settings["max_steps"],
             max_retries=settings["max_retries"])
 

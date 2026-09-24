@@ -88,6 +88,8 @@ class AgentOrchestrator:
             "append_file", "replace_in_file", "write_binary_file", "git_add",
             "git_commit", "git_pull", "git_switch", "install_app",
             "close_application", "schedule_notification", "start_timer",
+            "delete_email", "forget", "update_config", "git_fetch",
+            "kill_self", "cancel_timer", "send_notification",
         }
         self._states: dict[str, ExecutionState] = {}
 
