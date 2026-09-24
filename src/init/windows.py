@@ -105,7 +105,7 @@ def get_open_windows():
                             "pid": pid.value, "minimized": bool(minimized(hwnd))})
         except Exception as error:
             errors.append(error)
-            return False
+            return True
         return True
 
     if not enumerate_windows(collect, 0):
@@ -163,7 +163,7 @@ def launch_application(target, timeout=8.0):
             try:
                 windows = get_open_windows()
             except Exception as error:
-                return {"status": "error", "opened": False,
+                return {"status": "submitted", "opened": False,
                         "launch_requested": True, "error": str(error)}
             for window in windows:
                 path = window.get("executable_path")

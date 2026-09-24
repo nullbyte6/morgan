@@ -1266,6 +1266,19 @@ def open_application(application: str) -> str:
     from src.init.folders import FOLDER_ALIASES
 
     raw_application = application.strip().strip('"').strip("'")
+    explorer_aliases = {
+        "explorador", "explorador de archivos", "file explorer",
+        "windows explorer", "explorer",
+    }
+    if normalize_application_name(raw_application) in explorer_aliases:
+        explorer = Path(os.environ.get("WINDIR", r"C:\\Windows")) / "explorer.exe"
+        app = {"Name": "File Explorer", "Source": "file", "Path": str(explorer)}
+        try:
+            result = _launch_application(app)
+            remember_app(normalize_application_name(raw_application), app)
+            return result
+        except Exception as error:
+            return f"Error: {error}"
     if raw_application.casefold() in FOLDER_ALIASES:
         return open_directory(application)
     path_candidate = Path(os.path.expandvars(raw_application))
