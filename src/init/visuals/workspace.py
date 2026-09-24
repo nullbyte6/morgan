@@ -579,8 +579,7 @@ class Workspace(QWidget):
             panel_id=panel_id,
             title=title,
             content=content,
-            closable=panel_id != getattr(self, "_primary_panel_id", None),
-        )
+            closable=panel_id != getattr(self, "_primary_panel_id", None))
 
         panel.close_requested.connect(self.close_panel)
         panel.focus_requested.connect(self.focus_panel)
@@ -628,7 +627,6 @@ class Workspace(QWidget):
         panel.set_renamable(False)
         panel.close_button.setVisible(False)
         return True
-
 
 
     def animate_splitter(

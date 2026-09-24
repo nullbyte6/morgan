@@ -26,7 +26,7 @@ from pydantic import ValidationError
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import QApplication
 
-from .schema import Flowchart
+from src.init.visuals.schema import Flowchart
 
 
 @dataclass
@@ -113,7 +113,6 @@ class FlowchartBridge(QObject):
         widget = None
         try:
             from .window import FlowchartWidget
-
             workspace = getattr(self.parent(), "workspace", None)
             if workspace is None:
                 raise RuntimeError("The flowchart bridge requires the Arlo workspace")
@@ -122,10 +121,13 @@ class FlowchartBridge(QObject):
                 workspace.panel_closed.connect(self._on_panel_closed)
                 self._workspace_connected = True
             widget = FlowchartWidget(request.chart)
+
             panel_id = workspace.open_panel(
                 title=request.chart.title,
                 content=widget,
-            )
+                target_id=window.main_workspace_panel_id,
+                direction=Qt.Key_Right)
+
             self._panel_requests[panel_id] = request.id
             widget.destroyed.connect(
                 lambda: self.windows.pop(request.id, None))
