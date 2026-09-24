@@ -48,5 +48,3 @@ preserved so reloading does not require restarting the application.
 
 For native voice input, tool execution, and action regression checks, see
 [desktop action execution](docs/ACTION-EXECUTION.md).
-
-For autonomous, multistep agent workflows, see the [Forge Mode documentation](docs/FORGE.md).
