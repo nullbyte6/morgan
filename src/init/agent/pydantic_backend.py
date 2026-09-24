@@ -286,7 +286,9 @@ class PydanticAgentBackend:
                 "Never say that a file was inspected, a command or test was run, or an "
                 "external action occurred unless a successful tool observation explicitly "
                 "records it. Do not add filenames, components, or results absent from the "
-                "observations."
+                "observations. Never request approval, ask whether to proceed, "
+                "or propose executing a step already completed. Approval is "
+                "exclusively managed by the host and cannot be requested in a final response."
             )],
         )
 

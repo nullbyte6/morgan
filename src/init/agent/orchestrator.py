@@ -132,6 +132,45 @@ class AgentOrchestrator:
             return None
         return hashlib.sha256(target.read_bytes()).hexdigest()
 
+    @staticmethod
+    def _file_snapshot(step, working_directory: str):
+        if step.tool_name not in {
+                "create_file", "edit_file", "append_file", "replace_in_file",
+                "write_binary_file"}:
+            return None
+        path = step.tool_args.get("path")
+        if not isinstance(path, str) or not path.strip():
+            return None
+        target = Path(path).expanduser()
+        if not target.is_absolute():
+            target = Path(working_directory) / target
+        target = target.resolve()
+        if not target.exists():
+            return "MISSING"
+        if not target.is_file() or target.is_symlink():
+            raise ValueError("write target must be a regular file")
+        return hashlib.sha256(target.read_bytes()).hexdigest()
+
+    @staticmethod
+    def _completed_write_response(
+            plan: ExecutionPlan,
+            results: list[StepResult]) -> str | None:
+        """Return a deterministic summary of successfully completed operations."""
+        completed = [
+            (step, result)
+            for step, result in zip(plan.steps, results)
+            if result.success and step.requires_approval
+        ]
+
+        if not completed:
+            return None
+
+        return "\n".join(
+            f"{step.title}: {result.output.strip()}"
+            if result.output.strip()
+            else step.title
+            for step, result in completed)
+
     async def run(self, task: str, *, cancel_event=None,
                   pause_event=None,
                   approval: Callable[[str], bool | Awaitable[bool]] | None = None,
@@ -152,22 +191,28 @@ class AgentOrchestrator:
         observations: list[str] = []
         try:
             self._check_cancelled(cancel_event)
-            plan = await self._await_cancellable(
-                self.backend.plan(task, self.max_steps), cancel_event)
-            if len(plan.steps) > self.max_steps:
-                raise ValueError(
-                    f"Plan contains {len(plan.steps)} steps; limit is {self.max_steps}")
-            self.store.save_plan(run_id, plan)
-            self._emit(run_id, EventType.PLAN_CREATED, on_event,
-                       plan.model_dump(mode="json"))
-            plan_validation = await self._await_cancellable(
-                self.backend.validate_plan(task, plan), cancel_event)
-            self._emit(run_id, EventType.PLAN_VALIDATED, on_event,
-                       plan_validation.model_dump(mode="json"))
-            if not plan_validation.success:
+            plan_validation = None
+            for planning_attempt in range(2):
+                plan = await self._await_cancellable(
+                    self.backend.plan(task, self.max_steps), cancel_event)
+                if len(plan.steps) > self.max_steps:
+                    plan_validation = VerificationResult(
+                        success=False, summary="Plan exceeds the step limit")
+                else:
+                    plan_validation = await self._await_cancellable(
+                        self.backend.validate_plan(task, plan), cancel_event)
+                self._emit(run_id, EventType.PLAN_VALIDATED, on_event,
+                           {**plan_validation.model_dump(mode="json"),
+                            "attempt": planning_attempt + 1})
+                if plan_validation.success:
+                    break
+            if plan is None or not plan_validation.success:
                 raise RuntimeError(
                     "Plan validation failed: "
                     + (plan_validation.summary or "plan does not match the request"))
+            self.store.save_plan(run_id, plan)
+            self._emit(run_id, EventType.PLAN_CREATED, on_event,
+                       plan.model_dump(mode="json"))
             self._transition(run_id, ExecutionState.EXECUTING, on_event)
 
             for step in plan.steps:
@@ -178,9 +223,9 @@ class AgentOrchestrator:
                 if needs_approval:
                     self._transition(run_id, ExecutionState.AWAITING_APPROVAL, on_event)
                     message = f"{step.title}: {step.instruction}"
-                    snapshot = self._append_snapshot(step, working_directory or os.getcwd())
+                    snapshot = self._file_snapshot(step, working_directory or os.getcwd())
                     if snapshot is not None:
-                        message += f"\nAPPEND_SHA256:{snapshot}\nAPPEND_CONTENT:{step.tool_args.get('content', step.tool_args.get('text'))}"
+                        message += f"\nFILE_SHA256:{snapshot}"
                     self.store.register_approval(
                         run_id, step.id, step.tool_name, step.tool_args, message)
                     self._emit(run_id, EventType.APPROVAL_REQUESTED, on_event,
@@ -200,9 +245,9 @@ class AgentOrchestrator:
                                {"accepted": bool(accepted)}, step.id)
                     if not accepted:
                         raise PermissionError(f"Approval denied for step {step.id}")
-                    if snapshot is not None and self._append_snapshot(
+                    if snapshot is not None and self._file_snapshot(
                             step, working_directory or os.getcwd()) != snapshot:
-                        raise RuntimeError("Append target changed during approval")
+                        raise RuntimeError("Write target changed during approval")
                     self._transition(run_id, ExecutionState.EXECUTING, on_event)
 
                 result = await self._run_step(
@@ -222,8 +267,10 @@ class AgentOrchestrator:
                        verification.model_dump(mode="json"))
             if not verification.success:
                 raise RuntimeError(verification.summary or "Verification failed")
-            response = await self._await_cancellable(
-                self.backend.finalize(task, observations, verification), cancel_event)
+            response = self._completed_write_response(plan, results)
+            if response is None:
+                response = await self._await_cancellable(
+                    self.backend.finalize(task, observations, verification), cancel_event)
             self._transition(run_id, ExecutionState.COMPLETED, on_event,
                              response=response)
             self._emit(run_id, EventType.FINAL_RESULT, on_event,
@@ -234,6 +281,8 @@ class AgentOrchestrator:
             return self._cancel(run_id, plan, results, on_event)
         except Exception as error:
             if self._cancelled(cancel_event):
+                return self._cancel(run_id, plan, results, on_event)
+            if isinstance(error, PermissionError):
                 return self._cancel(run_id, plan, results, on_event)
             logging.getLogger("arlo.agent").exception(
                 "Agent run %s failed in state %s", run_id,
@@ -269,10 +318,13 @@ class AgentOrchestrator:
         if (step.tool_name != pending["tool_name"]
                 or step.tool_args != pending["tool_args"]):
             raise RuntimeError("Stored approval does not match the planned operation")
-        if step.tool_name == "append_file":
-            expected = pending["proposed_change"].split("APPEND_SHA256:")[-1].splitlines()[0] if "APPEND_SHA256:" in pending["proposed_change"] else None
-            if not expected or self._append_snapshot(step, pending["working_directory"]) != expected:
-                raise RuntimeError("Append target changed since approval was requested")
+        if self._file_snapshot(step, pending["working_directory"]) is not None:
+            marker = "FILE_SHA256:"
+            expected = (pending["proposed_change"].split(marker)[-1].splitlines()[0]
+                        if marker in pending["proposed_change"] else None)
+            if expected is None or self._file_snapshot(
+                    step, pending["working_directory"]) != expected:
+                raise RuntimeError("Write target changed since approval was requested")
         self._states[run_id] = ExecutionState.AWAITING_APPROVAL
         results = []
         observations = []
@@ -301,9 +353,9 @@ class AgentOrchestrator:
                     self._transition(
                         run_id, ExecutionState.AWAITING_APPROVAL, on_event)
                     message = f"{current.title}: {current.instruction}"
-                    snapshot = self._append_snapshot(current, pending["working_directory"])
+                    snapshot = self._file_snapshot(current, pending["working_directory"])
                     if snapshot is not None:
-                        message += f"\nAPPEND_SHA256:{snapshot}\nAPPEND_CONTENT:{current.tool_args.get('content', current.tool_args.get('text'))}"
+                        message += f"\nFILE_SHA256:{snapshot}"
                     self.store.register_approval(
                         run_id, current.id, current.tool_name,
                         current.tool_args, message)
@@ -330,9 +382,11 @@ class AgentOrchestrator:
                        verification.model_dump(mode="json"))
             if not verification.success:
                 raise RuntimeError(verification.summary or "Verification failed")
-            response = await self._await_cancellable(
-                self.backend.finalize(task, observations, verification),
-                cancel_event)
+            response = self._completed_write_response(plan, results)
+            if response is None:
+                response = await self._await_cancellable(
+                    self.backend.finalize(task, observations, verification),
+                    cancel_event)
             self._transition(run_id, ExecutionState.COMPLETED, on_event,
                              response=response)
             self._emit(run_id, EventType.FINAL_RESULT, on_event,
@@ -342,6 +396,8 @@ class AgentOrchestrator:
         except asyncio.CancelledError:
             return self._cancel(run_id, plan, results, on_event)
         except Exception as error:
+            if isinstance(error, PermissionError):
+                return self._cancel(run_id, plan, results, on_event)
             message = f"{type(error).__name__}: {error}"
             state = self._states[run_id]
             phase, event_type = self._failure_details(state)
@@ -370,6 +426,11 @@ class AgentOrchestrator:
                     tool = self.tools.get(step.tool_name)
                     if tool is None:
                         raise LookupError(f"Unknown tool: {step.tool_name}")
+                    try:
+                        inspect.signature(tool).bind(**step.tool_args)
+                    except TypeError as error:
+                        raise ValueError(
+                            f"Invalid arguments for {step.tool_name}: {error}") from None
                     self._emit(run_id, EventType.TOOL_CALLED, on_event,
                                {"tool_name": step.tool_name,
                                 "arguments": step.tool_args}, step.id)
@@ -463,6 +524,12 @@ class AgentOrchestrator:
             callback(event)
 
     def _cancel(self, run_id, plan, results, on_event) -> RunResult:
+        current = self._states[run_id]
+        if current is ExecutionState.AWAITING_APPROVAL:
+            pending = next((item for item in self.store.pending_approvals()
+                            if item["run_id"] == run_id), None)
+            if pending is not None:
+                self.store.resolve_approval(run_id, pending["step_id"], False)
         self._transition(run_id, ExecutionState.CANCELLED, on_event,
                          error="Execution cancelled")
         return RunResult(run_id=run_id, state=ExecutionState.CANCELLED,
