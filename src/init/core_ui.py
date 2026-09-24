@@ -395,11 +395,14 @@ class ArloWindow(DesktopWindow):
         indicator_row = QHBoxLayout()
         indicator_row.setContentsMargins(0, 0, 0, 0)
         indicator_row.setSpacing(6)
+        indicator_row.setAlignment(Qt.AlignVCenter)
         self.response_timer_display.setObjectName("responseTimer")
         self.response_timer_display.setAlignment(Qt.AlignCenter)
         self.response_timer_display.setText("0s")
         self.response_timer_display.setSizePolicy(
             QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.response_timer_display.setFixedHeight(
+            self.directory_indicator.sizeHint().height())
         indicator_row.addWidget(self.response_timer_display)
         indicator_row.addWidget(self.directory_indicator)
         indicator_row.addWidget(self.branch_indicator)
