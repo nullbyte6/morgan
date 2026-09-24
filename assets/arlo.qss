@@ -117,7 +117,8 @@ QPushButton#chatNav,
 QPushButton#logsNav,
 QPushButton#editorNav,
 QPushButton#terminalNav,
-QPushButton#browserNav {
+QPushButton#browserNav,
+QPushButton#logCopyNav {
     background-color: transparent;
     color: #a5adcb;
     border: 2px solid transparent;
@@ -130,7 +131,8 @@ QPushButton#chatNav:hover,
 QPushButton#logsNav:hover,
 QPushButton#editorNav:hover,
 QPushButton#terminalNav:hover,
-QPushButton#browserNav:hover {
+QPushButton#browserNav:hover,
+QPushButton#logCopyNav:hover {
     background-color: #363a4f;
     color: #cad3f5;
 }
@@ -442,7 +444,7 @@ QMessageBox QLabel {
 
 #responseView,
 #responseDocument,
-#responseDocument QAbstractScrollArea::viewport {
+#responseDocument QAbstractScrollArea:viewport {
     color: #cad3f5;
     background-color: #24273a;
     border: none;

@@ -168,8 +168,14 @@ class LogMessageCard(QFrame):
         self.timestamp = QLabel(message.timestamp)
         self.timestamp.setObjectName("logMessageTime")
 
+        self.copy_button = QPushButton("")
+        self.copy_button.setObjectName("logCopyNav")
+        self.copy_button.clicked.connect(lambda: self.copy_log)
+
         header.addWidget(self.author)
         header.addWidget(self.timestamp)
+        header.addStretch(2)
+        header.addWidget(self.copy_button)
         header.addStretch()
 
         layout.addLayout(header)
@@ -196,6 +202,9 @@ class LogMessageCard(QFrame):
         self.body.anchorClicked.connect(self.open_link)
         layout.addWidget(self.body)
         self.render_markdown()
+
+    def copy_log(self):
+        pass
 
     def render_markdown(self) -> None:
         """Render Markdown and apply the dedicated code font."""
