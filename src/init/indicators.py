@@ -86,7 +86,7 @@ class AgentModeIndicator(QToolButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("agentModeIndicator")
-        self.setText(" Agent Mode ")
+        self.setText(f" 󰢛 {tr("agent.mode")}")
         self.setCheckable(True)
         self.setAutoRaise(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
