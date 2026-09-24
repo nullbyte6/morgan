@@ -45,6 +45,18 @@ AGENT_PHASES = {
 }
 
 
+def handle_direct_command(assistant, prompt: str) -> str | None:
+    for handler in (
+        assistant.directory_cmd,
+        assistant.git_cmd,
+        assistant.print_file_cmd,
+    ):
+        result = handler(prompt)
+        if result is not None:
+            return result
+    return None
+
+
 def select_response_surface(prompt: str, model_name: str) -> str | None:
     """Let the local LLM choose the output surface before generation."""
     if not prompt.strip():
@@ -312,15 +324,6 @@ class AssistantWorker(QObject):
 
             self.session.write(self.assistant.username, message.log_text())
 
-            if isinstance(message, DesktopMessage) and message.agent_mode:
-                if self.session.private:
-                    reply = "Agent Mode is unavailable in private mode because autonomous runs persist."
-                    self.finished.emit(reply)
-                    return
-                self.run_agent_mode(
-                    turn_id, message.log_text(), cancel_event)
-                return
-
             from src.init.hot_reload import is_reload_command
             if (not voice_input and not message.attachments
                     and is_reload_command(prompt)):
@@ -328,12 +331,12 @@ class AssistantWorker(QObject):
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
-            directory_result = (self.assistant.directory_cmd(prompt)
-                                if not voice_input and not message.attachments
-                                else None)
-            if directory_result is not None:
-                self.session.write(self.assistant.name, directory_result)
-                self.finished.emit(directory_result)
+            direct_result = (handle_direct_command(self.assistant, prompt)
+                             if not voice_input and not message.attachments
+                             else None)
+            if direct_result is not None:
+                self.session.write(self.assistant.name, direct_result)
+                self.finished.emit(direct_result)
                 return
 
             if not voice_input and not message.attachments and prompt.casefold().startswith(
@@ -358,6 +361,15 @@ class AssistantWorker(QObject):
 
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
+                return
+
+            if isinstance(message, DesktopMessage) and message.agent_mode:
+                if self.session.private:
+                    reply = "Agent Mode is unavailable in private mode because autonomous runs persist."
+                    self.finished.emit(reply)
+                    return
+                self.run_agent_mode(
+                    turn_id, message.log_text(), cancel_event)
                 return
 
 
