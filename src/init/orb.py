@@ -70,7 +70,7 @@ class Orb(QWidget):
     }
 
     def __init__(self, parent=None, *,
-                 size: int = 384,
+                 size: int = 400,
                  floating: bool = False,
                  line_width: float = 5.0,
                  fill_ratio: float = 0.0):

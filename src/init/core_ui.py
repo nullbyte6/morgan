@@ -148,8 +148,7 @@ class ArloWindow(DesktopWindow):
         icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "arlo.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
 
-        self.mascot = Orb(
-            size=160, floating=True, line_width=4.2, fill_ratio=0.54)
+        self.mascot = Orb(size=120, floating=True, line_width=4.2, fill_ratio=0.54)
         self.mascot.set_speech_pulse_enabled(orb_speech_pulse)
         self.mascot.hide()
         self.mascot_subtitles = MascotSubtitleBubble(self.mascot)
