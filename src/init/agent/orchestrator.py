@@ -213,6 +213,8 @@ class AgentOrchestrator:
                 self.backend.request_capabilities(task), cancel_event)
             if not capabilities.file_write_requested:
                 forbidden_tools.update(FILE_WRITE_TOOLS)
+            if capabilities.read_only_inspection:
+                forbidden_tools.update(self.destructive_tools)
             project_context = None
             inspector = getattr(self.backend, "inspect_project", None)
             if inspector is not None:

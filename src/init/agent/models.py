@@ -98,6 +98,7 @@ class ProjectFileSelection(BaseModel):
 
 class RequestCapabilities(BaseModel):
     file_write_requested: bool = False
+    read_only_inspection: bool = False
 
 
 class ExecutionPlan(BaseModel):

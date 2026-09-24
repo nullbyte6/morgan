@@ -307,7 +307,11 @@ class PydanticAgentBackend:
                 "modify, append, replace, or delete filesystem content. Assess "
                 "only ORIGINAL_REQUEST. A display destination or UI workspace is "
                 "not a filesystem mutation. Set file_write_requested true only "
-                "for an explicit filesystem-content change."),
+                "for an explicit filesystem-content change. Also set "
+                "read_only_inspection true when the request only asks to inspect, "
+                "locate, explain, summarize, or report information and does not "
+                "ask to contact, execute, change, publish, or otherwise affect "
+                "an external system."),
         )
 
     async def request_capabilities(self, task: str) -> RequestCapabilities:
