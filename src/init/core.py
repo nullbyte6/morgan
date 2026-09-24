@@ -17,6 +17,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import logging
+import json
 import os
 import random
 import re
@@ -27,10 +28,58 @@ from contextlib import nullcontext
 from datetime import datetime
 from getpass import getuser
 
-from pydantic_ai import Agent, Tool
+from pydantic_ai import Agent, ModelRetry, RunContext, Tool
 
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
+
+
+def validate_application_output(ctx: RunContext, output: str) -> str:
+    """Reject simulated app calls and opening claims without tool evidence."""
+    messages = []
+    for message in reversed(ctx.messages):
+        messages.append(message)
+        if any(part.part_kind == "user-prompt" for part in message.parts):
+            break
+    requested = not isinstance(ctx.prompt, str) or re.search(
+        r"\b(?:abre|abreme|ábreme|abrir|open|launch|inicia|ejecuta)\b", ctx.prompt, re.I)
+    if not requested:
+        return output
+    if re.search(r'["\x27](?:action|tool|tool_name)["\x27]\s*:\s*["\x27]open_application["\x27]', output):
+        raise ModelRetry("Do not print an open_application JSON action. Execute the native tool if it has not already run, then report its actual result.")
+    claims = list(re.finditer(r"\b(?:abriendo|abiert[ao]s?|opening|opened|launched)\b", output, re.I))
+    claim = any(not re.search(r"\b(?:no|not|never|unable|cannot|couldn't)\b[^.!?\n]*$",
+                              output[max(0, match.start() - 100):match.start()], re.I)
+                for match in claims)
+    if not claim:
+        return output
+    results = [part for message in messages for part in message.parts
+               if part.part_kind == "tool-return"
+               and part.tool_name in {"open_application", "run_quick_command"}]
+    if not results:
+        if any(part.part_kind == "tool-return" and part.tool_name in {
+                "open_directory", "open_file", "open_browser", "open_in_editor"}
+               for message in messages for part in message.parts):
+            return output
+        raise ModelRetry("No application launch tool ran in this turn. Use open_application before claiming to open an app. If blocked, explain the blocker without claiming execution.")
+
+    def confirmed(value):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                return False
+        if not isinstance(value, dict):
+            return False
+        if value.get("opened") is True:
+            return True
+        launches = [item for item in value.get("results", [])
+                    if isinstance(item, dict) and item.get("tool") == "open_application"]
+        return bool(launches) and all(confirmed(item.get("output")) for item in launches)
+
+    if not all(confirmed(part.content) for part in results):
+        raise ModelRetry("Application opening was not confirmed for every request. Report the error or unconfirmed status without claiming success. Do not repeat a launch that Windows already accepted.")
+    return output
 
 
 # noinspection PyBroadException
@@ -119,6 +168,7 @@ class Assistant:
         self.agent = Agent(
             model=self.model,
             tools=[Tool(function, sequential=True) for function in TOOLS])
+        self.agent.output_validator(validate_application_output)
 
         self.agent.instructions(self.current_instructions)
         self.agent.instructions(self.current_datetime_instructions)
@@ -155,6 +205,7 @@ class Assistant:
                     model=self.model,
                     tools=[Tool(function, sequential=True)
                            for function in TOOLS])
+                self.agent.output_validator(validate_application_output)
                 self.agent.instructions(self.current_instructions)
                 self.agent.instructions(self.current_datetime_instructions)
                 self.agent.instructions(self.working_directory_instructions)
@@ -345,7 +396,12 @@ class Assistant:
 
     def current_instructions(self) -> str:
         from src.init import rules
-        return rules.current_instructions()
+        return (rules.current_instructions()
+                + "\nApplication execution: call the native open_application tool "
+                "for requested apps. Writing an action JSON or describing a call "
+                "does not execute it. Only report an app as open when its tool "
+                "result has opened=true. If launch_requested=true but opened=false, "
+                "explain that the launch could not be confirmed and do not repeat it.")
 
     def working_directory_instructions(self) -> str:
         from src.init.brain import get_working_directory
@@ -396,6 +452,8 @@ class Assistant:
         completed_history = None
         execution_started = False
         stream_messages = list(history)
+        defer_output = audio_input is not None or bool(re.search(
+            r"\b(?:abre|abreme|ábreme|abrir|open|launch|inicia|ejecuta)\b", prompt, re.I))
 
         if attachments:
             attachments.reserve_history(history)
@@ -451,7 +509,7 @@ class Assistant:
                             event.part.tool_call_id)
                         if on_phase is not None:
                             on_phase("processing")
-                    if chunk:
+                    if chunk and not defer_output:
                         reply.append(chunk)
                         if on_chunk is not None:
                             on_chunk(chunk)
@@ -472,6 +530,12 @@ class Assistant:
             )
 
             completed_history = result.all_messages()
+            if defer_output and not cancel_event.is_set():
+                reply.append(result.output)
+                if on_chunk is not None:
+                    on_chunk(result.output)
+                for phrase in buffer.feed(result.output):
+                    self.voice.enqueue(phrase)
             for phrase in buffer.finish():
                 if not cancel_event.is_set():
                     self.voice.enqueue(phrase)
