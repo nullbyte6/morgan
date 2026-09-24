@@ -223,6 +223,7 @@ class AssistantWorker(QObject):
         self.muted = bool(muted)
         self._voice_settings_lock = threading.Lock()
         self.history = []
+        self.agent_history = []
         self.session = SessionLog()
         self.confirmation_event = threading.Event()
         self.confirmation_answer = False
@@ -516,6 +517,7 @@ class AssistantWorker(QObject):
             approval=None,
             on_event=event_received,
             working_directory=str(Path.cwd()),
+            conversation_history=self.agent_history,
         ))
         if result.state == ExecutionState.COMPLETED:
             reply = result.response
@@ -533,6 +535,11 @@ class AssistantWorker(QObject):
                 f"Agent run {result.state.value.lower()}{phase} "
                 f"(run {result.run_id}): {result.error or 'No result'}")
         if reply:
+            self.agent_history.extend([
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": reply},
+            ])
+            self.agent_history = self.agent_history[-8:]
             self.chunk.emit(turn_id, reply)
             self.session.write(
                 self.assistant.name, reply,

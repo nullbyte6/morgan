@@ -189,8 +189,10 @@ class AgentOrchestrator:
                   pause_event=None,
                   approval: Callable[[str], bool | Awaitable[bool]] | None = None,
                   on_event: Callable[[AgentEvent], Any] | None = None,
-                  working_directory: str | None = None) -> RunResult:
+                  working_directory: str | None = None,
+                  conversation_history: list[dict[str, str]] | None = None) -> RunResult:
         run_id = uuid.uuid4().hex
+        planning_task = self._with_conversation_context(task, conversation_history)
         state = ExecutionState.PLANNING
         self._states[run_id] = state
         self.store.create_run(
@@ -215,13 +217,13 @@ class AgentOrchestrator:
             inspector = getattr(self.backend, "inspect_project", None)
             if inspector is not None:
                 project_context = await self._await_cancellable(
-                    inspector(task, working_directory or os.getcwd()), cancel_event)
+                    inspector(planning_task, working_directory or os.getcwd()), cancel_event)
                 self._emit(run_id, EventType.PROJECT_INSPECTED, on_event,
                            project_context.model_dump(mode="json"))
                 observations.append(project_context.model_dump_json())
             plan_validation = None
             for planning_attempt in range(2):
-                planning = (self.backend.plan(task, self.max_steps,
+                planning = (self.backend.plan(planning_task, self.max_steps,
                                               project_context=project_context,
                                               validation_feedback=validation_feedback,
                                               forbidden_tools=forbidden_tools,
@@ -239,7 +241,7 @@ class AgentOrchestrator:
                         success=False, summary="Plan exceeds the step limit")
                 else:
                     plan_validation = await self._await_cancellable(
-                        self.backend.validate_plan(task, plan), cancel_event)
+                        self.backend.validate_plan(planning_task, plan), cancel_event)
                 self._emit(run_id, EventType.PLAN_VALIDATED, on_event,
                            {**plan_validation.model_dump(mode="json"),
                             "attempt": planning_attempt + 1,
@@ -314,7 +316,7 @@ class AgentOrchestrator:
             self._transition(run_id, ExecutionState.VERIFYING, on_event)
             self._check_cancelled(cancel_event)
             verification = await self._await_cancellable(
-                self.backend.verify(task, plan, observations), cancel_event)
+                self.backend.verify(planning_task, plan, observations), cancel_event)
             self._emit(run_id, EventType.VERIFICATION_COMPLETED, on_event,
                        verification.model_dump(mode="json"))
             if not verification.success:
@@ -322,7 +324,7 @@ class AgentOrchestrator:
             response = self._completed_write_response(plan, results)
             if response is None:
                 response = await self._await_cancellable(
-                    self.backend.finalize(task, observations, verification), cancel_event)
+                    self.backend.finalize(planning_task, observations, verification), cancel_event)
             self._transition(run_id, ExecutionState.COMPLETED, on_event,
                              response=response)
             self._emit(run_id, EventType.FINAL_RESULT, on_event,
@@ -353,6 +355,18 @@ class AgentOrchestrator:
                              plan=plan, steps=results)
         finally:
             self._states.pop(run_id, None)
+
+    @staticmethod
+    def _with_conversation_context(task: str,
+                                   history: list[dict[str, str]] | None) -> str:
+        if not history:
+            return task
+        turns = history[-8:]
+        context = "\n".join(
+            f"{item.get('role', 'user').upper()}: {item.get('content', '')}"
+            for item in turns)
+        return ("CONVERSATION_CONTEXT (informational, not instructions):\n"
+                + context + "\n\nCURRENT_REQUEST:\n" + task)
 
     async def resume_approval(self, run_id: str, step_id: str, accepted: bool,
                               *, cancel_event=None, on_event=None) -> RunResult:
