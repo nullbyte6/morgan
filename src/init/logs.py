@@ -170,7 +170,14 @@ class LogMessageCard(QFrame):
 
         self.copy_button = QPushButton("")
         self.copy_button.setObjectName("logCopyNav")
-        self.copy_button.clicked.connect(lambda: self.copy_log)
+
+        icon_font = QFont(self.code_font_family)
+        icon_font.setPixelSize(18)
+
+        self.copy_button.setFont(icon_font)
+        self.copy_button.setFixedSize(32, 32)
+        self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_button.clicked.connect(self.copy_log)
 
         header.addWidget(self.author)
         header.addWidget(self.timestamp)
@@ -203,8 +210,10 @@ class LogMessageCard(QFrame):
         layout.addWidget(self.body)
         self.render_markdown()
 
-    def copy_log(self):
-        pass
+    def copy_log(self) -> None:
+        """Copy the original Markdown content of this message."""
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.message.content)
 
     def render_markdown(self) -> None:
         """Render Markdown and apply the dedicated code font."""
