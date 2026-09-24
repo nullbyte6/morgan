@@ -48,6 +48,7 @@ PYTHON_SYNTAX_COMMAND = (
 
 LOGGER = logging.getLogger("arlo.agent.planning")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+MAX_PLAN_STEPS = 6
 
 
 class PlanningOutputError(RuntimeError):
@@ -186,6 +187,8 @@ class PydanticAgentBackend:
             "system changes as requiring approval. Never create or modify a file "
             "unless the current request explicitly requires it. Do not invent tools. "
             "Keep the plan minimal and order dependent work correctly. "
+            "Use no more than six steps. Keep the goal, titles, and instructions "
+            "short; do not restate the request or tool catalog. "
             "Choose tool names from the compact catalog in the current prompt. "
             "Tool arguments are generated and validated separately after the plan.\n\n"
             "Tool selection rules:\n"
@@ -442,6 +445,7 @@ class PydanticAgentBackend:
 
     async def plan(self, task: str, max_steps: int) -> ExecutionPlan:
         request_id = uuid.uuid4().hex
+        plan_step_limit = min(max_steps, MAX_PLAN_STEPS)
         trace_model = _PlanningTraceModel(self.model, self.tool_names)
         source_hints = self._source_hints(task)
         planner = Agent(
@@ -460,8 +464,8 @@ class PydanticAgentBackend:
         def validate_execution_plan(plan: ExecutionPlanDraft) -> ExecutionPlanDraft:
             if plan.request_id != request_id:
                 raise ModelRetry("Copy REQUEST_ID exactly from the current prompt.")
-            if len(plan.steps) > max_steps:
-                raise ModelRetry(f"Use no more than {max_steps} steps.")
+            if len(plan.steps) > plan_step_limit:
+                raise ModelRetry(f"Use no more than {plan_step_limit} steps.")
             step_ids = [step.id for step in plan.steps]
             if len(step_ids) != len(set(step_ids)):
                 raise ModelRetry("Every plan step must have a unique id.")
@@ -515,7 +519,7 @@ class PydanticAgentBackend:
         try:
             result = await planner.run(
                 f"REQUEST_ID: {request_id}\nORIGINAL_REQUEST:\n{task}\n"
-                f"MAXIMUM_STEPS: {max_steps}\n"
+                f"MAXIMUM_STEPS: {plan_step_limit}\n"
                 f"{self._planning_catalog(task)}\n"
                 f"TASK_SPECIFIC_GUIDANCE:\n{self._planning_guidance(task)}\n"
                 f"SOURCE_PATH_HINTS:\n{source_hints}",
