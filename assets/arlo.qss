@@ -40,8 +40,8 @@ QLabel#responseTimer {
     background-color: transparent;
     color: #cad3f5;
     border: 2px solid #494d64;
-    border-radius: 16px;
-    padding: 4px 10px;
+    border-radius: 17px;
+    padding: 6px 12px;
 }
 
 QTextEdit {
