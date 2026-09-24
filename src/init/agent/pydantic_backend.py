@@ -463,6 +463,24 @@ class PydanticAgentBackend:
         signature.bind(**arguments)
         return arguments
 
+    def _readonly_fallback_plan(self, request_id: str,
+                                project_context: ProjectContext | None) -> ExecutionPlan:
+        directory = (project_context.working_directory
+                     if project_context else ".")
+        return ExecutionPlan(
+            request_id=request_id,
+            goal="Inspect available project files",
+            steps=[PlanStep(
+                id="safe_readonly_inventory",
+                title="Inspect project files",
+                instruction="Inspect the available project files",
+                tool_name="list_files",
+                tool_args={"path": directory, "recursive": False, "suffix": ""},
+            )],
+            project_context=project_context,
+            file_write_requested=False,
+        )
+
     async def plan(self, task: str,
             max_steps: int, project_context: ProjectContext | None = None,
             validation_feedback: str | None = None,
@@ -596,6 +614,12 @@ class PydanticAgentBackend:
                 trace_model.records[-3:],
                 errors,
                 frames)
+
+            if not file_write_requested and "list_files" in self.tools:
+                LOGGER.warning(
+                    "Falling back to a read-only inventory plan request=%s",
+                    request_id[:8])
+                return self._readonly_fallback_plan(request_id, project_context)
 
             summary = " | ".join(
                 f"{item['type']}: {item['detail']}"
