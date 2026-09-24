@@ -220,6 +220,12 @@ class ArloWindow(DesktopWindow):
         self.showing_greeting = True
         self.current_reply = None
         self.current_response_view = None
+        self.response_timer = QElapsedTimer()
+        self.response_timer_running = False
+        self.response_timer_display = QLabel()
+        self.response_timer_tick = QTimer(self)
+        self.response_timer_tick.setInterval(50)
+        self.response_timer_tick.timeout.connect(self._update_response_timer)
         self.subtitle_text = ""
         self._startup_reveal_animations = []
         self._workspace_hiding = False
@@ -459,6 +465,12 @@ class ArloWindow(DesktopWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         self.task_progress = TaskProgressPill(main_content)
+        self.response_timer_display.setParent(main_content)
+        self.response_timer_display.setObjectName("responseTimer")
+        self.response_timer_display.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        self.response_timer_display.setText("0.00 s")
+        self.response_timer_display.show()
+        main_content.installEventFilter(self)
         main_layout.addWidget(self.chat_scroll, 1)
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=f"Arlo {load_dev_file()["version"]}",
@@ -546,7 +558,44 @@ class ArloWindow(DesktopWindow):
         if root is not None and root.minimumHeight() != viewport_height:
             root.setMinimumHeight(max(0, viewport_height))
         self._layout_task_progress()
+        self._layout_response_timer()
         QTimer.singleShot(0, self._update_orb_scale)
+
+    def _layout_response_timer(self):
+        """Keep the response latency text in the workspace corner."""
+        label = getattr(self, "response_timer_display", None)
+        host = label.parentWidget() if label is not None else None
+        if host is None:
+            return
+        label.adjustSize()
+        label.move(host.width() - label.width() - 12, 8)
+        label.raise_()
+
+    def _update_response_timer(self):
+        if not self.response_timer_running:
+            return
+        self.response_timer_display.setText(
+            f"{self.response_timer.elapsed() / 1000:.2f} s")
+        self._layout_response_timer()
+
+    def _start_response_timer(self):
+        self.response_timer.start()
+        self.response_timer_running = True
+        self.response_timer_display.setText("0.00 s")
+        self.response_timer_tick.start()
+        self._layout_response_timer()
+
+    def _stop_response_timer(self):
+        if self.response_timer_running:
+            self._update_response_timer()
+        self.response_timer_running = False
+        self.response_timer_tick.stop()
+
+    def _reset_response_timer(self):
+        self.response_timer_running = False
+        self.response_timer_tick.stop()
+        self.response_timer_display.setText("0.00 s")
+        self._layout_response_timer()
 
     def _layout_task_progress(self):
         """Keep task progress over the chat surface without changing its layout."""
@@ -579,6 +628,10 @@ class ArloWindow(DesktopWindow):
             self.input.setFocus()
 
     def eventFilter(self, watched, event):
+        timer_host = (self.response_timer_display.parentWidget()
+                      if hasattr(self, "response_timer_display") else None)
+        if (watched is self.response_timer_display or watched is timer_host) and event.type() == QEvent.Resize:
+            self._layout_response_timer()
         if event.type() == QEvent.WindowDeactivate and watched is self:
             self._workspace_chord_timer.stop()
             self._workspace_chord_pending = False
@@ -1156,6 +1209,7 @@ class ArloWindow(DesktopWindow):
 
         self.current_reply = ""
         self.current_response_view = None
+        self._start_response_timer()
         self.update_subtitles(prompt.display_text)
 
         self.busy = True
@@ -1285,6 +1339,7 @@ class ArloWindow(DesktopWindow):
             return
 
         self.current_reply += chunk
+        self._stop_response_timer()
         if self.current_response_view is not None:
             self.current_response_view.append_chunk(chunk)
         if not self.speaking:
@@ -1330,6 +1385,7 @@ class ArloWindow(DesktopWindow):
 
     @Slot(str)
     def on_finished(self, reply):
+        self._reset_response_timer()
         interrupted = self.stopping
         if self.current_response_view is not None:
             self.current_response_view.finish(reply)
