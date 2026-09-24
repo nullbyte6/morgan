@@ -20,6 +20,7 @@
 import html
 import logging
 import os
+import re
 import random
 import sys
 import threading
