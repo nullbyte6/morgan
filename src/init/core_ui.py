@@ -401,8 +401,6 @@ class ArloWindow(DesktopWindow):
         self.response_timer_display.setText("0s")
         self.response_timer_display.setSizePolicy(
             QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.response_timer_display.setFixedHeight(
-            self.directory_indicator.sizeHint().height())
         indicator_row.addWidget(self.response_timer_display)
         indicator_row.addWidget(self.directory_indicator)
         indicator_row.addWidget(self.branch_indicator)
