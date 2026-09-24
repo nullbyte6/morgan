@@ -461,19 +461,21 @@ class Workspace(QWidget):
         self._root: QWidget | None = None
         self._next_orientation = Qt.Horizontal
 
-        # A permanent outer split reveals the entire workspace, including the
-        # first chat panel, without moving or rebuilding any of its contents.
+        # Symmetric spacers reveal the entire workspace from its horizontal
+        # center without rebuilding the panel tree or its contents.
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        self._surface = QSplitter(Qt.Vertical, self)
+        self._surface = QSplitter(Qt.Horizontal, self)
         self._surface.setHandleWidth(0)
         host = QWidget()
         host.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self._surface.addWidget(QWidget())
         self._surface.addWidget(host)
         self._surface.addWidget(QWidget())
         self._surface.handle(1).setEnabled(False)
+        self._surface.handle(2).setEnabled(False)
         outer.addWidget(self._surface)
-        self._surface.setSizes([10000, 0])
+        self._surface.setSizes([0, 10000, 0])
         self._layout = QVBoxLayout(host)
         self._layout.setSizeConstraint(QLayout.SetNoConstraint)
         self._layout.setContentsMargins(6, 6, 6, 8)
@@ -499,7 +501,7 @@ class Workspace(QWidget):
         return len(self._panels)
 
     def animate_visibility(self, expanded: bool, *, restart=False, on_finished=None):
-        """Reveal/collapse the intact panel tree before the window is hidden."""
+        """Expand from the horizontal center or collapse back toward it."""
         if not expanded:
             focus = self.focusWidget()
             if focus is not None and self.isAncestorOf(focus):
@@ -517,11 +519,11 @@ class Workspace(QWidget):
 
         sizes = self._surface.sizes()
         total = max(1, sum(sizes))
-        start = ([0, 10000] if restart else
+        start = ([5000, 0, 5000] if restart else
                  [round(size * 10000 / total) for size in sizes])
         self._surface.setSizes(start)
         self.animate_splitter(self._surface, start,
-                              [10000, 0] if expanded else [0, 10000],
+                              [0, 10000, 0] if expanded else [5000, 0, 5000],
                               duration=260, on_finished=finish)
 
     def _stop_opening_animations(self):
