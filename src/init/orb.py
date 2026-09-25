@@ -16,7 +16,6 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-import random
 import math
 from enum import Enum
 from PySide6.QtCore import *
@@ -73,7 +72,11 @@ class Orb(QWidget):
                  size: int = 400,
                  floating: bool = False,
                  line_width: float = 5.0,
-                 fill_ratio: float = 0.0):
+                 fill_ratio: float = 0.0,
+                 spectrum_radius: float = 110.4,
+                 spectrum_sensitivity: float = 1.0,
+                 spectrum_smoothing: float = 0.72,
+                 spectrum_deformation: float = 18.0):
         super().__init__(parent)
         self.floating = floating
         if floating:
@@ -86,6 +89,11 @@ class Orb(QWidget):
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.set_line_width(line_width)
         self.set_fill_ratio(fill_ratio)
+        self.set_spectrum_parameters(
+            radius=spectrum_radius,
+            sensitivity=spectrum_sensitivity,
+            smoothing=spectrum_smoothing,
+            deformation=spectrum_deformation)
         self.set_size(size)
         self.setToolTip("Arlo")
 
@@ -94,8 +102,6 @@ class Orb(QWidget):
 
         self.amplitude = 0.0
         self.phase = 0.0
-        self.ripple_phase = random.uniform(0.0, math.tau)
-        self.ripple_seed = random.uniform(0.0, math.tau)
         self.speaking = False
         self.listening = False
         self.thinking = False
@@ -232,6 +238,27 @@ class Orb(QWidget):
         self.fill_ratio = float(fill_ratio)
         self.update()
 
+    def set_spectrum_parameters(self, *, radius=None, sensitivity=None,
+                                smoothing=None, deformation=None):
+        values = {
+            "radius": radius,
+            "sensitivity": sensitivity,
+            "smoothing": smoothing,
+            "deformation": deformation,
+        }
+        for name, value in values.items():
+            if value is None:
+                continue
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not math.isfinite(value)):
+                raise ValueError(f"Spectrum {name} must be a finite number")
+            if name == "smoothing" and not 0.0 <= value < 1.0:
+                raise ValueError("Spectrum smoothing must be from 0 up to 1")
+            if name != "smoothing" and value < 0.0:
+                raise ValueError(f"Spectrum {name} must not be negative")
+            setattr(self, f"spectrum_{name}", float(value))
+        self.update()
+
     def set_levels(self, levels):
         values = list(levels)[:15]
         self.levels = [max(0.0, min(1.0, float(value)))
@@ -259,8 +286,11 @@ class Orb(QWidget):
     def animate(self):
         for index, target in enumerate(self.levels):
             current = self.smoothed[index]
-            factor = 0.65 if target > current else 0.16
+            response = 1.0 - self.spectrum_smoothing
+            factor = response if target > current else response * 0.42
             self.smoothed[index] += (target - current) * factor
+            if self.smoothed[index] < 0.0005:
+                self.smoothed[index] = 0.0
 
         target = max(self.smoothed)
         factor = (0.55 if target > self.amplitude
@@ -291,7 +321,6 @@ class Orb(QWidget):
         self._state_phase += speed
         self._state_rotation += rotation
         self.phase += (speed + self.amplitude * 0.045)
-        self.ripple_phase += 0.008
 
         self.click_pulse *= 0.88
         self.double_pulse *= 0.93
@@ -326,9 +355,7 @@ class Orb(QWidget):
         painter.setOpacity(min(1.0, self.pop_scale))
         painter.scale(scale * self.speech_scale * self.pop_scale,
                       scale * self.speech_scale * self.pop_scale)
-        painter.rotate(self._state_rotation * 12.0)
         points = 240
-        _, target_amplitude, _, _ = self.STATE_PROFILES[self.visual_state]
         colors = []
         for index, alpha in enumerate((240, 165)):
             accent = QColor(self._state_color)
@@ -345,162 +372,71 @@ class Orb(QWidget):
 
         inner_fill.setAlpha(colors[0].alpha())
 
-        for layer, color in enumerate(colors):
-            path = QPainterPath()
-            fill_path = QPainterPath() if layer == 0 and self.fill_ratio else None
-            base_radius = 102.4 + layer * 8.0
-
-            if layer == 0:
-                base_radius *= 1.0 - 0.15 * self.thinking_mix
-
-            for index in range(points + 1):
-                t = index / points
-                angle = t * math.tau
-
-                position = t * 15
-                band = int(position) % 15
-                next_band = (band + 1) % 15
-                fraction = position - int(position)
-
-                fraction = (
-                        fraction * fraction
-                        * (3.0 - 2.0 * fraction))
-
-                level = (self.smoothed[band] * (1.0 - fraction)
-                        + self.smoothed[next_band] * fraction)
-
-                primary = math.sin(
-                    angle * 4.0
-                    - self.phase * (1.0 + layer * 0.07)
-                    + layer * 0.45)
-
-                secondary = math.sin(
-                    angle * 7.0
-                    + self.phase * 0.63
-                    + layer * 0.32) * 0.35
-
-                detail = math.sin(
-                    angle * 11.0
-                    - self.phase * 0.37) * 0.12
-
-                if (self.visual_state == self.State.IDLE
-                        and self.amplitude < 0.02):
-                    state_energy = 0.012
-                else:
-                    state_energy = target_amplitude * (0.25 + 0.75 * self._state_mix)
-                energy = (max(self.amplitude, state_energy) * 0.35
-                          + level * (1.0 - 0.65 * self.thinking_mix))
-                energy = min(1.0, energy * 2.0) ** 0.7
-
-                idle = math.sin(
-                    angle * 3.0 - self.phase * 0.5) * 0.45
-
-                ripple = (math.sin(angle * 5.0
-                                   + self.ripple_phase * 0.75
-                                   + self.ripple_seed) * 0.75 + math.sin(
-                    angle * 9.0
-                    - self.ripple_phase * 0.43
-                    + self.ripple_seed * 1.7) * 0.35 + math.sin(angle * 13.0
-                                                                + self.ripple_phase * 0.27
-                                                                + self.ripple_seed * 0.6) * 0.15)
-
-                ripple *= 1.2 + layer * 0.08
-                if self.visual_state == self.State.IDLE:
-                    ripple *= 0.35
-
-                deformation = ((primary + secondary + detail)
-                               * energy * (9.0 + layer * 1.2))
-                if self.visual_state == self.State.IDLE:
-                    deformation *= 0.18 if self.amplitude < 0.02 else 0.35
-
-                click_wave = math.sin(
-                    angle * 3.0
-                    - self.phase * 2.5
-                    - layer * 0.65)
-
-                click_effect = (
-                        click_wave
-                        * self.click_pulse
-                        * (3.0 + layer * 0.8))
-
-                double_wave = math.sin(
-                    angle * 2.0
-                    + self.phase * 3.0
-                    - layer * 0.9)
-
-                double_effect = (
-                        double_wave
-                        * self.double_pulse
-                        * (5.0 + layer * 1.2))
-
-                expansion = (
-                        self.click_pulse * 1.5
+        breathing = (math.sin(self._state_phase * 1.7) *
+                     (0.25 if self.visual_state == self.State.IDLE else 0.8))
+        inner_radius = (102.4 * (1.0 - 0.15 * self.thinking_mix)
+                        + breathing + self.click_pulse * 1.5
                         + self.double_pulse * 4.0)
+        inner_rect = QRectF(-inner_radius, -inner_radius,
+                            inner_radius * 2.0, inner_radius * 2.0)
 
-                breathing = (math.sin(self._state_phase * 1.7) *
-                             (0.25 if self.visual_state == self.State.IDLE else 0.8))
-                voice_expansion = (self.amplitude * 14.0)
+        if self.fill_ratio:
+            fill_radius = inner_radius * self.fill_ratio
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(inner_fill)
+            painter.drawEllipse(QPointF(0.0, 0.0), fill_radius, fill_radius)
 
-                radius = (base_radius + idle + breathing +
-                          ripple + voice_expansion + click_effect +
-                          double_effect + expansion)
+        inner_color = colors[0]
+        solid_color = QColor(inner_color)
+        solid_color.setAlphaF(inner_color.alphaF() * (1.0 - self.thinking_mix))
+        if solid_color.alpha() > 0:
+            pen = QPen(solid_color)
+            pen.setWidthF(self.line_width / scale)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(inner_rect)
 
-                x = math.cos(angle) * radius
-                y = math.sin(angle) * radius
+        if self.thinking_mix > 0.001:
+            dashed_color = QColor(inner_color)
+            dashed_color.setAlphaF(
+                inner_color.alphaF() * self.thinking_mix)
+            pen = QPen(dashed_color)
+            pen.setWidthF(self.line_width / scale)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setDashPattern([5.0, 4.0])
+            pen.setDashOffset(self.thinking_rotation)
+            painter.setPen(pen)
+            painter.drawEllipse(inner_rect)
 
-                if index == 0:
-                    path.moveTo(x, y)
-                    if fill_path is not None:
-                        fill_path.moveTo(
-                            x * self.fill_ratio, y * self.fill_ratio)
-                else:
-                    path.lineTo(x, y)
-                    if fill_path is not None:
-                        fill_path.lineTo(
-                            x * self.fill_ratio, y * self.fill_ratio)
+        spectrum_path = QPainterPath()
+        band_count = len(self.smoothed)
+        for index in range(points + 1):
+            position = index / points * band_count
+            band = int(position) % band_count
+            fraction = position - int(position)
+            fraction = fraction * fraction * (3.0 - 2.0 * fraction)
+            next_band = (band + 1) % band_count
+            level = (self.smoothed[band] * (1.0 - fraction)
+                     + self.smoothed[next_band] * fraction)
+            energy = min(1.0, level * self.spectrum_sensitivity)
+            radius = (self.spectrum_radius
+                      + energy ** 0.72 * self.spectrum_deformation)
+            angle = index / points * math.tau
+            point = QPointF(math.cos(angle) * radius,
+                            math.sin(angle) * radius)
+            if index == 0:
+                spectrum_path.moveTo(point)
+            else:
+                spectrum_path.lineTo(point)
+        spectrum_path.closeSubpath()
 
-            path.closeSubpath()
-            if fill_path is not None:
-                fill_path.closeSubpath()
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(inner_fill)
-                painter.drawPath(fill_path)
-
-            width = (self.line_width * (1.0 if layer == 0 else 0.85) /
-                    scale)
-
-            mix = self.thinking_mix if layer == 0 else 0.0
-            solid_color = QColor(color)
-            solid_color.setAlphaF(color.alphaF() * (1.0 - mix))
-
-            if solid_color.alpha() > 0:
-                pen = QPen(solid_color)
-                pen.setWidthF(width)
-                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-                pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-
-                painter.setPen(pen)
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawPath(path)
-
-            if mix > 0.001 and layer == 0:
-                dashed_color = QColor(color)
-                dashed_color.setAlphaF(color.alphaF() * mix)
-
-                pen = QPen(dashed_color)
-                pen.setWidthF(width)
-                pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-                pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-
-                pen.setDashPattern([5.0, 4.0])
-
-                direction = 1.0 if layer % 2 == 0 else -1.0
-                pen.setDashOffset(
-                    self.thinking_rotation * direction * (1.0 + layer * 0.15))
-
-                painter.setPen(pen)
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawPath(path)
+        pen = QPen(colors[1])
+        pen.setWidthF(self.line_width * 0.85 / scale)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(spectrum_path)
 
         painter.end()
 
