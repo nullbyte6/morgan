@@ -372,8 +372,10 @@ class Orb(QWidget):
 
         inner_fill.setAlpha(colors[0].alpha())
 
-        breathing = (math.sin(self._state_phase * 1.7) *
-                     (0.25 if self.visual_state == self.State.IDLE else 0.8))
+        if self.visual_state == self.State.IDLE:
+            breathing = math.sin(self._state_phase * 0.75) * 1.6
+        else:
+            breathing = math.sin(self._state_phase * 1.7) * 0.8
         inner_radius = (102.4 * (1.0 - 0.15 * self.thinking_mix)
                         + breathing + self.click_pulse * 1.5
                         + self.double_pulse * 4.0)
@@ -381,7 +383,7 @@ class Orb(QWidget):
                             inner_radius * 2.0, inner_radius * 2.0)
 
         if self.fill_ratio:
-            fill_radius = inner_radius * self.fill_ratio
+            fill_radius = 102.4 * self.fill_ratio
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(inner_fill)
             painter.drawEllipse(QPointF(0.0, 0.0), fill_radius, fill_radius)
@@ -411,11 +413,14 @@ class Orb(QWidget):
         spectrum_path = QPainterPath()
         band_count = len(self.smoothed)
         for index in range(points + 1):
-            position = index / points * band_count
-            band = int(position) % band_count
+            circular_position = index / points * 2.0
+            if circular_position > 1.0:
+                circular_position = 2.0 - circular_position
+            position = circular_position * (band_count - 1)
+            band = min(band_count - 1, int(position))
             fraction = position - int(position)
             fraction = fraction * fraction * (3.0 - 2.0 * fraction)
-            next_band = (band + 1) % band_count
+            next_band = min(band_count - 1, band + 1)
             level = (self.smoothed[band] * (1.0 - fraction)
                      + self.smoothed[next_band] * fraction)
             energy = min(1.0, level * self.spectrum_sensitivity)
