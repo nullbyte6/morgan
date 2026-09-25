@@ -408,6 +408,7 @@ class Orb(QWidget):
             pen.setDashPattern([5.0, 4.0])
             pen.setDashOffset(self.thinking_rotation)
             painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(inner_rect)
 
         spectrum_path = QPainterPath()
