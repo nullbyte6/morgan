@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 readonly ASSISTANT_NAME="Arlo"
-readonly ARLO_MODEL="${ARLO_MODEL:-deepseek-r1:8b}"
+readonly ARLO_MODEL="${ARLO_MODEL:-qwen3.5:9b}"
 readonly ARLO_VISION_MODEL="${ARLO_VISION_MODEL:-qwen3-vl:4b}"
 readonly ARLO_AUDIO_MODEL="${ARLO_AUDIO_MODEL:-gemma4:e2b}"
 readonly ARLO_VOICE_MODEL="${ARLO_VOICE_MODEL:-FunAudioLLM/Fun-CosyVoice3-0.5B-2512}"
