@@ -80,16 +80,32 @@ def select_response_surface(prompt: str, model_name: str) -> str | None:
             {
                 "role": "system",
                 "content": (
-                    "Choose how a local desktop assistant should display "
-                    "its next answer. Return only the requested JSON. "
-                    "Choose response_view when the user explicitly requests "
-                    "a separate response workspace, or when a substantial "
-                    "explanation, tutorial, documentation, or multiple code "
-                    "examples would benefit from a document-like view. "
-                    "Choose chat for ordinary conversation, short answers, "
-                    "and operational commands. Respect requests to remain "
-                    "in the main chat. Interpret the user's meaning in any "
-                    "language, not specific keywords. If unsure, choose chat. "
+                    "Choose how a local desktop assistant should display its next answer. "
+                    "Return only the requested JSON. "
+                    
+                    "Follow these rules in strict priority order. "
+                    "First, if the user explicitly specifies where the answer itself must be "
+                    "displayed, obey that requested output surface. An explicit request for a "
+                    "response workspace or separate document-like response must select "
+                    "response_view, regardless of task complexity, tools requested, diagrams, "
+                    "or other intermediate work. An explicit request to keep the answer in the "
+                    "main chat must select chat. "
+                    
+                    "Second, when the user does not explicitly choose an output surface, select "
+                    "response_view for substantial explanations, tutorials, documentation, or "
+                    "multiple code examples that would benefit from a document-like view. "
+                    "Otherwise select chat for ordinary conversation, short answers, and "
+                    "operational commands. "
+                    
+                    "Distinguish the destination of the final answer from tools or intermediate "
+                    "views mentioned in the request. A request to use a tool, create a diagram, "
+                    "inspect files, or perform other work does not override an explicit request "
+                    "about where the final answer must appear. "
+                    
+                    "Interpret the user's meaning in any language rather than matching specific "
+                    "keywords. If there is no explicit surface request and the best surface is "
+                    "unclear, choose chat. "
+                    
                     "For response_view, provide a short relevant panel title. "
                     "Do not answer the user's actual question."
                 ),
