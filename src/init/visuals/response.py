@@ -184,6 +184,26 @@ class ResponseView(QWidget):
                 font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
                 font-size: 14px;
             }
+
+            table {
+                border-collapse: collapse;
+                margin: 12px 0;
+            }
+
+            th, td {
+                border: 1px solid #585b70;
+                padding: 6px 10px;
+                vertical-align: top;
+            }
+
+            th {
+                background-color: #303244;
+                color: #f5c2e7;
+            }
+
+            tr:nth-child(even) {
+                background-color: #242638;
+            }
         """)
         layout.addWidget(self.document_view)
 
@@ -191,6 +211,7 @@ class ResponseView(QWidget):
         self._render_pending = False
         self._renderer = MarkdownIt(
             "commonmark", {"html": False, "highlight": self._highlight})
+        self._renderer.enable("table")
 
     def _highlight(self, code: str, language: str, attrs: str = "") -> str:
         try:
