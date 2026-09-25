@@ -112,6 +112,7 @@ if (-not (Test-TcpPort -Address "127.0.0.1" -Port 11434)) {
 Write-Host "Ollama ready." -ForegroundColor Green
 $corePath = Join-Path $root "dev\core.json"
 $modelName = $env:MODEL
+$managedModel = [string]::IsNullOrWhiteSpace($modelName)
 if ([string]::IsNullOrWhiteSpace($modelName)) {
     if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
         throw "ARLO model configuration not found: $corePath"
@@ -123,6 +124,35 @@ if ([string]::IsNullOrWhiteSpace($modelName)) {
 
 if ($modelName -isnot [string] -or [string]::IsNullOrWhiteSpace($modelName)) {
     throw "Model name is missing or invalid in $corePath. Set model_name or MODEL."
+}
+
+if ($managedModel) {
+    $baseModelName = $core.base_model_name
+    $modelContext = $core.context_length
+    if ($baseModelName -isnot [string] -or
+        [string]::IsNullOrWhiteSpace($baseModelName) -or
+        $modelContext -isnot [long] -or $modelContext -lt 4096) {
+        throw "Managed model configuration is invalid in $corePath."
+    }
+
+    Write-Host "Configuring model context: $modelContext"
+    $createPayload = @{
+        model = $modelName
+        from = $baseModelName
+        parameters = @{num_ctx = $modelContext}
+        stream = $false
+    } | ConvertTo-Json -Compress
+    try {
+        $null = Invoke-RestMethod `
+            -Uri "$ollamaUrl/api/create" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body $createPayload `
+            -TimeoutSec 300
+    }
+    catch {
+        throw "Managed model configuration failed: $($_.Exception.Message)"
+    }
 }
 
 $keepAlive = $env:KEEP_ALIVE
