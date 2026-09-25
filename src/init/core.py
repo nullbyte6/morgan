@@ -16,6 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
+import inspect
 import logging
 import json
 import os
@@ -32,6 +33,95 @@ from pydantic_ai import Agent, Tool
 
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
+
+
+def _tool_payload(value, tool_names):
+    try:
+        payload = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if (not isinstance(payload, dict)
+            or set(payload) != {"name", "arguments"}
+            or payload["name"] not in tool_names
+            or not isinstance(payload["arguments"], dict)):
+        return None
+    return payload["name"], payload["arguments"]
+
+
+def extract_text_tool_call(text, tool_names):
+    fenced = re.compile(
+        r"```json\s*\n(?P<body>.*?)\n```", re.DOTALL | re.IGNORECASE)
+    for match in fenced.finditer(text):
+        call = _tool_payload(match.group("body").strip(), tool_names)
+        if call is not None:
+            visible = (text[:match.start()] + text[match.end():]).strip()
+            return visible, call
+    stripped = text.strip()
+    call = _tool_payload(stripped, tool_names)
+    return ("", call) if call is not None else (text, None)
+
+
+class AssistantTextStream:
+    def __init__(self, tool_names, emit):
+        self.tool_names = tool_names
+        self.emit = emit
+        self.visible = []
+        self.prefix = ""
+        self.candidate = None
+        self.at_line_start = True
+
+    def _output(self, text):
+        if text:
+            self.visible.append(text)
+            self.emit(text)
+
+    def feed(self, text):
+        output = []
+        for character in text:
+            if self.candidate is not None:
+                self.candidate += character
+                continue
+            if self.at_line_start:
+                self.prefix += character
+                stripped = self.prefix.lstrip()
+                candidate_prefix = stripped.rstrip("\r\n").casefold()
+                if stripped.startswith("{"):
+                    self.candidate = self.prefix
+                    self.prefix = ""
+                    self.at_line_start = False
+                elif "```json".startswith(candidate_prefix):
+                    if candidate_prefix == "```json" and character == "\n":
+                        self.candidate = self.prefix
+                        self.prefix = ""
+                        self.at_line_start = False
+                elif stripped or character == "\n":
+                    output.append(self.prefix)
+                    self.at_line_start = character == "\n"
+                    self.prefix = ""
+                continue
+            output.append(character)
+            if character == "\n":
+                self.at_line_start = True
+        self._output("".join(output))
+
+    def finish(self):
+        pending = self.candidate if self.candidate is not None else self.prefix
+        visible, call = extract_text_tool_call(pending, self.tool_names)
+        self._output(visible)
+        self.candidate = None
+        self.prefix = ""
+        return "".join(self.visible), call
+
+
+async def invoke_text_tool(name, arguments):
+    from pydantic import validate_call
+    from src.init.tools import TOOLS
+
+    function = next(tool for tool in TOOLS if tool.__name__ == name)
+    result = validate_call(function)(**arguments)
+    if inspect.isawaitable(result):
+        result = await result
+    return result
 
 # noinspection PyBroadException
 class Assistant:
@@ -440,7 +530,6 @@ class Assistant:
         completed_history = None
         execution_started = False
         stream_messages = list(history)
-        defer_output = True
 
         if attachments:
             attachments.reserve_history(history)
@@ -471,11 +560,27 @@ class Assistant:
             nonlocal completed_history, stream_messages, execution_started
             from pydantic_ai.messages import (PartStartEvent, PartDeltaEvent,
                                               TextPartDelta, FunctionToolCallEvent,
-                                              FunctionToolResultEvent)
+                                              FunctionToolResultEvent,
+                                              ToolCallPart, ToolReturnPart)
+            from src.init.tools import TOOLS
             buffer = SpeechBuffer()
+            tool_names = {tool.__name__ for tool in TOOLS}
+            conversation_messages = list(history)
+            turn_messages = []
+            current_prompt = model_prompt
+            text_stream = None
+
+            def emit_visible(chunk):
+                if not chunk:
+                    return
+                reply.append(chunk)
+                if on_chunk is not None:
+                    on_chunk(chunk)
+                for phrase in buffer.feed(chunk):
+                    self.voice.enqueue(phrase)
 
             async def stream_events(ctx, events):
-                nonlocal stream_messages
+                nonlocal stream_messages, text_stream
                 stream_messages = ctx.messages
                 async for event in events:
                     if cancel_event.is_set():
@@ -496,43 +601,85 @@ class Assistant:
                             event.part.tool_call_id)
                         if on_phase is not None:
                             on_phase("processing")
-                    if chunk and not defer_output:
-                        reply.append(chunk)
-                        if on_chunk is not None:
-                            on_chunk(chunk)
-                        for phrase in buffer.feed(chunk):
-                            self.voice.enqueue(phrase)
+                    if chunk:
+                        text_stream.feed(chunk)
 
             if cancel_event.is_set():
                 return
             execution_started = True
-            result = await self.agent.run(
-                model_prompt,
-                message_history=history,
-                toolsets=attachment_tools,
-                model=turn_model,
-                model_settings=turn_model_settings,
-                cancellation_token=cancellation_token,
-                event_stream_handler=stream_events
-            )
+            for _ in range(32):
+                text_stream = AssistantTextStream(tool_names, emit_visible)
+                result = await self.agent.run(
+                    current_prompt,
+                    message_history=conversation_messages,
+                    toolsets=attachment_tools,
+                    model=turn_model,
+                    model_settings=turn_model_settings,
+                    cancellation_token=cancellation_token,
+                    event_stream_handler=stream_events
+                )
+                streamed_output, streamed_call = text_stream.finish()
+                output = (result.output if isinstance(result.output, str)
+                          else str(result.output))
+                visible_output, text_call = extract_text_tool_call(output, tool_names)
+                text_call = streamed_call or text_call
+                if visible_output.startswith(streamed_output):
+                    emit_visible(visible_output[len(streamed_output):])
 
-            completed_history = result.new_messages()
+                new_messages = list(result.new_messages())
+                if text_call is None:
+                    turn_messages.extend(new_messages)
+                    break
+
+                name, arguments = text_call
+                call_part = ToolCallPart(name, arguments)
+                if new_messages and isinstance(new_messages[-1], ModelResponse):
+                    response = new_messages[-1]
+                    parts = [part for part in response.parts
+                             if not isinstance(part, TextPart)]
+                    if visible_output:
+                        parts.append(TextPart(visible_output))
+                    parts.append(call_part)
+                    new_messages[-1] = ModelResponse(
+                        parts=parts, model_name=response.model_name,
+                        timestamp=response.timestamp,
+                        provider_name=response.provider_name,
+                        provider_url=response.provider_url)
+                else:
+                    new_messages.append(ModelResponse(parts=[call_part]))
+
+                logging.getLogger("arlo.tools").info(
+                    "Executing %s (%s)", name, call_part.tool_call_id)
+                if on_phase is not None:
+                    on_phase("executing")
+                try:
+                    tool_output = await invoke_text_tool(name, arguments)
+                    outcome = "success"
+                except Exception as error:
+                    logging.getLogger("arlo.tools").exception(
+                        "Text tool call failed: %s", name)
+                    tool_output = str(error)
+                    outcome = "failed"
+                tool_return = ModelRequest(parts=[ToolReturnPart(
+                    name, tool_output, call_part.tool_call_id,
+                    outcome=outcome)])
+                logging.getLogger("arlo.tools").info(
+                    "Tool result: %s (%s)", name, call_part.tool_call_id)
+                if on_phase is not None:
+                    on_phase("processing")
+                new_messages.append(tool_return)
+                conversation_messages.extend(new_messages)
+                turn_messages.extend(new_messages)
+                stream_messages = conversation_messages
+                current_prompt = None
+                if cancel_event.is_set():
+                    return
+            else:
+                raise RuntimeError("Tool continuation exceeded 32 model rounds")
+
+            completed_history = turn_messages
             if session is not None:
                 completed_history = session.context.externalize_messages(completed_history)
-            if defer_output and not cancel_event.is_set():
-                output = result.output
-                if session is not None:
-                    for message in reversed(completed_history):
-                        text_parts = [part.content for part in message.parts
-                                      if isinstance(part, TextPart)]
-                        if text_parts:
-                            output = "".join(text_parts)
-                            break
-                reply.append(output)
-                if on_chunk is not None:
-                    on_chunk(output)
-                for phrase in buffer.feed(output):
-                    self.voice.enqueue(phrase)
             for phrase in buffer.finish():
                 if not cancel_event.is_set():
                     self.voice.enqueue(phrase)
