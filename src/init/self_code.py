@@ -165,6 +165,11 @@ def search_code(query: str, directory: str = ".",
                 suffix: str = ".py",
                 limit: int = SEARCH_CODE_MAX_RESULTS) -> str:
     """Search Arlo's local source checkout for text or symbols.
+    Plain-text search only; regular expressions are not supported.
+    An exact phrase match is preferred. If the complete query does not occur
+    literally, multiple whitespace-separated terms are matched when all of
+    them occur on the same source line, regardless of order or text between
+    them.
     Returns bounded matching paths, line numbers and source lines. Use this
     to locate relevant source before read_code(). This searches source files,
     not conversation history or long-term memory.
@@ -181,7 +186,15 @@ def search_code(query: str, directory: str = ".",
         if not root.is_dir():
             raise ValueError("directory must be a directory")
 
-        matches = []
+        needle = query.casefold()
+        terms = tuple(
+            dict.fromkeys(
+                term for term in needle.split()
+                if term))
+
+        exact_matches = []
+        term_matches = []
+
         files = sorted(
             path for path in root.rglob(f"*{suffix}")
             if path.is_file()
@@ -189,31 +202,36 @@ def search_code(query: str, directory: str = ".",
             and ".venv" not in path.parts
             and "__pycache__" not in path.parts)
 
-        needle = query.casefold()
-
         for path in files:
             try:
                 content = path.read_text(encoding="utf-8")
             except (OSError, UnicodeError):
                 continue
 
+            relative = path.relative_to(ROOT)
             for line_number, line in enumerate(content.splitlines(), start=1):
-                if needle not in line.casefold():
+                folded = line.casefold()
+
+                if needle in folded:
+                    exact_matches.append(
+                        f"{relative}:{line_number}: {line.strip()}")
                     continue
 
-                relative = path.relative_to(ROOT)
-                matches.append(
-                    f"{relative}:{line_number}: {line.strip()}"
-                )
+                if len(terms) > 1 and all(term in folded for term in terms):
+                    term_matches.append(
+                        f"{relative}:{line_number}: {line.strip()}")
 
-                if len(matches) >= limit:
-                    break
-
-            if len(matches) >= limit:
-                break
-
+        matches = (exact_matches + term_matches)[:limit]
         if not matches:
-            return f"No source matches found for {query!r}."
+            logging.getLogger("arlo.context").info(
+                "search_code query=%r directory=%s "
+                "exact_matches=0 term_matches=0 returned_bytes=0",
+                query,
+                directory)
+            return (
+                f"No source matches found for {query!r}. "
+                "Search is plain text, not regex. Try a concrete symbol, "
+                "identifier, or a few relevant terms.")
 
         output = "\n".join(matches)
         allowance = _claim_inspection_characters(len(output))
@@ -225,9 +243,13 @@ def search_code(query: str, directory: str = ".",
                 "inspect the relevant matches with read_code().")
 
         logging.getLogger("arlo.context").info(
-            "search_code query=%r directory=%s matches=%d returned_bytes=%d",
+            "search_code query=%r directory=%s "
+            "exact_matches=%d term_matches=%d returned_matches=%d "
+            "returned_bytes=%d",
             query,
             directory,
+            len(exact_matches),
+            len(term_matches),
             len(matches),
             len(output.encode("utf-8")))
 
