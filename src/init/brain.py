@@ -403,7 +403,13 @@ def write_file(path: str, content: str) -> str:
 
 
 def edit_file(path: str, content: str) -> str:
-    """Replace all text in an existing file while preserving its encoding."""
+    """Replace the entire contents of an existing user file.
+    Use for files in the user's current working directory.
+    Do not use to modify Arlo's own source code; use edit_code instead.
+    Args:
+        path: Path to the existing user file.
+        content: Complete replacement contents of the file.
+    """
     try:
         file_path = resolve_safe_path(path)
         if not file_path.exists():

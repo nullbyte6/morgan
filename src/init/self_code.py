@@ -417,9 +417,13 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
 
 
 def edit_code(path: str, old_text: str, new_text: str) -> str:
-    """Replace one exact source fragment after reading it. Preserves encoding.
-    Refuses ambiguous matches and invalid Python syntax. Changes are saved on
-    disk; restart the assistant to activate them reliably. Does not commit or push.
+    """Replace one exact fragment in Arlo's own source code.
+    Use this tool exclusively when modifying Arlo's own repository.
+    Do not use edit_file or replace_in_file for Arlo source changes.
+    Args:
+        path: Source path relative to Arlo's repository root.
+        old_text: Exact existing source fragment to replace.
+        new_text: Replacement source fragment.
     """
     from .brain import atomic_write_bytes, decode_text
 
