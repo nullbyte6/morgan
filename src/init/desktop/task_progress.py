@@ -17,6 +17,8 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import json
+
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import *
 
@@ -37,6 +39,7 @@ class TaskProgressPill(QWidget):
         self.dismissed = False
         self.state = "running"
         self.order_title = ""
+        self.step_detail = None
 
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 8, 12, 8)
@@ -45,9 +48,10 @@ class TaskProgressPill(QWidget):
         self.pill.setObjectName("taskProgressPill")
         self.pill.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.pill.setMinimumWidth(0)
+        self.pill.installEventFilter(self)
         body = QVBoxLayout(self.pill)
-        body.setContentsMargins(20, 12, 16, 14)
-        body.setSpacing(8)
+        body.setContentsMargins(16, 10, 14, 10)
+        body.setSpacing(3)
         heading = QHBoxLayout()
         heading.setSpacing(12)
         self.title = QLabel()
@@ -65,6 +69,12 @@ class TaskProgressPill(QWidget):
         self.bar.setObjectName("taskProgressBar")
         self.bar.setTextVisible(False)
         body.addWidget(self.bar)
+        self.subtitle = QLabel()
+        self.subtitle.setObjectName("taskProgressSubtitle")
+        self.subtitle.setTextFormat(Qt.PlainText)
+        self.subtitle.setWordWrap(True)
+        self.subtitle.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        body.addWidget(self.subtitle)
         self.step = QLabel()
         self.step.setObjectName("taskProgressStep")
         self.step.setTextFormat(Qt.PlainText)
@@ -78,11 +88,13 @@ class TaskProgressPill(QWidget):
 
     def begin(self, turn_id, title):
         self.turn_id = turn_id
-        self.order_title = " ".join(str(title).split())[:240]
+        words = str(title).split()
+        self.order_title = " ".join(words) if len(words) in (3, 4) else ""
         self.started = self.completed = 0
         self.active = True
         self.dismissed = False
         self.state = "running"
+        self.step_detail = None
         self.setVisible(False)
         self._render()
 
@@ -90,7 +102,26 @@ class TaskProgressPill(QWidget):
     def on_phase(self, turn_id, phase):
         if turn_id != self.turn_id or not self.active:
             return
-        if phase == "executing":
+        if phase.startswith("title:"):
+            words = phase[6:].split()
+            if len(words) not in (3, 4):
+                return
+            self.order_title = " ".join(words)
+        elif phase.startswith("step:"):
+            try:
+                detail = json.loads(phase[5:])
+            except ValueError:
+                return
+            if (not isinstance(detail, dict)
+                    or detail.get("kind") not in ("inspect", "execute", "verify", "checkpoint", "failed", "skipped")
+                    or not isinstance(detail.get("tool"), str)):
+                return
+            subject = detail.get("subject", "")
+            if not isinstance(subject, str):
+                return
+            self.step_detail = (detail["kind"], " ".join(detail["tool"].split())[:80],
+                                " ".join(subject.split())[:80], self.completed)
+        elif phase == "executing":
             self.started += 1
             self.state = "running"
         elif phase == "processing" and self.completed < self.started:
@@ -130,7 +161,7 @@ class TaskProgressPill(QWidget):
         self._render()
 
     def _render(self):
-        title = self.order_title or tr("task_progress.voice_request")
+        title = self.order_title or tr("task_progress.pending_title")
         self.title.setToolTip(title)
         self.title.setAccessibleName(title)
         self.title.setText(self.title.fontMetrics().elidedText(
@@ -143,6 +174,15 @@ class TaskProgressPill(QWidget):
         else:
             detail = tr("task_progress." + self.state)
         self.step.setText(tr("task_progress.summary", detail=detail, count=count))
+        subtitle = ""
+        if self.step_detail:
+            kind, tool, subject, step = self.step_detail
+            detail = tr("task_progress.step_" + kind, tool=tool)
+            if subject and kind != "checkpoint":
+                detail += " · " + subject
+            subtitle = tr("task_progress.step_detail", step=step, detail=detail)
+        self.subtitle.setText(subtitle)
+        self.subtitle.setVisible(self.step_detail is not None)
         self.bar.setRange(0, max(1, self.started))
         self.bar.setValue(self.completed)
         self.bar.setAccessibleName(self.step.text())
@@ -152,6 +192,12 @@ class TaskProgressPill(QWidget):
                 widget.style().unpolish(widget)
                 widget.style().polish(widget)
                 widget.update()
+        self._fit_height()
+
+    def _fit_height(self):
+        height = self.pill.layout().totalHeightForWidth(self.pill.width())
+        if height >= 0 and (self.pill.minimumHeight() != height or self.pill.maximumHeight() != height):
+            self.pill.setFixedHeight(height)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -162,6 +208,8 @@ class TaskProgressPill(QWidget):
         self._render()
 
     def eventFilter(self, watched, event):
+        if watched is self.pill and event.type() == event.Type.Resize:
+            self._fit_height()
         if watched is self.parentWidget() and event.type() == event.Type.Resize:
             self.setGeometry(watched.rect())
             self.raise_()

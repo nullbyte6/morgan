@@ -4,6 +4,7 @@ import asyncio
 import copy
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -19,6 +20,29 @@ def encoded(value):
 
 def fingerprint(value):
     return hashlib.sha256(encoded(value).encode("utf-8")).hexdigest()
+
+
+def information_units(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            pass
+    if value is None:
+        return set()
+    if isinstance(value, dict):
+        return {fingerprint((key, unit)) for key, item in value.items()
+                for unit in information_units(item)}
+    if isinstance(value, (list, tuple)):
+        return {unit for item in value for unit in information_units(item)}
+    units = set()
+    for line in str(value).splitlines():
+        words = re.findall(r"\w+", line.casefold())
+        width = min(4, len(words))
+        if width:
+            units.update(fingerprint(words[index:index + width])
+                         for index in range(len(words) - width + 1))
+    return units
 
 
 def failed_result(value):
@@ -59,6 +83,7 @@ class TaskState:
     changes: list = field(default_factory=list)
     unresolved: set = field(default_factory=set)
     seen: set = field(default_factory=set)
+    information_seen: set = field(default_factory=set)
     used_evidence: set = field(default_factory=set)
     sequence: int = 0
     requests: int = 0
@@ -67,6 +92,7 @@ class TaskState:
     stagnant: int = 0
     recovery_at: int | None = None
     recovery_offered_at: int | None = None
+    recovery_started_at: int | None = None
     recovery_sequence: int = 0
     strategy: str = ""
     recovery_strategy: str = ""
@@ -75,6 +101,16 @@ class TaskState:
     progress_window: int = 16
     last_progress_request: int = 0
     tool_attempts: int = 0
+    information_gain_ratio: float = 0.2
+
+    def mark_progress(self):
+        self.last_progress = self.sequence
+        self.last_progress_request = self.requests
+        self.stagnant = 0
+        self.recovery_at = None
+        self.recovery_offered_at = None
+        self.recovery_started_at = None
+        self.notice = ""
 
     def observe(self, name, arguments, result, call_id, failed=False):
         result = getattr(result, "return_value", result)
@@ -84,6 +120,11 @@ class TaskState:
         novel = key not in self.seen and (name, digest) not in self.seen
         self.seen.update((key, (name, digest)))
         failed = failed or failed_result(result)
+        units = information_units(result) if not failed else set()
+        gained = units - self.information_seen
+        information_progress = bool(gained) and len(gained) / len(units) >= self.information_gain_ratio
+        if not failed:
+            self.information_seen.update(units)
         item = Evidence(call_id, name, encoded(arguments), digest, self.phase,
                         failed, self.sequence, str(result)[:700])
         self.evidence[call_id] = item
@@ -93,7 +134,11 @@ class TaskState:
             self.last_change = self.sequence
             self.changes.append(call_id)
             self.status = "active"
-        self.stagnant = 0 if novel and not failed else self.stagnant + 1
+        if self.phase == "inspect" and information_progress:
+            self.mark_progress()
+        else:
+            useful = information_progress if self.phase == "inspect" else novel and not failed
+            self.stagnant = 0 if useful else self.stagnant + 1
         self.assess()
         return item
 
@@ -111,8 +156,10 @@ class TaskState:
                            "attempts, and choose a materially different strategy. Move from inspection "
                            "to execution or verification. A new strategy alone is not progress.")
         elif self.recovery_offered_at is not None and (
-                self.requests - self.recovery_offered_at >= self.idle_window
-                or self.sequence - self.recovery_sequence >= self.idle_window):
+                self.requests - (self.recovery_started_at if self.recovery_started_at is not None
+                                 else self.recovery_offered_at) >= self.idle_window
+                or (self.recovery_started_at is not None
+                    and self.sequence - self.recovery_sequence >= self.idle_window)):
             self.status = "blocked"
             self.notice = "No verified progress after the opportunity to change strategy. User input is required."
 
@@ -159,13 +206,15 @@ class TaskState:
         self.decisions.extend(value for value in decisions if value not in self.decisions)
         self.strategy = strategy or self.strategy
         self.phase = phase
+        self.unresolved.difference_update({ref for ref in self.unresolved
+                                          if self.evidence[ref].tool == "task_checkpoint"})
+        if (self.recovery_offered_at is not None and self.recovery_started_at is None
+                and " ".join(self.strategy.casefold().split())
+                != " ".join(self.recovery_strategy.casefold().split())):
+            self.recovery_started_at = self.requests
+            self.recovery_sequence = self.sequence
         if advanced:
-            self.last_progress = self.sequence
-            self.last_progress_request = self.requests
-            self.stagnant = 0
-            self.recovery_at = None
-            self.recovery_offered_at = None
-            self.notice = ""
+            self.mark_progress()
         self.status = "complete" if self.complete() else "active"
         return {"accepted": True, "status": self.status, "notice": self.notice}
 
@@ -221,15 +270,17 @@ class TaskControl(AbstractCapability):
         )
 
     def task_checkpoint(self, phase: Literal["inspect", "execute", "verify"],
-                        criteria: list[str], completed: dict[str, list[str]],
-                        decisions: list[str], strategy: str, resolves: list[str]) -> dict:
+                        criteria: list[str], completed: dict[str, list[str]] | None = None,
+                        decisions: list[str] | None = None, strategy: str = "",
+                        resolves: list[str] | None = None) -> dict:
         """Record acceptance criteria, brief decisions and verified milestones, without reasoning.
 
         completed maps each satisfied criterion to verification tool call IDs. resolves lists failed
         call IDs whose errors the completed evidence resolves. Retain existing criteria when adding more.
         """
         before = self.state.last_progress_request
-        result = self.state.checkpoint(phase, criteria, completed, decisions, strategy, resolves)
+        result = self.state.checkpoint(phase, criteria, completed or {}, decisions or [],
+                                       strategy, resolves or [])
         if not self.state.notice:
             self.last_notice = ""
         if self.on_progress and self.state.last_progress_request != before:
@@ -262,7 +313,7 @@ class TaskControl(AbstractCapability):
             self.state.stagnant += 1
             return {"error": "Call task_checkpoint with acceptance criteria and phase before tools."}
         if self.state.notice and (self.state.recovery_offered_at is None
-                                  or self.state.strategy == self.state.recovery_strategy):
+                                  or self.state.recovery_started_at is None):
             return {"error": "Use task_checkpoint to choose a different strategy before more tools."}
         result = await handler(arguments)
         self.state.observe(name, arguments, result, call_id)
@@ -332,6 +383,8 @@ class TaskControl(AbstractCapability):
         if self.state.recovery_at is not None and self.state.recovery_offered_at is None:
             self.state.recovery_offered_at = self.state.requests
             self.state.recovery_sequence = self.state.sequence
+        if not self.state.notice:
+            self.last_notice = ""
         if self.state.notice and self.last_notice != self.state.notice:
             self.last_notice = self.state.notice
             if self.on_progress:

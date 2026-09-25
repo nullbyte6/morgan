@@ -49,7 +49,7 @@ def handle_direct_command(assistant, prompt: str) -> str | None:
     return None
 
 
-def select_response_surface(prompt: str, model_name: str) -> str | None:
+def select_response_surface(prompt: str, model_name: str, on_title=None) -> str | None:
     """Let the local LLM choose the output surface before generation."""
     if not prompt.strip():
         return None
@@ -62,8 +62,9 @@ def select_response_surface(prompt: str, model_name: str) -> str | None:
                 "enum": ["chat", "response_view"],
             },
             "title": {"type": "string"},
+            "task_title": {"type": "string", "pattern": r"^\S+(?:\s+\S+){2,3}$"},
         },
-        "required": ["surface", "title"],
+        "required": ["surface", "title", "task_title"],
         "additionalProperties": False,
     }
 
@@ -107,6 +108,9 @@ def select_response_surface(prompt: str, model_name: str) -> str | None:
                     "unclear, choose chat. "
                     
                     "For response_view, provide a short relevant panel title. "
+                    "For every surface, task_title must summarize the user's task in exactly "
+                    "3 or 4 words, in the user's language. Describe the main action and subject; "
+                    "do not simply copy the beginning of the request. "
                     "Do not answer the user's actual question."
                 ),
             },
@@ -127,6 +131,9 @@ def select_response_surface(prompt: str, model_name: str) -> str | None:
     decision = json.loads(result["message"]["content"])
     surface = decision["surface"]
     title = str(decision.get("title") or "").strip()[:72]
+    task_title = " ".join(str(decision.get("task_title") or "").split()[:4])
+    if on_title is not None and len(task_title.split()) in (3, 4):
+        on_title(task_title)
 
     logging.getLogger("arlo.response").info(
         "Surface decision: %s; title=%r", surface, title
@@ -347,7 +354,8 @@ class AssistantWorker(QObject):
 
             try:
                 response_title = select_response_surface(
-                    prompt, self.assistant.MODEL_NAME)
+                    prompt, self.assistant.MODEL_NAME,
+                    on_title=lambda title: self.phase.emit(turn_id, "title:" + title))
 
             except Exception:
                 logging.getLogger("arlo.response").exception(

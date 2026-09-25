@@ -616,6 +616,31 @@ class Assistant:
                     for phrase in buffer.feed(chunk):
                         self.voice.enqueue(phrase)
 
+            def emit_step(name, call_id, result, failed=False):
+                if on_phase is None:
+                    return
+                evidence = controller.state.evidence.get(call_id)
+                if failed or (evidence is not None and evidence.failed):
+                    kind = "failed"
+                elif evidence is not None:
+                    kind = evidence.phase
+                elif name == "task_checkpoint" and isinstance(result, dict) and result.get("accepted"):
+                    kind = "checkpoint"
+                else:
+                    kind = "skipped"
+                arguments = tool_arguments.get(call_id, {})
+                if isinstance(arguments, str):
+                    try:
+                        arguments = json.loads(arguments)
+                    except ValueError:
+                        arguments = {}
+                subject = next((str(value) for value in arguments.values()
+                                if isinstance(value, (str, int, float)) and not isinstance(value, bool)
+                                and str(value).strip()), "") if isinstance(arguments, dict) else ""
+                on_phase("step:" + json.dumps({"kind": kind, "tool": name,
+                                               "subject": " ".join(subject.split())[:80]},
+                                              ensure_ascii=False))
+
             async def stream_events(ctx, events):
                 nonlocal stream_messages
                 stream_messages = ctx.messages
@@ -648,6 +673,9 @@ class Assistant:
                             result_bytes)
                         if on_phase is not None:
                             on_phase("processing")
+                        emit_step(part.tool_name, part.tool_call_id, part.content,
+                                  getattr(part, "outcome", None) == "failed"
+                                  or part.part_kind == "retry-prompt")
 
             controller.on_progress = emit_visible
             consecutive_length_finishes = 0
@@ -728,6 +756,7 @@ class Assistant:
 
                 name, arguments = text_call
                 call_part = ToolCallPart(name, arguments)
+                tool_arguments[call_part.tool_call_id] = arguments
                 if new_messages and isinstance(new_messages[-1], ModelResponse):
                     response = new_messages[-1]
                     parts = [part for part in response.parts
@@ -770,6 +799,7 @@ class Assistant:
                     "Tool result: %s (%s)", name, call_part.tool_call_id)
                 if on_phase is not None:
                     on_phase("processing")
+                emit_step(name, call_part.tool_call_id, tool_output, outcome == "failed")
                 new_messages.append(tool_return)
                 original_count = len(result.new_messages())
                 prefix = result.all_messages()[:-original_count] if original_count else result.all_messages()
