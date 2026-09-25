@@ -34,6 +34,7 @@ from pydantic_ai import Agent, Tool
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
 
+MAX_TOOL_ROUNDS = 12
 
 def _tool_payload(value, tool_names):
     try:
@@ -593,6 +594,7 @@ class Assistant:
             turn_messages = []
             current_prompt = model_prompt
             text_stream = None
+            round_chunks = []
 
             def emit_visible(chunk):
                 if not chunk:
@@ -641,8 +643,10 @@ class Assistant:
             if cancel_event.is_set():
                 return
             execution_started = True
-            for _ in range(32):
-                text_stream = AssistantTextStream(tool_names, emit_visible)
+            for _ in range(MAX_TOOL_ROUNDS):
+                round_chunks = []
+                text_stream = AssistantTextStream(tool_names,
+                                                  round_chunks.append)
                 result = await self.agent.run(
                     current_prompt,
                     message_history=conversation_messages,
@@ -652,13 +656,25 @@ class Assistant:
                     cancellation_token=cancellation_token,
                     event_stream_handler=stream_events
                 )
+
                 streamed_output, streamed_call = text_stream.finish()
-                output = (result.output if isinstance(result.output, str)
-                          else str(result.output))
-                visible_output, text_call = extract_text_tool_call(output, tool_names)
+                output = (
+                    result.output
+                    if isinstance(result.output, str)
+                    else str(result.output))
+
+                visible_output, text_call = extract_text_tool_call(
+                    output,
+                    tool_names)
                 text_call = streamed_call or text_call
+
                 if visible_output.startswith(streamed_output):
-                    emit_visible(visible_output[len(streamed_output):])
+                    round_chunks.append(
+                        visible_output[len(streamed_output):])
+
+                if text_call is None:
+                    for chunk in round_chunks:
+                        emit_visible(chunk)
 
                 new_messages = list(result.new_messages())
                 model_responses = [message for message in new_messages
@@ -731,7 +747,8 @@ class Assistant:
                 if cancel_event.is_set():
                     return
             else:
-                raise RuntimeError("Tool continuation exceeded 32 model rounds")
+                raise RuntimeError(f"Tool continuation exceeded "
+                                   f"{MAX_TOOL_ROUNDS} model rounds")
 
             completed_history = turn_messages
             if session is not None:
