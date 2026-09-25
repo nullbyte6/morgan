@@ -193,8 +193,8 @@ class AssistantWorker(QObject):
         self.startup_greeting = startup_greeting
         self.muted = bool(muted)
         self._voice_settings_lock = threading.Lock()
-        self.history = []
         self.session = SessionLog()
+        self.history = self.session.context.messages
         self.confirmation_event = threading.Event()
         self.confirmation_answer = False
         self._confirmation_lock = threading.Lock()
@@ -289,6 +289,7 @@ class AssistantWorker(QObject):
             if (not voice_input and not message.attachments
                     and is_reload_command(prompt)):
                 reply = self.assistant.reload_source()
+                self.session.context.add_exchange(prompt, reply)
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
@@ -296,6 +297,7 @@ class AssistantWorker(QObject):
                              if not voice_input and not message.attachments
                              else None)
             if direct_result is not None:
+                self.session.context.add_exchange(prompt, direct_result)
                 self.session.write(self.assistant.name, direct_result)
                 self.finished.emit(direct_result)
                 return
@@ -320,6 +322,8 @@ class AssistantWorker(QObject):
                 if data["status"] == "error":
                     reply += f"\n\n{data.get('error', '')}"
 
+                reply = self.session.context.externalize_response(reply)
+                self.session.context.add_exchange(prompt, reply)
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
@@ -348,7 +352,7 @@ class AssistantWorker(QObject):
                     audio_lease.yield_to_wake_listener()
                 self.speaking.emit(turn_id, speaking)
 
-            reply, self.history = self.assistant.run_desktop_turn(
+            reply, history = self.assistant.run_desktop_turn(
                 prompt,
                 self.history,
                 on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),
@@ -362,6 +366,7 @@ class AssistantWorker(QObject):
                 attachments=attachment_session, session=self.session,
                 audio_input=(message.audio_wav
                              if voice_input and not prompt else None))
+            self.history[:] = history
             if not self.cancel_event.is_set():
                 audio_lease.reclaim()
 

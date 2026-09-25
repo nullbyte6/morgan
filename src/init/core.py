@@ -361,7 +361,10 @@ class Assistant:
                 "for requested apps. Writing an action JSON or describing a call "
                 "does not execute it. Only report an app as open when its tool "
                 "result has opened=true. If launch_requested=true but opened=false, "
-                "explain that the launch could not be confirmed and do not repeat it.")
+                "explain that the launch could not be confirmed and do not repeat it. "
+                "Conversation messages can contain local artifact links replacing large "
+                "technical blocks. Use read_file on a linked artifact when its raw "
+                "contents are needed for the current reasoning.")
 
     def working_directory_instructions(self) -> str:
         from src.init.brain import get_working_directory
@@ -437,8 +440,7 @@ class Assistant:
         completed_history = None
         execution_started = False
         stream_messages = list(history)
-        defer_output = audio_input is not None or bool(re.search(
-            r"\b(?:abre|abreme|ábreme|abrir|open|launch|inicia|ejecuta)\b", prompt, re.I))
+        defer_output = True
 
         if attachments:
             attachments.reserve_history(history)
@@ -514,12 +516,22 @@ class Assistant:
                 event_stream_handler=stream_events
             )
 
-            completed_history = result.all_messages()
+            completed_history = result.new_messages()
+            if session is not None:
+                completed_history = session.context.externalize_messages(completed_history)
             if defer_output and not cancel_event.is_set():
-                reply.append(result.output)
+                output = result.output
+                if session is not None:
+                    for message in reversed(completed_history):
+                        text_parts = [part.content for part in message.parts
+                                      if isinstance(part, TextPart)]
+                        if text_parts:
+                            output = "".join(text_parts)
+                            break
+                reply.append(output)
                 if on_chunk is not None:
-                    on_chunk(result.output)
-                for phrase in buffer.feed(result.output):
+                    on_chunk(output)
+                for phrase in buffer.feed(output):
                     self.voice.enqueue(phrase)
             for phrase in buffer.finish():
                 if not cancel_event.is_set():
@@ -603,11 +615,6 @@ class Assistant:
     def _merge_message_history(history: list, completed_history: list | None) -> list:
         if not completed_history:
             return list(history)
-        if not history:
-            return list(completed_history)
-        if (len(completed_history) >= len(history)
-                and completed_history[:len(history)] == history):
-            return list(completed_history)
         return [*history, *completed_history]
 
     def cancel_active_generation(self):
