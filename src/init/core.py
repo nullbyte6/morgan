@@ -596,9 +596,16 @@ class Assistant:
                         if on_phase is not None:
                             on_phase("executing")
                     elif isinstance(event, FunctionToolResultEvent):
+                        try:
+                            result_bytes = len(json.dumps(
+                                event.part.content, ensure_ascii=False,
+                                default=str).encode("utf-8"))
+                        except (TypeError, ValueError):
+                            result_bytes = len(str(event.part.content).encode("utf-8"))
                         logging.getLogger("arlo.tools").info(
-                            "Tool result: %s (%s)", event.part.tool_name,
-                            event.part.tool_call_id)
+                            "Tool result: %s (%s); context_bytes=%d",
+                            event.part.tool_name, event.part.tool_call_id,
+                            result_bytes)
                         if on_phase is not None:
                             on_phase("processing")
                     if chunk:
@@ -627,6 +634,15 @@ class Assistant:
                     emit_visible(visible_output[len(streamed_output):])
 
                 new_messages = list(result.new_messages())
+                model_responses = [message for message in new_messages
+                                   if isinstance(message, ModelResponse)]
+                for request_index, response in enumerate(model_responses, 1):
+                    logging.getLogger("arlo.model").info(
+                        "Model response request=%d/%d input_tokens=%d "
+                        "output_tokens=%d finish_reason=%s",
+                        request_index, len(model_responses),
+                        response.usage.input_tokens, response.usage.output_tokens,
+                        response.finish_reason)
                 if text_call is None:
                     turn_messages.extend(new_messages)
                     if result.response.finish_reason == "length":

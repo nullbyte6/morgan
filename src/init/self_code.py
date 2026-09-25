@@ -23,11 +23,15 @@ from .identity import get_assistant
 
 
 import json
+import logging
 import subprocess
 from src.init.visuals.browser_bridge import open_embedded_url
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+READ_CODE_MAX_CHARACTERS = 4000
+READ_CODE_MAX_LINES = 160
+LIST_CODE_MAX_ENTRIES = 200
 
 
 def _path(path):
@@ -62,21 +66,80 @@ def get_repo() -> str:
 
 
 def list_code(directory: str = ".", recursive: bool = False,
-              suffix: str = "") -> str:
-    """List source entries; recursive=False is root-only, suffix filters files."""
+              suffix: str = "", offset: int = 0,
+              limit: int = LIST_CODE_MAX_ENTRIES) -> str:
+    """List source entries with bounded pagination; offset selects the first entry."""
     from .brain import list_files
     try:
-        return list_files(str(_path(directory)), recursive=recursive,
-                          suffix=suffix)
+        if offset < 0 or limit < 1:
+            raise ValueError("offset must be non-negative and limit must be positive")
+        result = list_files(str(_path(directory)), recursive=recursive,
+                            suffix=suffix)
+        entries = result.splitlines()
+        bounded_limit = min(limit, LIST_CODE_MAX_ENTRIES)
+        if offset == 0 and len(entries) <= bounded_limit:
+            return result
+        selected = entries[offset:offset + bounded_limit]
+        end = offset + len(selected)
+        header = (f"Source listing: {directory}; entries {offset + 1}-{end} "
+                  f"of {len(entries)}.")
+        if end < len(entries):
+            header += (" Continue with list_code(directory="
+                       f"{directory!r}, recursive={recursive!r}, suffix={suffix!r}, "
+                       f"offset={end}, limit={bounded_limit}).")
+        output = header + "\n\n" + "\n".join(selected)
+        logging.getLogger("arlo.context").info(
+            "Bounded list_code source=%s entries=%d returned=%d offset=%d bytes=%d",
+            directory, len(entries), len(selected), offset,
+            len(output.encode("utf-8")))
+        return output
     except (OSError, ValueError) as error:
         return f"Error: {error}"
 
 
-def read_code(path: str) -> str:
-    """Read source using a repository-relative path, e.g. entry/desktop.py."""
+def read_code(path: str, start_line: int = 1, end_line: int = 0,
+              character_offset: int = 0) -> str:
+    """Read a bounded source range; use line bounds and character_offset to continue."""
     from .brain import read_file
     try:
-        return read_file(str(_path(path)))
+        if start_line < 1 or end_line < 0 or character_offset < 0:
+            raise ValueError("line numbers and character_offset cannot be negative")
+        if end_line and end_line < start_line:
+            raise ValueError("end_line cannot be before start_line")
+        result = read_file(str(_path(path)))
+        lines = result.splitlines(keepends=True)
+        total_lines = len(lines)
+        if start_line > max(total_lines, 1):
+            raise ValueError(f"start_line exceeds the file's {total_lines} lines")
+        requested_end = end_line or min(total_lines, start_line + READ_CODE_MAX_LINES - 1)
+        bounded_end = min(requested_end, total_lines,
+                          start_line + READ_CODE_MAX_LINES - 1)
+        block = "".join(lines[start_line - 1:bounded_end])
+        if (start_line == 1 and not end_line and character_offset == 0
+                and len(result) <= READ_CODE_MAX_CHARACTERS):
+            return result
+        chunk = block[character_offset:character_offset + READ_CODE_MAX_CHARACTERS]
+        next_character = character_offset + len(chunk)
+        header = (
+            f"Source: {path}; lines {start_line}-{bounded_end} of {total_lines}; "
+            f"characters {character_offset}-{next_character} of {len(block)} in this range; "
+            f"file characters={len(result)}."
+        )
+        if next_character < len(block):
+            header += (
+                " Continue this range with read_code(path="
+                f"{path!r}, start_line={start_line}, end_line={bounded_end}, "
+                f"character_offset={next_character})."
+            )
+        elif bounded_end < total_lines:
+            header += f" Continue with read_code(path={path!r}, start_line={bounded_end + 1})."
+        output = header + "\n\n" + chunk
+        logging.getLogger("arlo.context").info(
+            "Bounded read_code source=%s total_lines=%d total_bytes=%d "
+            "range=%d-%d offset=%d returned_bytes=%d",
+            path, total_lines, len(result.encode("utf-8")), start_line,
+            bounded_end, character_offset, len(output.encode("utf-8")))
+        return output
     except (OSError, ValueError) as error:
         return f"Error: {error}"
 
