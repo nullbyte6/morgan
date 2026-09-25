@@ -392,8 +392,11 @@ class AssistantWorker(QObject):
                 audio_lease.reclaim()
 
             if reply:
+                task_state = getattr(self.assistant, "task_state", None)
                 self.session.write(self.assistant.name, reply,
-                                   status="interrupted" if cancel_event.is_set() else "completed")
+                                   status=("interrupted" if cancel_event.is_set() else
+                                           "error" if task_state is not None and task_state.status == "blocked"
+                                           else "completed"))
 
             self.finished.emit(reply)
 

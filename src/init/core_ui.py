@@ -1392,8 +1392,10 @@ class ArloWindow(DesktopWindow):
             self.current_response_view.finish(reply)
         self.task_progress.finish(self.turn_id, interrupted=interrupted,
                                   failed=self.permission_denied_state)
-        self.finish_wake_command("failed" if interrupted else "completed",
-                                 "Interrupted" if interrupted else "")
+        task_failed = self.task_progress.state == "error"
+        self.finish_wake_command("failed" if interrupted or task_failed else "completed",
+                                 "Interrupted" if interrupted else
+                                 tr("task_progress.error") if task_failed else "")
         if self.worker.command_reply:
             self.command_output.setPlainText(reply)
             self.command_output.show()

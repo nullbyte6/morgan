@@ -480,5 +480,8 @@
   "task_progress.finished": "Execution finished",
   "task_progress.executing": "Executing step {step}",
   "task_progress.reviewing": "Reviewing results…",
-  "task_progress.summary": "{detail} · {count}"
+  "task_progress.summary": "{detail} · {count}",
+  "task_control.verified": "Verified {verified} of {total} criteria.",
+  "task_control.recovering": "No verified progress; I am reviewing the strategy.",
+  "task_control.blocked": "The task is blocked: no verified progress after an opportunity to change strategy. I need your input to continue."
 }

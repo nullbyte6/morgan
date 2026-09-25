@@ -96,10 +96,12 @@ class TaskProgressPill(QWidget):
         elif phase == "processing" and self.completed < self.started:
             self.completed += 1
             self.state = "running"
+        elif phase == "blocked":
+            self.state = "error"
         else:
             return
         self._render()
-        if self.started >= 2 and not self.dismissed:
+        if (self.started >= 2 or phase == "blocked") and not self.dismissed:
             self.setVisible(True)
 
     def awaiting_permission(self, turn_id, *, waiting=True):
@@ -111,7 +113,7 @@ class TaskProgressPill(QWidget):
         if turn_id != self.turn_id or not self.active:
             return
         self.active = False
-        self.state = ("stopped" if interrupted else "error" if failed
+        self.state = ("stopped" if interrupted else "error" if failed or self.state == "error"
                       else "finished" if self.completed == self.started else "stopped")
         self._render()
 

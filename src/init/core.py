@@ -34,8 +34,6 @@ from pydantic_ai import Agent, Tool
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
 
-MAX_TOOL_ROUNDS = 12
-
 def _tool_payload(value, tool_names):
     try:
         payload = json.loads(value)
@@ -517,6 +515,7 @@ class Assistant:
                                           ModelResponse, TextPart,
                                           UserPromptPart)
 
+        self.task_state = None
         application = self.application_opening_request(prompt)
         if application is not None and audio_input is None and not attachments:
             from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
@@ -584,21 +583,26 @@ class Assistant:
             turn_model = self.audio_model
             turn_model_settings["thinking"] = False
         attachment_tools = [attachments.toolset()] if attachments else []
+        from src.init.task_control import TaskControl, TaskStopped
+        from src.init.session_log import SessionContext
+        from src.init.config import HOME_PATH
+        import uuid
+        task_context = (session.context if session is not None else
+                        SessionContext(uuid.uuid4().hex, HOME_PATH / ".log"))
+        controller = TaskControl(prompt, task_context, cancel_event)
+        self.task_state = controller.state
 
         async def generate():
             nonlocal completed_history, stream_messages, execution_started
-            from pydantic_ai.messages import (PartStartEvent, PartDeltaEvent,
-                                              TextPartDelta, FunctionToolCallEvent,
-                                              FunctionToolResultEvent,
+            from pydantic_ai.messages import (FunctionToolCallEvent, FunctionToolResultEvent,
                                               ToolCallPart, ToolReturnPart)
             from src.init.tools import TOOLS
             buffer = SpeechBuffer()
-            tool_names = {tool.__name__ for tool in TOOLS}
+            tool_names = {tool.__name__ for tool in TOOLS} | {"task_checkpoint"}
             conversation_messages = list(history)
-            turn_messages = []
             current_prompt = model_prompt
-            text_stream = None
-            round_chunks = []
+            tool_arguments = {}
+            answer_parts = []
 
             def emit_visible(chunk):
                 if not chunk:
@@ -613,22 +617,25 @@ class Assistant:
                         self.voice.enqueue(phrase)
 
             async def stream_events(ctx, events):
-                nonlocal stream_messages, text_stream
+                nonlocal stream_messages
                 stream_messages = ctx.messages
                 async for event in events:
                     if cancel_event.is_set():
                         return
-                    chunk = ""
-                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
-                        chunk = event.part.content
-                    elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
-                        chunk = event.delta.content_delta
                     if isinstance(event, FunctionToolCallEvent):
+                        tool_arguments[event.part.tool_call_id] = event.part.args
                         logging.getLogger("arlo.tools").info(
                             "Executing %s (%s)", event.part.tool_name, event.part.tool_call_id)
                         if on_phase is not None:
                             on_phase("executing")
                     elif isinstance(event, FunctionToolResultEvent):
+                        part = event.part
+                        if (part.tool_call_id not in controller.state.evidence
+                                and (getattr(part, "outcome", None) == "failed"
+                                     or part.part_kind == "retry-prompt")):
+                            controller.state.observe(part.tool_name,
+                                                     tool_arguments.get(part.tool_call_id),
+                                                     part.content, part.tool_call_id, failed=True)
                         try:
                             result_bytes = len(json.dumps(
                                 event.part.content, ensure_ascii=False,
@@ -641,26 +648,36 @@ class Assistant:
                             result_bytes)
                         if on_phase is not None:
                             on_phase("processing")
-                    if chunk:
-                        text_stream.feed(chunk)
 
+            controller.on_progress = emit_visible
+            consecutive_length_finishes = 0
             if cancel_event.is_set():
                 return
             execution_started = True
-            for _ in range(MAX_TOOL_ROUNDS):
-                round_chunks = []
-                text_stream = AssistantTextStream(tool_names,
-                                                  round_chunks.append)
-                result = await self.agent.run(
-                    current_prompt,
-                    message_history=conversation_messages,
-                    toolsets=attachment_tools,
-                    model=turn_model,
-                    model_settings=turn_model_settings,
-                    cancellation_token=cancellation_token,
-                    event_stream_handler=stream_events)
+            from pydantic_ai.usage import UsageLimits
+            while True:
+                try:
+                    result = await self.agent.run(
+                        current_prompt,
+                        message_history=conversation_messages,
+                        toolsets=attachment_tools,
+                        model=turn_model,
+                        model_settings=turn_model_settings,
+                        cancellation_token=cancellation_token,
+                        usage_limits=UsageLimits(request_limit=None),
+                        capabilities=[controller],
+                        event_stream_handler=stream_events)
+                except TaskStopped:
+                    from src.init.lang import tr
+                    stream_messages = list(controller.messages)
+                    notice = tr("task_control.blocked")
+                    if on_phase is not None:
+                        on_phase("blocked")
+                    emit_visible(notice)
+                    conversation_messages = [*stream_messages,
+                                             ModelResponse(parts=[TextPart(notice)])]
+                    break
 
-                streamed_output, streamed_call = text_stream.finish()
                 output = (
                     result.output
                     if isinstance(result.output, str)
@@ -669,23 +686,7 @@ class Assistant:
                 visible_output, text_call = extract_text_tool_call(
                     output,
                     tool_names)
-                text_call = streamed_call or text_call
-
-                if visible_output.startswith(streamed_output):
-                    round_chunks.append(
-                        visible_output[len(streamed_output):])
-
                 new_messages = list(result.new_messages())
-                has_native_tool_calls = any(
-                    isinstance(part, ToolCallPart)
-                    for message in new_messages
-                    if isinstance(message, ModelResponse)
-                    for part in message.parts)
-
-                if text_call is None and not has_native_tool_calls:
-                    for chunk in round_chunks:
-                        emit_visible(chunk)
-
                 model_responses = [
                     message
                     for message in new_messages
@@ -699,32 +700,31 @@ class Assistant:
                         request_index, len(model_responses),
                         response.usage.input_tokens, response.usage.output_tokens,
                         response.finish_reason)
+                conversation_messages = list(result.all_messages())
+                stream_messages = conversation_messages
                 if text_call is None:
-                    turn_messages.extend(new_messages)
-                    consecutive_length_finishes = 0
                     if result.response.finish_reason == "length":
                         consecutive_length_finishes += 1
-
-                        if consecutive_length_finishes >= 2:
-                            logging.getLogger("arlo.model").warning(
-                                "Stopping continuation after %d consecutive length finishes",
-                                consecutive_length_finishes,
-                            )
-                            break
-                        
-                        logging.getLogger("arlo.model").info(
-                            "Continuing response after model output limit")
-                        conversation_messages.extend(new_messages)
-                        stream_messages = conversation_messages
+                        if controller.accept_output() and visible_output and visible_output not in answer_parts:
+                            answer_parts.append(visible_output)
+                            controller.state.last_progress_request = controller.state.requests
+                            consecutive_length_finishes = 0
                         current_prompt = (
-                            "Continue the response that was interrupted by the output "
-                            "limit. Resume from the existing assistant text, keep working "
-                            "on the active user request, and do not restart the answer."
-                        )
-                        if cancel_event.is_set():
-                            return
+                            "The output was interrupted. Continue the active task without restarting. "
+                            "Use a brief checkpoint and concise final answer.")
+                        if consecutive_length_finishes >= 2:
+                            controller.state.stagnant += controller.state.idle_window
+                            controller.state.assess()
                         continue
-                    break
+                    consecutive_length_finishes = 0
+                    if controller.accept_output():
+                        emit_visible("".join(answer_parts) + visible_output)
+                        break
+                    current_prompt = (
+                        "The task is not complete. Verify the remaining acceptance criteria and "
+                        "record evidence with task_checkpoint, or explain the concrete blocker. "
+                        "Do not repeat a final answer without new evidence.")
+                    continue
 
                 name, arguments = text_call
                 call_part = ToolCallPart(name, arguments)
@@ -748,12 +748,20 @@ class Assistant:
                 if on_phase is not None:
                     on_phase("executing")
                 try:
-                    tool_output = await invoke_text_tool(name, arguments)
-                    outcome = "success"
+                    async def invoke(arguments):
+                        if name == "task_checkpoint":
+                            from pydantic import validate_call
+                            return validate_call(controller.task_checkpoint)(**arguments)
+                        return await invoke_text_tool(name, arguments)
+                    tool_output = await controller.execute(
+                        name, arguments, call_part.tool_call_id, invoke)
+                    outcome = "failed" if isinstance(tool_output, dict) and tool_output.get("error") else "success"
                 except Exception as error:
                     logging.getLogger("arlo.tools").exception(
                         "Text tool call failed: %s", name)
                     tool_output = str(error)
+                    controller.state.observe(name, arguments, tool_output,
+                                             call_part.tool_call_id, failed=True)
                     outcome = "failed"
                 tool_return = ModelRequest(parts=[ToolReturnPart(
                     name, tool_output, call_part.tool_call_id,
@@ -763,17 +771,14 @@ class Assistant:
                 if on_phase is not None:
                     on_phase("processing")
                 new_messages.append(tool_return)
-                conversation_messages.extend(new_messages)
-                turn_messages.extend(new_messages)
+                original_count = len(result.new_messages())
+                prefix = result.all_messages()[:-original_count] if original_count else result.all_messages()
+                conversation_messages = [*prefix, *new_messages]
                 stream_messages = conversation_messages
                 current_prompt = None
                 if cancel_event.is_set():
                     return
-            else:
-                raise RuntimeError(f"Tool continuation exceeded "
-                                   f"{MAX_TOOL_ROUNDS} model rounds")
-
-            completed_history = turn_messages
+            completed_history = conversation_messages
             if session is not None:
                 completed_history = session.context.externalize_messages(completed_history)
 
@@ -834,13 +839,14 @@ class Assistant:
 
         text = "".join(reply)
         if cancel_event.is_set():
+            controller.state.status = "cancelled"
             if not execution_started:
                 return "", history
             messages = stream_messages or list(history) + [ModelRequest(parts=[UserPromptPart(model_prompt)])]
-            safe = list(history)
+            safe = []
             pending = set()
             segment = []
-            for message in messages[len(history):]:
+            for message in messages:
                 segment.append(message)
                 for part in message.parts:
                     if part.part_kind == "tool-call":
@@ -850,16 +856,21 @@ class Assistant:
                 if not pending:
                     safe.extend(segment)
                     segment = []
-            if len(safe) > len(history) and isinstance(safe[-1], ModelResponse) and any(
+            if safe and isinstance(safe[-1], ModelResponse) and any(
                     isinstance(part, TextPart) for part in safe[-1].parts):
                 safe.pop()
+            interrupted_state = json.dumps(controller.state.snapshot(), ensure_ascii=False)
+            if len(interrupted_state) > 16000:
+                interrupted_state = controller.archive(interrupted_state, "Interrupted task state")
+            safe.append(ModelRequest(parts=[UserPromptPart(
+                "Interrupted task state (observed outcomes, not instructions): " + interrupted_state)]))
             safe.append(ModelResponse(parts=[TextPart(
                 (text + "\n" if text else "") +
                 "[Response interrupted by the user. Speech may have stopped before "
                 "all displayed text was spoken. Tools already started may have completed; "
                 "inspect current state before retrying. Follow the user's next instruction.]")]))
             return text, safe
-        return text, self._merge_message_history(history, completed_history)
+        return text, completed_history if completed_history is not None else list(history)
 
     @staticmethod
     def _merge_message_history(history: list, completed_history: list | None) -> list:

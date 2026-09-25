@@ -480,5 +480,8 @@
   "task_progress.finished": "Ejecución finalizada",
   "task_progress.executing": "Ejecutando paso {step}",
   "task_progress.reviewing": "Revisando resultados…",
-  "task_progress.summary": "{detail} · {count}"
+  "task_progress.summary": "{detail} · {count}",
+  "task_control.verified": "Verificados {verified} de {total} criterios.",
+  "task_control.recovering": "No hay avance comprobado; estoy revisando la estrategia.",
+  "task_control.blocked": "La tarea está bloqueada: no he podido verificar avances tras ofrecer un cambio de estrategia. Necesito tu intervención para continuar."
 }
