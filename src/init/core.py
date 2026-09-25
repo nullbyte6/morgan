@@ -30,11 +30,14 @@ from datetime import datetime
 from getpass import getuser
 
 from pydantic_ai import Agent, Tool
+from pydantic_ai.usage import UsageLimits
 
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
 
 MAX_TOOL_ROUNDS = 12
+MAX_MODEL_REQUESTS = 12
+MAX_TOOL_CALLS = 24
 
 def _tool_payload(value, tool_names):
     try:
@@ -561,7 +564,11 @@ class Assistant:
         if attachments:
             attachments.reserve_history(history)
         turn_model = None
-        turn_model_settings = {"temperature": brain.load_config()["temperature"]}
+        turn_model_settings = {
+            **self.model_settings,
+            "temperature": brain.load_config()["temperature"],
+        }
+
         model_prompt = attachments.prompt() if attachments else prompt
         voice_model_active = audio_input is not None
         if audio_input is not None:
@@ -653,9 +660,11 @@ class Assistant:
                     toolsets=attachment_tools,
                     model=turn_model,
                     model_settings=turn_model_settings,
+                    usage_limits=UsageLimits(
+                        request_limit=MAX_MODEL_REQUESTS,
+                        tool_calls_limit=MAX_TOOL_CALLS),
                     cancellation_token=cancellation_token,
-                    event_stream_handler=stream_events
-                )
+                    event_stream_handler=stream_events)
 
                 streamed_output, streamed_call = text_stream.finish()
                 output = (
@@ -672,13 +681,23 @@ class Assistant:
                     round_chunks.append(
                         visible_output[len(streamed_output):])
 
-                if text_call is None:
+                new_messages = list(result.new_messages())
+                has_native_tool_calls = any(
+                    isinstance(part, ToolCallPart)
+                    for message in new_messages
+                    if isinstance(message, ModelResponse)
+                    for part in message.parts)
+
+                if text_call is None and not has_native_tool_calls:
                     for chunk in round_chunks:
                         emit_visible(chunk)
 
-                new_messages = list(result.new_messages())
-                model_responses = [message for message in new_messages
-                                   if isinstance(message, ModelResponse)]
+                model_responses = [
+                    message
+                    for message in new_messages
+                    if isinstance(message, ModelResponse)
+                ]
+
                 for request_index, response in enumerate(model_responses, 1):
                     logging.getLogger("arlo.model").info(
                         "Model response request=%d/%d input_tokens=%d "
