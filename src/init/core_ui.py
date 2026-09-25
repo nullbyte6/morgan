@@ -1126,6 +1126,8 @@ class ArloWindow(DesktopWindow):
     def on_request_rejected(self, turn_id, error):
         if turn_id != self.turn_id:
             return
+
+        self._reset_response_timer()
         self.task_progress.finish(turn_id, failed=True)
         self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
         self.finish_wake_command("failed", error)
@@ -1295,6 +1297,7 @@ class ArloWindow(DesktopWindow):
             self.input.setFocus()
 
     def stop_response(self):
+        self._stop_response_timer()
         self.stopping = True
         self.task_progress.finish(self.turn_id, interrupted=True)
         self.worker.interrupt()
@@ -1452,6 +1455,8 @@ class ArloWindow(DesktopWindow):
         if not self.ready:
             self.status_key = ""
             self.status.setText(tr("ui.error", error=error))
+
+        self._reset_response_timer()
         self.task_progress.finish(self.turn_id, failed=True)
         self.finish_wake_command("failed", error)
         self.showing_greeting = False
