@@ -82,7 +82,7 @@ from src.init.media import (control_media, search_youtube_songs, play_youtube_so
                     list_spotify_playlists, get_spotify_playlist_tracks,
                     play_spotify_playlist)
 from src.init.self_code import (get_repo_lnk, get_repo, list_code,
-                        read_code, edit_code, update_repo)
+                        search_code, read_code, edit_code, update_repo)
 
 from src.diagnostics.tools import (check_system_health, check_disk_health,
                                    check_security_health, kill_self)
@@ -135,6 +135,7 @@ TOOLS = [
     get_repo_lnk,
     get_repo,
     list_code,
+    search_code,
     read_code,
     edit_code,
     update_repo,

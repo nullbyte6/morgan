@@ -37,6 +37,7 @@ READ_CODE_MAX_CHARACTERS = 3000
 READ_CODE_MAX_LINES = 160
 LIST_CODE_MAX_ENTRIES = 200
 INSPECTION_CONTEXT_CHARACTERS = 32000
+SEARCH_CODE_MAX_RESULTS = 20
 
 
 @dataclass
@@ -158,6 +159,82 @@ def list_code(directory: str = ".", recursive: bool = False,
         return output
     except (OSError, ValueError) as error:
         return f"Error: {error}"
+
+
+def search_code(query: str, directory: str = ".",
+                suffix: str = ".py",
+                limit: int = SEARCH_CODE_MAX_RESULTS) -> str:
+    """Search Arlo's local source checkout for text or symbols.
+    Returns bounded matching paths, line numbers and source lines. Use this
+    to locate relevant source before read_code(). This searches source files,
+    not conversation history or long-term memory.
+    """
+    try:
+        query = query.strip()
+        if not query:
+            raise ValueError("query cannot be empty")
+        if limit < 1 or limit > SEARCH_CODE_MAX_RESULTS:
+            raise ValueError(
+                f"limit must be between 1 and {SEARCH_CODE_MAX_RESULTS}")
+
+        root = _path(directory)
+        if not root.is_dir():
+            raise ValueError("directory must be a directory")
+
+        matches = []
+        files = sorted(
+            path for path in root.rglob(f"*{suffix}")
+            if path.is_file()
+            and ".git" not in path.parts
+            and ".venv" not in path.parts
+            and "__pycache__" not in path.parts)
+
+        needle = query.casefold()
+
+        for path in files:
+            try:
+                content = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                continue
+
+            for line_number, line in enumerate(content.splitlines(), start=1):
+                if needle not in line.casefold():
+                    continue
+
+                relative = path.relative_to(ROOT)
+                matches.append(
+                    f"{relative}:{line_number}: {line.strip()}"
+                )
+
+                if len(matches) >= limit:
+                    break
+
+            if len(matches) >= limit:
+                break
+
+        if not matches:
+            return f"No source matches found for {query!r}."
+
+        output = "\n".join(matches)
+        allowance = _claim_inspection_characters(len(output))
+
+        if allowance < len(output):
+            output = output[:allowance]
+            output += (
+                "\nResults truncated by the inspection context budget; "
+                "inspect the relevant matches with read_code().")
+
+        logging.getLogger("arlo.context").info(
+            "search_code query=%r directory=%s matches=%d returned_bytes=%d",
+            query,
+            directory,
+            len(matches),
+            len(output.encode("utf-8")))
+
+        return output
+
+    except (OSError, ValueError) as error:
+        return f"Error searching source code: {error}"
 
 
 def read_code(path: str, start_line: int = 1, end_line: int = 0,

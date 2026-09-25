@@ -94,6 +94,8 @@ def search_words(prefix: str = "", scope: Literal["history", "memories", "all"] 
                  role: Literal["user", "assistant"] | None = None,
                  since: str | None = None, until: str | None = None) -> dict:
     """List normalized words alphabetically, with exact occurrence/document counts.
+    Searches conversation history and long-term memory only. Never use this tool
+    to search files or source code.
     Optional prefix is one word; accents/case follow existing FTS matching. Scope
     selects completed dialogue, current memories or both. Filters use the same
     semantics as recall. Follow next_offset to continue; total counts distinct words.
