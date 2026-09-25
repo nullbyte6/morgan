@@ -113,7 +113,8 @@ class FlowchartBridge(QObject):
         widget = None
         try:
             from .window import FlowchartWidget
-            workspace = getattr(self.parent(), "workspace", None)
+            window = self.parent()
+            workspace = getattr(window, "workspace", None)
             if workspace is None:
                 raise RuntimeError("The flowchart bridge requires the Arlo workspace")
             self._workspace = workspace
