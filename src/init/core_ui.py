@@ -1152,7 +1152,7 @@ class ArloWindow(DesktopWindow):
         if self.quitting or self._workspace_hiding:
             return
         if not self.mascot.isVisible():
-            self.mascot.move_to_corner()
+            self.mascot.move_mascot()
         self.mascot.pop_in()
         if self.isVisible():
             self._workspace_hiding = True

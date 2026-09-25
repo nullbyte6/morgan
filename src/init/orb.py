@@ -445,7 +445,7 @@ class Orb(QWidget):
 
         painter.end()
 
-    def move_to_corner(self):
+    def move_mascot(self):
         screen = (
                 QApplication.screenAt(self.pos())
                 or QApplication.primaryScreen())
