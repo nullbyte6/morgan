@@ -82,7 +82,7 @@ class GitBranchIndicator(QToolButton):
         self.setVisible(bool(branch))
 
 
-class PrivacyIndicator(QToolButton):
+class PrivacyIndicator(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("privacyIndicator")
