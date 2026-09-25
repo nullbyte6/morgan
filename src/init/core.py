@@ -30,14 +30,11 @@ from datetime import datetime
 from getpass import getuser
 
 from pydantic_ai import Agent, Tool
-from pydantic_ai.usage import UsageLimits
 
 from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
 
 MAX_TOOL_ROUNDS = 12
-MAX_MODEL_REQUESTS = 36
-MAX_TOOL_CALLS = 50
 
 def _tool_payload(value, tool_names):
     try:
@@ -660,9 +657,6 @@ class Assistant:
                     toolsets=attachment_tools,
                     model=turn_model,
                     model_settings=turn_model_settings,
-                    usage_limits=UsageLimits(
-                        request_limit=MAX_MODEL_REQUESTS,
-                        tool_calls_limit=MAX_TOOL_CALLS),
                     cancellation_token=cancellation_token,
                     event_stream_handler=stream_events)
 

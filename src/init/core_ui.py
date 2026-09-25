@@ -370,15 +370,14 @@ class ArloWindow(DesktopWindow):
 
         composer = QHBoxLayout()
         composer.setSpacing(12)
-        composer.setAlignment(Qt.AlignBottom)
 
         input_frame = QFrame()
         input_frame.setObjectName("inputFrame")
         input_frame.setSizePolicy(
             QSizePolicy.Expanding,
-            QSizePolicy.Fixed
+            QSizePolicy.Preferred
         )
-        input_frame.setFixedHeight(48)
+        input_frame.setMinimumHeight(48)
         input_layout = QHBoxLayout(input_frame)
         input_layout.setContentsMargins(16, 0, 0, 0)
         input_layout.setSpacing(0)
@@ -421,7 +420,7 @@ class ArloWindow(DesktopWindow):
         input_column.addWidget(input_frame)
 
         input_group = QWidget()
-        input_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        input_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         input_group.setLayout(input_column)
         self.input_group = input_group
         self.input_group.setMaximumHeight(0)
@@ -445,7 +444,7 @@ class ArloWindow(DesktopWindow):
         composer_container.setLayout(composer)
         composer_container.setSizePolicy(
             QSizePolicy.Expanding,
-            QSizePolicy.Fixed
+            QSizePolicy.Preferred
         )
 
         composer_row = QHBoxLayout()
