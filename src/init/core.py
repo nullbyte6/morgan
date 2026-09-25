@@ -629,6 +629,15 @@ class Assistant:
                 new_messages = list(result.new_messages())
                 if text_call is None:
                     turn_messages.extend(new_messages)
+                    if result.response.finish_reason == "length":
+                        logging.getLogger("arlo.model").info(
+                            "Continuing response after model output limit")
+                        conversation_messages.extend(new_messages)
+                        stream_messages = conversation_messages
+                        current_prompt = None
+                        if cancel_event.is_set():
+                            return
+                        continue
                     break
 
                 name, arguments = text_call
