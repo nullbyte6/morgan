@@ -634,7 +634,11 @@ class Assistant:
                             "Continuing response after model output limit")
                         conversation_messages.extend(new_messages)
                         stream_messages = conversation_messages
-                        current_prompt = None
+                        current_prompt = (
+                            "Continue the response that was interrupted by the output "
+                            "limit. Resume from the existing assistant text, keep working "
+                            "on the active user request, and do not restart the answer."
+                        )
                         if cancel_event.is_set():
                             return
                         continue
