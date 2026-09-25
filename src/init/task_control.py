@@ -418,6 +418,10 @@ class TaskControl(AbstractCapability):
             if len(ModelMessagesTypeAdapter.dump_json(suffix)) <= self.context_characters // 2:
                 archive = self.archive(ModelMessagesTypeAdapter.dump_json(
                     result[:boundary]).decode(), "Earlier conversation and tool evidence")
+                self.trace("context_compacted", archived_messages=boundary,
+                           retained_messages=len(suffix), archive=archive,
+                           archived_tool_calls=[part.tool_call_id for message in result[:boundary]
+                                                for part in message.parts if part.part_kind == "tool-return"])
                 return [ModelRequest(parts=[UserPromptPart(
                     "Earlier context archived without discarding evidence: " + archive)]), *suffix]
         return result
@@ -443,12 +447,20 @@ class TaskControl(AbstractCapability):
         messages = [message for message in request_context.messages
                     if not (message.metadata or {}).get("arlo_task_snapshot")]
         messages = self.compact(messages)
-        snapshot = encoded(self.state.snapshot())
+        snapshot_data = self.state.snapshot()
+        snapshot = encoded(snapshot_data)
         if len(snapshot) > 16000:
-            snapshot = encoded({"objective": self.state.objective, "phase": self.state.phase,
-                                "status": self.state.status, "notice": self.state.notice,
-                                "task_ledger": self.archive(snapshot, "Full task ledger"),
-                                "recent_evidence": self.state.snapshot()["evidence"][-4:]})
+            snapshot_data = {"objective": self.state.objective, "phase": self.state.phase,
+                             "status": self.state.status, "notice": self.state.notice,
+                             "task_ledger": self.archive(snapshot, "Full task ledger"),
+                             "recent_evidence": snapshot_data["evidence"][-4:]}
+            snapshot = encoded(snapshot_data)
+        from src.init.self_code import INSPECTION_TOOLS, compact_inspection_context
+        previews = snapshot_data.get("evidence", snapshot_data.get("recent_evidence", []))
+        inspection = compact_inspection_context(
+            messages, self.archive,
+            sum(len(item["preview"]) for item in previews if item["tool"] in INSPECTION_TOOLS))
+        self.trace("inspection_context", **inspection)
         messages.append(ModelRequest(parts=[UserPromptPart("Supervisor task state: " + snapshot)],
                                      metadata={"arlo_task_snapshot": True}))
         request_context.messages = messages

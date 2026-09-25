@@ -27,6 +27,7 @@ from .identity import get_assistant
 
 
 import ast
+import hashlib
 import json
 import logging
 import subprocess
@@ -41,11 +42,60 @@ READ_CODE_MAX_LINES = 160
 LIST_CODE_MAX_ENTRIES = 200
 INSPECTION_CONTEXT_CHARACTERS = 20000
 SEARCH_CODE_MAX_RESULTS = 20
+INSPECTION_TOOLS = frozenset(("read_code", "search_code", "list_code"))
 
 
 @dataclass
 class InspectionContextBudget:
-    remaining: int = INSPECTION_CONTEXT_CHARACTERS
+    resident_characters: int = 0
+
+    def compact(self, messages, archive, preview_characters=0):
+        self.resident_characters = preview_characters
+        retained = {}
+        archived = []
+        reused = []
+        source_characters = 0
+        arguments = {}
+        for message in messages:
+            for part in message.parts:
+                if part.part_kind == "tool-call" and part.tool_name in INSPECTION_TOOLS:
+                    try:
+                        arguments[part.tool_call_id] = part.args_as_dict()
+                    except (ValueError, TypeError, AssertionError):
+                        arguments[part.tool_call_id] = {}
+        for message in reversed(messages):
+            for part in reversed(message.parts):
+                if (part.part_kind != "tool-return" or part.tool_name not in INSPECTION_TOOLS
+                        or not isinstance(part.content, str)):
+                    continue
+                content = part.content
+                if content.startswith(("Archived source evidence:", "Source evidence reused from")):
+                    continue
+                source_characters += len(content)
+                payload = (content.split("\n\n", 1)[-1]
+                           if content.startswith(("Source:", "Source listing:")) else content)
+                args = arguments.get(part.tool_call_id, {})
+                location = args.get("path", args.get("directory", "."))
+                try:
+                    location = str(_path(location)).casefold()
+                except (OSError, ValueError):
+                    location = str(location)
+                key = (part.tool_name, location, hashlib.sha256(payload.encode("utf-8")).hexdigest())
+                if key in retained:
+                    part.content = f"Source evidence reused from tool call {retained[key]}."
+                    reused.append(part.tool_call_id)
+                elif self.resident_characters + len(content) <= INSPECTION_CONTEXT_CHARACTERS:
+                    retained[key] = part.tool_call_id
+                    self.resident_characters += len(content)
+                else:
+                    part.content = "Archived source evidence: " + archive(
+                        json.dumps(content, ensure_ascii=False), f"Source evidence {part.tool_call_id}")
+                    archived.append(part.tool_call_id)
+        return {"limit": INSPECTION_CONTEXT_CHARACTERS,
+                "source_characters_before": source_characters,
+                "resident_characters": self.resident_characters,
+                "preview_characters": preview_characters,
+                "retained": list(retained.values()), "archived": archived, "reused": reused}
 
 
 _inspection_budget = ContextVar("inspection_context_budget", default=None)
@@ -103,26 +153,15 @@ def _clear_edit_failures(path: str) -> None:
             del state.failures[key]
 
 
-INSPECTION_BUDGET_EXHAUSTED = (
-    "INSPECTION_BUDGET_EXHAUSTED: No inspection context remains for this turn. "
-    "Do not retry read_code, search_code, or list_code with different ranges, "
-    "offsets, paths, or queries to obtain more source. Use the source evidence "
-    "already collected. If required evidence is still missing, state that it "
-    "could not be verified."
-)
-
-
-def _inspection_budget_exhausted() -> bool:
-    budget = _inspection_budget.get()
-    return budget is not None and budget.remaining <= 0
-
-def _claim_inspection_characters(requested: int) -> int:
+def compact_inspection_context(messages, archive, preview_characters=0):
     budget = _inspection_budget.get()
     if budget is None:
-        return min(requested, READ_CODE_MAX_CHARACTERS)
-    claimed = min(requested, READ_CODE_MAX_CHARACTERS, budget.remaining)
-    budget.remaining -= claimed
-    return claimed
+        budget = InspectionContextBudget()
+    return budget.compact(messages, archive, preview_characters)
+
+
+def _inspection_allowance(requested: int) -> int:
+    return min(requested, READ_CODE_MAX_CHARACTERS)
 
 
 def _source_index(path: str, content: str) -> str:
@@ -183,13 +222,10 @@ def get_repo() -> str:
 def list_code(directory: str = ".", recursive: bool = False,
               suffix: str = "", offset: int = 0,
               limit: int = LIST_CODE_MAX_ENTRIES) -> str:
-    """List source entries with bounded pagination within the per-turn inspection budget.
-    If INSPECTION_BUDGET_EXHAUSTED is returned, do not retry source-inspection tools
-    with different arguments; continue from existing evidence.
+    """List source entries with bounded pagination in the working inspection context.
+    Reuse existing evidence. Older results may be archived to make room for new evidence.
     """
     from .brain import list_files
-    if _inspection_budget_exhausted():
-        return INSPECTION_BUDGET_EXHAUSTED
     try:
         if offset < 0 or limit < 1:
             raise ValueError("offset must be non-negative and limit must be positive")
@@ -198,7 +234,7 @@ def list_code(directory: str = ".", recursive: bool = False,
         entries = result.splitlines()
         bounded_limit = min(limit, LIST_CODE_MAX_ENTRIES)
         requested = "\n".join(entries[offset:offset + bounded_limit])
-        allowance = _claim_inspection_characters(len(requested))
+        allowance = _inspection_allowance(len(requested))
         if (offset == 0 and len(entries) <= bounded_limit
                 and allowance == len(result)):
             return result
@@ -214,7 +250,7 @@ def list_code(directory: str = ".", recursive: bool = False,
         header = (f"Source listing: {directory}; entries {offset + 1}-{end} "
                   f"of {len(entries)}.")
         if not selected:
-            return INSPECTION_BUDGET_EXHAUSTED
+            return f"No source entries at offset {offset}."
         elif end < len(entries):
             header += (" Continue with list_code(directory="
                        f"{directory!r}, recursive={recursive!r}, suffix={suffix!r}, "
@@ -240,13 +276,10 @@ def search_code(query: str, directory: str = ".",
     them.
     Returns bounded matching paths, line numbers and source lines. Use this
     to locate relevant source before read_code(). This searches source files,
-    not conversation history or long-term memory. Inspection context is finite
-    for each turn. If INSPECTION_BUDGET_EXHAUSTED is returned, do not retry
-    source-inspection tools with different arguments; continue from existing
-    evidence and mark anything still unverified explicitly.
+    not conversation history or long-term memory. Reuse existing evidence;
+    older results may be archived to make room for new evidence. Avoid repeating
+    equivalent searches without new information.
     """
-    if _inspection_budget_exhausted():
-        return INSPECTION_BUDGET_EXHAUSTED
     try:
         query = query.strip()
         if not query:
@@ -302,20 +335,17 @@ def search_code(query: str, directory: str = ".",
                 query,
                 directory)
             return (
-                f"No source matches found for {query!r}. "
+                "No source matches found. "
                 "Search is plain text, not regex. Try a concrete symbol, "
                 "identifier, or a few relevant terms.")
 
         output = "\n".join(matches)
-        allowance = _claim_inspection_characters(len(output))
-
-        if allowance == 0:
-            return INSPECTION_BUDGET_EXHAUSTED
+        allowance = _inspection_allowance(len(output))
 
         if allowance < len(output):
             output = output[:allowance]
             output += (
-                "\nResults truncated by the remaining inspection context budget. "
+                "\nResults truncated by the per-call inspection limit. "
                 "Use the returned matches selectively.")
 
         logging.getLogger("arlo.context").info(
@@ -337,17 +367,13 @@ def search_code(query: str, directory: str = ".",
 
 def read_code(path: str, start_line: int = 1, end_line: int = 0,
               character_offset: int = 0) -> str:
-    """Inspect a bounded source range within the per-turn inspection budget.
+    """Inspect a bounded source range in the working inspection context.
     Use search_code() first to locate relevant symbols and request only the
-    necessary ranges. Inspection context is finite for each turn. If the tool
-    reports INSPECTION_BUDGET_EXHAUSTED, do not retry source-inspection tools
-    with other ranges or queries; continue from existing evidence and mark
-    anything still unverified explicitly.
+    necessary ranges. Reuse existing evidence; older results may be archived
+    to make room for new evidence. Do not repeatedly read unchanged ranges.
     """
     from .brain import decode_text
 
-    if _inspection_budget_exhausted():
-        return INSPECTION_BUDGET_EXHAUSTED
     try:
         if start_line < 1 or end_line < 0 or character_offset < 0:
             raise ValueError("line numbers and character_offset cannot be negative")
@@ -360,12 +386,10 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
         if (start_line == 1 and not end_line and character_offset == 0
                 and len(result) > READ_CODE_MAX_CHARACTERS):
             index = _source_index(path, result)
-            allowance = _claim_inspection_characters(len(index))
-            if allowance == 0:
-                return INSPECTION_BUDGET_EXHAUSTED
-            output = index[:allowance]
+            output = (index or result)[:READ_CODE_MAX_CHARACTERS]
+            allowance = len(output)
             if allowance < len(index):
-                output += "\nIndex truncated by the remaining inspection context budget."
+                output += "\nIndex truncated by the per-call inspection limit."
             logging.getLogger("arlo.context").info(
                 "Indexed read_code source=%s total_lines=%d total_bytes=%d "
                 "returned_bytes=%d",
@@ -378,10 +402,10 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
         bounded_end = min(requested_end, total_lines,
                           start_line + READ_CODE_MAX_LINES - 1)
         block = "".join(lines[start_line - 1:bounded_end])
-        allowance = _claim_inspection_characters(
+        allowance = _inspection_allowance(
             max(0, len(block) - character_offset))
         if allowance == 0:
-            return INSPECTION_BUDGET_EXHAUSTED
+            return f"No source characters at offset {character_offset} in this range."
         if (start_line == 1 and not end_line and character_offset == 0
                 and len(result) <= READ_CODE_MAX_CHARACTERS
                 and allowance == len(result)):
@@ -394,23 +418,13 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
             f"file characters={len(result)}."
         )
         if next_character < len(block):
-            if _inspection_budget_exhausted():
-                header += (
-                    " Inspection context budget exhausted after this partial range. "
-                    "Do not request another source range this turn.")
-            else:
-                header += (
-                    " Continue this range with read_code(path="
-                    f"{path!r}, start_line={start_line}, end_line={bounded_end}, "
-                    f"character_offset={next_character})."
-                )
+            header += (
+                " Continue this range with read_code(path="
+                f"{path!r}, start_line={start_line}, end_line={bounded_end}, "
+                f"character_offset={next_character})."
+            )
         elif bounded_end < total_lines:
-            if _inspection_budget_exhausted():
-                header += (
-                    " Inspection context budget exhausted after this range. "
-                    "Do not request another source range this turn.")
-            else:
-                header += f" Continue with read_code(path={path!r}, start_line={bounded_end + 1})."
+            header += f" Continue with read_code(path={path!r}, start_line={bounded_end + 1})."
         output = header + "\n\n" + chunk
         logging.getLogger("arlo.context").info(
             "Bounded read_code source=%s total_lines=%d total_bytes=%d "
