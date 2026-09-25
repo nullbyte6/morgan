@@ -4,8 +4,11 @@ import asyncio
 import copy
 import hashlib
 import json
+import logging
 import re
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic_ai.capabilities import AbstractCapability
@@ -102,6 +105,11 @@ class TaskState:
     last_progress_request: int = 0
     tool_attempts: int = 0
     information_gain_ratio: float = 0.2
+    trace: object = field(default=None, repr=False)
+
+    def record(self, event, **details):
+        if self.trace is not None:
+            self.trace(event, **details)
 
     def mark_progress(self):
         self.last_progress = self.sequence
@@ -139,10 +147,26 @@ class TaskState:
         else:
             useful = information_progress if self.phase == "inspect" else novel and not failed
             self.stagnant = 0 if useful else self.stagnant + 1
+        self.record("observation", call_id=call_id, tool=name, arguments=arguments,
+                    result=result, failed=failed, novel=novel, units=len(units),
+                    gained=len(gained), information_progress=information_progress,
+                    progress_accepted=self.phase == "inspect" and information_progress,
+                    reason=("failed" if failed else "inspection_information_gain"
+                            if self.phase == "inspect" and information_progress else
+                            "insufficient_information_gain" if self.phase == "inspect" else
+                            "awaiting_verified_checkpoint"))
         self.assess()
         return item
 
-    def assess(self):
+    def assess(self, *, allow_block=False):
+        self.record("assessment", allow_block=allow_block, triggers={
+            "stagnant": self.stagnant >= self.idle_window,
+            "tools_since_progress": self.sequence - self.last_progress >= self.progress_window,
+            "requests_since_progress": self.requests - self.last_progress_request >= self.progress_window},
+            recovery_requests=(None if self.recovery_offered_at is None else
+                               self.requests - (self.recovery_started_at if self.recovery_started_at is not None
+                                                else self.recovery_offered_at)),
+            recovery_tools=self.sequence - self.recovery_sequence)
         stalled = (self.stagnant >= self.idle_window
                    or self.sequence - self.last_progress >= self.progress_window
                    or self.requests - self.last_progress_request >= self.progress_window)
@@ -155,13 +179,15 @@ class TaskState:
             self.notice = ("Progress checkpoint required. Reuse collected evidence, stop equivalent "
                            "attempts, and choose a materially different strategy. Move from inspection "
                            "to execution or verification. A new strategy alone is not progress.")
-        elif self.recovery_offered_at is not None and (
+            self.record("recovery_required")
+        elif allow_block and self.recovery_offered_at is not None and (
                 self.requests - (self.recovery_started_at if self.recovery_started_at is not None
                                  else self.recovery_offered_at) >= self.idle_window
                 or (self.recovery_started_at is not None
                     and self.sequence - self.recovery_sequence >= self.idle_window)):
             self.status = "blocked"
             self.notice = "No verified progress after the opportunity to change strategy. User input is required."
+            self.record("blocked")
 
     def checkpoint(self, phase, criteria, completed, decisions, strategy, resolves):
         if self.status == "blocked":
@@ -208,11 +234,6 @@ class TaskState:
         self.phase = phase
         self.unresolved.difference_update({ref for ref in self.unresolved
                                           if self.evidence[ref].tool == "task_checkpoint"})
-        if (self.recovery_offered_at is not None and self.recovery_started_at is None
-                and " ".join(self.strategy.casefold().split())
-                != " ".join(self.recovery_strategy.casefold().split())):
-            self.recovery_started_at = self.requests
-            self.recovery_sequence = self.sequence
         if advanced:
             self.mark_progress()
         self.status = "complete" if self.complete() else "active"
@@ -241,6 +262,8 @@ class TaskControl(AbstractCapability):
         super().__init__()
         self.state = TaskState(objective)
         self.context = context
+        self.trace_path = context.directory / f"task-control-{uuid.uuid4().hex}.jsonl"
+        self.state.trace = self.trace
         self.cancel_event = cancel_event
         self.on_progress = on_progress
         self.messages = []
@@ -250,6 +273,20 @@ class TaskControl(AbstractCapability):
         self.context_characters = 48000
         self.toolset = FunctionToolset()
         self.toolset.add_function(self.task_checkpoint, sequential=True)
+        self.trace("start")
+
+    def trace(self, event, **details):
+        state = {key: value for key, value in vars(self.state).items()
+                 if key not in ("trace", "seen", "information_seen", "used_evidence", "evidence")}
+        state["unresolved"] = sorted(self.state.unresolved)
+        state["evidence"] = [vars(item) for item in self.state.evidence.values()]
+        try:
+            self.trace_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.trace_path.open("a", encoding="utf-8") as stream:
+                stream.write(encoded({"time": datetime.now(timezone.utc).isoformat(),
+                                      "event": event, "state": state, **details}) + "\n")
+        except OSError:
+            logging.getLogger("arlo.task_control").exception("Cannot write task trace %s", self.trace_path)
 
     def get_toolset(self):
         return self.toolset
@@ -281,6 +318,8 @@ class TaskControl(AbstractCapability):
         before = self.state.last_progress_request
         result = self.state.checkpoint(phase, criteria, completed or {}, decisions or [],
                                        strategy, resolves or [])
+        self.trace("checkpoint", phase=phase, criteria=criteria, completed=completed,
+                   decisions=decisions, strategy=strategy, resolves=resolves, result=result)
         if not self.state.notice:
             self.last_notice = ""
         if self.on_progress and self.state.last_progress_request != before:
@@ -298,7 +337,15 @@ class TaskControl(AbstractCapability):
 
     async def execute(self, name, arguments, call_id, handler):
         async with self.tool_lock:
-            return await self._execute(name, arguments, call_id, handler)
+            self.trace("tool_attempt", tool=name, arguments=arguments, call_id=call_id)
+            try:
+                result = await self._execute(name, arguments, call_id, handler)
+            except BaseException as error:
+                self.trace("tool_exception", tool=name, call_id=call_id, error=str(error))
+                raise
+            self.trace("tool_return", tool=name, call_id=call_id,
+                       handler_observed=call_id in self.state.evidence, result=getattr(result, "return_value", result))
+            return result
 
     async def _execute(self, name, arguments, call_id, handler):
         self.check_cancelled()
@@ -312,9 +359,11 @@ class TaskControl(AbstractCapability):
         if not self.state.criteria:
             self.state.stagnant += 1
             return {"error": "Call task_checkpoint with acceptance criteria and phase before tools."}
-        if self.state.notice and (self.state.recovery_offered_at is None
-                                  or self.state.recovery_started_at is None):
-            return {"error": "Use task_checkpoint to choose a different strategy before more tools."}
+        if self.state.recovery_offered_at is not None and self.state.recovery_started_at is None:
+            self.state.recovery_started_at = self.state.requests
+            self.state.recovery_sequence = self.state.sequence
+            self.trace("recovery_execution_started", tool=name, call_id=call_id)
+        self.trace("tool_handler_started", tool=name, call_id=call_id)
         result = await handler(arguments)
         self.state.observe(name, arguments, result, call_id)
         self.check_cancelled()
@@ -377,7 +426,8 @@ class TaskControl(AbstractCapability):
         self.check_cancelled()
         self.messages = ctx.messages
         self.state.requests += 1
-        self.state.assess()
+        self.trace("before_model_request")
+        self.state.assess(allow_block=True)
         if self.state.status == "blocked":
             raise TaskStopped(self.state.notice)
         if self.state.recovery_at is not None and self.state.recovery_offered_at is None:
@@ -402,10 +452,19 @@ class TaskControl(AbstractCapability):
         messages.append(ModelRequest(parts=[UserPromptPart("Supervisor task state: " + snapshot)],
                                      metadata={"arlo_task_snapshot": True}))
         request_context.messages = messages
+        self.trace("request_ready", supervisor_snapshot=snapshot)
         return request_context
+
+    async def after_model_request(self, ctx, *, request_context, response):
+        self.trace("model_response", model=response.model_name, finish_reason=response.finish_reason,
+                   parts=[vars(part) for part in response.parts
+                          if part.part_kind in ("text", "tool-call")], usage=vars(response.usage))
+        return response
 
     def accept_output(self):
         self.check_cancelled()
+        self.trace("output_assessment", accepted=(not self.state.criteria and not self.state.tool_attempts)
+                   or self.state.complete())
         if not self.state.criteria and not self.state.tool_attempts:
             self.state.status = "complete"
             return True
