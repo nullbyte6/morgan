@@ -742,9 +742,11 @@ class Assistant:
                 raise
 
         from src.init.attachments import active_attachments
+        from src.init.self_code import inspection_context_scope
         attachment_token = active_attachments.set(attachments)
         try:
-            with session.memory_scope() if session is not None else nullcontext():
+            with (session.memory_scope() if session is not None else nullcontext(),
+                  inspection_context_scope()):
                 if event_loop is None:
                     asyncio.run(run())
                 else:

@@ -25,13 +25,43 @@ from .identity import get_assistant
 import json
 import logging
 import subprocess
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from src.init.visuals.browser_bridge import open_embedded_url
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-READ_CODE_MAX_CHARACTERS = 4000
+READ_CODE_MAX_CHARACTERS = 3000
 READ_CODE_MAX_LINES = 160
 LIST_CODE_MAX_ENTRIES = 200
+INSPECTION_CONTEXT_CHARACTERS = 24000
+
+
+@dataclass
+class InspectionContextBudget:
+    remaining: int = INSPECTION_CONTEXT_CHARACTERS
+
+
+_inspection_budget = ContextVar("inspection_context_budget", default=None)
+
+
+@contextmanager
+def inspection_context_scope():
+    token = _inspection_budget.set(InspectionContextBudget())
+    try:
+        yield
+    finally:
+        _inspection_budget.reset(token)
+
+
+def _claim_inspection_characters(requested: int) -> int:
+    budget = _inspection_budget.get()
+    if budget is None:
+        return min(requested, READ_CODE_MAX_CHARACTERS)
+    claimed = min(requested, READ_CODE_MAX_CHARACTERS, budget.remaining)
+    budget.remaining -= claimed
+    return claimed
 
 
 def _path(path):
@@ -77,12 +107,24 @@ def list_code(directory: str = ".", recursive: bool = False,
                             suffix=suffix)
         entries = result.splitlines()
         bounded_limit = min(limit, LIST_CODE_MAX_ENTRIES)
-        if offset == 0 and len(entries) <= bounded_limit:
+        requested = "\n".join(entries[offset:offset + bounded_limit])
+        allowance = _claim_inspection_characters(len(requested))
+        if (offset == 0 and len(entries) <= bounded_limit
+                and allowance == len(result)):
             return result
-        selected = entries[offset:offset + bounded_limit]
+        selected = []
+        selected_characters = 0
+        for entry in entries[offset:offset + bounded_limit]:
+            added = len(entry) + int(bool(selected))
+            if selected_characters + added > allowance:
+                break
+            selected.append(entry)
+            selected_characters += added
         end = offset + len(selected)
         header = (f"Source listing: {directory}; entries {offset + 1}-{end} "
                   f"of {len(entries)}.")
+        if not selected:
+            header += " Inspection context budget exhausted for this turn."
         if end < len(entries):
             header += (" Continue with list_code(directory="
                        f"{directory!r}, recursive={recursive!r}, suffix={suffix!r}, "
@@ -115,10 +157,13 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
         bounded_end = min(requested_end, total_lines,
                           start_line + READ_CODE_MAX_LINES - 1)
         block = "".join(lines[start_line - 1:bounded_end])
+        allowance = _claim_inspection_characters(
+            max(0, len(block) - character_offset))
         if (start_line == 1 and not end_line and character_offset == 0
-                and len(result) <= READ_CODE_MAX_CHARACTERS):
+                and len(result) <= READ_CODE_MAX_CHARACTERS
+                and allowance == len(result)):
             return result
-        chunk = block[character_offset:character_offset + READ_CODE_MAX_CHARACTERS]
+        chunk = block[character_offset:character_offset + allowance]
         next_character = character_offset + len(chunk)
         header = (
             f"Source: {path}; lines {start_line}-{bounded_end} of {total_lines}; "
@@ -133,6 +178,8 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
             )
         elif bounded_end < total_lines:
             header += f" Continue with read_code(path={path!r}, start_line={bounded_end + 1})."
+        if not chunk:
+            header += " Inspection context budget exhausted for this turn."
         output = header + "\n\n" + chunk
         logging.getLogger("arlo.context").info(
             "Bounded read_code source=%s total_lines=%d total_bytes=%d "
