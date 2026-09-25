@@ -18,6 +18,10 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Access the assistant's own checkout independently of the user's working directory."""
 
+from PIL.PdfParser import decode_text
+
+from requests.packages import target
+
 from src.init.lang import tr
 from .identity import get_assistant
 
@@ -35,7 +39,7 @@ from src.init.paths import ARLO_ROOT
 READ_CODE_MAX_CHARACTERS = 3000
 READ_CODE_MAX_LINES = 160
 LIST_CODE_MAX_ENTRIES = 200
-INSPECTION_CONTEXT_CHARACTERS = 32000
+INSPECTION_CONTEXT_CHARACTERS = 20000
 SEARCH_CODE_MAX_RESULTS = 20
 
 
@@ -340,7 +344,8 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
     with other ranges or queries; continue from existing evidence and mark
     anything still unverified explicitly.
     """
-    from .brain import read_file
+    from .brain import decode_text
+
     if _inspection_budget_exhausted():
         return INSPECTION_BUDGET_EXHAUSTED
     try:
@@ -348,7 +353,8 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
             raise ValueError("line numbers and character_offset cannot be negative")
         if end_line and end_line < start_line:
             raise ValueError("end_line cannot be before start_line")
-        result = read_file(str(_path(path)))
+        target = _path(path)
+        result, _ = decode_text(target.read_bytes())
         lines = result.splitlines(keepends=True)
         total_lines = len(lines)
         if (start_line == 1 and not end_line and character_offset == 0

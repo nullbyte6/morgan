@@ -362,6 +362,12 @@ def read_file(path: str) -> str:
     """Read a text file while detecting UTF-8, UTF-16 or Windows-1252."""
     try:
         file_path = resolve_safe_path(path)
+        if _is_arlo_source_path(file_path):
+            return (
+                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                "Use search_code/read_code for source inspection. "
+                "Do not retry read_file for this path.")
+        
         from .attachments import active_attachments
         attachments = active_attachments.get()
         if attachments is not None:
@@ -382,6 +388,11 @@ def create_file(path: str, content: str = "", encoding: str = "utf-8") -> str:
     """Create a new text file and fail rather than overwrite an existing file."""
     try:
         file_path = resolve_safe_path(path)
+        if _is_arlo_source_path(file_path):
+            return (
+                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                "Use edit_code to modify Arlo source. "
+                "Do not retry create_file for this path.")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("x", encoding=encoding) as file:
             file.write(content)
@@ -396,6 +407,11 @@ def write_file(path: str, content: str) -> str:
     """Create or completely overwrite a UTF-8 text file."""
     try:
         file_path = resolve_safe_path(path)
+        if _is_arlo_source_path(file_path):
+            return (
+                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                "Use edit_code to modify Arlo source. "
+                "Do not retry write_file for this path.")
         atomic_write_bytes(file_path, content.encode("utf-8"))
         return tr('brain.file_written', file_path=file_path)
     except Exception as error:
@@ -412,6 +428,11 @@ def edit_file(path: str, content: str) -> str:
     """
     try:
         file_path = resolve_safe_path(path)
+        if _is_arlo_source_path(file_path):
+            return (
+                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                "Use edit_code to modify Arlo source. "
+                "Do not retry edit_file for this path.")
         if not file_path.exists():
             return tr('brain.file_does_not_exist', file_path=file_path)
         if not file_path.is_file():
@@ -427,6 +448,11 @@ def append_file(path: str, content: str) -> str:
     """Append text to a file, preserving its existing text encoding."""
     try:
         file_path = resolve_safe_path(path)
+        if _is_arlo_source_path(file_path):
+            return (
+                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                "Use edit_code to modify Arlo source. "
+                "Do not retry append_file for this path.")
         file_path.parent.mkdir(parents=True, exist_ok=True)
         encoding = "utf-8"
         if file_path.exists():
@@ -444,6 +470,11 @@ def replace_in_file(path: str, old_text: str, new_text: str) -> str:
     """Replace matching text in an existing file without changing its encoding."""
     try:
         file_path = resolve_safe_path(path)
+        if _is_arlo_source_path(file_path):
+            return (
+                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                "Use edit_code to modify Arlo source. "
+                "Do not retry replace_in_file for this path.")
         if not file_path.exists():
             return tr('brain.file_does_not_exist', file_path=file_path)
         if not file_path.is_file():
@@ -647,6 +678,11 @@ def write_binary_file(path: str, base64_content: str,
     """Create a binary file from Base64; set overwrite only for an existing file."""
     try:
         file_path = resolve_safe_path(path)
+        if _is_arlo_source_path(file_path):
+            return (
+                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                "Use edit_code to modify Arlo source. "
+                "Do not retry write_binary_file for this path.")
         already_exists = file_path.exists()
         if already_exists and not overwrite:
             return tr('brain.file_already_exists_e61309', file_path=file_path)
@@ -1570,11 +1606,18 @@ def list_media_sessions() -> str:
 def resolve_safe_path(path: str) -> Path:
     return Path(path).expanduser().resolve()
 
-
 def resolve_entry_path(path: str) -> Path:
     """Resolve a directory entry without following its final symbolic link."""
     return Path(os.path.abspath(Path(path).expanduser()))
 
+def _is_arlo_source_path(path: Path) -> bool:
+    from src.init.paths import ARLO_ROOT
+
+    try:
+        path.resolve().relative_to(ARLO_ROOT.resolve())
+        return True
+    except ValueError:
+        return False
 
 def decode_text(data: bytes) -> tuple[str, str]:
     """Decode common Windows text formats and return text plus its encoding."""

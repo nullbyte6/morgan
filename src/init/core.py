@@ -701,7 +701,17 @@ class Assistant:
                         response.finish_reason)
                 if text_call is None:
                     turn_messages.extend(new_messages)
+                    consecutive_length_finishes = 0
                     if result.response.finish_reason == "length":
+                        consecutive_length_finishes += 1
+
+                        if consecutive_length_finishes >= 2:
+                            logging.getLogger("arlo.model").warning(
+                                "Stopping continuation after %d consecutive length finishes",
+                                consecutive_length_finishes,
+                            )
+                            break
+                        
                         logging.getLogger("arlo.model").info(
                             "Continuing response after model output limit")
                         conversation_messages.extend(new_messages)
