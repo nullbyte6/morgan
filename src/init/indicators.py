@@ -16,9 +16,9 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-from pathlib import Path
 import subprocess
 import time
+from pathlib import Path
 
 from PySide6.QtCore import *
 from PySide6.QtGui import *
@@ -88,7 +88,6 @@ class PrivacyIndicator(QPushButton):
         self.setObjectName("privacyIndicator")
         self.setText(tr("status.private"))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setAutoRaise(True)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(
             QSizePolicy.Policy.Fixed,
@@ -97,6 +96,6 @@ class PrivacyIndicator(QPushButton):
 
         self.hide()
 
-    def private_toggle(self):
-        self.parent().worker.session.private = False
+    def private_toggle(self, worker):
+        worker.session.private = False
         self.hide()

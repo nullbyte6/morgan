@@ -173,6 +173,10 @@ class ArloWindow(DesktopWindow):
         font = self.send.font()
         font.setPointSize(32 if self.send.text() == "" or "" else 11)
         self.send.setFont(font)
+        self.greeting_key = f"greeting.{random.randrange(6)}"
+
+        self.worker = AssistantWorker(self.startup_greeting, muted=self.muted)
+        register_assistant(lambda: self.worker.assistant)
 
         self.attach = QPushButton("")
         self.directory_indicator = WorkingDirectory(self)
@@ -180,7 +184,8 @@ class ArloWindow(DesktopWindow):
         self.privacy_indicator = PrivacyIndicator(self)
 
         self.privacy_indicator.clicked.connect(
-            self.privacy_indicator.private_toggle)
+            lambda: self.privacy_indicator.private_toggle(self.worker)
+        )
 
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
         self.submitting = None
@@ -193,14 +198,11 @@ class ArloWindow(DesktopWindow):
         self.status = QLabel()
         self.command_output = QPlainTextEdit()
         self.active_language = None
-        self.greeting_key = f"greeting.{random.randrange(6)}"
         self.subtitles = QLabel(self.startup_greeting)
 
         self.orb = Orb(self, fill_ratio=0.54)
         self.orb.set_speech_pulse_enabled(orb_speech_pulse)
 
-        self.worker = AssistantWorker(self.startup_greeting, muted=self.muted)
-        register_assistant(lambda: self.worker.assistant)
         self.capture_handler = self.worker.screenshot_requested.emit
         register_capture_handler(self.capture_handler)
         self.clipboard_handler = self.worker.clipboard_requested.emit
