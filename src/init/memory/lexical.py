@@ -34,6 +34,8 @@ def word_token(db, value):
     tokens = db.execute("SELECT term FROM query_vocab ORDER BY offset").fetchall()
     if len(tokens) != 1:
         raise ValueError("Supply exactly one word; use recall with mode=phrase for phrases")
+    db.execute("DROP TABLE IF EXISTS temp.query_tokens")
+    db.execute("DROP TABLE IF EXISTS temp.query_vocab")
     return tokens[0][0]
 
 

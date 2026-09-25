@@ -199,7 +199,7 @@ class Assistant:
         self.model_settings = {
             "openai_reasoning_effort": "none",
             "temperature": 0.2,
-            "max_tokens": 8192
+            "max_tokens": 16384
         }
 
         self.provider = OllamaProvider(base_url="http://localhost:11434/v1")
