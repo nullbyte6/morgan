@@ -413,17 +413,20 @@ class Orb(QWidget):
 
         spectrum_path = QPainterPath()
         band_count = len(self.smoothed)
+        band_order = []
+        for band in range((band_count + 1) // 2):
+            band_order.append(band)
+            opposite_band = band_count - 1 - band
+            if opposite_band != band:
+                band_order.append(opposite_band)
         for index in range(points + 1):
-            circular_position = index / points * 2.0
-            if circular_position > 1.0:
-                circular_position = 2.0 - circular_position
-            position = circular_position * (band_count - 1)
-            band = min(band_count - 1, int(position))
+            position = index / points * band_count
+            slot = int(position) % band_count
             fraction = position - int(position)
             fraction = fraction * fraction * (3.0 - 2.0 * fraction)
-            next_band = min(band_count - 1, band + 1)
-            level = (self.smoothed[band] * (1.0 - fraction)
-                     + self.smoothed[next_band] * fraction)
+            next_slot = (slot + 1) % band_count
+            level = (self.smoothed[band_order[slot]] * (1.0 - fraction)
+                     + self.smoothed[band_order[next_slot]] * fraction)
             energy = min(1.0, level * self.spectrum_sensitivity)
             radius = (self.spectrum_radius
                       + energy ** 0.72 * self.spectrum_deformation)
