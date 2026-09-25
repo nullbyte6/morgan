@@ -30,9 +30,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from src.init.visuals.browser_bridge import open_embedded_url
-from pathlib import Path
+from src.init.paths import ARLO_ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
 READ_CODE_MAX_CHARACTERS = 3000
 READ_CODE_MAX_LINES = 160
 LIST_CODE_MAX_ENTRIES = 200
@@ -100,8 +99,8 @@ def _source_index(path: str, content: str) -> str:
 
 
 def _path(path):
-    target = (ROOT / path).resolve()
-    relative = target.relative_to(ROOT)
+    target = (ARLO_ROOT / path).resolve()
+    relative = target.relative_to(ARLO_ROOT)
     if any(part in (".git", ".venv", "__pycache__") for part in relative.parts):
         raise ValueError(
             tr('self_code.choose_a_source_file_not_git_metadata_or_the_runtime'))
@@ -125,8 +124,12 @@ def get_repo() -> str:
     from .brain import git_status
     from .config import CONFIG_FILE
     return json.dumps(
-        {"repository": str(ROOT), "entrypoint": str(ROOT / "entry" / "desktop.py"),
-         "user_config": str(CONFIG_FILE), "git_status": git_status(str(ROOT))},
+        {
+            "repository": str(ARLO_ROOT),
+            "entrypoint": str(ARLO_ROOT / "entry" / "desktop.py"),
+            "user_config": str(CONFIG_FILE),
+            "git_status": git_status(str(ARLO_ROOT)),
+        },
         ensure_ascii=False)
 
 
@@ -231,7 +234,7 @@ def search_code(query: str, directory: str = ".",
             except (OSError, UnicodeError):
                 continue
 
-            relative = path.relative_to(ROOT)
+            relative = path.relative_to(ARLO_ROOT)
             for line_number, line in enumerate(content.splitlines(), start=1):
                 folded = line.casefold()
 
@@ -398,7 +401,7 @@ def update_repo() -> str:
     from .brain import run_git
     try:
         status = subprocess.run(
-            ["git", "-C", str(ROOT), "status", "--porcelain",
+            ["git", "-C", str(ARLO_ROOT), "status", "--porcelain",
              "--untracked-files=all"],
             capture_output=True, text=True, errors="replace", timeout=15,
         )
@@ -406,7 +409,7 @@ def update_repo() -> str:
             return tr('self_code.error_checking_repository', value0=get_assistant().name, value1=status.stderr.strip())
         if status.stdout.strip():
             return tr('self_code.error_has_local_changes_resolve_them_before_updating', value0=get_assistant().name) + status.stdout.strip()
-        result = run_git(str(ROOT), ["pull", "--ff-only"])
+        result = run_git(str(ARLO_ROOT), ["pull", "--ff-only"])
         return result + tr('self_code.only_files_on_disk_were_updated_if_git_succeeded_restart_to_load', value0=get_assistant().name)
     except (OSError, subprocess.TimeoutExpired) as error:
         return tr('self_code.error_updating_repository', value0=get_assistant().name, error=error)

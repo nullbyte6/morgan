@@ -198,6 +198,7 @@ class Assistant:
         self.model_settings = {
             "openai_reasoning_effort": "none",
             "temperature": 0.2,
+            "max_tokens": 8192
         }
 
         self.provider = OllamaProvider(base_url="http://localhost:11434/v1")
@@ -213,7 +214,7 @@ class Assistant:
 
         self.agent.instructions(self.current_instructions)
         self.agent.instructions(self.current_datetime_instructions)
-        self.agent.instructions(self.working_directory_instructions)
+        self.agent.instructions(self.wd_instructions)
         from src.init.memory.integration import memory_instructions
         self.agent.instructions(memory_instructions)
         self.agent.instructions(
@@ -248,7 +249,7 @@ class Assistant:
                            for function in TOOLS])
                 self.agent.instructions(self.current_instructions)
                 self.agent.instructions(self.current_datetime_instructions)
-                self.agent.instructions(self.working_directory_instructions)
+                self.agent.instructions(self.wd_instructions)
                 from src.init.memory.integration import memory_instructions
                 self.agent.instructions(memory_instructions)
 
@@ -457,9 +458,21 @@ class Assistant:
                 "tool results. Use read_file on a linked artifact when its raw "
                 "contents are needed for the current reasoning.")
 
-    def working_directory_instructions(self) -> str:
+    def wd_instructions(self) -> str:
         from src.init.brain import get_working_directory
-        return f"Current working directory for this turn: {get_working_directory()}"
+        from src.init.paths import ARLO_ROOT
+
+        return (
+            f"Arlo project root: {ARLO_ROOT}\n"
+            f"Current user working directory: {get_working_directory()}\n"
+            "These are separate locations. "
+            "When the user refers to your code, Arlo's code, your source, "
+            "your project, or asks you to inspect or modify yourself, use the "
+            "self-code tools and resolve source paths relative to the Arlo project root. "
+            "For ordinary user file and project operations, use the current working "
+            "directory unless the user provides an explicit path. "
+            "Never assume the current working directory is the Arlo project root."
+        )
 
     def current_datetime_instructions(self) -> str:
         """Provide the actual local date and time on every model run."""
