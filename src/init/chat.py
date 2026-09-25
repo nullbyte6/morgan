@@ -25,13 +25,16 @@ class ChatInput(QTextEdit):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.max_lines = 6
+        self.min_lines = 1
+        self.max_lines = 4
         self.setAcceptRichText(False)
         self.document().setDocumentMargin(0)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
+        # Conectar señales de cambio de contenido para ajustar altura
+        self.textChanged.connect(self.adjust_height)
         self.document().documentLayout().documentSizeChanged.connect(
             self.adjust_height)
         self.adjust_height()
@@ -39,11 +42,15 @@ class ChatInput(QTextEdit):
     def adjust_height(self, *_):
         line_height = self.fontMetrics().lineSpacing()
         content_height = self.document().size().height()
+        
+        # Calcular altura basada en líneas visibles (incluyendo wrapping)
         max_height = self.max_lines * line_height
-
+        
+        # Altura mínima para una línea, máxima para 4 líneas
         height = max(line_height, min(max_height, int(content_height)))
         self.setFixedHeight(height)
 
+        # Scrollbar solo visible cuando hay contenido que excede las 4 líneas
         self.setVerticalScrollBarPolicy(
             Qt.ScrollBarAsNeeded if content_height > max_height
             else Qt.ScrollBarAlwaysOff
