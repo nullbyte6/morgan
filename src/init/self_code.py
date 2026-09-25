@@ -46,14 +46,57 @@ class InspectionContextBudget:
 
 _inspection_budget = ContextVar("inspection_context_budget", default=None)
 
+@dataclass
+class EditAttemptState:
+    failures: dict[tuple[str, str], int]
+
+
+_edit_attempt_state = ContextVar("edit_attempt_state", default=None)
+MAX_EQUIVALENT_EDIT_FAILURES = 2
 
 @contextmanager
 def inspection_context_scope():
-    token = _inspection_budget.set(InspectionContextBudget())
+    budget_token = _inspection_budget.set(InspectionContextBudget())
+    edit_token = _edit_attempt_state.set(EditAttemptState(failures={}))
     try:
         yield
     finally:
-        _inspection_budget.reset(token)
+        _edit_attempt_state.reset(edit_token)
+        _inspection_budget.reset(budget_token)
+
+def _edit_failure_key(path: str, old_text: str) -> tuple[str, str]:
+    import hashlib
+
+    digest = hashlib.sha256(
+        old_text.encode("utf-8", errors="replace")
+    ).hexdigest()
+
+    return path.casefold(), digest
+
+
+def _record_edit_failure(path: str, old_text: str) -> int:
+    state = _edit_attempt_state.get()
+
+    if state is None:
+        return 1
+
+    key = _edit_failure_key(path, old_text)
+    failures = state.failures.get(key, 0) + 1
+    state.failures[key] = failures
+    return failures
+
+
+def _clear_edit_failures(path: str) -> None:
+    state = _edit_attempt_state.get()
+
+    if state is None:
+        return
+
+    normalized = path.casefold()
+
+    for key in tuple(state.failures):
+        if key[0] == normalized:
+            del state.failures[key]
 
 
 INSPECTION_BUDGET_EXHAUSTED = (
@@ -379,18 +422,53 @@ def edit_code(path: str, old_text: str, new_text: str) -> str:
     disk; restart the assistant to activate them reliably. Does not commit or push.
     """
     from .brain import atomic_write_bytes, decode_text
+
     try:
         target = _path(path)
         content, encoding = decode_text(target.read_bytes())
+
         if not old_text or content.count(old_text) != 1:
-            return tr('self_code.error_old_text_must_match_exactly_once_read_the_file_and_use_a_u')
+            failures = _record_edit_failure(path, old_text)
+
+            if failures >= MAX_EQUIVALENT_EDIT_FAILURES:
+                return (
+                    "EDIT_RETRY_BLOCKED: This equivalent edit has already failed "
+                    f"{failures} times for {path!r}. Do not retry this edit or make "
+                    "cosmetic variations of old_text. Use the source evidence already "
+                    "collected and either choose a genuinely different implementation "
+                    "strategy or stop and report the blocker.")
+
+            return (
+                "EDIT_FAILED: old_text must match exactly once. "
+                "Re-read only the smallest necessary source range before retrying. "
+                "Do not retry the same old_text unchanged.")
+
         updated = content.replace(old_text, new_text, 1)
+
         if target.suffix.lower() == ".py":
             compile(updated, str(target), "exec")
+
         atomic_write_bytes(target, updated.encode(encoding))
-        return tr('self_code.updated_restart_to_activate_the_change_no_commit_or_push_perform', target=target, value1=get_assistant().name)
+        _clear_edit_failures(path)
+
+        return tr(
+            'self_code.updated_restart_to_activate_the_change_no_commit_or_push_perform',
+            target=target,
+            value1=get_assistant().name)
+
     except (OSError, ValueError, UnicodeError, SyntaxError) as error:
-        return tr('self_code.error_editing_code', value0=get_assistant().name, error=error)
+        failures = _record_edit_failure(path, old_text)
+
+        if failures >= MAX_EQUIVALENT_EDIT_FAILURES:
+            return (
+                "EDIT_RETRY_BLOCKED: Equivalent edits for "
+                f"{path!r} have failed {failures} times. Stop retrying this operation "
+                f"and report the blocker. Last error: {error}")
+
+        return tr(
+            'self_code.error_editing_code',
+            value0=get_assistant().name,
+            error=error)
 
 
 def update_repo() -> str:
