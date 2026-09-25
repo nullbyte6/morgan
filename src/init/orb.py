@@ -458,7 +458,7 @@ class Orb(QWidget):
         margin = round(min(self.width(), self.height()) / 6)
 
         self.move(
-            area.center().x() - self.width() // 2,
+            area.right() - self.width() - margin + 1,
             area.bottom() - self.height() - margin + 1)
 
     def mousePressEvent(self, event):
