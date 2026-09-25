@@ -129,6 +129,7 @@ class Assistant:
     starts the model or UI."""
     name = "Arlo"
     voice: VoiceClient = None
+    speech_enabled: bool = True
     _instance = None
     _instance_lock = threading.Lock()
     debug_console = None
@@ -478,12 +479,21 @@ class Assistant:
             "without supporting evidence."
         )
 
-
-    def run_desktop_turn(self, prompt: str, history: list, on_chunk=None,
-                         on_audio=None, on_speaking=None, on_subtitle=None,
-                         on_phase=None,
-                         cancel_event=None, event_loop=None, attachments=None,
-                         session=None, audio_input=None):
+    def run_desktop_turn(
+            self,
+            prompt: str,
+            history: list,
+            on_chunk=None,
+            on_audio=None,
+            on_speaking=None,
+            on_subtitle=None,
+            on_phase=None,
+            cancel_event=None,
+            event_loop=None,
+            attachments=None,
+            session=None,
+            audio_input=None, *,
+            speech_enabled: bool = True):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
@@ -519,10 +529,13 @@ class Assistant:
                            ModelResponse(parts=[TextPart(reply)])]
 
         self._initialize_runtime()
-        self.voice.audio_callback = on_audio
-        self.voice.speaking_callback = on_speaking
-        self.voice.subtitle_callback = on_subtitle
-        self.voice.begin_turn()
+
+        if speech_enabled:
+            self.voice.audio_callback = on_audio
+            self.voice.speaking_callback = on_speaking
+            self.voice.subtitle_callback = on_subtitle
+            self.voice.begin_turn()
+
         cancel_event = cancel_event if cancel_event is not None else threading.Event()
         cancellation_token = CancellationToken()
         self._active_cancellation_token = cancellation_token
@@ -536,8 +549,6 @@ class Assistant:
         turn_model = None
         turn_model_settings = {"temperature": brain.load_config()["temperature"]}
         model_prompt = attachments.prompt() if attachments else prompt
-        # Select the audio model only for a turn that actually contains audio.
-        # Looking through history makes a later text turn inherit audio mode.
         voice_model_active = audio_input is not None
         if audio_input is not None:
             model_prompt = [BinaryContent(data=audio_input, media_type="audio/wav")]
@@ -573,11 +584,14 @@ class Assistant:
             def emit_visible(chunk):
                 if not chunk:
                     return
+
                 reply.append(chunk)
                 if on_chunk is not None:
                     on_chunk(chunk)
-                for phrase in buffer.feed(chunk):
-                    self.voice.enqueue(phrase)
+
+                if speech_enabled:
+                    for phrase in buffer.feed(chunk):
+                        self.voice.enqueue(phrase)
 
             async def stream_events(ctx, events):
                 nonlocal stream_messages, text_stream
@@ -709,12 +723,16 @@ class Assistant:
             completed_history = turn_messages
             if session is not None:
                 completed_history = session.context.externalize_messages(completed_history)
-            for phrase in buffer.finish():
-                if not cancel_event.is_set():
-                    self.voice.enqueue(phrase)
-            self.voice.request_done()
-            while not self.voice.is_done():
-                await asyncio.sleep(0.02)
+
+            if speech_enabled:
+                for phrase in buffer.finish():
+                    if not cancel_event.is_set():
+                        self.voice.enqueue(phrase)
+
+                self.voice.request_done()
+
+                while not self.voice.is_done():
+                    await asyncio.sleep(0.02)
 
         async def run():
             task = asyncio.create_task(generate())
@@ -757,7 +775,8 @@ class Assistant:
             self.voice.audio_callback = None
             self.voice.speaking_callback = None
             self.voice.subtitle_callback = None
-            if on_speaking is not None:
+
+            if speech_enabled and on_speaking is not None:
                 on_speaking(False)
 
         text = "".join(reply)

@@ -332,6 +332,7 @@ class AssistantWorker(QObject):
             try:
                 response_title = select_response_surface(
                     prompt, self.assistant.MODEL_NAME)
+
             except Exception:
                 logging.getLogger("arlo.response").exception(
                     "Unable to select response surface; falling back to chat")
@@ -346,6 +347,8 @@ class AssistantWorker(QObject):
                 logging.getLogger("arlo.response").info(
                     "Response workspace result: %s", result)
 
+            speech_enabled = response_title is None
+
             def speaking_changed(speaking):
                 if speaking:
                     audio_lease.yield_to_wake_listener()
@@ -355,16 +358,19 @@ class AssistantWorker(QObject):
                 prompt,
                 self.history,
                 on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),
-                on_audio=lambda samples, rate: self.report_audio(turn_id,
-                                                                 samples, rate),
+                on_audio=lambda samples, rate: self.report_audio(
+                    turn_id, samples, rate),
                 on_speaking=speaking_changed,
                 on_subtitle=lambda text: self.subtitle.emit(turn_id, text),
                 on_phase=lambda phase: self.phase.emit(turn_id, phase),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
-                attachments=attachment_session, session=self.session,
+                attachments=attachment_session,
+                session=self.session,
                 audio_input=(message.audio_wav
-                             if voice_input and not prompt else None))
+                             if voice_input and not prompt else None),
+                speech_enabled=speech_enabled)
+
             self.history[:] = history
             if not self.cancel_event.is_set():
                 audio_lease.reclaim()
