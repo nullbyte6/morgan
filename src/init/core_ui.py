@@ -1339,7 +1339,6 @@ class ArloWindow(DesktopWindow):
             return
 
         self.current_reply += chunk
-        self._stop_response_timer()
         if self.current_response_view is not None:
             self.current_response_view.append_chunk(chunk)
         if not self.speaking:
@@ -1385,7 +1384,7 @@ class ArloWindow(DesktopWindow):
 
     @Slot(str)
     def on_finished(self, reply):
-        self._reset_response_timer()
+        self._stop_response_timer()
         interrupted = self.stopping
         if self.current_response_view is not None:
             self.current_response_view.finish(reply)
