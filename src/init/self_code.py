@@ -22,6 +22,7 @@ from src.init.lang import tr
 from .identity import get_assistant
 
 
+import ast
 import json
 import logging
 import subprocess
@@ -35,7 +36,7 @@ ROOT = Path(__file__).resolve().parents[2]
 READ_CODE_MAX_CHARACTERS = 3000
 READ_CODE_MAX_LINES = 160
 LIST_CODE_MAX_ENTRIES = 200
-INSPECTION_CONTEXT_CHARACTERS = 24000
+INSPECTION_CONTEXT_CHARACTERS = 32000
 
 
 @dataclass
@@ -62,6 +63,26 @@ def _claim_inspection_characters(requested: int) -> int:
     claimed = min(requested, READ_CODE_MAX_CHARACTERS, budget.remaining)
     budget.remaining -= claimed
     return claimed
+
+
+def _source_index(path: str, content: str) -> str:
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return ""
+    entries = []
+
+    def visit(body, prefix=""):
+        for node in body:
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                kind = "class" if isinstance(node, ast.ClassDef) else "function"
+                name = f"{prefix}{node.name}"
+                entries.append(
+                    f"{kind} {name}: lines {node.lineno}-{getattr(node, 'end_lineno', node.lineno)}")
+                visit(node.body, name + ".")
+
+    visit(tree.body)
+    return f"Source index: {path}\n" + "\n".join(entries)
 
 
 def _path(path):
@@ -141,7 +162,7 @@ def list_code(directory: str = ".", recursive: bool = False,
 
 def read_code(path: str, start_line: int = 1, end_line: int = 0,
               character_offset: int = 0) -> str:
-    """Read a bounded source range; use line bounds and character_offset to continue."""
+    """Inspect source. Omit ranges for an index; request only relevant line ranges."""
     from .brain import read_file
     try:
         if start_line < 1 or end_line < 0 or character_offset < 0:
@@ -151,6 +172,19 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
         result = read_file(str(_path(path)))
         lines = result.splitlines(keepends=True)
         total_lines = len(lines)
+        if (start_line == 1 and not end_line and character_offset == 0
+                and len(result) > READ_CODE_MAX_CHARACTERS):
+            index = _source_index(path, result)
+            allowance = _claim_inspection_characters(len(index))
+            output = index[:allowance]
+            if allowance < len(index):
+                output += "\nIndex truncated; request a relevant line range from the entries shown."
+            logging.getLogger("arlo.context").info(
+                "Indexed read_code source=%s total_lines=%d total_bytes=%d "
+                "returned_bytes=%d",
+                path, total_lines, len(result.encode("utf-8")),
+                len(output.encode("utf-8")))
+            return output
         if start_line > max(total_lines, 1):
             raise ValueError(f"start_line exceeds the file's {total_lines} lines")
         requested_end = end_line or min(total_lines, start_line + READ_CODE_MAX_LINES - 1)
@@ -170,7 +204,9 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
             f"characters {character_offset}-{next_character} of {len(block)} in this range; "
             f"file characters={len(result)}."
         )
-        if next_character < len(block):
+        if not chunk:
+            header += " Inspection context budget exhausted for this turn."
+        elif next_character < len(block):
             header += (
                 " Continue this range with read_code(path="
                 f"{path!r}, start_line={start_line}, end_line={bounded_end}, "
@@ -178,8 +214,6 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
             )
         elif bounded_end < total_lines:
             header += f" Continue with read_code(path={path!r}, start_line={bounded_end + 1})."
-        if not chunk:
-            header += " Inspection context budget exhausted for this turn."
         output = header + "\n\n" + chunk
         logging.getLogger("arlo.context").info(
             "Bounded read_code source=%s total_lines=%d total_bytes=%d "
