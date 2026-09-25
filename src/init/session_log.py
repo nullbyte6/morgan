@@ -47,56 +47,7 @@ def open_current_session_log() -> str:
     return open_file(str(_current_session_path))
 
 
-CODE_FENCE = re.compile(
-    r"(?P<indent>^[ \t]{0,3})(?P<fence>`{3,})[ \t]*"
-    r"(?P<language>[A-Za-z0-9_+#.-]+)[^\n]*\n"
-    r"(?P<code>.*?)"
-    r"^[ \t]{0,3}(?P<closing>`{3,})[ \t]*(?:\n|$)",
-    re.MULTILINE | re.DOTALL,
-)
-
-CODE_EXTENSIONS = {
-    "python": ".py",
-    "py": ".py",
-    "javascript": ".js",
-    "js": ".js",
-    "typescript": ".ts",
-    "ts": ".ts",
-    "json": ".json",
-    "html": ".html",
-    "css": ".css",
-    "bash": ".sh",
-    "shell": ".sh",
-    "sh": ".sh",
-    "powershell": ".ps1",
-    "ps1": ".ps1",
-    "batch": ".bat",
-    "bat": ".bat",
-    "cmd": ".cmd",
-    "c": ".c",
-    "cpp": ".cpp",
-    "c++": ".cpp",
-    "h": ".h",
-    "hpp": ".hpp",
-    "java": ".java",
-    "rust": ".rs",
-    "rs": ".rs",
-    "sql": ".sql",
-    "yaml": ".yaml",
-    "yml": ".yml",
-    "xml": ".xml",
-    "toml": ".toml",
-}
-
-ARTIFACT_MIN_BYTES = 2048
 TOOL_ARTIFACT_MIN_BYTES = 4096
-ARTIFACT_FENCE = re.compile(
-    r"(?P<indent>^[ \t]{0,3})(?P<fence>`{3,}|~{3,})[ \t]*"
-    r"(?P<language>[A-Za-z0-9_+#.-]*)[^\n]*\n"
-    r"(?P<code>.*?)"
-    r"^[ \t]{0,3}(?P<closing>`{3,}|~{3,})[ \t]*(?:\n|$)",
-    re.MULTILINE | re.DOTALL,
-)
 
 
 class SessionContext:
@@ -119,23 +70,8 @@ class SessionContext:
             stream.write(content)
         return f"[{label}]({path.as_posix()})"
 
-    def externalize_response(self, text: str) -> str:
-        def replace(match: re.Match[str]) -> str:
-            if (match.group("closing")[0] != match.group("fence")[0]
-                    or len(match.group("closing")) < len(match.group("fence"))):
-                return match.group(0)
-            content = match.group("code")
-            if len(content.encode("utf-8")) < ARTIFACT_MIN_BYTES:
-                return match.group(0)
-            language = match.group("language").casefold()
-            extension = CODE_EXTENSIONS.get(language, ".txt")
-            reference = self._store(content, extension, f"Artifact: {language or 'text'}")
-            return match.group("indent") + reference + "\n"
-
-        return ARTIFACT_FENCE.sub(replace, text)
-
     def externalize_messages(self, messages):
-        from pydantic_ai.messages import TextPart, ToolReturnPart
+        from pydantic_ai.messages import ToolReturnPart
         result = copy.deepcopy(list(messages))
         for message in result:
             for part in message.parts:
@@ -149,51 +85,7 @@ class SessionContext:
                         extension = ".json" if raw.lstrip().startswith(("{", "[")) else ".txt"
                         part.content = self._store(
                             raw, extension, f"Tool result: {part.tool_name}")
-                elif isinstance(part, TextPart):
-                    part.content = self.externalize_response(part.content)
         return result
-
-def extract_code(text: str, log_path: Path) -> str:
-    """Archive fenced code blocks and replace them with Markdown links."""
-    if not text or "```" not in text:
-        return text
-
-    code_dir = log_path.parent / log_path.stem
-    counter = 0
-
-    def replace(match: re.Match[str]) -> str:
-        nonlocal counter
-
-        if len(match.group("closing")) < len(match.group("fence")):
-            return match.group(0)
-
-        language = match.group("language").casefold()
-        extension = CODE_EXTENSIONS.get(language)
-
-        if extension is None:
-            return match.group(0)
-
-        code = match.group("code")
-
-        if not code.strip():
-            return match.group(0)
-
-        counter += 1
-        filename = f"{counter:02d}-{uuid.uuid4().hex[:8]}{extension}"
-        destination = code_dir / filename
-
-        try:
-            code_dir.mkdir(parents=True, exist_ok=True)
-            with destination.open("x", encoding="utf-8", newline="\n") as file:
-                file.write(code)
-
-        except OSError:
-            return match.group(0)
-
-        relative_path = f"{log_path.stem}/{filename}"
-        return f"**({language}):** [{filename}]({relative_path})\n"
-
-    return CODE_FENCE.sub(replace, text)
 
 
 class SessionLog:
@@ -259,7 +151,7 @@ class SessionLog:
             path.unlink()
 
     def write(self, role, text, *, status="completed"):
-        """Append Markdown, archiving supported fenced code blocks."""
+        """Append Markdown while retaining fenced code in the conversation."""
         if self.private:
             return
 
@@ -273,7 +165,6 @@ class SessionLog:
             self._start_day(now)
 
         original = text
-        text = extract_code(text, self.path)
         with self.path.open("a", encoding="utf-8") as log:
             log.write("\n\n")
             source_ref = str(self.path) + "#byte=" + str(log.tell())

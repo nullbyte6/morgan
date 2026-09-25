@@ -363,7 +363,7 @@ class Assistant:
                 "result has opened=true. If launch_requested=true but opened=false, "
                 "explain that the launch could not be confirmed and do not repeat it. "
                 "Conversation messages can contain local artifact links replacing large "
-                "technical blocks. Use read_file on a linked artifact when its raw "
+                "tool results. Use read_file on a linked artifact when its raw "
                 "contents are needed for the current reasoning.")
 
     def working_directory_instructions(self) -> str:

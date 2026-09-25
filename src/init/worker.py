@@ -322,7 +322,6 @@ class AssistantWorker(QObject):
                 if data["status"] == "error":
                     reply += f"\n\n{data.get('error', '')}"
 
-                reply = self.session.context.externalize_response(reply)
                 self.session.context.add_exchange(prompt, reply)
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
