@@ -177,6 +177,10 @@ class ArloWindow(DesktopWindow):
         self.directory_indicator = WorkingDirectory(self)
         self.branch_indicator = GitBranchIndicator(self)
         self.privacy_indicator = PrivacyIndicator(self)
+
+        self.privacy_indicator.clicked.connect(
+            self.privacy_indicator.private_toggle)
+
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
         self.submitting = None
         self.input = ChatInput()

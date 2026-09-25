@@ -87,7 +87,7 @@ class PrivacyIndicator(QToolButton):
         super().__init__(parent)
         self.setObjectName("privacyIndicator")
         self.setText(tr("status.private"))
-        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAutoRaise(True)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(
@@ -95,4 +95,8 @@ class PrivacyIndicator(QToolButton):
             QSizePolicy.Policy.Fixed
         )
 
+        self.hide()
+
+    def private_toggle(self):
+        self.parent().worker.session.private = False
         self.hide()
