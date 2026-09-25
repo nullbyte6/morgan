@@ -18,9 +18,11 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Daily Markdown conversation logs shared by all sessions."""
 
+import copy
+import json
+import logging
 import re
 import uuid
-import logging
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -86,6 +88,71 @@ CODE_EXTENSIONS = {
     "toml": ".toml",
 }
 
+ARTIFACT_MIN_BYTES = 2048
+TOOL_ARTIFACT_MIN_BYTES = 4096
+ARTIFACT_FENCE = re.compile(
+    r"(?P<indent>^[ \t]{0,3})(?P<fence>`{3,}|~{3,})[ \t]*"
+    r"(?P<language>[A-Za-z0-9_+#.-]*)[^\n]*\n"
+    r"(?P<code>.*?)"
+    r"^[ \t]{0,3}(?P<closing>`{3,}|~{3,})[ \t]*(?:\n|$)",
+    re.MULTILINE | re.DOTALL,
+)
+
+
+class SessionContext:
+    """Conversation state and external artifacts for one live session."""
+
+    def __init__(self, session_id: str, directory: Path):
+        self.session_id = session_id
+        self.messages = []
+        self.directory = Path(directory).resolve() / "artifacts" / session_id
+
+    def add_exchange(self, prompt: str, reply: str):
+        from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+        self.messages.extend((ModelRequest(parts=[UserPromptPart(prompt)]),
+                              ModelResponse(parts=[TextPart(reply)])))
+
+    def _store(self, content: str, extension: str, label: str) -> str:
+        self.directory.mkdir(parents=True, exist_ok=True)
+        path = self.directory / f"{uuid.uuid4().hex}{extension}"
+        with path.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(content)
+        return f"[{label}]({path.as_posix()})"
+
+    def externalize_response(self, text: str) -> str:
+        def replace(match: re.Match[str]) -> str:
+            if (match.group("closing")[0] != match.group("fence")[0]
+                    or len(match.group("closing")) < len(match.group("fence"))):
+                return match.group(0)
+            content = match.group("code")
+            if len(content.encode("utf-8")) < ARTIFACT_MIN_BYTES:
+                return match.group(0)
+            language = match.group("language").casefold()
+            extension = CODE_EXTENSIONS.get(language, ".txt")
+            reference = self._store(content, extension, f"Artifact: {language or 'text'}")
+            return match.group("indent") + reference + "\n"
+
+        return ARTIFACT_FENCE.sub(replace, text)
+
+    def externalize_messages(self, messages):
+        from pydantic_ai.messages import TextPart, ToolReturnPart
+        result = copy.deepcopy(list(messages))
+        for message in result:
+            for part in message.parts:
+                if isinstance(part, ToolReturnPart):
+                    if isinstance(part.content, str):
+                        raw = part.content
+                    else:
+                        raw = json.dumps(part.content, ensure_ascii=False, indent=2,
+                                         default=str)
+                    if len(raw.encode("utf-8")) >= TOOL_ARTIFACT_MIN_BYTES:
+                        extension = ".json" if raw.lstrip().startswith(("{", "[")) else ".txt"
+                        part.content = self._store(
+                            raw, extension, f"Tool result: {part.tool_name}")
+                elif isinstance(part, TextPart):
+                    part.content = self.externalize_response(part.content)
+        return result
+
 def extract_code(text: str, log_path: Path) -> str:
     """Archive fenced code blocks and replace them with Markdown links."""
     if not text or "```" not in text:
@@ -133,6 +200,8 @@ class SessionLog:
     def __init__(self, directory=None, *, memory_service=None):
         self.private = False
         self.session_id = uuid.uuid4().hex
+        context_directory = Path(directory) if directory is not None else HOME_PATH / ".log"
+        self.context = SessionContext(self.session_id, context_directory)
         self.started_at = datetime.now().astimezone().isoformat()
         self.last_user_message_id = None
         self.last_user_text = ""
