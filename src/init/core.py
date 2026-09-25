@@ -36,8 +36,8 @@ from src.init.console import DebugConsole
 from src.init.voice_client import VoiceClient
 
 MAX_TOOL_ROUNDS = 12
-MAX_MODEL_REQUESTS = 12
-MAX_TOOL_CALLS = 24
+MAX_MODEL_REQUESTS = 36
+MAX_TOOL_CALLS = 50
 
 def _tool_payload(value, tool_names):
     try:
