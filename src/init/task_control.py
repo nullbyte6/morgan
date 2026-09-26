@@ -153,6 +153,10 @@ class TaskState:
         self.last_progress = self.sequence
         self.last_progress_request = self.requests
         self.stagnant = 0
+
+        if self.recovery_started_at is not None:
+            self.recovery_sequence = self.sequence
+
         self.recovery_at = None
         self.recovery_offered_at = None
         self.recovery_started_at = None
@@ -287,16 +291,23 @@ class TaskState:
                 sequence=self.sequence)
             return
 
-        if not allow_block: return
-        if self.recovery_offered_at is None: return
-        if self.recovery_started_at is None: return
-        if self.sequence > self.recovery_sequence: return
+        if not allow_block:
+            return
+
+        if self.recovery_offered_at is None:
+            return
+
+        if self.recovery_started_at is None:
+            return
+
+        if self.sequence <= self.recovery_sequence:
+            return
 
         self.status = "blocked"
         self.notice = (
-            "The task is blocked because the recovery attempt produced no new "
-            "evidence or verified progress. A different strategy or user "
-            "intervention is required."
+            "The task is blocked because the recovery attempt produced no "
+            "verified progress before stagnating again. A different strategy "
+            "or user intervention is required."
         )
 
         self.record(
