@@ -1614,9 +1614,10 @@ def main():
         main_font = load_font("Inter_24pt-Regular.ttf")
         nerd_font = load_font("JetBrainsMonoNLNerdFontMono-Medium.ttf")
         
-        main_font.setKerning(True)
-        main_font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 96)
-        app.setFont(QFont(main_font, 11))
+        font = QFont(main_font, 11)
+        font.setKerning(True)
+        font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 96)
+        app.setFont(font)
         window = ArloWindow()
         window.show()
         icon_font = QFont(nerd_font, 18)
