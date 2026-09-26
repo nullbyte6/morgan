@@ -474,13 +474,13 @@ class TaskControl(AbstractCapability):
             return await handler(arguments)
 
         if name in INSPECTION_TOOLS:
-            argument_fingerprint = fingerprint(arguments)
-
-            duplicate = next((evidence
-                    for evidence in reversed(self.state.evidence)
+            encoded_arguments = encoded(arguments)
+            duplicate = next(
+                (evidence
+                    for evidence in reversed(list(self.state.evidence.values()))
                     if evidence.tool == name
-                    and evidence.arguments == argument_fingerprint
-                    and evidence.sequence >= self.state.last_change), None)
+                    and evidence.arguments == encoded_arguments
+                    and evidence.sequence >= self.state.last_change),None)
 
             if duplicate is not None:
                 self.trace(
