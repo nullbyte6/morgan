@@ -34,7 +34,7 @@ class MascotSubtitleBubble(QWidget):
     GAP = 3
     PADDING_X = 12
     PADDING_Y = 16
-    RADIUS = 12
+    RADIUS = 24
     ANIMATION_MS = 120
 
     def __init__(self, mascot):

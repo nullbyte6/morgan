@@ -238,9 +238,25 @@ class TaskState:
             self.unresolved.add(call_id)
 
         if self.phase == "inspect":
-            self.stagnant = 0 if information_progress else self.stagnant + 1
+            if information_progress:
+                self.stagnant = 0
+
+                if self.recovery_started_at is not None:
+                    self.recovery_at = None
+                    self.recovery_offered_at = None
+                    self.recovery_started_at = None
+                    self.recovery_sequence = 0
+                    self.recovery_strategy = ""
+                    self.notice = ""
+                    self.record(
+                        "recovery_succeeded",
+                        call_id=call_id,
+                        sequence=self.sequence)
+            else:
+                self.stagnant += 1
         else:
             self.stagnant = 0 if novel and not failed else self.stagnant + 1
+
         self.record(
             "observation",
             call_id=call_id,
