@@ -187,6 +187,7 @@ class TaskState:
                     "digest": digest,
                 },
                 evidence=(call_id,))
+            self.phase = "verify"
 
         if failed and name in MUTATION_TOOLS:
             self.unresolved.add(call_id)
