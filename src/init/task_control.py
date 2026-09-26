@@ -691,3 +691,17 @@ class TaskControl(AbstractCapability):
             return True
 
         return False
+
+    def resume(self, context, cancel_event):
+        self.context = context
+        self.cancel_event = cancel_event
+        self.state.status = "active"
+        self.state.notice = (
+            "This task was interrupted by the user and has now resumed. "
+            "Preserve the existing objective, criteria, evidence, decisions, "
+            "and verified progress. Follow the user's current instruction "
+            "without restarting completed work."
+        )
+
+        self.trace("resumed")
+        return self

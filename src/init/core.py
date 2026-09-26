@@ -144,6 +144,7 @@ class Assistant:
                 instance.audio_model_name = None
                 instance.shutdown_requested = threading.Event()
                 instance._active_cancellation_token = None
+                instance._active_task_controller = None
                 instance.voice = None
                 instance.debug_console = None
                 instance._reload_lock = threading.Lock()
@@ -515,7 +516,6 @@ class Assistant:
                                           ModelResponse, TextPart,
                                           UserPromptPart)
 
-        self.task_state = None
         application = self.application_opening_request(prompt)
         if application is not None and audio_input is None and not attachments:
             from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
@@ -589,7 +589,21 @@ class Assistant:
         import uuid
         task_context = (session.context if session is not None else
                         SessionContext(uuid.uuid4().hex, HOME_PATH / ".log"))
-        controller = TaskControl(prompt, task_context, cancel_event)
+        previous = self._active_task_controller
+        if previous is not None and previous.state.status in {
+            "active",
+            "cancelled"}:
+            controller = previous.resume(
+                prompt=prompt,
+                context=task_context,
+                cancel_event=cancel_event)
+        else:
+            controller = TaskControl(
+                prompt,
+                task_context,
+                cancel_event)
+
+        self._active_task_controller = controller
         self.task_state = controller.state
 
         async def generate():
@@ -869,7 +883,7 @@ class Assistant:
 
         text = "".join(reply)
         if cancel_event.is_set():
-            controller.state.status = "cancelled"
+            controller.state.status = "interrupted"
             if not execution_started:
                 return "", history
             messages = stream_messages or list(history) + [ModelRequest(parts=[UserPromptPart(model_prompt)])]
@@ -900,7 +914,16 @@ class Assistant:
                 "all displayed text was spoken. Tools already started may have completed; "
                 "inspect current state before retrying. Follow the user's next instruction.]")]))
             return text, safe
-        return text, completed_history if completed_history is not None else list(history)
+
+        if controller.state.status == "complete":
+            self._active_task_controller = None
+            self.task_state = None
+
+        return (
+            text,
+            completed_history
+            if completed_history is not None
+            else list(history))
 
     @staticmethod
     def _merge_message_history(history: list, completed_history: list | None) -> list:
