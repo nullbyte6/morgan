@@ -511,6 +511,7 @@ class Assistant:
             from src.init.task_state import normalize_task_title
             controller.state.title = normalize_task_title(task_title)
         self.task_state = controller.state
+        controller.on_action = on_phase
 
         async def generate():
             nonlocal completed_history, stream_messages, execution_started
@@ -539,8 +540,11 @@ class Assistant:
             def emit_step(name, call_id, result, failed=False):
                 if on_phase is None:
                     return
-                evidence = controller.state.evidence.get(call_id)
-                if failed or (evidence is not None and evidence.failed):
+                receipt = controller.receipts.get(call_id, {})
+                evidence = controller.state.evidence.get(receipt.get("evidence_id", call_id))
+                if receipt and not receipt.get("executed") and not receipt.get("control"):
+                    kind = "skipped"
+                elif failed or (evidence is not None and evidence.failed):
                     kind = "failed"
                 elif evidence is not None:
                     kind = evidence.role
@@ -571,8 +575,6 @@ class Assistant:
                         tool_arguments[event.part.tool_call_id] = event.part.args
                         logging.getLogger("arlo.tools").info(
                             "Executing %s (%s)", event.part.tool_name, event.part.tool_call_id)
-                        if on_phase is not None:
-                            on_phase("executing")
                     elif isinstance(event, FunctionToolResultEvent):
                         part = event.part
                         try:
@@ -585,8 +587,6 @@ class Assistant:
                             "Tool result: %s (%s); context_bytes=%d",
                             event.part.tool_name, event.part.tool_call_id,
                             result_bytes)
-                        if on_phase is not None:
-                            on_phase("processing")
                         emit_step(part.tool_name, part.tool_call_id, part.content,
                                   getattr(part, "outcome", None) == "failed"
                                   or part.part_kind == "retry-prompt")
@@ -654,10 +654,10 @@ class Assistant:
                         emit_visible("".join(answer_parts) + visible_output)
                         break
                     current_prompt = (
-                        "The task is not complete. Verify the remaining acceptance criteria and "
-                        "record evidence with task_checkpoint and propose task_finish. For an answer requiring "
-                        "no actions, declare task_finish(direct=True). Use task_defer for a supported "
-                        "external dependency. The current ledger describes unmet obligations.")
+                        "Completion was not accepted. Satisfy these explicit requirements and propose task_finish: "
+                        + json.dumps(controller.state.requirements(), ensure_ascii=False)
+                        + ". The structured task memory retains current coverage, evidence IDs and control errors. "
+                        "Use those IDs for read_only completion; mutations need independent verification.")
                     continue
 
                 name, arguments = text_call
@@ -680,10 +680,9 @@ class Assistant:
 
                 logging.getLogger("arlo.tools").info(
                     "Executing %s (%s)", name, call_part.tool_call_id)
-                if on_phase is not None:
-                    on_phase("executing")
                 tool_output = await controller.invoke(name, arguments, call_part.tool_call_id)
-                evidence = controller.state.evidence.get(call_part.tool_call_id)
+                receipt = controller.receipts.get(call_part.tool_call_id, {})
+                evidence = controller.state.evidence.get(receipt.get("evidence_id", call_part.tool_call_id))
                 outcome = "failed" if evidence is not None and evidence.failed else "success"
                 from pydantic_ai import ToolReturn
                 raw_return = tool_output if isinstance(tool_output, ToolReturn) else None
@@ -694,8 +693,6 @@ class Assistant:
                     tool_return.parts.append(UserPromptPart(raw_return.content))
                 logging.getLogger("arlo.tools").info(
                     "Tool result: %s (%s)", name, call_part.tool_call_id)
-                if on_phase is not None:
-                    on_phase("processing")
                 emit_step(name, call_part.tool_call_id, tool_output, outcome == "failed")
                 new_messages.append(tool_return)
                 original_count = len(result.new_messages())

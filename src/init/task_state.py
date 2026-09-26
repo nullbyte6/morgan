@@ -34,6 +34,12 @@ def fingerprint(value):
     return hashlib.sha256(encoded(value).encode("utf-8")).hexdigest()
 
 
+def control_rejection(reason, field, expected, *, requirements=None, code="invalid_checkpoint"):
+    return {"accepted": False, "outcome": Outcome.REJECTED, "status": "rejected", "code": code,
+            "reason": reason, "field": field, "expected": expected, "recoverable": True,
+            "requirements": requirements or []}
+
+
 class Lifecycle(StrEnum):
     ACTIVE = "active"
     COMPLETE = "complete"
@@ -111,6 +117,10 @@ class TaskState:
     notice: str = ""
     sequence: int = 0
     requests: int = 0
+    inspections: dict = field(default_factory=dict)
+    findings: dict = field(default_factory=dict)
+    restrictions: dict = field(default_factory=dict)
+    last_rejection: dict = field(default_factory=dict)
     trace: object = field(default=None, repr=False)
 
     def record(self, event, **details):
@@ -127,6 +137,10 @@ class TaskState:
             if any(contains(resource, dependency) or contains(dependency, resource)
                    for resource in changed for dependency in criterion.resources):
                 criterion.evidence = []
+        for inspection in self.inspections.values():
+            if any(contains(resource, dependency) or contains(dependency, resource)
+                   for resource in changed for dependency in inspection["resources"]):
+                inspection["current"] = False
         return changed
 
     def observe(self, name, arguments, result, call_id, revisions, *, effectful=False,
@@ -135,19 +149,23 @@ class TaskState:
             return self.evidence[call_id]
         self.sequence += 1
         self.refresh(revisions)
-        affected = list(effect_scope if effect_scope is not None else revisions if uncertain else effects)
+        affected = list(effect_scope if effect_scope is not None else revisions if uncertain else effects) if effectful else []
         item = Evidence(call_id, name, arguments, result.outcome, self.role, self.sequence,
                         datetime.now(timezone.utc).isoformat(), dict(revisions), effectful,
                         fingerprint(result.payload()), result.payload(), affected,
                         not effectful if verification_capable is None else verification_capable)
         self.evidence[call_id] = item
-        if effects or uncertain:
+        if effectful and (effects or uncertain):
             for resource in affected:
                 self.changed_at[resource] = self.sequence
             for criterion in self.criteria.values():
                 if any(contains(resource, dependency) or contains(dependency, resource)
                        for resource in affected for dependency in criterion.resources):
                     criterion.evidence = []
+            for inspection in self.inspections.values():
+                if any(contains(resource, dependency) or contains(dependency, resource)
+                       for resource in affected for dependency in inspection["resources"]):
+                    inspection["current"] = False
             if not ancillary or any(contains(scope, resource) or contains(resource, scope)
                                     for criterion in self.criteria.values()
                                     for resource in criterion.resources for scope in affected):
@@ -156,17 +174,21 @@ class TaskState:
                     obligation_id, call_id, "reconcile" if uncertain else "verify", affected,
                     self.sequence, "Reconcile possible partial effects." if uncertain
                     else "Independently verify the resulting state.")
-        self.record("observation", call_id=call_id, tool=name, arguments=arguments,
-                    result=result.payload(), effects=list(effects), uncertain=uncertain)
+        if item.failed:
+            self.restrictions[fingerprint({"tool": name, "arguments": arguments})] = {
+                "tool": name, "arguments": arguments, "outcome": result.outcome,
+                "code": result.code, "evidence": call_id, "resources": dict(revisions), "detail": result.data}
+        self.record("observation", evidence=asdict(item), uncertain=uncertain)
         return item
 
-    def valid_evidence(self, refs, resources, *, after=0):
+    def valid_evidence(self, refs, resources, *, after=0, inspection=False):
         if not refs or len(set(refs)) != len(refs):
             return False
         observed = set()
         for ref in refs:
             item = self.evidence.get(ref)
-            if item is None or item.failed or not item.verification_capable or item.role != "verify" or item.sequence <= after:
+            if item is None or item.failed or not item.verification_capable or (
+                    not inspection and item.role != "verify") or item.sequence <= after:
                 return False
             if item.effectful and (not resources or any(
                     contains(scope, resource) or contains(resource, scope)
@@ -184,9 +206,9 @@ class TaskState:
         return all(any(contains(scope, resource) for scope in observed) for resource in resources)
 
     def checkpoint(self, role, criteria, verification, completed, decisions, strategy,
-                   resolutions, reopen, kind, resources):
-        def reject(reason):
-            return {"accepted": False, "reason": reason}
+                   resolutions, reopen, kind, resources, findings=()):
+        def reject(reason, field="criteria", expected="A valid task contract"):
+            return control_rejection(reason, field, expected)
 
         if self.status != Lifecycle.ACTIVE:
             return reject("Resume the task before updating its contract.")
@@ -196,7 +218,7 @@ class TaskState:
             return reject("A supervised contract is read_only or mutation.")
         proposed_kind = kind or self.kind
         if proposed_kind is None:
-            return reject("Declare read_only or mutation as the task kind.")
+            return reject("Declare read_only or mutation as the task kind.", "kind", ["read_only", "mutation"])
         if self.kind == "mutation" and proposed_kind != "mutation":
             return reject("A mutation contract cannot be weakened to read_only.")
         if any(not value.strip() for value in criteria) or len(set(criteria)) != len(criteria):
@@ -205,20 +227,23 @@ class TaskState:
             return reject("Retain all original acceptance criteria.")
         proposed = copy.deepcopy(self.criteria)
         declared_resources = list(resources)
-        for contract in verification.values():
+        for key, contract in verification.items():
             if not isinstance(contract, dict) or not isinstance(contract.get("method"), str) or not isinstance(contract.get("resources"), list):
-                return reject("Verification entries require a method string and an explicit resource list.")
+                return reject("Verification entries must be keyed by the exact criterion, without a wrapper.",
+                              "verification." + key, {"method": "Describe the observable check", "resources": []})
             declared_resources.extend(contract["resources"])
         if any(not isinstance(resource, str) or not (
                 resource.startswith("domain:") and resource[7:].strip()
                 or resource.startswith(("file:", "entry:")) and Path(resource.split(":", 1)[1]).is_absolute())
                for resource in declared_resources):
-            return reject("Resources must be domain:name, file:absolute-path or entry:absolute-path identifiers.")
+            return reject("Use resource identifiers, not bare paths, globs or display names.", "verification.resources",
+                          ["file:" + str(Path.cwd() / "src" / "init" / "core.py"), "domain:presentation"])
         for criterion in criteria:
             contract = verification.get(criterion)
             if criterion not in proposed:
                 if not contract or not contract.get("method", "").strip():
-                    return reject("Each new criterion needs an explicit verification method and resource list.")
+                    return reject("Each new criterion needs an explicit verification method and resource list.",
+                                  "verification." + criterion, {"method": "Describe the observable check", "resources": []})
                 proposed[criterion] = Criterion(contract["method"], list(contract.get("resources", [])))
             elif contract:
                 if not contract["method"].strip() or not set(proposed[criterion].resources).issubset(contract["resources"]):
@@ -232,16 +257,27 @@ class TaskState:
         for criterion in reopen:
             proposed[criterion].evidence = []
         for criterion, refs in completed.items():
-            if criterion not in proposed or not self.valid_evidence(refs, proposed[criterion].resources):
-                return reject("Completion requires independent, successful, current verification evidence.")
+            if criterion not in proposed or not self.valid_evidence(refs, proposed[criterion].resources,
+                                                                  inspection=proposed_kind == "read_only"):
+                return reject("Cite successful current observations covering the criterion's resources; effects need independent verification.",
+                              "completed." + criterion, {"evidence_ids": "Successful current call IDs"})
             proposed[criterion].evidence = list(refs)
         obligations = copy.deepcopy(self.obligations)
         for obligation_id, resolution in resolutions.items():
             obligation = obligations.get(obligation_id)
+            if obligation is None:
+                return reject("Resolve only recorded effect obligations. Use completed for acceptance criteria.",
+                              "resolutions." + obligation_id, {"known_obligations": list(obligations)})
             if not isinstance(resolution, dict) or obligation is None or not isinstance(resolution.get("finding"), str) or not resolution["finding"].strip() or not self.valid_evidence(
                     resolution.get("evidence", []), obligation.resources, after=obligation.sequence):
-                return reject("Resolve each effect with a finding and subsequent verification of its resources.")
+                return reject("Resolve each effect with a finding and subsequent verification of its resources.",
+                              "resolutions." + obligation_id, {"finding": "Observed reconciliation", "evidence": []})
             del obligations[obligation_id]
+        for index, finding in enumerate(findings):
+            if not finding.get("finding", "").strip() or not self.valid_evidence(
+                    finding.get("evidence", []), [], inspection=True):
+                return reject("Findings require supporting successful current observations.",
+                              f"findings.{index}", {"finding": "Observed fact", "evidence": []})
         self.kind = proposed_kind
         self.criteria = proposed
         self.obligations = obligations
@@ -250,26 +286,47 @@ class TaskState:
         self.decisions.extend(value for value in decisions if value not in self.decisions)
         self.strategy = strategy or self.strategy
         self.notice = ""
+        self.last_rejection = {}
+        for finding in findings:
+            self.findings[fingerprint(finding)] = finding
         self.record("checkpoint", completed=completed, resolutions=resolutions, reopened=reopen)
-        return {"accepted": True, "ready_to_complete": self.complete()}
+        return {"accepted": True, "outcome": Outcome.SUCCESS, "status": "accepted", "ready_to_complete": self.complete()}
 
     def complete(self):
         return bool(self.kind and self.criteria and not self.obligations and not self.dependencies
-                    and all(self.valid_evidence(value.evidence, value.resources)
+                    and all(self.valid_evidence(value.evidence, value.resources, inspection=self.kind == "read_only")
                             for value in self.criteria.values()))
+
+    def requirements(self):
+        result = []
+        if self.kind is None or not self.criteria:
+            result.append({"code": "contract_required", "tool": "task_checkpoint", "fields": {
+                "kind": "read_only or mutation", "phase": "inspect", "criteria": ["User outcome"],
+                "verification": {"User outcome": {"method": "Observable check", "resources": []}}}})
+        for name, criterion in self.criteria.items():
+            if not self.valid_evidence(criterion.evidence, criterion.resources, inspection=self.kind == "read_only"):
+                result.append({"code": "criterion_evidence_required", "criterion": name,
+                               "method": criterion.verification, "resources": criterion.resources,
+                               "repair": "Cite current evidence IDs in completed; read_only accepts inspection evidence."})
+        result.extend({"code": "effect_verification_required", **asdict(value)} for value in self.obligations.values())
+        result.extend({"code": "dependency_resolution_required", **asdict(value)} for value in self.dependencies)
+        return result
 
     def finish(self, direct=False):
         if self.status != Lifecycle.ACTIVE:
             return {"accepted": False, "reason": "Only active tasks can propose completion."}
         if direct:
             if self.evidence or self.criteria or self.obligations or self.kind:
-                return {"accepted": False, "reason": "Direct answers cannot bypass a supervised task."}
+                return control_rejection("Direct answers cannot bypass a supervised task.", "direct", False,
+                                         requirements=self.requirements(), code="completion_requirements")
             self.kind = "direct"
         elif not self.complete():
-            return {"accepted": False, "reason": "Current criteria and effect obligations require verification."}
+            return control_rejection("Satisfy the listed contract requirements before completion.", "completed",
+                                     "Current evidence IDs keyed by exact criterion", requirements=self.requirements(),
+                                     code="completion_requirements")
         self.status = Lifecycle.COMPLETE
         self.record("complete", direct=direct)
-        return {"accepted": True, "status": self.status}
+        return {"accepted": True, "outcome": Outcome.SUCCESS, "status": self.status}
 
     def defer(self, kind, obligation, dependency, refs, required_change):
         if self.status != Lifecycle.ACTIVE or kind not in {"waiting", "blocked"}:
@@ -326,19 +383,24 @@ class TaskState:
         self.record("dependency_resolved", evidence=refs, finding=finding, user_input=user_input)
         return {"accepted": True}
 
-    def snapshot(self, include_results=False):
+    def snapshot(self, include_results=False, include_evidence=True):
         evidence = []
-        for item in self.evidence.values():
+        for item in self.evidence.values() if include_evidence else ():
             value = asdict(item)
             if not include_results:
                 value.pop("result")
                 value.pop("arguments")
             evidence.append(value)
-        return {"id": self.id, "objective": self.objective, "title": self.title, "status": self.status,
+        snapshot = {"id": self.id, "objective": self.objective, "title": self.title, "status": self.status,
                 "contract": self.kind, "role": self.role, "role_resources": self.role_resources,
                 "criteria": {key: asdict(value) for key, value in self.criteria.items()},
                 "obligations": {key: asdict(value) for key, value in self.obligations.items()},
                 "dependencies": [asdict(item) for item in self.dependencies],
                 "revisions": self.revisions, "changed_at": self.changed_at,
                 "strategy": self.strategy, "decisions": self.decisions, "notice": self.notice,
-                "sequence": self.sequence, "requests": self.requests, "evidence": evidence}
+                "sequence": self.sequence, "requests": self.requests, "inspections": self.inspections,
+                "findings": self.findings, "restrictions": self.restrictions,
+                "last_rejection": self.last_rejection, "pending_verification": self.requirements()}
+        if include_evidence:
+            snapshot["evidence"] = evidence
+        return snapshot

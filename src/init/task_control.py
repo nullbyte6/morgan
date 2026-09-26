@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Literal
 
-from pydantic import ValidationError, validate_call
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, validate_call
 from pydantic_ai import ToolReturn
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.exceptions import ModelRetry
@@ -17,7 +17,20 @@ from pydantic_ai.toolsets import FunctionToolset
 
 from .task_effects import TOOL_SPECS, content_revision, resources_for
 from .task_outcomes import ActionResult, Outcome, normalize_result
-from .task_state import Lifecycle, TaskState, encoded, fingerprint
+from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint
+from .task_trace import TaskJournal
+
+
+class VerificationContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    method: str = Field(min_length=1)
+    resources: list[str]
+
+
+class EvidenceFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    finding: str = Field(min_length=1)
+    evidence: list[str] = Field(min_length=1)
 
 
 class TaskStopped(Exception):
@@ -30,12 +43,16 @@ class TaskControl(AbstractCapability):
         self.state = TaskState(objective)
         self.context = context
         self.trace_path = context.directory / f"task-control-{self.state.id}.jsonl"
+        self.journal = TaskJournal(self.trace_path, self.state)
         self.state.trace = self.trace
         self.cancel_event = cancel_event
         self.messages = []
         self.artifacts = {}
         self.tool_lock = asyncio.Lock()
         self.context_characters = 48000
+        self.read_cache = {}
+        self.receipts = {}
+        self.on_action = None
         self.toolset = FunctionToolset()
         self.control_tools = {function.__name__: function for function in (
             self.task_checkpoint, self.task_finish, self.task_defer, self.task_request_input, self.task_resolve_dependency,
@@ -45,12 +62,8 @@ class TaskControl(AbstractCapability):
         self.trace("start")
 
     def trace(self, event, **details):
-        from datetime import datetime, timezone
         try:
-            self.trace_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.trace_path.open("a", encoding="utf-8") as stream:
-                stream.write(encoded({"time": datetime.now(timezone.utc).isoformat(),
-                                      "event": event, "state": self.state.snapshot(), **details}) + "\n")
+            self.journal.record(event, **details)
         except OSError:
             logging.getLogger("arlo.task_control").exception("Cannot write task trace %s", self.trace_path)
 
@@ -60,6 +73,9 @@ class TaskControl(AbstractCapability):
     def get_instructions(self):
         return """You are the only agent. Choose your own strategy, inspection, repairs and next actions.
 TaskControl validates execution and evidence, never strategy or textual progress.
+Before any tool work, establish the single task contract through task_checkpoint.
+For example task_checkpoint(kind='read_only', phase='inspect', criteria=['Review tool contracts'],
+verification={'Review tool contracts': {'method': 'Inspect contracts and cite findings', 'resources': []}}).
 Before effects, declare the user's outcome with task_checkpoint(kind='mutation', criteria=[...],
 verification={exact_criterion: {'method': 'specific independent check', 'resources': [resource IDs]}}).
 For research/audits use kind='read_only'. Each criterion must describe the user's outcome,
@@ -70,6 +86,15 @@ you are inspecting when a tool's intrinsic scope does not identify them. Semanti
 interpretation are your responsibility. Successful mutation messages cannot verify mutations.
 completed maps exact criteria to nonempty lists of verification call IDs. resolutions independently
 maps effect obligation IDs to {'finding': 'observed reconciliation', 'evidence': [verification IDs]}.
+For read_only, current successful inspection IDs can satisfy completed; you do not need to
+repeat unchanged reads in phase verify. task_finish(completed={exact_criterion: [evidence IDs]})
+can certify remaining criteria and finish. Mutations still need independent verification.
+verification keys must match criteria exactly, without a nested 'criteria' wrapper. resolutions
+may name only real effect obligations; an audit criterion is completed, not resolved as an effect.
+Record findings=[{'finding': 'Observed fact', 'evidence': [IDs]}] to preserve semantic findings
+across compaction. A rejected control result names field, expected, and recoverable requirements.
+read_code returns structured content, coverage and next_cursor. Use read_code(cursor=next_cursor)
+until exhausted; mode='index' explicitly requests an index, which is not source-body coverage.
 Finish with task_finish after current criteria and effect obligations are verified. For an answer
 needing no external actions use task_finish(direct=True); it cannot bypass an existing task ledger.
 Propose waiting/blocked with task_defer, naming an outstanding criterion/obligation, a concrete
@@ -85,23 +110,31 @@ An explicit pwsh: request supplies an exact shell command; use execute_command w
 and retain its consent checks. cd requests use change_directory and Git requests use Git tools."""
 
     def task_checkpoint(self, phase: Literal["inspect", "execute", "verify"],
-                        criteria: list[str], verification: dict[str, dict] | None = None,
+                        criteria: list[str], verification: dict[str, VerificationContract] | None = None,
                         completed: dict[str, list[str]] | None = None,
                         decisions: list[str] | None = None, strategy: str = "",
-                        resolutions: dict[str, dict] | None = None, reopen: list[str] | None = None,
+                        resolutions: dict[str, EvidenceFinding] | None = None, reopen: list[str] | None = None,
                         kind: Literal["read_only", "mutation"] | None = None,
-                        resources: list[str] | None = None) -> dict:
+                        resources: list[str] | None = None, findings: list[EvidenceFinding] | None = None) -> dict:
         """Apply an atomic task contract. Verification entries contain method/resources;
         resolutions contain finding/evidence. phase is the next action's role, not lifecycle.
         """
         self.refresh_resources()
-        return self.state.checkpoint(phase, criteria, verification or {}, completed or {},
-                                     decisions or [], strategy, resolutions or {}, reopen or [],
-                                     kind, resources or [])
+        values = lambda entries: {key: value.model_dump() if isinstance(value, BaseModel) else value
+                                  for key, value in (entries or {}).items()}
+        return self.state.checkpoint(phase, criteria, values(verification), completed or {},
+                                     decisions or [], strategy, values(resolutions), reopen or [],
+                                     kind, resources or [], [value.model_dump() if isinstance(value, BaseModel) else value
+                                                            for value in findings or []])
 
-    def task_finish(self, direct: bool = False) -> dict:
+    def task_finish(self, direct: bool = False, completed: dict[str, list[str]] | None = None) -> dict:
         """Propose completion after verification, or declare an answer needing no external actions."""
         self.refresh_resources()
+        if completed:
+            result = self.state.checkpoint(self.state.role, [], {}, completed, [], "", {}, [],
+                                           self.state.kind, self.state.role_resources)
+            if not result["accepted"]:
+                return result
         return self.state.finish(direct)
 
     def task_defer(self, status: Literal["waiting", "blocked"], obligation: str,
@@ -131,7 +164,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         """Retrieve preserved action evidence including its raw result and provenance."""
         from dataclasses import asdict
         item = self.state.evidence.get(call_id)
-        return {"found": False} if item is None else asdict(item)
+        return {"accepted": True, "outcome": Outcome.NEGATIVE if item is None else Outcome.SUCCESS,
+                "found": item is not None, "data": None if item is None else asdict(item)}
 
     def check_cancelled(self):
         if self.cancel_event.is_set():
@@ -153,41 +187,120 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.state.status = Lifecycle.ACTIVE
             self.state.notice = "A verification dependency changed; reverify the affected criteria."
 
-    def reject(self, name, arguments, call_id, code, data):
+    def _validation_rejection(self, error):
+        if isinstance(error, ValidationError):
+            errors = error.errors(include_input=False, include_url=False)
+            first = errors[0]
+            result = control_rejection(first["msg"], ".".join(map(str, first["loc"])),
+                                       {"type": first["type"], "schema": "See the named tool's declared schema"},
+                                       code="invalid_arguments")
+            examples = {"verification": {"Exact criterion from criteria": {"method": "Observable check", "resources": []}},
+                        "resolutions": {"Recorded effect obligation ID": {"finding": "Observed reconciliation", "evidence": ["call_id"]}},
+                        "completed": {"Exact criterion from criteria": ["call_id"]},
+                        "criteria": ["User outcome"], "kind": ["read_only", "mutation"]}
+            if first["loc"] and first["loc"][0] in examples:
+                result["expected"]["example"] = examples[first["loc"][0]]
+            result["errors"] = errors
+            return result
+        return control_rejection(str(error), "arguments", "Arguments matching the declared tool schema",
+                                 code="invalid_arguments")
+
+    def _return(self, name, arguments, call_id, result, *, validated=True, executed=False,
+                evidence_id="", reused=False):
+        control = name in self.control_tools
+        payload = dict(getattr(result, "return_value", result))
+        outcome = payload.get("outcome", Outcome.REJECTED if payload.get("accepted") is False else Outcome.SUCCESS)
+        payload.setdefault("outcome", outcome)
+        if evidence_id:
+            payload["evidence_id"] = evidence_id
+        if reused:
+            payload["reused_evidence"] = True
+        self.receipts[call_id] = {"tool": name, "validated": validated, "executed": executed,
+                                 "control": control, "outcome": outcome, "evidence_id": evidence_id,
+                                 "reused": reused}
+        if control and outcome == Outcome.REJECTED:
+            payload.setdefault("status", "rejected")
+            payload.setdefault("field", "arguments")
+            payload.setdefault("expected", "The declared control protocol")
+            payload.setdefault("recoverable", True)
+            self.state.last_rejection = {"tool": name, "call_id": call_id, **payload}
+        self.trace("tool_return", tool=name, call_id=call_id, receipt=self.receipts[call_id],
+                   result=payload if control or not evidence_id else {key: value for key, value in payload.items()
+                                                                     if key != "data"})
+        if isinstance(result, ToolReturn):
+            return ToolReturn(payload, content=result.content, metadata=result.metadata, tools=result.tools)
+        return payload
+
+    def reject(self, name, arguments, call_id, code, data, *, validated=True):
+        if name in self.control_tools:
+            return self._return(name, arguments, call_id, data, validated=validated)
         result = ActionResult(Outcome.REJECTED, data, code)
         self.state.observe(name, arguments, result, call_id, {})
-        return {**result.payload(), "evidence_id": call_id}
+        return self._return(name, arguments, call_id, result.payload(), validated=validated, evidence_id=call_id)
 
-    async def execute(self, name, arguments, call_id, handler):
+    def _inspection_key(self, name, arguments, resources, revisions):
+        names = {"read_code", "list_code", "search_code", "verify_code", "read_file", "list_files",
+                 "git_status", "git_diff", "git_log", "git_list_branches"}
+        if name not in names or not resources or any(value is None for value in revisions.values()):
+            return None
+        values = dict(arguments)
+        spec = TOOL_SPECS[name]
+        if spec.path_argument and spec.path_argument in values:
+            values[spec.path_argument] = next((resource for resource in resources
+                                              if resource.startswith(("file:", "entry:"))), values[spec.path_argument])
+        return fingerprint({"tool": name, "arguments": values, "revisions": revisions})
+
+    async def execute(self, name, arguments, call_id, handler, validator=None):
         async with self.tool_lock:
             self.check_cancelled()
-            self.trace("tool_attempt", tool=name, arguments=arguments, call_id=call_id)
+            self.trace("tool_proposed", tool=name, arguments=arguments, call_id=call_id)
+            if validator is not None:
+                try:
+                    arguments = validator(arguments)
+                except (ValidationError, ValueError, TypeError) as error:
+                    result = self._validation_rejection(error)
+                    return self.reject(name, arguments, call_id, result["code"], result, validated=False)
+            self.trace("tool_attempt", tool=name, arguments=arguments, call_id=call_id, validated=True)
             if self.state.status != Lifecycle.ACTIVE:
-                return ActionResult(Outcome.REJECTED, self.state.notice, "task_not_active").payload()
+                result = control_rejection(self.state.notice, "lifecycle", "Resume the same task before actions", code="task_not_active")
+                return self.reject(name, arguments, call_id, result["code"], result)
             if name in self.control_tools:
                 try:
                     result = await handler(arguments)
-                    return getattr(result, "return_value", result)
                 except (ValidationError, ValueError, TypeError, ModelRetry) as error:
-                    return ActionResult(Outcome.REJECTED, str(error), "invalid_control_call").payload()
+                    result = self._validation_rejection(error)
+                return self._return(name, arguments, call_id, result)
+            if self.state.kind is None or not self.state.criteria:
+                result = control_rejection("Declare the user's task contract before tool work.", "kind/criteria/verification",
+                                           "task_checkpoint with read_only or mutation and observable criteria",
+                                           requirements=self.state.requirements(), code="contract_required")
+                return self.reject(name, arguments, call_id, result["code"], result)
             declared = TOOL_SPECS.get(name)
-            if declared is not None and declared.effectful and not declared.ancillary and (self.state.kind != "mutation" or not self.state.criteria):
+            if declared is not None and declared.effectful and not declared.ancillary and self.state.kind != "mutation":
                 return self.reject(name, arguments, call_id, "mutation_contract_required",
                                    "Declare a mutation contract and verification criteria before effects.")
             try:
                 spec, resources = resources_for(name, arguments)
-            except (ValueError, TypeError) as error:
+            except (ValueError, TypeError, OSError) as error:
                 return self.reject(name, arguments, call_id, "undeclared_effects", str(error))
-            if self.state.kind is None:
-                self.state.notice = "Define the user's read_only or mutation contract before completion."
             verification_resources = [resource for criterion in self.state.criteria.values()
                                       for resource in criterion.resources] if self.state.role == "verify" else []
             declared_resources = set(resources)
             resources = list(dict.fromkeys([*resources, *self.state.role_resources, *verification_resources]))
             before = {resource: self.revision(resource) for resource in resources}
             self.state.refresh(before)
+            key = self._inspection_key(name, arguments, resources, before) if not spec.effectful else None
+            cached = self.state.evidence.get(self.read_cache.get(key)) if key else None
+            if cached is not None and not (self.state.kind == "mutation" and self.state.role == "verify") and self.state.valid_evidence(
+                    [cached.id], resources, inspection=True):
+                self.trace("observation_reused", call_id=call_id, evidence_id=cached.id, inspection_key=key)
+                return self._return(name, arguments, call_id, {**cached.result, "resources": cached.revisions},
+                                    evidence_id=cached.id, reused=True)
             interrupted = False
             raw = None
+            self.trace("execution_started", tool=name, call_id=call_id)
+            if self.on_action is not None:
+                self.on_action("executing")
             try:
                 raw = await handler(arguments)
                 result = normalize_result(raw, text_observation=spec.text_observation)
@@ -195,80 +308,93 @@ and retain its consent checks. cd requests use change_directory and Git requests
                 interrupted = True
                 result = ActionResult(Outcome.CANCELLED, "Action interrupted; effects may be partial.", "interrupted")
             except (ValidationError, ModelRetry) as error:
-                result = ActionResult(Outcome.REJECTED, str(error), "invalid_arguments")
+                result = ActionResult(Outcome.REJECTED, self._validation_rejection(error), "invalid_arguments")
             except Exception as error:
                 result = ActionResult(Outcome.FAILED, str(error), "execution_exception")
             after = {resource: self.revision(resource) for resource in resources}
-            if (not spec.effectful or spec.ancillary) and before != after and result.successful:
-                result = ActionResult(Outcome.UNCERTAIN, result.data, "resource_changed_during_observation")
-            effects = []
+            changed = [resource for resource in resources if before[resource] != after[resource]]
+            if (not spec.effectful or spec.ancillary) and changed:
+                self.trace("observed_external_revision_change", call_id=call_id,
+                           revisions={resource: {"before": before[resource], "after": after[resource]} for resource in changed})
+                if result.successful:
+                    result = ActionResult(Outcome.UNCERTAIN, result.data, "resource_changed_during_observation")
+            effects = changed if spec.effectful and not spec.ancillary else []
             no_execution = result.outcome in {Outcome.REJECTED, Outcome.WAITING, Outcome.EXTERNAL_BLOCKER}
             uncertain = spec.effectful and not no_execution
-            for resource in resources:
-                if resource.startswith(("file:", "entry:", "domain:git:")):
-                    if before[resource] != after[resource]:
-                        effects.append(resource)
-                    if not no_execution and (before[resource] is None or after[resource] is None):
-                        uncertain = spec.effectful
-                elif resource in declared_resources and spec.effectful and not no_execution and (
+            for resource in declared_resources:
+                if not resource.startswith(("file:", "entry:", "domain:git:")) and spec.effectful and not no_execution and (
                         not spec.ancillary or resource == "domain:presentation"):
                     after[resource] = str(self.state.sequence + 1)
                     effects.append(resource)
-            if spec.path_argument and not spec.domain and result.successful and all(
-                    value is not None for value in after.values()):
+            if spec.path_argument and not spec.domain and result.successful and all(value is not None for value in after.values()):
                 uncertain = False
-            if effects and not result.successful:
-                uncertain = spec.effectful
-            effect_scope = None
-            if result.successful and spec.verification_capable:
-                effect_scope = list(dict.fromkeys([*effects, *[resource for resource, revision in after.items()
-                                                               if revision is None]]))
-            self.state.observe(name, arguments, result, call_id, after,
-                               effectful=spec.effectful, effects=effects, uncertain=uncertain,
-                               effect_scope=effect_scope, ancillary=spec.ancillary,
-                               verification_capable=not spec.effectful or spec.verification_capable)
-            self.trace("tool_return", tool=name, call_id=call_id, result=result.payload())
+            effect_scope = list(dict.fromkeys([*declared_resources, *effects])) if uncertain else effects
+            if spec.ancillary or result.successful and spec.verification_capable:
+                effect_scope = list(dict.fromkeys([*effects, *[resource for resource in declared_resources if after[resource] is None]]))
+            item = self.state.observe(name, arguments, result, call_id, after,
+                                      effectful=spec.effectful, effects=effects, uncertain=uncertain,
+                                      effect_scope=effect_scope, ancillary=spec.ancillary,
+                                      verification_capable=not spec.effectful or spec.verification_capable)
+            if not spec.effectful and result.successful:
+                data = result.data if isinstance(result.data, dict) else {}
+                inspection_key = key or fingerprint({"tool": name, "arguments": arguments, "revisions": after})
+                self.state.inspections[inspection_key] = {"tool": name, "arguments": arguments,
+                    "resources": after, "evidence_id": call_id, "kind": data.get("kind", "observation"),
+                    "current": True,
+                    "coverage": data.get("coverage"), "range": data.get("range"),
+                    "next_cursor": data.get("next_cursor"), "exhausted": data.get("exhausted"),
+                    "summary": str(data.get("content", result.data))[:400]}
+                if key:
+                    self.read_cache[key] = call_id
+            if self.on_action is not None:
+                self.on_action("processing")
+            returned = self._return(name, arguments, call_id, {**result.payload(), "resources": after},
+                                    executed=True, evidence_id=item.id)
             if interrupted:
                 self.state.suspend(Lifecycle.INTERRUPTED, "Action interrupted; inspect unresolved effects before retrying.")
                 raise asyncio.CancelledError()
             self.check_cancelled()
-            payload = {**result.payload(), "evidence_id": call_id, "resources": after}
             if isinstance(raw, ToolReturn):
-                return ToolReturn(payload, content=raw.content, metadata=raw.metadata, tools=raw.tools)
-            return payload
+                return ToolReturn(returned, content=raw.content, metadata=raw.metadata, tools=raw.tools)
+            return returned
 
     async def invoke(self, name, arguments, call_id):
+        if name in self.control_tools:
+            function = self.control_tools[name]
+        else:
+            from .tools import TOOLS
+            function = next(tool for tool in TOOLS if tool.__name__ == name)
+        signature = inspect.signature(function)
+        def capture(*args, **kwargs):
+            return dict(signature.bind(*args, **kwargs).arguments)
+        capture.__signature__ = signature
+        capture.__annotations__ = function.__annotations__
+        validator = validate_call(capture)
         async def handler(values):
-            if name in self.control_tools:
-                function = self.control_tools[name]
-            else:
-                from .tools import TOOLS
-                function = next(tool for tool in TOOLS if tool.__name__ == name)
-            result = validate_call(function)(**values)
+            result = function(**values)
             return await result if inspect.isawaitable(result) else result
-        return await self.execute(name, arguments, call_id, handler)
+        return await self.execute(name, arguments, call_id, handler, validator=lambda values: validator(**values))
 
     async def wrap_tool_execute(self, ctx, *, call, tool_def, args, handler):
         return await self.execute(call.tool_name, args, call.tool_call_id, handler)
 
     async def on_tool_execute_error(self, ctx, *, call, tool_def, args, error):
-        item = self.state.evidence.get(call.tool_call_id)
-        if item is not None:
-            return item.result
-        spec, resources = resources_for(call.tool_name, args)
+        if call.tool_call_id in self.receipts:
+            item = self.state.evidence.get(self.receipts[call.tool_call_id]["evidence_id"])
+            return item.result if item is not None else self.state.last_rejection
         result = ActionResult(Outcome.FAILED, str(error), "execution_dispatch_error")
+        spec, resources = resources_for(call.tool_name, args)
         self.state.observe(call.tool_name, args, result, call.tool_call_id,
                            {resource: self.revision(resource) for resource in resources},
                            effectful=spec.effectful, uncertain=spec.effectful)
-        return result.payload()
+        return self._return(call.tool_name, args, call.tool_call_id, result.payload(), evidence_id=call.tool_call_id)
 
     async def on_tool_validate_error(self, ctx, *, call, tool_def, args, error):
         from pydantic_ai.exceptions import ToolFailed
-        if call.tool_name in self.control_tools:
-            self.trace("control_validation_rejected", tool=call.tool_name, error=str(error))
-        else:
-            self.reject(call.tool_name, args, call.tool_call_id, "invalid_arguments", str(error))
-        raise ToolFailed(str(error))
+        result = self._validation_rejection(error)
+        self.trace("tool_proposed", tool=call.tool_name, arguments=args, call_id=call.tool_call_id)
+        returned = self.reject(call.tool_name, args, call.tool_call_id, result["code"], result, validated=False)
+        raise ToolFailed(encoded(returned))
 
     def archive(self, raw, label):
         key = fingerprint(raw)
@@ -322,17 +448,11 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.refresh_resources()
         messages = self.compact([message for message in request_context.messages
                                  if not (message.metadata or {}).get("arlo_task_snapshot")])
-        snapshot = self.state.snapshot()
-        evidence_index = snapshot.pop("evidence")
-        snapshot["recent_evidence"] = evidence_index[-12:]
-        if len(encoded(evidence_index)) > 4096:
-            snapshot["evidence_index"] = self.archive(encoded(evidence_index), "Evidence provenance index")
-        else:
-            snapshot["evidence_index"] = evidence_index
+        snapshot = self.state.snapshot(include_evidence=False)
         messages.append(ModelRequest(parts=[UserPromptPart("Supervisor task state: " + encoded(snapshot))],
                                      metadata={"arlo_task_snapshot": True}))
         request_context.messages = messages
-        self.trace("request_ready", supervisor_snapshot=snapshot)
+        self.trace("request_ready", memory_digest=fingerprint(snapshot))
         return request_context
 
     async def after_model_request(self, ctx, *, request_context, response):
@@ -346,8 +466,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         accepted = self.state.status == Lifecycle.COMPLETE and (
             self.state.kind == "direct" or self.state.complete())
         if not accepted:
-            self.state.notice = "Propose task_finish after satisfying the current task contract and effect obligations."
-        self.trace("output_assessment", accepted=accepted)
+            self.state.notice = "Completion requires: " + encoded(self.state.requirements())
+        self.trace("output_assessment", accepted=accepted, requirements=[] if accepted else self.state.requirements())
         return accepted
 
     def resume(self, context, cancel_event, prompt=""):
