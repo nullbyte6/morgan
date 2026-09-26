@@ -679,12 +679,15 @@ class TaskControl(AbstractCapability):
 
     def accept_output(self):
         self.check_cancelled()
-        self.trace("output_assessment", accepted=(not self.state.criteria and not self.state.tool_attempts)
-                   or self.state.complete())
-        if not self.state.criteria and not self.state.tool_attempts:
+
+        accepted = not self.state.criteria or self.state.complete()
+        self.trace(
+            "output_assessment",
+            accepted=accepted,
+        )
+
+        if accepted:
             self.state.status = "complete"
             return True
-        if self.state.complete():
-            self.state.status = "complete"
-            return True
+
         return False
