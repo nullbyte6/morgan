@@ -476,12 +476,11 @@ class TaskControl(AbstractCapability):
         if name in INSPECTION_TOOLS:
             argument_fingerprint = fingerprint(arguments)
 
-            duplicate = next((
-                evidence
-                for evidence in self.state.evidence.values()
-                if evidence.tool == name
-                and fingerprint(json.loads(evidence.arguments)) == argument_fingerprint
-                and not evidence.failed), None,)
+            duplicate = next((evidence
+                    for evidence in reversed(self.state.evidence)
+                    if evidence.tool == name
+                    and evidence.arguments == argument_fingerprint
+                    and evidence.sequence >= self.state.last_change), None)
 
             if duplicate is not None:
                 self.trace(
