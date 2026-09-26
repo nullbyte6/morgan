@@ -515,3 +515,27 @@ def update_repo() -> str:
         return result + tr('self_code.only_files_on_disk_were_updated_if_git_succeeded_restart_to_load', value0=get_assistant().name)
     except (OSError, subprocess.TimeoutExpired) as error:
         return tr('self_code.error_updating_repository', value0=get_assistant().name, error=error)
+
+
+def get_repo_state() -> str:
+    """Return a deterministic snapshot of Arlo's current Git working tree."""
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(ARLO_ROOT),
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+            ],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=15,
+        )
+        if result.returncode:
+            return ""
+        return result.stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""

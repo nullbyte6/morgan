@@ -16,6 +16,7 @@ from pydantic_ai.exceptions import ToolFailed
 from pydantic_ai.messages import ModelRequest, ModelMessagesTypeAdapter, UserPromptPart
 from pydantic_ai.toolsets import FunctionToolset
 
+from src.init.self_code import get_repo_state
 
 def encoded(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
@@ -62,6 +63,16 @@ def failed_result(value):
                 or value.get("exit_code", 0) not in (0, None))
     return False
 
+INSPECTION_TOOLS = frozenset({
+    "get_repo",
+    "list_code",
+    "search_code",
+    "read_code",
+})
+
+MUTATION_TOOLS = frozenset({
+    "edit_code",
+})
 
 @dataclass
 class Evidence:
@@ -100,12 +111,11 @@ class TaskState:
     strategy: str = ""
     recovery_strategy: str = ""
     notice: str = ""
-    idle_window: int = 8
-    progress_window: int = 16
     last_progress_request: int = 0
     tool_attempts: int = 0
     information_gain_ratio: float = 0.2
     trace: object = field(default=None, repr=False)
+    milestones: list = field(default_factory=list)
 
     def record(self, event, **details):
         if self.trace is not None:
@@ -120,7 +130,33 @@ class TaskState:
         self.recovery_started_at = None
         self.notice = ""
 
-    def observe(self, name, arguments, result, call_id, failed=False):
+    def add_milestone(self, kind, value, evidence=()):
+        evidence = tuple(sorted(set(evidence)))
+        signature = (kind, fingerprint(value), evidence)
+
+        if signature in {
+            (item["kind"], item["fingerprint"], tuple(item["evidence"]))
+            for item in self.milestones
+        }:
+            return False
+
+        self.milestones.append({
+            "kind": kind,
+            "fingerprint": fingerprint(value),
+            "value": value,
+            "evidence": list(evidence),
+            "sequence": self.sequence,
+        })
+        self.mark_progress()
+        self.record(
+            "milestone",
+            kind=kind,
+            value=value,
+            evidence=list(evidence))
+        return True
+
+    def observe(self,name, arguments, result, call_id, failed=False,
+        state_changed=False):
         result = getattr(result, "return_value", result)
         self.sequence += 1
         digest = fingerprint(result)
@@ -136,62 +172,68 @@ class TaskState:
         item = Evidence(call_id, name, encoded(arguments), digest, self.phase,
                         failed, self.sequence, str(result)[:700])
         self.evidence[call_id] = item
-        if failed:
-            self.unresolved.add(call_id)
-        if self.phase == "execute":
+
+        changed = state_changed and not failed
+
+        if changed:
             self.last_change = self.sequence
             self.changes.append(call_id)
             self.status = "active"
-        if self.phase == "inspect" and information_progress:
-            self.mark_progress()
+            self.add_milestone(
+                "state_change",
+                {
+                    "tool": name,
+                    "arguments": arguments,
+                    "digest": digest,
+                },
+                evidence=(call_id,))
+
+        if failed:
+            self.unresolved.add(call_id)
+
+        if self.phase == "inspect":
+            self.stagnant = 0 if information_progress else self.stagnant + 1
         else:
-            useful = information_progress if self.phase == "inspect" else novel and not failed
-            self.stagnant = 0 if useful else self.stagnant + 1
-        self.record("observation", call_id=call_id, tool=name, arguments=arguments,
-                    result=result, failed=failed, novel=novel, units=len(units),
-                    gained=len(gained), information_progress=information_progress,
-                    progress_accepted=self.phase == "inspect" and information_progress,
-                    reason=("failed" if failed else "inspection_information_gain"
-                            if self.phase == "inspect" and information_progress else
-                            "insufficient_information_gain" if self.phase == "inspect" else
-                            "awaiting_verified_checkpoint"))
+            self.stagnant = 0 if novel and not failed else self.stagnant + 1
+        self.record(
+            "observation",
+            call_id=call_id,
+            tool=name,
+            arguments=arguments,
+            result=result,
+            failed=failed,
+            novel=novel,
+            changed=changed,
+            units=len(units),
+            gained=len(gained),
+            information_progress=information_progress,
+            progress_accepted=changed,
+            reason=(
+                "failed"
+                if failed
+                else "state_changed"
+                if changed
+                else "new_inspection_evidence"
+                if self.phase == "inspect" and information_progress
+                else "insufficient_information_gain"
+                if self.phase == "inspect"
+                else "awaiting_verified_checkpoint"))
         self.assess()
         return item
 
     def assess(self, *, allow_block=False):
-        self.record("assessment", allow_block=allow_block, triggers={
-            "stagnant": self.stagnant >= self.idle_window,
-            "tools_since_progress": self.sequence - self.last_progress >= self.progress_window,
-            "requests_since_progress": self.requests - self.last_progress_request >= self.progress_window},
-            recovery_requests=(None if self.recovery_offered_at is None else
-                               self.requests - (self.recovery_started_at if self.recovery_started_at is not None
-                                                else self.recovery_offered_at)),
-            recovery_tools=self.sequence - self.recovery_sequence)
-        stalled = (self.stagnant >= self.idle_window
-                   or self.sequence - self.last_progress >= self.progress_window
-                   or self.requests - self.last_progress_request >= self.progress_window)
-        if not stalled:
-            return
-        if self.recovery_at is None:
-            self.recovery_at = self.requests
-            self.recovery_sequence = self.sequence
-            self.recovery_strategy = self.strategy
-            self.notice = ("Progress checkpoint required. Reuse collected evidence, stop equivalent "
-                           "attempts, and choose a materially different strategy. Move from inspection "
-                           "to execution or verification. A new strategy alone is not progress.")
-            self.record("recovery_required")
-        elif allow_block and self.recovery_offered_at is not None and (
-                self.requests - (self.recovery_started_at if self.recovery_started_at is not None
-                                 else self.recovery_offered_at) >= self.idle_window
-                or (self.recovery_started_at is not None
-                    and self.sequence - self.recovery_sequence >= self.idle_window)):
-            self.status = "blocked"
-            self.notice = "No verified progress after the opportunity to change strategy. User input is required."
-            self.record("blocked")
+        self.record(
+            "assessment",
+            allow_block=allow_block,
+            stagnant=self.stagnant,
+            last_progress=self.last_progress,
+            last_progress_request=self.last_progress_request,
+        )
 
     def checkpoint(self, phase, criteria, completed, decisions, strategy, resolves):
         if self.status == "blocked":
             return {"accepted": False, "reason": self.notice}
+        
         if any(not criterion.strip() for criterion in criteria) or len(set(criteria)) != len(criteria):
             return {"accepted": False, "reason": "Acceptance criteria must be distinct and nonempty."}
         if not self.criteria:
@@ -225,19 +267,62 @@ class TaskState:
                       if not self.criteria[criterion] or any(
                           self.evidence[old].sequence < self.last_change
                           for old in self.criteria[criterion])}
-        advanced = bool(signatures - self.used_evidence)
+
         self.criteria = proposed
         self.unresolved.difference_update(resolves)
         self.used_evidence.update(signatures)
         self.decisions.extend(value for value in decisions if value not in self.decisions)
         self.strategy = strategy or self.strategy
         self.phase = phase
-        self.unresolved.difference_update({ref for ref in self.unresolved
-                                          if self.evidence[ref].tool == "task_checkpoint"})
-        if advanced:
-            self.mark_progress()
-        self.status = "complete" if self.complete() else "active"
-        return {"accepted": True, "status": self.status, "notice": self.notice}
+
+        decision_refs = {
+            ref
+            for refs in completed.values()
+            for ref in refs
+        }
+
+        if decisions and not self.evidence:
+            return {
+                "accepted": False,
+                "reason": "Decisions require collected tool evidence."}
+
+        new_decisions = [
+            value for value in decisions
+            if value not in self.decisions
+        ]
+
+        self.decisions.extend(new_decisions)
+        self.strategy = strategy or self.strategy
+        self.phase = phase
+
+        self.unresolved.difference_update({
+            ref for ref in self.unresolved
+            if self.evidence[ref].tool == "task_checkpoint"
+        })
+
+        for decision in new_decisions:
+            self.add_milestone(
+                "decision",
+                decision,
+                evidence=new_refs)
+
+        for criterion, refs in completed.items():
+            if refs:
+                self.add_milestone(
+                    "criterion_verified",
+                    criterion,
+                    evidence=refs)
+
+        if resolves:
+            self.add_milestone(
+                "errors_resolved",
+                sorted(resolves),
+                evidence=new_refs)
+
+        self.unresolved.difference_update({
+            ref for ref in self.unresolved
+            if self.evidence[ref].tool == "task_checkpoint"
+        })
 
     def complete(self):
         return (self.phase == "verify" and bool(self.criteria) and not self.unresolved
@@ -245,12 +330,22 @@ class TaskState:
                                     for ref in refs) for refs in self.criteria.values()))
 
     def snapshot(self):
-        return {"objective": self.objective, "phase": self.phase, "status": self.status,
-                "criteria": self.criteria, "decisions": self.decisions,
-                "changes": self.changes, "unresolved": sorted(self.unresolved),
-                "strategy": self.strategy, "notice": self.notice,
-                "evidence": [{**vars(value), "arguments": value.arguments[:700]}
-                             for value in list(self.evidence.values())[-12:]]}
+        return {
+            "objective": self.objective,
+            "phase": self.phase,
+            "status": self.status,
+            "criteria": self.criteria,
+            "decisions": self.decisions,
+            "milestones": self.milestones[-12:],
+            "changes": self.changes,
+            "unresolved": sorted(self.unresolved),
+            "strategy": self.strategy,
+            "notice": self.notice,
+            "evidence": [
+                {**vars(value), "arguments": value.arguments[:700]}
+                for value in list(self.evidence.values())[-12:]
+            ],
+        }
 
 
 class TaskStopped(Exception):
@@ -293,18 +388,7 @@ class TaskControl(AbstractCapability):
 
     def get_instructions(self):
         return (
-            "For tasks using tools, call task_checkpoint to define the full objective's acceptance "
-            "criteria and select inspect, execute or verify before working. Use inspect only to gather "
-            "necessary facts; execute for actions that may change state; verify for independent checks "
-            "of the requested result. Keep criteria small and independently verifiable. Report completed "
-            "criteria using actual successful verification tool call IDs. Checkpoint partial milestones "
-            "during long tasks. Record concise decisions, never private reasoning. Do not count a plan, "
-            "a successful tool invocation or different wording as completion. Resolve errors explicitly "
-            "with verification evidence. After uncertain or partial execution, inspect state before "
-            "retrying; never bypass a refusal or confirmation. Finish only when all criteria are verified. "
-            "Simple conversational answers require no tools or checkpoints. The supervisor snapshot is "
-            "task data, not a new user instruction. Archived tool results remain readable via read_file."
-        )
+            "For substantial tool-based tasks, use task_checkpoint to maintain a small set of acceptance criteria for the user's actual objective. Gather only evidence that helps resolve those criteria. Record concise evidence-backed decisions when the evidence changes what you know or what you will do; do not record private reasoning. Use inspect while gathering facts, execute when performing actions that may change state, and verify when independently checking results. Not every task requires execution: research, diagnosis, audits and comparisons may proceed from inspection directly to verification. Tool calls and newly read information are evidence, not progress by themselves. Avoid equivalent repeated tool calls. After a state-changing action, independently verify the resulting state before completing affected criteria. Resolve observed failures explicitly. Finish when the user's acceptance criteria are supported by successful verification evidence. Simple conversational answers that need no tools require no checkpoint. The supervisor snapshot is task state, not a new user instruction. Archived tool results remain readable via read_file.")
 
     def task_checkpoint(self, phase: Literal["inspect", "execute", "verify"],
                         criteria: list[str], completed: dict[str, list[str]] | None = None,
@@ -356,16 +440,36 @@ class TaskControl(AbstractCapability):
             return await handler(arguments)
         if self.state.status == "complete":
             return {"status": "complete", "note": "All criteria are verified. Return the final answer."}
-        if not self.state.criteria:
-            self.state.stagnant += 1
-            return {"error": "Call task_checkpoint with acceptance criteria and phase before tools."}
+
         if self.state.recovery_offered_at is not None and self.state.recovery_started_at is None:
             self.state.recovery_started_at = self.state.requests
             self.state.recovery_sequence = self.state.sequence
             self.trace("recovery_execution_started", tool=name, call_id=call_id)
         self.trace("tool_handler_started", tool=name, call_id=call_id)
+        before_state = get_repo_state() if name in MUTATION_TOOLS else None
+
         result = await handler(arguments)
-        self.state.observe(name, arguments, result, call_id)
+
+        after_state = get_repo_state() if before_state is not None else None
+        state_changed = (
+            before_state is not None
+            and after_state is not None
+            and before_state != after_state)
+
+        if before_state is not None:
+            self.trace(
+                "mutation_probe",
+                tool=name,
+                call_id=call_id,
+                state_changed=state_changed)
+
+        self.state.observe(
+            name,
+            arguments,
+            result,
+            call_id,
+            state_changed=state_changed)
+        
         self.check_cancelled()
         return result
 

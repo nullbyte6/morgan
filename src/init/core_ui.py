@@ -421,10 +421,6 @@ class ArloWindow(DesktopWindow):
 
         input_group = QWidget()
         input_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        input_group.setLayout(input_column)
-        self.input_group = input_group
-        self.input_group.setMaximumHeight(0)
-        self.input_group.setVisible(False)
 
         self.attachment_tray.changed.connect(self.update_send_button)
 
@@ -433,9 +429,15 @@ class ArloWindow(DesktopWindow):
         self.attach.clicked.connect(self.attachment_tray.choose_files)
 
         self.send.setObjectName("send")
+        input_column.addWidget(self.send)
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
         self.send.hide()
+
+        input_group.setLayout(input_column)
+        self.input_group = input_group
+        self.input_group.setMaximumHeight(0)
+        self.input_group.setVisible(False)
 
         composer.addWidget(input_group, 1)
         composer.addWidget(self.send, 0, Qt.AlignBottom)

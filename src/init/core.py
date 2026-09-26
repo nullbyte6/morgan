@@ -197,7 +197,7 @@ class Assistant:
         self.model_settings = {
             "thinking": False,
             "temperature": 0.2,
-            "max_tokens": 16384
+            "max_tokens": 32768,
         }
 
         self.provider = OllamaProvider(base_url="http://localhost:11434/v1")
