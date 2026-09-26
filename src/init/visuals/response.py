@@ -226,7 +226,7 @@ class ResponseView(QWidget):
             '<pre style="background-color:#1e2030; color:#cad3f5; '
             'border:2px solid #494d64; padding:12px 14px; margin:10px 0; '
             "font-family:'JetBrains Mono NL', 'JetBrains Mono', monospace; "
-            'font-size:14px; white-space:pre-wrap;">'
+            'font-size:16px; white-space:pre-wrap;">'
             + highlighted
             + '</pre>'
         )

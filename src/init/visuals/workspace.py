@@ -56,8 +56,6 @@ class WorkspacePanel(QFrame):
         self.setObjectName("workspacePanel")
         self.setProperty("workspacePanel", True)
         self.setFrameShape(QFrame.NoFrame)
-        # Let the splitter shrink the surface to zero; child painting is clipped
-        # by the panel instead of imposing content minimums on the whole tree.
         self.setMinimumSize(0, 0)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setAcceptDrops(True)
