@@ -50,12 +50,6 @@ class ChatInput(QTextEdit):
         height = max(line_height, min(max_height, int(content_height)))
         self.setFixedHeight(height)
 
-        # Scrollbar solo visible cuando hay contenido que excede las 4 líneas
-        self.setVerticalScrollBarPolicy(
-            Qt.ScrollBarAsNeeded if content_height > max_height
-            else Qt.ScrollBarAlwaysOff
-        )
-
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return,
                            Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
