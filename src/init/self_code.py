@@ -450,20 +450,24 @@ def edit_code(path: str, old_text: str, new_text: str) -> str:
     try:
         target = _path(path)
         content, encoding = decode_text(target.read_bytes())
+        matches = content.count(old_text) if old_text else 0
 
-        if not old_text or content.count(old_text) != 1:
+        if matches != 1:
             failures = _record_edit_failure(path, old_text)
 
             if failures >= MAX_EQUIVALENT_EDIT_FAILURES:
                 return (
                     "EDIT_RETRY_BLOCKED: This equivalent edit has already failed "
-                    f"{failures} times for {path!r}. Do not retry this edit or make "
-                    "cosmetic variations of old_text. Use the source evidence already "
-                    "collected and either choose a genuinely different implementation "
-                    "strategy or stop and report the blocker.")
+                    f"{failures} times for {path!r}. "
+                    f"old_text matched {matches} times; exactly one match is required. "
+                    "Do not retry this edit or make cosmetic variations of old_text. "
+                    "Use the source evidence already collected and either choose a "
+                    "genuinely different implementation strategy or stop and report "
+                    "the blocker.")
 
             return (
-                "EDIT_FAILED: old_text must match exactly once. "
+                f"EDIT_FAILED: old_text matched {matches} times; "
+                "exactly one match is required. "
                 "Re-read only the smallest necessary source range before retrying. "
                 "Do not retry the same old_text unchanged.")
 
@@ -486,13 +490,16 @@ def edit_code(path: str, old_text: str, new_text: str) -> str:
         if failures >= MAX_EQUIVALENT_EDIT_FAILURES:
             return (
                 "EDIT_RETRY_BLOCKED: Equivalent edits for "
-                f"{path!r} have failed {failures} times. Stop retrying this operation "
-                f"and report the blocker. Last error: {error}")
+                f"{path!r} have failed {failures} times. "
+                "Stop retrying this operation and report the blocker. "
+                f"Last error: {error}"
+            )
 
         return tr(
             'self_code.error_editing_code',
             value0=get_assistant().name,
-            error=error)
+            error=error
+        )
 
 
 def update_repo() -> str:

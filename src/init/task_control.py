@@ -24,6 +24,10 @@ CONTROL_FAILURE_PREFIXES = (
     "SELF_CODE_REQUIRED:",
 )
 
+TOOL_FAILURE_PREFIXES = (
+    "EDIT_FAILED:",
+)
+
 def encoded(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
 
@@ -59,7 +63,8 @@ def failed_result(value):
     if isinstance(value, str):
         stripped = value.strip()
 
-        if stripped.startswith(CONTROL_FAILURE_PREFIXES):
+        if stripped.startswith(CONTROL_FAILURE_PREFIXES + 
+                               TOOL_FAILURE_PREFIXES):
             return True
 
         try:
