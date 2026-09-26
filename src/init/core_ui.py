@@ -551,9 +551,14 @@ class ArloWindow(DesktopWindow):
         self.response_timer_display.setText(self._response_timer_text())
 
     def _response_timer_text(self):
-        seconds = self.response_timer.elapsed() // 1000
-        minutes, seconds = divmod(seconds, 60)
-        return f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
+        total_seconds = self.response_timer.elapsed() // 1000
+        minutes, seconds = divmod(total_seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        if hours:
+            return f"{hours}h {minutes}m"
+        if minutes:
+            return f"{minutes}m {seconds:02d}s"
+        return f"{seconds}s"
 
     def _start_response_timer(self):
         self.response_timer.start()
