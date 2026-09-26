@@ -18,6 +18,12 @@ from pydantic_ai.toolsets import FunctionToolset
 
 from src.init.self_code import get_repo_state
 
+CONTROL_FAILURE_PREFIXES = (
+    "EDIT_RETRY_BLOCKED:",
+    "DUPLICATE_INSPECTION:",
+    "SELF_CODE_REQUIRED:",
+)
+
 def encoded(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
 
@@ -51,16 +57,38 @@ def information_units(value):
 
 def failed_result(value):
     if isinstance(value, str):
+        stripped = value.strip()
+
+        if stripped.startswith(CONTROL_FAILURE_PREFIXES):
+            return True
+
         try:
             value = json.loads(value)
         except ValueError:
-            return value.strip().casefold().startswith((
-                "error:", "error ", "failed:", "denied", "cancelled",
-                "canceled", "inspection_budget_exhausted"))
+            return stripped.casefold().startswith((
+                "error:",
+                "error ",
+                "failed:",
+                "denied",
+                "cancelled",
+                "canceled",
+                "inspection_budget_exhausted",
+            ))
+
     if isinstance(value, dict):
-        return (bool(value.get("error")) or value.get("success") is False
-                or value.get("status") in ("error", "failed", "denied", "timeout", "cancelled")
-                or value.get("exit_code", 0) not in (0, None))
+        return (
+            bool(value.get("error"))
+            or value.get("success") is False
+            or value.get("status") in (
+                "error",
+                "failed",
+                "denied",
+                "timeout",
+                "cancelled",
+            )
+            or value.get("exit_code", 0) not in (0, None)
+        )
+
     return False
 
 INSPECTION_TOOLS = frozenset({
@@ -164,14 +192,22 @@ class TaskState:
         novel = key not in self.seen and (name, digest) not in self.seen
         self.seen.update((key, (name, digest)))
         failed = failed or failed_result(result)
+        control_rejection = (
+            isinstance(result, str)
+            and result.strip().startswith(CONTROL_FAILURE_PREFIXES))
+
         units = information_units(result) if not failed else set()
         gained = units - self.information_seen
         information_progress = bool(gained) and len(gained) / len(units) >= self.information_gain_ratio
+        
         if not failed:
             self.information_seen.update(units)
+        
         item = Evidence(call_id, name, encoded(arguments), digest, self.phase,
                         failed, self.sequence, str(result)[:700])
-        self.evidence[call_id] = item
+        
+        if not control_rejection:
+            self.evidence[call_id] = item
 
         changed = state_changed and not failed
 
@@ -189,7 +225,7 @@ class TaskState:
                 evidence=(call_id,))
             self.phase = "verify"
 
-        if failed and name in MUTATION_TOOLS:
+        if failed and name in MUTATION_TOOLS and not control_rejection:
             self.unresolved.add(call_id)
 
         if self.phase == "inspect":
@@ -210,7 +246,9 @@ class TaskState:
             information_progress=information_progress,
             progress_accepted=changed,
             reason=(
-                "failed"
+                "control_rejection"
+                if control_rejection
+                else "failed"
                 if failed
                 else "state_changed"
                 if changed
@@ -513,6 +551,32 @@ class TaskControl(AbstractCapability):
         if name == "task_checkpoint":
             return await handler(arguments)
 
+        if name in MUTATION_TOOLS and not self.state.criteria:
+            self.state.notice = (
+                "This task requires execution, but no acceptance criteria have "
+                "been defined. Create a task checkpoint with concise acceptance "
+                "criteria before performing state-changing actions.")
+            self.trace(
+                "execution_rejected_missing_checkpoint",
+                tool=name,
+                arguments=arguments,
+                call_id=call_id)
+            self.state.stagnant += 1
+            self.state.assess(allow_block=False)
+
+            return {
+                "status": "checkpoint_required",
+                "error": self.state.notice,
+            }
+
+        if name in MUTATION_TOOLS and self.state.phase == "inspect":
+            self.state.phase = "execute"
+            self.trace(
+                "phase_changed",
+                phase="execute",
+                trigger_tool=name,
+                call_id=call_id)
+
         if name in INSPECTION_TOOLS:
             encoded_arguments = encoded(arguments)
             duplicate = next(
@@ -523,14 +587,15 @@ class TaskControl(AbstractCapability):
                     and evidence.sequence >= self.state.last_change),None)
 
             if duplicate is not None:
+                self.state.stagnant += 1
                 self.trace(
                     "duplicate_inspection_rejected",
                     tool=name,
                     arguments=arguments,
                     call_id=call_id,
-                    existing_call_id=duplicate.id,
-                )
+                    existing_call_id=duplicate.id)
 
+                self.state.assess(allow_block=False)
                 return {
                     "status": "already_observed",
                     "evidence_id": duplicate.id,
