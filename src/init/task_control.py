@@ -589,6 +589,14 @@ class TaskControl(AbstractCapability):
         if name == "task_checkpoint":
             return await handler(arguments)
 
+        if (name in INSPECTION_TOOLS
+            and self.state.substantial_tool_use
+            and not self.state.criteria):
+            return (
+                "CHECKPOINT_REQUIRED: inspection has become substantial. "
+                "Define acceptance criteria with task_checkpoint before "
+                "continuing further inspection or execution.")
+
         if name in MUTATION_TOOLS and not self.state.criteria:
             self.state.notice = (
                 "This task requires execution, but no acceptance criteria have "
