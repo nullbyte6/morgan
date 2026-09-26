@@ -267,28 +267,49 @@ class TaskState:
         new_refs = set()
         for criterion, refs in completed.items():
             if criterion not in proposed or not refs:
-                return {"accepted": False, "reason": "Unknown criterion or missing verification evidence."}
+                return {
+                    "accepted": False,
+                    "reason": "Unknown criterion or missing verification evidence.",
+                }
+
+            existing_refs = proposed[criterion]
+
+            if existing_refs:
+                if refs != existing_refs:
+                    return {
+                        "accepted": False,
+                        "reason": (
+                            "A verified criterion is already complete. "
+                            "Reuse its existing evidence instead of replacing it."
+                        ),
+                    }
+                continue
+
             for ref in refs:
                 evidence = self.evidence.get(ref)
 
                 if evidence is None or evidence.failed:
                     return {
                         "accepted": False,
-                        "reason": "Use successful tool evidence to verify completed criteria.",
+                        "reason": (
+                            "Use successful tool evidence to verify completed criteria."
+                        ),
                     }
 
-                if self.last_change:
-                    if (
-                        evidence.phase != "verify"
-                        or evidence.sequence < self.last_change):
-                        return {
-                            "accepted": False,
-                            "reason": (
-                                "After execution, verification must use successful "
-                                "verification evidence collected after the latest change."
-                            )}
-            proposed[criterion] = refs
+                if self.last_change and (
+                    evidence.phase != "verify"
+                    or evidence.sequence < self.last_change):
+                    return {
+                        "accepted": False,
+                        "reason": (
+                            "Criteria completed after execution require successful "
+                            "verification evidence collected after the latest change."
+                        ),
+                    }
+
+            proposed[criterion] = list(refs)
             new_refs.update(refs)
+
         if resolves and (not new_refs or any(ref not in self.unresolved for ref in resolves)):
             return {"accepted": False, "reason": "Resolve observed errors with fresh verification evidence."}
         if any(not any(self.evidence[verified].sequence > self.evidence[failed].sequence
@@ -339,15 +360,17 @@ class TaskState:
                     criterion,
                     evidence=refs)
 
-        if resolves:
-            self.add_milestone(
-                "errors_resolved",
-                sorted(resolves),
-                evidence=new_refs)
+        is_complete = self.complete()
+        if is_complete:
+            self.status = "complete"
+            self.notice = ""
+            self.recovery_at = None
+            self.recovery_offered_at = None
+            self.recovery_started_at = None
 
         return {
             "accepted": True,
-            "complete": self.complete(),
+            "complete": is_complete,
         }
 
     def complete(self):
@@ -362,11 +385,6 @@ class TaskState:
                 evidence = self.evidence.get(ref)
 
                 if evidence is None or evidence.failed:
-                    return False
-
-                if self.last_change and (
-                    evidence.phase != "verify"
-                    or evidence.sequence < self.last_change):
                     return False
 
         return True

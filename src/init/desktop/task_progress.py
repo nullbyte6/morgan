@@ -169,8 +169,7 @@ class TaskProgressPill(QWidget):
         count = tr("task_progress.step_count", completed=self.completed, total=self.started)
         if self.state == "running":
             detail = (tr("task_progress.executing", step=self.completed + 1)
-                      if self.completed < self.started else
-                      tr("task_progress.reviewing"))
+                      if self.completed < self.started else "")
         else:
             detail = tr("task_progress." + self.state)
         self.step.setText(tr("task_progress.summary", detail=detail, count=count))
