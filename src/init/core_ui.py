@@ -112,6 +112,7 @@ from src.init.desktop.clipboard import (
     unregister_clipboard_handler,
 )
 from src.init.desktop.task_progress import TaskProgressPill
+from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
 from src.init.visuals.bridge import FlowchartBridge
@@ -212,7 +213,6 @@ class ArloWindow(DesktopWindow):
         self.browser_bridge = BrowserBridge(self)
         self.terminal_bridge = TerminalBridge(self)
         self.response_bridge = ResponseBridge(self)
-        self.chat_scroll = QScrollArea()
         self.thread = QThread(self)
 
         self.log_dir = Path.home() / ".arlo" / ".log"
@@ -330,20 +330,11 @@ class ArloWindow(DesktopWindow):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
 
-        root = QWidget()
+        root = CompositionSurface()
         root.setObjectName("root")
 
-        main = QVBoxLayout(root)
-        main.setContentsMargins(20, 12, 20, 20)
-        main.setSpacing(16)
-        self.main_layout = main
-
-        banner_group = QVBoxLayout()
-        banner_group.setSpacing(16)
-        banner_group.setAlignment(Qt.AlignCenter)
-        self.banner_group = banner_group
-        banner_group.addWidget(self.orb, 0, Qt.AlignCenter)
-        main.addLayout(banner_group, 1)
+        main = CompositionLayout(root)
+        main.addWidget(self.orb)
 
         self.status.setObjectName("status")
         self.status.setAlignment(Qt.AlignCenter)
@@ -430,7 +421,6 @@ class ArloWindow(DesktopWindow):
         self.attach.clicked.connect(self.attachment_tray.choose_files)
 
         self.send.setObjectName("send")
-        input_column.addWidget(self.send)
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
         self.send.hide()
@@ -441,7 +431,7 @@ class ArloWindow(DesktopWindow):
         self.input_group.setVisible(False)
 
         composer.addWidget(input_group, 1)
-        composer.addWidget(self.send, 0, Qt.AlignBottom)
+        composer.addWidget(self.send, 0, Qt.AlignVCenter)
 
         composer_container = QWidget()
         composer_container.setLayout(composer)
@@ -462,14 +452,6 @@ class ArloWindow(DesktopWindow):
         self.composer_widget.setLayout(composer_area)
         main.addWidget(self.composer_widget)
 
-        self.chat_scroll.setObjectName("chatScroll")
-        self.chat_scroll.setFrameShape(QFrame.NoFrame)
-        self.chat_scroll.setWidgetResizable(True)
-        self.chat_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.chat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.chat_scroll.setWidget(root)
-        self.attachment_tray.changed.connect(self.ensure_composer_visible)
-        self.input.textChanged.connect(self.ensure_composer_visible)
         self.input.textChanged.connect(self.update_send_button)
 
         self.workspace = Workspace()
@@ -477,14 +459,14 @@ class ArloWindow(DesktopWindow):
             self.workspace_content
         )
 
-        self.chat_scroll.setMinimumWidth(300)
         main_content = QWidget()
         main_content.setObjectName("mainWorkspaceContent")
         main_layout = QVBoxLayout(main_content)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         self.task_progress = TaskProgressPill(main_content)
-        main_layout.addWidget(self.chat_scroll, 1)
+        main_layout.addWidget(root, 1)
+        root.minimum_changed.connect(self._update_main_workspace_minimum)
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=f"Arlo {load_dev_file()["version"]}",
             content=main_content,
@@ -502,8 +484,6 @@ class ArloWindow(DesktopWindow):
         self.setCentralWidget(self.zoom_view)
         self.zoom_view.zoom_changed.connect(
             lambda percent: self.settings.setValue("ui_zoom", percent))
-        self.zoom_view.content_resized.connect(
-            lambda: QTimer.singleShot(0, self._resize_chat_content))
 
         self.set_enabled(False)
         self.load_stylesheet()
@@ -549,29 +529,21 @@ class ArloWindow(DesktopWindow):
         layout.addWidget(placeholder, 1)
         return content
 
-    def ensure_composer_visible(self):
-        QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(
-            self.input))
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._resize_chat_content()
-
     def showEvent(self, event):
         super().showEvent(event)
         if hasattr(self, "workspace"):
             self._workspace_hiding = False
             self.workspace.animate_visibility(True, restart=True)
 
-    def _resize_chat_content(self):
-        if not hasattr(self, "chat_scroll"):
-            return
-        viewport_height = self.chat_scroll.viewport().height()
-        root = self.chat_scroll.widget()
-        if root is not None and root.minimumHeight() != viewport_height:
-            root.setMinimumHeight(max(0, viewport_height))
-        self._layout_task_progress()
-        QTimer.singleShot(0, self._update_orb_scale)
+    def _update_main_workspace_minimum(self, size):
+        panel = self.workspace.get_panel(self.main_workspace_panel_id)
+        if panel is not None:
+            margins = panel.layout().contentsMargins()
+            minimum = QSize(size.width() + margins.left() + margins.right(),
+                            size.height() + panel.header.height() + panel.layout().spacing()
+                            + margins.top() + margins.bottom())
+            if panel.minimumSize() != minimum:
+                panel.setMinimumSize(minimum)
 
     def _update_response_timer(self):
         if not self.response_timer_running:
@@ -599,31 +571,6 @@ class ArloWindow(DesktopWindow):
         self.response_timer_running = False
         self.response_timer_tick.stop()
         self.response_timer_display.setText("0s")
-
-    def _layout_task_progress(self):
-        """Keep task progress over the chat surface without changing its layout."""
-        if not hasattr(self, "task_progress"):
-            return
-        host = self.task_progress.parentWidget()
-        if host is None:
-            return
-        self.task_progress.setGeometry(host.rect().adjusted(0, 0, 0, 0))
-        self.task_progress.raise_()
-
-    def _update_orb_scale(self):
-        """Keep the main orb readable while fitting the available height."""
-        if not hasattr(self, "chat_scroll"):
-            return
-        available = self.chat_scroll.viewport().height()
-        composer_height = self.composer_widget.sizeHint().height()
-        compact = available < composer_height + 360
-        banner_height = max(120, available - composer_height - 150)
-        target = max(120 if compact else 180,
-                     min(384, int(banner_height * (0.64 if compact else 0.82))))
-        if self.orb.sizeHint().width() != target:
-            self.orb.set_size(target)
-        if hasattr(self, "main_layout"):
-            self.main_layout.setStretch(0, 0 if compact else 1)
 
     def focus_main_workspace(self):
         self.workspace.focus_panel(self.main_workspace_panel_id)
@@ -713,6 +660,7 @@ class ArloWindow(DesktopWindow):
         self.worker.speaking.connect(self.on_speaking)
         self.worker.phase.connect(self.on_phase)
         self.worker.phase.connect(self.task_progress.on_phase)
+        self.worker.task_title.connect(self.task_progress.set_task_title)
         self.worker.permission_denied.connect(self.on_permission_denied)
         self.worker.subtitle.connect(self.on_subtitle)
         self.worker.finished.connect(self.on_finished)
@@ -970,7 +918,6 @@ class ArloWindow(DesktopWindow):
         self.set_orbs_visual_state(Orb.State.IDLE)
         self.set_enabled(True)
         self._reveal_startup_controls()
-        self._update_orb_scale()
 
         if self.isVisible():
             self.input.setFocus()
@@ -1199,9 +1146,7 @@ class ArloWindow(DesktopWindow):
 
     def start_prompt(self, prompt):
         self.turn_id += 1
-        title = (prompt.transcript if isinstance(prompt, DesktopVoiceMessage)
-                 else prompt.display_text)
-        self.task_progress.begin(self.turn_id, title)
+        self.task_progress.begin(self.turn_id)
         self.showing_greeting = False
         self.worker.cancel_event = threading.Event()
         self.stopping = False

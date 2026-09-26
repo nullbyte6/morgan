@@ -23,6 +23,7 @@ from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import *
 
 from src.init.lang import tr
+from src.init.task_state import normalize_task_title
 
 class TaskProgressPill(QWidget):
     """A dismissible view of the desktop's existing execution-phase signals."""
@@ -44,6 +45,7 @@ class TaskProgressPill(QWidget):
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 8, 12, 8)
         row.setSpacing(0)
+        row.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.pill = QFrame(self)
         self.pill.setObjectName("taskProgressPill")
         self.pill.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -86,10 +88,9 @@ class TaskProgressPill(QWidget):
         self.refresh_language()
         self.hide()
 
-    def begin(self, turn_id, title):
+    def begin(self, turn_id, title=""):
         self.turn_id = turn_id
-        words = str(title).split()
-        self.order_title = " ".join(words) if len(words) in (3, 4) else ""
+        self.order_title = normalize_task_title(title)
         self.started = self.completed = 0
         self.active = True
         self.dismissed = False
@@ -102,12 +103,7 @@ class TaskProgressPill(QWidget):
     def on_phase(self, turn_id, phase):
         if turn_id != self.turn_id or not self.active:
             return
-        if phase.startswith("title:"):
-            words = phase[6:].split()
-            if len(words) not in (3, 4):
-                return
-            self.order_title = " ".join(words)
-        elif phase.startswith("step:"):
+        if phase.startswith("step:"):
             try:
                 detail = json.loads(phase[5:])
             except ValueError:
@@ -137,6 +133,15 @@ class TaskProgressPill(QWidget):
         self._render()
         if (self.started >= 2 or phase == "blocked") and not self.dismissed:
             self.setVisible(True)
+
+    @Slot(int, str)
+    def set_task_title(self, turn_id, title):
+        if turn_id != self.turn_id or not self.active or self.order_title:
+            return
+        title = normalize_task_title(title)
+        if title:
+            self.order_title = title
+            self._render()
 
     def awaiting_permission(self, turn_id, *, waiting=True):
         if turn_id == self.turn_id and self.active:
@@ -196,6 +201,21 @@ class TaskProgressPill(QWidget):
                 widget.style().polish(widget)
                 widget.update()
         self._fit_height()
+        self._place()
+
+    def _place(self):
+        host = self.parentWidget()
+        if host is None:
+            return
+        width = min(host.width(), self.fontMetrics().averageCharWidth() * 48)
+        height = self.layout().totalHeightForWidth(width)
+        if height < 0:
+            height = self.layout().sizeHint().height()
+        target = self.geometry()
+        target.setRect(0, 0, max(0, width), min(host.height(), max(0, height)))
+        if self.geometry() != target:
+            self.setGeometry(target)
+        self.raise_()
 
     def _fit_height(self):
         height = self.pill.layout().totalHeightForWidth(self.pill.width())
@@ -214,6 +234,5 @@ class TaskProgressPill(QWidget):
         if watched is self.pill and event.type() == event.Type.Resize:
             self._fit_height()
         if watched is self.parentWidget() and event.type() == event.Type.Resize:
-            self.setGeometry(watched.rect())
-            self.raise_()
+            self._place()
         return super().eventFilter(watched, event)
