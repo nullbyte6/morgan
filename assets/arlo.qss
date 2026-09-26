@@ -25,7 +25,7 @@ QToolTip {
 QWidget#mascotSubtitleBubble {
     background-color: #24273a;
     border: 2px solid #494d64;
-    border-radius: 24px;
+    border-radius: 10px;
     color: #cad3f5;
     font-size: 16px;
 }

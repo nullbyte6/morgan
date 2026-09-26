@@ -33,7 +33,8 @@ class MascotSubtitleBubble(QWidget):
     WIDTH = 320
     GAP = 3
     PADDING_X = 12
-    PADDING_Y = 10
+    PADDING_Y = 16
+    RADIUS = 12
     ANIMATION_MS = 120
 
     def __init__(self, mascot):
@@ -58,7 +59,6 @@ class MascotSubtitleBubble(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
-        self.setFixedWidth(self.WIDTH)
         self.setFixedHeight(
             self.fontMetrics().height() + self.PADDING_Y * 2 + 4
         )
@@ -82,7 +82,7 @@ class MascotSubtitleBubble(QWidget):
     def _fit_text(self, text):
         """Keep the newest words within the available width."""
         metrics = self.fontMetrics()
-        available = self.width() - self.PADDING_X * 2
+        available = self.WIDTH - self.PADDING_X * 2
 
         words = text.split()
 
@@ -105,6 +105,20 @@ class MascotSubtitleBubble(QWidget):
         return metrics.elidedText(word, Qt.TextElideMode.ElideLeft,
             available)
 
+    def _update_width(self):
+        """Resize the bubble to fit the currently visible subtitle."""
+        if not self._visible_text:
+            return
+
+        text_width = self.fontMetrics().horizontalAdvance(self._visible_text)
+        width = min(
+            self.WIDTH,
+            text_width + self.PADDING_X * 2 + 4)
+
+        if self.width() != width:
+            self.setFixedWidth(width)
+            self.reposition()
+
     def set_subtitle(self, text: str, active: bool):
         """Receive the latest subtitle without changing the TTS pipeline."""
         subtitle = " ".join(str(text or "").split())
@@ -125,6 +139,7 @@ class MascotSubtitleBubble(QWidget):
 
             self._source_text = subtitle
             self._visible_text = self._fit_text(subtitle)
+            self._update_width()
 
             appended = (
                 bool(old_source)
@@ -177,22 +192,37 @@ class MascotSubtitleBubble(QWidget):
         top = self.PADDING_Y
 
         available = right - left
-        painter.save()
-        painter.setClipRect(QRectF(left, top, available,
-                self.height() - self.PADDING_Y * 2))
-
-        # Dibujar fondo visible con el color Window de la paleta
         background_color = self.palette().color(QPalette.ColorRole.Window)
-        painter.fillRect(QRectF(left, top, available,
-            self.height() - self.PADDING_Y * 2), background_color)
+        background_rect = QRectF(self.rect()).adjusted(2, 2, -2, -2)
 
-        painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(background_color)
+        painter.drawRoundedRect(
+            background_rect,
+            self.RADIUS,
+            self.RADIUS)
+
+        painter.save()
+        painter.setClipRect(QRectF(
+            left,
+            top,
+            available,
+            self.height() - self.PADDING_Y * 2))
+
+        painter.setPen(
+            self.palette().color(QPalette.ColorRole.WindowText))
         painter.setFont(self.font())
 
-        baseline = ((self.height() - metrics.height()) / 2 + metrics.ascent())
+        baseline = (
+            (self.height() - metrics.height()) / 2
+            + metrics.ascent())
+
         text_width = metrics.horizontalAdvance(self._visible_text)
         x = right - text_width + self._offset
-        painter.drawText(QPointF(x, baseline),self._visible_text)
+
+        painter.drawText(
+            QPointF(x, baseline),
+            self._visible_text)
 
         painter.restore()
         painter.end()
