@@ -590,11 +590,9 @@ class Assistant:
         task_context = (session.context if session is not None else
                         SessionContext(uuid.uuid4().hex, HOME_PATH / ".log"))
         previous = self._active_task_controller
-        if previous is not None and previous.state.status in {
-            "active",
-            "cancelled"}:
+        if (previous is not None
+            and previous.state.status == "interrupted"):
             controller = previous.resume(
-                prompt=prompt,
                 context=task_context,
                 cancel_event=cancel_event)
         else:

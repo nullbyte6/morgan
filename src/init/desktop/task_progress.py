@@ -178,7 +178,7 @@ class TaskProgressPill(QWidget):
             kind, tool, subject, step = self.step_detail
             detail = tr("task_progress.step_" + kind, tool=tool)
             if subject and kind != "checkpoint":
-                detail += " · " + subject
+                detail += subject
             subtitle = tr("task_progress.step_detail", step=step, detail=detail)
         self.subtitle.setText(subtitle)
         self.subtitle.setVisible(self.step_detail is not None)

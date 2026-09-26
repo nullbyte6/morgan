@@ -242,12 +242,31 @@ class TaskState:
                 "Inspection is repeating previously observed information. "
                 "Do not repeat equivalent tool calls. Reuse existing evidence, "
                 "update the task checkpoint, and complete or narrow the remaining criteria.")
-            
             self.record(
                 "recovery_requested",
                 stagnant=self.stagnant,
                 requests=self.requests,
                 sequence=self.sequence)
+            return
+
+        if not allow_block: return
+        if self.recovery_offered_at is None: return
+        if self.recovery_started_at is None: return
+        if self.sequence > self.recovery_sequence: return
+
+        self.status = "blocked"
+        self.notice = (
+            "The task is blocked because the recovery attempt produced no new "
+            "evidence or verified progress. A different strategy or user "
+            "intervention is required."
+        )
+
+        self.record(
+            "blocked",
+            reason="recovery_without_progress",
+            requests=self.requests,
+            sequence=self.sequence,
+        )
 
     def checkpoint(self, phase, criteria, completed, decisions, strategy, resolves):
         if self.status == "blocked":
