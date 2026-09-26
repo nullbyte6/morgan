@@ -442,12 +442,7 @@ class TaskControl(AbstractCapability):
                    decisions=decisions, strategy=strategy, resolves=resolves, result=result)
         if not self.state.notice:
             self.last_notice = ""
-        if self.on_progress and self.state.last_progress_request != before:
-            from src.init.lang import tr
-            verified = sum(bool(refs) and all(self.state.evidence[ref].sequence >= self.state.last_change
-                                            for ref in refs) for refs in self.state.criteria.values())
-            self.on_progress(tr("task_control.verified", verified=verified,
-                                total=len(self.state.criteria)) + "\n")
+        
         return result
 
     def check_cancelled(self):
@@ -486,24 +481,24 @@ class TaskControl(AbstractCapability):
                 and fingerprint(json.loads(evidence.arguments)) == argument_fingerprint
                 and not evidence.failed), None,)
 
-        if duplicate is not None:
-            self.trace(
-                "duplicate_inspection_rejected",
-                tool=name,
-                arguments=arguments,
-                call_id=call_id,
-                existing_call_id=duplicate.id,
-            )
+            if duplicate is not None:
+                self.trace(
+                    "duplicate_inspection_rejected",
+                    tool=name,
+                    arguments=arguments,
+                    call_id=call_id,
+                    existing_call_id=duplicate.id,
+                )
 
-            return {
-                "status": "already_observed",
-                "evidence_id": duplicate.id,
-                "note": (
-                    f"Equivalent inspection evidence already exists as {duplicate.id}. "
-                    "Reuse that evidence in task_checkpoint instead of repeating "
-                    "or rephrasing this inspection."
-                ),
-            }
+                return {
+                    "status": "already_observed",
+                    "evidence_id": duplicate.id,
+                    "note": (
+                        f"Equivalent inspection evidence already exists as {duplicate.id}. "
+                        "Reuse that evidence in task_checkpoint instead of repeating "
+                        "or rephrasing this inspection."
+                    ),
+                }
         
         if self.state.status == "complete":
             return {"status": "complete", "note": "All criteria are verified. Return the final answer."}
@@ -630,9 +625,7 @@ class TaskControl(AbstractCapability):
             self.last_notice = ""
         if self.state.notice and self.last_notice != self.state.notice:
             self.last_notice = self.state.notice
-            if self.on_progress:
-                from src.init.lang import tr
-                self.on_progress(tr("task_control.recovering") + "\n")
+            
         messages = [message for message in request_context.messages
                     if not (message.metadata or {}).get("arlo_task_snapshot")]
         messages = self.compact(messages)
