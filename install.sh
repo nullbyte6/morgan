@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 readonly ASSISTANT_NAME="Arlo"
-readonly ARLO_MODEL="${ARLO_MODEL:-ministral-3:14b}"
+readonly ARLO_MODEL="${ARLO_MODEL:-qwen3.5:9b}"
 readonly ARLO_AUDIO_MODEL="${ARLO_AUDIO_MODEL:-gemma4:e2b}"
 readonly ARLO_VOICE_MODEL="${ARLO_VOICE_MODEL:-FunAudioLLM/Fun-CosyVoice3-0.5B-2512}"
 # shellcheck disable=SC2155
@@ -334,7 +334,7 @@ fi
 
 ensure_ollama_server
 
-info "Downloading/verifying ${ARLO_MODEL} (approximately 9.2 GB)..."
+info "Downloading/verifying ${ARLO_MODEL} (approximately 6.6 GB)..."
 "$OLLAMA_BIN" pull "$ARLO_MODEL"
 
 info "Downloading/verifying ${ARLO_AUDIO_MODEL} (approximately 7.2 GB)..."

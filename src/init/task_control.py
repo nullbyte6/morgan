@@ -580,22 +580,11 @@ class TaskControl(AbstractCapability):
         self.check_cancelled()
         self.state.tool_attempts += 1
 
-        if name in MUTATION_TOOLS or self.state.tool_attempts >= 3:
-            self.state.substantial_tool_use = True
-
         if self.state.status == "blocked":
             return {"status": "blocked", "error": self.state.notice}
         
         if name == "task_checkpoint":
             return await handler(arguments)
-
-        if (name in INSPECTION_TOOLS
-            and self.state.substantial_tool_use
-            and not self.state.criteria):
-            return (
-                "CHECKPOINT_REQUIRED: inspection has become substantial. "
-                "Define acceptance criteria with task_checkpoint before "
-                "continuing further inspection or execution.")
 
         if name in MUTATION_TOOLS and not self.state.criteria:
             self.state.notice = (
