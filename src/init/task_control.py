@@ -227,8 +227,26 @@ class TaskState:
             allow_block=allow_block,
             stagnant=self.stagnant,
             last_progress=self.last_progress,
-            last_progress_request=self.last_progress_request,
-        )
+            last_progress_request=self.last_progress_request)
+
+        if self.status != "active":
+            return
+
+        if self.stagnant < 3:
+            return
+
+        if self.recovery_at is None:
+            self.recovery_at = self.requests
+            self.notice = (
+                "Inspection is repeating previously observed information. "
+                "Do not repeat equivalent tool calls. Reuse existing evidence, "
+                "update the task checkpoint, and complete or narrow the remaining criteria.")
+            
+            self.record(
+                "recovery_requested",
+                stagnant=self.stagnant,
+                requests=self.requests,
+                sequence=self.sequence)
 
     def checkpoint(self, phase, criteria, completed, decisions, strategy, resolves):
         if self.status == "blocked":
@@ -249,10 +267,25 @@ class TaskState:
         for criterion, refs in completed.items():
             if criterion not in proposed or not refs:
                 return {"accepted": False, "reason": "Unknown criterion or missing verification evidence."}
-            if any(ref not in self.evidence or self.evidence[ref].failed
-                   or self.evidence[ref].phase != "verify"
-                   or self.evidence[ref].sequence < self.last_change for ref in refs):
-                return {"accepted": False, "reason": "Use successful verification tool IDs after the latest execution."}
+            for ref in refs:
+                evidence = self.evidence.get(ref)
+
+                if evidence is None or evidence.failed:
+                    return {
+                        "accepted": False,
+                        "reason": "Use successful tool evidence to verify completed criteria.",
+                    }
+
+                if self.last_change:
+                    if (
+                        evidence.phase != "verify"
+                        or evidence.sequence < self.last_change):
+                        return {
+                            "accepted": False,
+                            "reason": (
+                                "After execution, verification must use successful "
+                                "verification evidence collected after the latest change."
+                            )}
             proposed[criterion] = refs
             new_refs.update(refs)
         if resolves and (not new_refs or any(ref not in self.unresolved for ref in resolves)):
@@ -325,9 +358,25 @@ class TaskState:
         })
 
     def complete(self):
-        return (self.phase == "verify" and bool(self.criteria) and not self.unresolved
-                and all(refs and all(self.evidence[ref].sequence >= self.last_change
-                                    for ref in refs) for refs in self.criteria.values()))
+        if self.phase != "verify" or not self.criteria or self.unresolved:
+            return False
+
+        for refs in self.criteria.values():
+            if not refs:
+                return False
+
+            for ref in refs:
+                evidence = self.evidence.get(ref)
+
+                if evidence is None or evidence.failed:
+                    return False
+
+                if self.last_change and (
+                    evidence.phase != "verify"
+                    or evidence.sequence < self.last_change):
+                    return False
+
+        return True
 
     def snapshot(self):
         return {
@@ -436,8 +485,35 @@ class TaskControl(AbstractCapability):
         self.state.tool_attempts += 1
         if self.state.status == "blocked":
             return {"status": "blocked", "error": self.state.notice}
+        
         if name == "task_checkpoint":
             return await handler(arguments)
+
+        if name in INSPECTION_TOOLS:
+            argument_fingerprint = fingerprint(arguments)
+
+            duplicate = any(
+                evidence.tool == name
+                and fingerprint(json.loads(evidence.arguments)) == argument_fingerprint
+                and not evidence.failed
+                for evidence in self.state.evidence.values())
+
+            if duplicate:
+                self.trace(
+                    "duplicate_inspection_rejected",
+                    tool=name,
+                    arguments=arguments,
+                    call_id=call_id)
+                
+                return {
+                    "status": "already_observed",
+                    "note": (
+                        "Equivalent inspection evidence already exists in the task "
+                        "state. Reuse the existing evidence instead of repeating this "
+                        "tool call."
+                    ),
+                }
+        
         if self.state.status == "complete":
             return {"status": "complete", "note": "All criteria are verified. Return the final answer."}
 
@@ -484,7 +560,27 @@ class TaskControl(AbstractCapability):
 
     async def on_tool_validate_error(self, ctx, *, call, tool_def, args, error):
         self.state.tool_attempts += 1
-        self.state.observe(call.tool_name, args, str(error), call.tool_call_id, failed=True)
+
+        if call.tool_name == "task_checkpoint":
+            self.trace(
+                "checkpoint_validation_error",
+                call_id=call.tool_call_id,
+                arguments=args,
+                error=str(error),
+            )
+            raise ToolFailed(
+                "Invalid task_checkpoint arguments. Correct the checkpoint call "
+                "using the declared schema. Do not repeat inspection solely because "
+                "the checkpoint call was invalid."
+            )
+
+        self.state.observe(
+            call.tool_name,
+            args,
+            str(error),
+            call.tool_call_id,
+            failed=True,
+        )
         raise ToolFailed(str(error))
 
     def archive(self, raw, label):
