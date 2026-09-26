@@ -30,7 +30,7 @@ from pydantic_ai.providers.ollama import OllamaProvider
 from src.init.config import load_dev_file
 from src.init.desktop.capture import request_screen_image
 
-VISION_MODEL = os.getenv("ARLO_VISION_MODEL", load_dev_file()["vision_model"])
+VISION_MODEL = os.getenv("ARLO_VISION_MODEL", load_dev_file()["base_model_name"])
 IMAGE_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
