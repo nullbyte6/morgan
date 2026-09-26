@@ -27,6 +27,7 @@ import sys
 import threading
 import tempfile
 from getpass import getuser
+from tkinter import font
 
 from src.init.identity import register_assistant
 from src.init.utils import *
@@ -1662,6 +1663,9 @@ def main():
 
         main_font = load_font("Inter_24pt-Regular.ttf")
         nerd_font = load_font("JetBrainsMonoNLNerdFontMono-Medium.ttf")
+        
+        main_font.setKerning(True)
+        main_font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 96)
         app.setFont(QFont(main_font, 11))
         window = ArloWindow()
         window.show()
