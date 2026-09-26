@@ -119,8 +119,7 @@ class TaskProgressPill(QWidget):
             subject = detail.get("subject", "")
             if not isinstance(subject, str):
                 return
-            self.step_detail = (detail["kind"], " ".join(detail["tool"].split())[:80],
-                                " ".join(subject.split())[:80], self.completed)
+            self.step_detail = (detail["kind"], " ".join(detail["tool"].split())[:80]," ".join(subject.split())[:80], self.completed)
         elif phase == "executing":
             self.started += 1
             self.state = "running"
@@ -178,7 +177,7 @@ class TaskProgressPill(QWidget):
             kind, tool, subject, step = self.step_detail
             detail = tr("task_progress.step_" + kind, tool=tool)
             if subject and kind != "checkpoint":
-                detail += subject
+                detail += "\n" + subject
             subtitle = tr("task_progress.step_detail", step=step, detail=detail)
         self.subtitle.setText(subtitle)
         self.subtitle.setVisible(self.step_detail is not None)

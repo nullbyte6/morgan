@@ -175,14 +175,14 @@ class ResponseView(QWidget):
         self.document_view.document().setDefaultStyleSheet("""
             code {
                 font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
-                font-size: 14px;
+                font-size: 16px;
                 color: #f5c2e7;
                 background-color: #303244;
             }
 
             pre {
                 font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
-                font-size: 14px;
+                font-size: 16px;
             }
 
             table {
@@ -203,8 +203,7 @@ class ResponseView(QWidget):
 
             tr:nth-child(even) {
                 background-color: #242638;
-            }
-        """)
+            }""")
         layout.addWidget(self.document_view)
 
         self._source = ""
