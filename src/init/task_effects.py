@@ -164,6 +164,9 @@ def resources_for(name, arguments):
     if spec.path_argument:
         base = ARLO_ROOT if spec.source else Path.cwd()
         path = arguments.get(spec.path_argument, ".")
+        if name == "read_code" and arguments.get("cursor"):
+            from .self_code import code_cursor
+            path = code_cursor(arguments["cursor"])["path"]
         make_resource = entry_resource if name in {"delete_file", "delete_directory", "rename_directory"} else file_resource
         resources.append(make_resource(base / path))
         if name == "rename_directory" and arguments.get("new_name"):

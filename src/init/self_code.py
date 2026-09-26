@@ -22,6 +22,9 @@ from src.init.lang import tr
 
 
 import ast
+import base64
+import hashlib
+from typing import Literal
 import json
 import logging
 import subprocess
@@ -241,75 +244,80 @@ def search_code(query: str, directory: str = ".",
         return ActionResult(Outcome.REJECTED, str(error), "inspection_precondition").payload()
 
 
-def read_code(path: str, start_line: int = 1, end_line: int = 0,
-              character_offset: int = 0) -> dict:
-    """Inspect a bounded source range in the working inspection context.
-    Use search_code() first to locate relevant symbols and request only the
-    necessary ranges. Reuse existing evidence; older results may be archived
-    to make room for new evidence. Do not repeatedly read unchanged ranges.
+def code_cursor(cursor):
+    try:
+        value = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")))
+        if not isinstance(value, dict) or set(value) != {"version", "path", "revision", "mode", "start", "end", "offset"}:
+            raise ValueError("Invalid cursor fields")
+        if value["version"] != 1 or value["mode"] not in {"content", "index"} or not isinstance(value["path"], str):
+            raise ValueError("Unsupported cursor")
+        if not isinstance(value["revision"], str) or any(type(value[key]) is not int for key in ("start", "end", "offset")):
+            raise ValueError("Invalid cursor types")
+        if value["start"] < 1 or value["end"] < value["start"] or value["offset"] < 0:
+            raise ValueError("Invalid cursor range")
+        _path(value["path"])
+        return value
+    except (ValueError, TypeError, UnicodeError) as error:
+        raise ValueError("Use an unchanged next_cursor returned by read_code") from error
+
+
+def read_code(path: str = "", start_line: int = 1, end_line: int = 0,
+              character_offset: int = 0, cursor: str = "",
+              mode: Literal["content", "index"] = "content") -> dict:
+    """Read source content, or explicitly request mode='index'.
+    Results identify actual coverage, truncated and exhausted ranges, and next_cursor.
+    Continue with read_code(cursor=next_cursor), without changing any range arguments.
+    A cursor is bound to the source revision; stale cursors require restarting that range.
+    Index pages describe symbols and never count as source-body coverage.
     """
     from .brain import decode_text
-
     try:
-        if start_line < 1 or end_line < 0 or character_offset < 0:
-            raise ValueError("line numbers and character_offset cannot be negative")
+        continuation = code_cursor(cursor) if cursor else None
+        if continuation:
+            if path or start_line != 1 or end_line or character_offset or mode != "content":
+                raise ValueError("Use cursor alone, without path, range, offset or mode arguments")
+            path, start_line, end_line, character_offset, mode = (continuation[key]
+                for key in ("path", "start", "end", "offset", "mode"))
+        if not path or start_line < 1 or end_line < 0 or character_offset < 0:
+            raise ValueError("Supply a source path and nonnegative range/offset values")
         if end_line and end_line < start_line:
             raise ValueError("end_line cannot be before start_line")
         target = _path(path)
-        result, _ = decode_text(target.read_bytes())
-        lines = result.splitlines(keepends=True)
+        raw = target.read_bytes()
+        revision = hashlib.sha256(raw).hexdigest()
+        if continuation and revision != continuation["revision"]:
+            return ActionResult(Outcome.REJECTED, {"restart": {"path": path, "start_line": start_line,
+                                "end_line": end_line, "mode": mode}}, "stale_cursor").payload()
+        content, _ = decode_text(raw)
+        lines = content.splitlines(keepends=True)
         total_lines = len(lines)
-        if (start_line == 1 and not end_line and character_offset == 0
-                and len(result) > READ_CODE_MAX_CHARACTERS):
-            index = _source_index(path, result)
-            output = (index or result)[:READ_CODE_MAX_CHARACTERS]
-            allowance = len(output)
-            if allowance < len(index):
-                output += "\nIndex truncated by the per-call inspection limit."
-            logging.getLogger("arlo.context").info(
-                "Indexed read_code source=%s total_lines=%d total_bytes=%d "
-                "returned_bytes=%d",
-                path, total_lines, len(result.encode("utf-8")),
-                len(output.encode("utf-8")))
-            return ActionResult(Outcome.SUCCESS, output).payload()
         if start_line > max(total_lines, 1):
             raise ValueError(f"start_line exceeds the file's {total_lines} lines")
-        requested_end = end_line or min(total_lines, start_line + READ_CODE_MAX_LINES - 1)
-        bounded_end = min(requested_end, total_lines,
-                          start_line + READ_CODE_MAX_LINES - 1)
-        block = "".join(lines[start_line - 1:bounded_end])
-        allowance = _inspection_allowance(
-            max(0, len(block) - character_offset))
-        if allowance == 0:
-            return ActionResult(Outcome.NEGATIVE, f"No source characters at offset {character_offset} in this range.").payload()
-        if (start_line == 1 and not end_line and character_offset == 0
-                and len(result) <= READ_CODE_MAX_CHARACTERS
-                and allowance == len(result)):
-            return ActionResult(Outcome.SUCCESS, result).payload()
-        chunk = block[character_offset:character_offset + allowance]
-        next_character = character_offset + len(chunk)
-        header = (
-            f"Source: {path}; lines {start_line}-{bounded_end} of {total_lines}; "
-            f"characters {character_offset}-{next_character} of {len(block)} in this range; "
-            f"file characters={len(result)}."
-        )
-        if next_character < len(block):
-            header += (
-                " Continue this range with read_code(path="
-                f"{path!r}, start_line={start_line}, end_line={bounded_end}, "
-                f"character_offset={next_character})."
-            )
-        elif bounded_end < total_lines:
-            header += f" Continue with read_code(path={path!r}, start_line={bounded_end + 1})."
-        output = header + "\n\n" + chunk
-        logging.getLogger("arlo.context").info(
-            "Bounded read_code source=%s total_lines=%d total_bytes=%d "
-            "range=%d-%d offset=%d returned_bytes=%d",
-            path, total_lines, len(result.encode("utf-8")), start_line,
-            bounded_end, character_offset, len(output.encode("utf-8")))
-        return ActionResult(Outcome.SUCCESS, output).payload()
+        range_end = min(end_line or max(total_lines, 1), max(total_lines, 1))
+        block = _source_index(path, content) if mode == "index" else "".join(lines[start_line - 1:range_end])
+        if character_offset > len(block):
+            raise ValueError("Cursor/offset is beyond the requested range")
+        page = block[character_offset:character_offset + READ_CODE_MAX_CHARACTERS]
+        page = "".join(page.splitlines(keepends=True)[:READ_CODE_MAX_LINES])
+        next_offset = character_offset + len(page)
+        truncated = next_offset < len(block)
+        next_cursor = None
+        if truncated:
+            value = {"version": 1, "path": str(target), "revision": revision, "mode": mode,
+                     "start": start_line, "end": range_end, "offset": next_offset}
+            next_cursor = base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).decode()
+        prefix = sum(len(line) for line in lines[:start_line - 1])
+        data = {"resource": "file:" + str(target), "revision": revision, "kind": mode,
+                "content": page, "truncated": truncated, "next_cursor": next_cursor,
+                "exhausted": not truncated, "range": {"start_line": start_line, "end_line": range_end,
+                    "character_offset": character_offset, "next_character_offset": next_offset},
+                "coverage": {"kind": mode, "start_character": prefix + character_offset if mode == "content" else character_offset,
+                    "end_character": prefix + next_offset if mode == "content" else next_offset},
+                "total_lines": total_lines}
+        return ActionResult(Outcome.SUCCESS if page else Outcome.NEGATIVE, data, "source_page").payload()
     except (OSError, ValueError) as error:
-        return ActionResult(Outcome.REJECTED, str(error), "inspection_precondition").payload()
+        return ActionResult(Outcome.REJECTED, {"reason": str(error), "expected": "Source path or returned cursor"},
+                            "inspection_precondition").payload()
 
 
 def edit_code(path: str, old_text: str, new_text: str) -> dict:
