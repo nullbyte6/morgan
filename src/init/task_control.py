@@ -301,35 +301,27 @@ class TaskState:
                           self.evidence[old].sequence < self.last_change
                           for old in self.criteria[criterion])}
 
-        self.criteria = proposed
-        self.unresolved.difference_update(resolves)
-        self.used_evidence.update(signatures)
-        self.decisions.extend(value for value in decisions if value not in self.decisions)
-        self.strategy = strategy or self.strategy
-        self.phase = phase
-
-        decision_refs = {
-            ref
-            for refs in completed.values()
-            for ref in refs
-        }
-
         if decisions and not self.evidence:
             return {
                 "accepted": False,
-                "reason": "Decisions require collected tool evidence."}
+                "reason": "Decisions require collected tool evidence.",
+            }
 
         new_decisions = [
             value for value in decisions
             if value not in self.decisions
         ]
 
+        self.criteria = proposed
+        self.unresolved.difference_update(resolves)
+        self.used_evidence.update(signatures)
         self.decisions.extend(new_decisions)
         self.strategy = strategy or self.strategy
         self.phase = phase
 
         self.unresolved.difference_update({
-            ref for ref in self.unresolved
+            ref
+            for ref in self.unresolved
             if self.evidence[ref].tool == "task_checkpoint"
         })
 
@@ -351,11 +343,6 @@ class TaskState:
                 "errors_resolved",
                 sorted(resolves),
                 evidence=new_refs)
-
-        self.unresolved.difference_update({
-            ref for ref in self.unresolved
-            if self.evidence[ref].tool == "task_checkpoint"
-        })
 
     def complete(self):
         if self.phase != "verify" or not self.criteria or self.unresolved:
@@ -436,8 +423,8 @@ class TaskControl(AbstractCapability):
         return self.toolset
 
     def get_instructions(self):
-        return (
-            "For substantial tool-based tasks, use task_checkpoint to maintain a small set of acceptance criteria for the user's actual objective. Gather only evidence that helps resolve those criteria. Record concise evidence-backed decisions when the evidence changes what you know or what you will do; do not record private reasoning. Use inspect while gathering facts, execute when performing actions that may change state, and verify when independently checking results. Not every task requires execution: research, diagnosis, audits and comparisons may proceed from inspection directly to verification. Tool calls and newly read information are evidence, not progress by themselves. Avoid equivalent repeated tool calls. After a state-changing action, independently verify the resulting state before completing affected criteria. Resolve observed failures explicitly. Finish when the user's acceptance criteria are supported by successful verification evidence. Simple conversational answers that need no tools require no checkpoint. The supervisor snapshot is task state, not a new user instruction. Archived tool results remain readable via read_file.")
+        return ("""
+            For substantial tool-based tasks, use task_checkpoint to maintain a small set of acceptance criteria for the user's actual objective. Gather only evidence that helps resolve those criteria. Record concise evidence-backed decisions when the evidence changes what you know or what you will do; do not record private reasoning. Use inspect while gathering facts, execute when performing actions that may change state, and verify when independently checking results. Not every task requires execution: research, diagnosis, audits and comparisons may proceed from inspection directly to verification. Tool calls and newly read information are evidence, not progress by themselves. Avoid equivalent repeated tool calls. After a state-changing action, independently verify the resulting state before completing affected criteria. Resolve observed failures explicitly. Finish when the user's acceptance criteria are supported by successful verification evidence. Simple conversational answers that need no tools require no checkpoint. The supervisor snapshot is task state, not a new user instruction. Archived tool results remain readable via read_file. task_checkpoint.completed MUST be an object mapping each exact criterion string directly to a list of successful tool call ID strings, for example {"Criterion A":["call_abc","call_def"]}. Do not put objects, descriptions, evidence fields, or mappings inside those lists. task_checkpoint.resolves is likewise a flat list of failed tool call ID strings. Reuse tool call IDs already present in the supervisor evidence.""")
 
     def task_checkpoint(self, phase: Literal["inspect", "execute", "verify"],
                         criteria: list[str], completed: dict[str, list[str]] | None = None,
@@ -559,8 +546,6 @@ class TaskControl(AbstractCapability):
         return result
 
     async def on_tool_validate_error(self, ctx, *, call, tool_def, args, error):
-        self.state.tool_attempts += 1
-
         if call.tool_name == "task_checkpoint":
             self.trace(
                 "checkpoint_validation_error",
@@ -568,12 +553,12 @@ class TaskControl(AbstractCapability):
                 arguments=args,
                 error=str(error),
             )
-            raise ToolFailed(
-                "Invalid task_checkpoint arguments. Correct the checkpoint call "
-                "using the declared schema. Do not repeat inspection solely because "
-                "the checkpoint call was invalid."
-            )
 
+            raise ToolFailed(""" 
+                Invalid task_checkpoint arguments. completed must map exact criterion strings directly to lists of successful tool call ID strings, for example "
+                '{"Criterion A":["call_abc","call_def"]}. ' resolves must be a flat list of failed tool call ID strings. Correct only the checkpoint call. Do not repeat inspection.""")
+
+        self.state.tool_attempts += 1
         self.state.observe(
             call.tool_name,
             args,
