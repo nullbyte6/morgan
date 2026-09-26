@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -11,6 +12,18 @@ from pathlib import Path
 
 from .task_effects import contains
 from .task_outcomes import ActionResult, Outcome
+
+
+def normalize_task_title(value):
+    if not isinstance(value, str):
+        return ""
+    title = " ".join(value.split())
+    if not 1 <= len(title.split()) <= 4:
+        return ""
+    if re.match(r"^(working on|currently|investigating|processing|trabajando|actualmente|investigando|procesando)\b",
+                title, re.IGNORECASE):
+        return ""
+    return title
 
 
 def encoded(value):
@@ -81,6 +94,7 @@ class Dependency:
 @dataclass
 class TaskState:
     objective: str
+    title: str = ""
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     status: Lifecycle = Lifecycle.ACTIVE
     kind: str | None = None
@@ -320,7 +334,7 @@ class TaskState:
                 value.pop("result")
                 value.pop("arguments")
             evidence.append(value)
-        return {"id": self.id, "objective": self.objective, "status": self.status,
+        return {"id": self.id, "objective": self.objective, "title": self.title, "status": self.status,
                 "contract": self.kind, "role": self.role, "role_resources": self.role_resources,
                 "criteria": {key: asdict(value) for key, value in self.criteria.items()},
                 "obligations": {key: asdict(value) for key, value in self.obligations.items()},

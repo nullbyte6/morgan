@@ -473,7 +473,7 @@
   "task_progress.hide": "Ocultar progreso (la tarea continúa)",
   "task_progress.progress_hint": "Pasos realizados de los detectados hasta ahora; Arlo puede añadir más.",
   "task_progress.voice_request": "Orden de voz",
-  "task_progress.pending_title": "Preparando la tarea",
+  "task_progress.pending_title": "Tarea",
   "task_progress.step_count": "{completed} de {total} pasos realizados",
   "task_progress.waiting": "Esperando permiso",
   "task_progress.stopped": "Detenida",

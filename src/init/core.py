@@ -435,7 +435,7 @@ class Assistant:
             attachments=None,
             session=None,
             audio_input=None, *,
-            speech_enabled: bool = True):
+            speech_enabled: bool = True, task_title: str = ""):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
@@ -507,6 +507,9 @@ class Assistant:
                 cancel_event)
 
         self._active_task_controller = controller
+        if not controller.state.title:
+            from src.init.task_state import normalize_task_title
+            controller.state.title = normalize_task_title(task_title)
         self.task_state = controller.state
 
         async def generate():

@@ -31,6 +31,7 @@ from src.init.attachments import (DesktopMessage, DesktopVoiceMessage, Attachmen
 from src.init.commands import set_confirmation_handler
 from src.init.config import load_config
 from src.init.core import Assistant
+from src.init.task_state import normalize_task_title
 from src.init.lang import tr
 from src.init.session_log import SessionLog
 from src.init.voice_ipc import desktop_audio
@@ -50,7 +51,7 @@ def select_response_surface(prompt: str, model_name: str, on_title=None) -> str 
                 "enum": ["chat", "response_view"],
             },
             "title": {"type": "string"},
-            "task_title": {"type": "string", "pattern": r"^\S+(?:\s+\S+){2,3}$"},
+            "task_title": {"type": "string", "pattern": r"^\S+(?:\s+\S+){0,3}$"},
         },
         "required": ["surface", "title", "task_title"],
         "additionalProperties": False,
@@ -96,9 +97,11 @@ def select_response_surface(prompt: str, model_name: str, on_title=None) -> str 
                     "unclear, choose chat. "
                     
                     "For response_view, provide a short relevant panel title. "
-                    "For every surface, task_title must summarize the user's task in exactly "
-                    "3 or 4 words, in the user's language. Describe the main action and subject; "
-                    "do not simply copy the beginning of the request. "
+                    "For every surface, task_title must name the user's objective in at most "
+                    "4 words, in the user's language. Name the action and subject, not current progress. "
+                    "Examples: Audit Arlo Architecture; Fix Workspace Layout. Never use status text "
+                    "such as Working on, Currently checking, Investigating, or Processing. "
+                    "Do not truncate or copy the beginning of the request. "
                     "Do not answer the user's actual question."
                 ),
             },
@@ -119,8 +122,8 @@ def select_response_surface(prompt: str, model_name: str, on_title=None) -> str 
     decision = json.loads(result["message"]["content"])
     surface = decision["surface"]
     title = str(decision.get("title") or "").strip()[:72]
-    task_title = " ".join(str(decision.get("task_title") or "").split()[:4])
-    if on_title is not None and len(task_title.split()) in (3, 4):
+    task_title = normalize_task_title(decision.get("task_title"))
+    if on_title is not None and task_title:
         on_title(task_title)
 
     logging.getLogger("arlo.response").info(
@@ -187,6 +190,7 @@ class AssistantWorker(QObject):
     speaking = Signal(int, bool)
     subtitle = Signal(int, str)
     phase = Signal(int, str)
+    task_title = Signal(int, str)
     permission_denied = Signal(int)
     finished = Signal(str)
     failed = Signal(str)
@@ -306,11 +310,22 @@ class AssistantWorker(QObject):
                 self.finished.emit(reply)
                 return
             response_title = None
+            previous = getattr(self.assistant, "_active_task_controller", None)
+            task_title = previous.state.title if previous is not None else ""
+
+            def receive_task_title(title):
+                nonlocal task_title
+                if not task_title:
+                    task_title = title
+                self.task_title.emit(turn_id, task_title)
+
+            if task_title:
+                self.task_title.emit(turn_id, task_title)
 
             try:
                 response_title = select_response_surface(
                     prompt, self.assistant.MODEL_NAME,
-                    on_title=lambda title: self.phase.emit(turn_id, "title:" + title))
+                    on_title=receive_task_title)
 
             except Exception:
                 logging.getLogger("arlo.response").exception(
@@ -348,7 +363,8 @@ class AssistantWorker(QObject):
                 session=self.session,
                 audio_input=(message.audio_wav
                              if voice_input and not prompt else None),
-                speech_enabled=speech_enabled)
+                speech_enabled=speech_enabled,
+                task_title=task_title)
 
             self.history[:] = history
             if not self.cancel_event.is_set():
