@@ -345,6 +345,11 @@ class TaskState:
                 sorted(resolves),
                 evidence=new_refs)
 
+        return {
+            "accepted": True,
+            "complete": self.complete(),
+        }
+
     def complete(self):
         if self.phase != "verify" or not self.criteria or self.unresolved:
             return False
