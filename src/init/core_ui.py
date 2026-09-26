@@ -409,7 +409,12 @@ class ArloWindow(DesktopWindow):
         self.indicator_row.setLayout(indicator_row)
         self.indicator_row.setMaximumHeight(0)
         input_column.addWidget(self.indicator_row)
-        input_column.addWidget(input_frame)
+        input_row = QHBoxLayout()
+        input_row.setContentsMargins(0, 0, 0, 0)
+        input_row.setSpacing(12)
+        input_row.addWidget(input_frame, 1)
+        input_row.addWidget(self.send, 0, Qt.AlignVCenter)
+        input_column.addLayout(input_row)
 
         input_group = QWidget()
         input_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -431,7 +436,6 @@ class ArloWindow(DesktopWindow):
         self.input_group.setVisible(False)
 
         composer.addWidget(input_group, 1)
-        composer.addWidget(self.send, 0, Qt.AlignVCenter)
 
         composer_container = QWidget()
         composer_container.setLayout(composer)
