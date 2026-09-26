@@ -181,6 +181,11 @@ class MascotSubtitleBubble(QWidget):
         painter.setClipRect(QRectF(left, top, available,
                 self.height() - self.PADDING_Y * 2))
 
+        # Dibujar fondo visible con el color Window de la paleta
+        background_color = self.palette().color(QPalette.ColorRole.Window)
+        painter.fillRect(QRectF(left, top, available,
+            self.height() - self.PADDING_Y * 2), background_color)
+
         painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
         painter.setFont(self.font())
 
