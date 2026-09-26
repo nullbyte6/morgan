@@ -335,7 +335,7 @@ fi
 
 ensure_ollama_server
 
-info "Downloading/verifying ${ARLO_MODEL} (approximately 16.0 GB)..."
+info "Downloading/verifying ${ARLO_MODEL} (approximately 18.0 GB)..."
 "$OLLAMA_BIN" pull "$ARLO_MODEL"
 
 info "Downloading/verifying ${ARLO_VISION_MODEL} (approximately 3.3 GB)..."
