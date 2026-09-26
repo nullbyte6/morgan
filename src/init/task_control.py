@@ -146,6 +146,7 @@ class TaskState:
     notice: str = ""
     last_progress_request: int = 0
     tool_attempts: int = 0
+    substantial_tool_use: bool = False
     information_gain_ratio: float = 0.2
     trace: object = field(default=None, repr=False)
     milestones: list = field(default_factory=list)
@@ -484,6 +485,7 @@ class TaskState:
             "phase": self.phase,
             "status": self.status,
             "criteria": self.criteria,
+            "substantial_tool_use": self.substantial_tool_use,
             "decisions": self.decisions,
             "milestones": self.milestones[-12:],
             "changes": self.changes,
@@ -577,6 +579,10 @@ class TaskControl(AbstractCapability):
     async def _execute(self, name, arguments, call_id, handler):
         self.check_cancelled()
         self.state.tool_attempts += 1
+
+        if name in MUTATION_TOOLS or self.state.tool_attempts >= 3:
+            self.state.substantial_tool_use = True
+
         if self.state.status == "blocked":
             return {"status": "blocked", "error": self.state.notice}
         
@@ -796,11 +802,21 @@ class TaskControl(AbstractCapability):
     def accept_output(self):
         self.check_cancelled()
 
-        accepted = not self.state.criteria or self.state.complete()
+        if self.state.criteria:
+            accepted = self.state.complete()
+        elif self.state.substantial_tool_use:
+            accepted = False
+            self.state.notice = (
+                "This task used tools substantially but no acceptance criteria were "
+                "defined. If the user's objective is complete, create a task checkpoint "
+                "with criteria derived from the requested outcome and verify them. "
+                "Otherwise continue the task.")
+        else:
+            accepted = True
+
         self.trace(
             "output_assessment",
-            accepted=accepted,
-        )
+            accepted=accepted)
 
         if accepted:
             self.state.status = "complete"
