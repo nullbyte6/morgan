@@ -450,8 +450,10 @@ def edit_code(path: str, old_text: str, new_text: str) -> str:
     try:
         target = _path(path)
         content, encoding = decode_text(target.read_bytes())
-        matches = content.count(old_text) if old_text else 0
+        normalized_content = content.replace("\r\n", "\n").replace("\r", "\n")
+        normalized_old_text = old_text.replace("\r\n", "\n").replace("\r", "\n")
 
+        matches = normalized_content.count(normalized_old_text) if normalized_old_text else 0
         if matches != 1:
             failures = _record_edit_failure(path, old_text)
 
@@ -471,7 +473,18 @@ def edit_code(path: str, old_text: str, new_text: str) -> str:
                 "Re-read only the smallest necessary source range before retrying. "
                 "Do not retry the same old_text unchanged.")
 
-        updated = content.replace(old_text, new_text, 1)
+        start = normalized_content.index(normalized_old_text)
+        end = start + len(normalized_old_text)
+    
+        normalized_new_text = new_text.replace("\r\n", "\n").replace("\r", "\n")
+        normalized_updated = (normalized_content[:start] + normalized_new_text + normalized_content[end:])
+
+        newline = "\r\n" if "\r\n" in content else "\n"
+
+        if newline == "\r\n":
+            updated = normalized_updated.replace("\n", "\r\n")
+        else:
+            updated = normalized_updated
 
         if target.suffix.lower() == ".py":
             compile(updated, str(target), "exec")
