@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 
 from .config import HOME_PATH
+from .task_outcomes import normalize_result
 
 
 COMMANDS_FILE = HOME_PATH / "json" / "commands.json"
@@ -139,13 +140,7 @@ def _prepare_actions(actions: list[dict], registry: dict) -> list[tuple]:
 
 
 def _result_failed(value) -> bool:
-    if isinstance(value, str):
-        try:
-            value = json.loads(value)
-        except json.JSONDecodeError:
-            return value.strip().casefold().startswith("error")
-    return (isinstance(value, dict)
-            and value.get("status") in {"error", "failed", "timeout", "denied"})
+    return not normalize_result(value).successful
 
 
 def run_quick_command(name: str) -> str:

@@ -18,146 +18,21 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Access the assistant's own checkout independently of the user's working directory."""
 
-from PIL.PdfParser import decode_text
-
-from requests.packages import target
-
 from src.init.lang import tr
-from .identity import get_assistant
 
 
 import ast
-import hashlib
 import json
 import logging
 import subprocess
-from contextlib import contextmanager
-from contextvars import ContextVar
-from dataclasses import dataclass
 from src.init.visuals.browser_bridge import open_embedded_url
 from src.init.paths import ARLO_ROOT
+from .task_outcomes import ActionResult, Outcome, normalize_result
 
 READ_CODE_MAX_CHARACTERS = 3000
 READ_CODE_MAX_LINES = 160
 LIST_CODE_MAX_ENTRIES = 200
-INSPECTION_CONTEXT_CHARACTERS = 20000
 SEARCH_CODE_MAX_RESULTS = 20
-INSPECTION_TOOLS = frozenset(("read_code", "search_code", "list_code"))
-
-
-@dataclass
-class InspectionContextBudget:
-    resident_characters: int = 0
-
-    def compact(self, messages, archive, preview_characters=0):
-        self.resident_characters = preview_characters
-        retained = {}
-        archived = []
-        reused = []
-        source_characters = 0
-        arguments = {}
-        for message in messages:
-            for part in message.parts:
-                if part.part_kind == "tool-call" and part.tool_name in INSPECTION_TOOLS:
-                    try:
-                        arguments[part.tool_call_id] = part.args_as_dict()
-                    except (ValueError, TypeError, AssertionError):
-                        arguments[part.tool_call_id] = {}
-        for message in reversed(messages):
-            for part in reversed(message.parts):
-                if (part.part_kind != "tool-return" or part.tool_name not in INSPECTION_TOOLS
-                        or not isinstance(part.content, str)):
-                    continue
-                content = part.content
-                if content.startswith(("Archived source evidence:", "Source evidence reused from")):
-                    continue
-                source_characters += len(content)
-                payload = (content.split("\n\n", 1)[-1]
-                           if content.startswith(("Source:", "Source listing:")) else content)
-                args = arguments.get(part.tool_call_id, {})
-                location = args.get("path", args.get("directory", "."))
-                try:
-                    location = str(_path(location)).casefold()
-                except (OSError, ValueError):
-                    location = str(location)
-                key = (part.tool_name, location, hashlib.sha256(payload.encode("utf-8")).hexdigest())
-                if key in retained:
-                    part.content = f"Source evidence reused from tool call {retained[key]}."
-                    reused.append(part.tool_call_id)
-                elif self.resident_characters + len(content) <= INSPECTION_CONTEXT_CHARACTERS:
-                    retained[key] = part.tool_call_id
-                    self.resident_characters += len(content)
-                else:
-                    part.content = "Archived source evidence: " + archive(
-                        json.dumps(content, ensure_ascii=False), f"Source evidence {part.tool_call_id}")
-                    archived.append(part.tool_call_id)
-        return {"limit": INSPECTION_CONTEXT_CHARACTERS,
-                "source_characters_before": source_characters,
-                "resident_characters": self.resident_characters,
-                "preview_characters": preview_characters,
-                "retained": list(retained.values()), "archived": archived, "reused": reused}
-
-
-_inspection_budget = ContextVar("inspection_context_budget", default=None)
-
-@dataclass
-class EditAttemptState:
-    failures: dict[tuple[str, str], int]
-
-
-_edit_attempt_state = ContextVar("edit_attempt_state", default=None)
-MAX_EQUIVALENT_EDIT_FAILURES = 2
-
-@contextmanager
-def inspection_context_scope():
-    budget_token = _inspection_budget.set(InspectionContextBudget())
-    edit_token = _edit_attempt_state.set(EditAttemptState(failures={}))
-    try:
-        yield
-    finally:
-        _edit_attempt_state.reset(edit_token)
-        _inspection_budget.reset(budget_token)
-
-def _edit_failure_key(path: str, old_text: str) -> tuple[str, str]:
-    import hashlib
-
-    digest = hashlib.sha256(
-        old_text.encode("utf-8", errors="replace")
-    ).hexdigest()
-
-    return path.casefold(), digest
-
-
-def _record_edit_failure(path: str, old_text: str) -> int:
-    state = _edit_attempt_state.get()
-
-    if state is None:
-        return 1
-
-    key = _edit_failure_key(path, old_text)
-    failures = state.failures.get(key, 0) + 1
-    state.failures[key] = failures
-    return failures
-
-
-def _clear_edit_failures(path: str) -> None:
-    state = _edit_attempt_state.get()
-
-    if state is None:
-        return
-
-    normalized = path.casefold()
-
-    for key in tuple(state.failures):
-        if key[0] == normalized:
-            del state.failures[key]
-
-
-def compact_inspection_context(messages, archive, preview_characters=0):
-    budget = _inspection_budget.get()
-    if budget is None:
-        budget = InspectionContextBudget()
-    return budget.compact(messages, archive, preview_characters)
 
 
 def _inspection_allowance(requested: int) -> int:
@@ -187,7 +62,7 @@ def _source_index(path: str, content: str) -> str:
 def _path(path):
     target = (ARLO_ROOT / path).resolve()
     relative = target.relative_to(ARLO_ROOT)
-    if any(part in (".git", ".venv", "__pycache__") for part in relative.parts):
+    if any(part.casefold() in (".git", ".venv", "__pycache__") for part in relative.parts):
         raise ValueError(
             tr('self_code.choose_a_source_file_not_git_metadata_or_the_runtime'))
     return target
@@ -221,7 +96,7 @@ def get_repo() -> str:
 
 def list_code(directory: str = ".", recursive: bool = False,
               suffix: str = "", offset: int = 0,
-              limit: int = LIST_CODE_MAX_ENTRIES) -> str:
+              limit: int = LIST_CODE_MAX_ENTRIES) -> dict:
     """List source entries with bounded pagination in the working inspection context.
     Reuse existing evidence. Older results may be archived to make room for new evidence.
     """
@@ -231,13 +106,17 @@ def list_code(directory: str = ".", recursive: bool = False,
             raise ValueError("offset must be non-negative and limit must be positive")
         result = list_files(str(_path(directory)), recursive=recursive,
                             suffix=suffix)
+        observation = normalize_result(result)
+        if not observation.successful:
+            return observation.payload()
+        result = observation.data
         entries = result.splitlines()
         bounded_limit = min(limit, LIST_CODE_MAX_ENTRIES)
         requested = "\n".join(entries[offset:offset + bounded_limit])
         allowance = _inspection_allowance(len(requested))
         if (offset == 0 and len(entries) <= bounded_limit
                 and allowance == len(result)):
-            return result
+            return ActionResult(Outcome.SUCCESS, result).payload()
         selected = []
         selected_characters = 0
         for entry in entries[offset:offset + bounded_limit]:
@@ -250,7 +129,7 @@ def list_code(directory: str = ".", recursive: bool = False,
         header = (f"Source listing: {directory}; entries {offset + 1}-{end} "
                   f"of {len(entries)}.")
         if not selected:
-            return f"No source entries at offset {offset}."
+            return ActionResult(Outcome.NEGATIVE, f"No source entries at offset {offset}.").payload()
         elif end < len(entries):
             header += (" Continue with list_code(directory="
                        f"{directory!r}, recursive={recursive!r}, suffix={suffix!r}, "
@@ -260,14 +139,14 @@ def list_code(directory: str = ".", recursive: bool = False,
             "Bounded list_code source=%s entries=%d returned=%d offset=%d bytes=%d",
             directory, len(entries), len(selected), offset,
             len(output.encode("utf-8")))
-        return output
+        return ActionResult(Outcome.SUCCESS, output).payload()
     except (OSError, ValueError) as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.REJECTED, str(error), "inspection_precondition").payload()
 
 
 def search_code(query: str, directory: str = ".",
                 suffix: str = ".py",
-                limit: int = SEARCH_CODE_MAX_RESULTS) -> str:
+                limit: int = SEARCH_CODE_MAX_RESULTS) -> dict:
     """Search Arlo's local source checkout for text or symbols.
     Plain-text search only; regular expressions are not supported.
     An exact phrase match is preferred. If the complete query does not occur
@@ -334,10 +213,7 @@ def search_code(query: str, directory: str = ".",
                 "exact_matches=0 term_matches=0 returned_bytes=0",
                 query,
                 directory)
-            return (
-                "No source matches found. "
-                "Search is plain text, not regex. Try a concrete symbol, "
-                "identifier, or a few relevant terms.")
+            return ActionResult(Outcome.NEGATIVE, {"matches": [], "query": query}, "no_matches").payload()
 
         output = "\n".join(matches)
         allowance = _inspection_allowance(len(output))
@@ -359,14 +235,14 @@ def search_code(query: str, directory: str = ".",
             len(matches),
             len(output.encode("utf-8")))
 
-        return output
+        return ActionResult(Outcome.SUCCESS, output).payload()
 
     except (OSError, ValueError) as error:
-        return f"Error searching source code: {error}"
+        return ActionResult(Outcome.REJECTED, str(error), "inspection_precondition").payload()
 
 
 def read_code(path: str, start_line: int = 1, end_line: int = 0,
-              character_offset: int = 0) -> str:
+              character_offset: int = 0) -> dict:
     """Inspect a bounded source range in the working inspection context.
     Use search_code() first to locate relevant symbols and request only the
     necessary ranges. Reuse existing evidence; older results may be archived
@@ -395,7 +271,7 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
                 "returned_bytes=%d",
                 path, total_lines, len(result.encode("utf-8")),
                 len(output.encode("utf-8")))
-            return output
+            return ActionResult(Outcome.SUCCESS, output).payload()
         if start_line > max(total_lines, 1):
             raise ValueError(f"start_line exceeds the file's {total_lines} lines")
         requested_end = end_line or min(total_lines, start_line + READ_CODE_MAX_LINES - 1)
@@ -405,11 +281,11 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
         allowance = _inspection_allowance(
             max(0, len(block) - character_offset))
         if allowance == 0:
-            return f"No source characters at offset {character_offset} in this range."
+            return ActionResult(Outcome.NEGATIVE, f"No source characters at offset {character_offset} in this range.").payload()
         if (start_line == 1 and not end_line and character_offset == 0
                 and len(result) <= READ_CODE_MAX_CHARACTERS
                 and allowance == len(result)):
-            return result
+            return ActionResult(Outcome.SUCCESS, result).payload()
         chunk = block[character_offset:character_offset + allowance]
         next_character = character_offset + len(chunk)
         header = (
@@ -431,131 +307,89 @@ def read_code(path: str, start_line: int = 1, end_line: int = 0,
             "range=%d-%d offset=%d returned_bytes=%d",
             path, total_lines, len(result.encode("utf-8")), start_line,
             bounded_end, character_offset, len(output.encode("utf-8")))
-        return output
+        return ActionResult(Outcome.SUCCESS, output).payload()
     except (OSError, ValueError) as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.REJECTED, str(error), "inspection_precondition").payload()
 
 
-def edit_code(path: str, old_text: str, new_text: str) -> str:
-    """Replace one exact fragment in Arlo's own source code.
-    Use this tool exclusively when modifying Arlo's own repository.
-    Do not use edit_file or replace_in_file for Arlo source changes.
-    Args:
-        path: Source path relative to Arlo's repository root.
-        old_text: Exact existing source fragment to replace.
-        new_text: Replacement source fragment.
-    """
+def edit_code(path: str, old_text: str, new_text: str) -> dict:
+    """Replace exactly one existing fragment in Arlo source, validating Python before atomic writes."""
     from .brain import atomic_write_bytes, decode_text
-
     try:
         target = _path(path)
         content, encoding = decode_text(target.read_bytes())
-        normalized_content = content.replace("\r\n", "\n").replace("\r", "\n")
-        normalized_old_text = old_text.replace("\r\n", "\n").replace("\r", "\n")
-
-        matches = normalized_content.count(normalized_old_text) if normalized_old_text else 0
+        normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+        old = old_text.replace("\r\n", "\n").replace("\r", "\n")
+        matches = normalized.count(old) if old else 0
         if matches != 1:
-            failures = _record_edit_failure(path, old_text)
-
-            if failures >= MAX_EQUIVALENT_EDIT_FAILURES:
-                return (
-                    "EDIT_RETRY_BLOCKED: This equivalent edit has already failed "
-                    f"{failures} times for {path!r}. "
-                    f"old_text matched {matches} times; exactly one match is required. "
-                    "Do not retry this edit or make cosmetic variations of old_text. "
-                    "Use the source evidence already collected and either choose a "
-                    "genuinely different implementation strategy or stop and report "
-                    "the blocker.")
-
-            return (
-                f"EDIT_FAILED: old_text matched {matches} times; "
-                "exactly one match is required. "
-                "Re-read only the smallest necessary source range before retrying. "
-                "Do not retry the same old_text unchanged.")
-
-        start = normalized_content.index(normalized_old_text)
-        end = start + len(normalized_old_text)
-    
-        normalized_new_text = new_text.replace("\r\n", "\n").replace("\r", "\n")
-        normalized_updated = (normalized_content[:start] + normalized_new_text + normalized_content[end:])
-
-        newline = "\r\n" if "\r\n" in content else "\n"
-
-        if newline == "\r\n":
-            updated = normalized_updated.replace("\n", "\r\n")
-        else:
-            updated = normalized_updated
-
+            return ActionResult(Outcome.REJECTED, {"matches": matches}, "exact_match_required").payload()
+        updated = normalized.replace(old, new_text.replace("\r\n", "\n").replace("\r", "\n"), 1)
+        if "\r\n" in content:
+            updated = updated.replace("\n", "\r\n")
         if target.suffix.lower() == ".py":
             compile(updated, str(target), "exec")
-
         atomic_write_bytes(target, updated.encode(encoding))
-        _clear_edit_failures(path)
-
-        return tr(
-            'self_code.updated_restart_to_activate_the_change_no_commit_or_push_perform',
-            target=target,
-            value1=get_assistant().name)
-
-    except (OSError, ValueError, UnicodeError, SyntaxError) as error:
-        failures = _record_edit_failure(path, old_text)
-
-        if failures >= MAX_EQUIVALENT_EDIT_FAILURES:
-            return (
-                "EDIT_RETRY_BLOCKED: Equivalent edits for "
-                f"{path!r} have failed {failures} times. "
-                "Stop retrying this operation and report the blocker. "
-                f"Last error: {error}"
-            )
-
-        return tr(
-            'self_code.error_editing_code',
-            value0=get_assistant().name,
-            error=error
-        )
+        return ActionResult(Outcome.SUCCESS, {"path": str(target), "restart_required": True}).payload()
+    except (ValueError, UnicodeError, SyntaxError, FileNotFoundError) as error:
+        return ActionResult(Outcome.REJECTED, str(error), "source_precondition").payload()
+    except OSError as error:
+        return ActionResult(Outcome.FAILED, str(error), "source_write_failed").payload()
 
 
-def update_repo() -> str:
-    """Pull the assistant's configured upstream with fast-forward only, when requested.
-    Refuses local changes, including untracked files. Does not restart the assistant,
-    install dependencies, change version settings, commit, or push.
+def create_code(path: str, content: str) -> dict:
+    """Create a new Arlo source file without overwriting, under a supervised mutation contract.
+    Parent directory must exist. Python syntax is validated before an atomic exclusive publication.
     """
+    import os
+    import tempfile
+    temporary = None
+    try:
+        target = _path(path)
+        if target.exists() or not target.parent.is_dir():
+            return ActionResult(Outcome.REJECTED, str(target), "new_source_path_required").payload()
+        if target.suffix.lower() == ".py":
+            compile(content, str(target), "exec")
+        with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as stream:
+            temporary = stream.name
+            stream.write(content.encode("utf-8"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(temporary, target)
+        return ActionResult(Outcome.SUCCESS, {"path": str(target), "restart_required": True}).payload()
+    except (ValueError, SyntaxError, FileExistsError) as error:
+        return ActionResult(Outcome.REJECTED, str(error), "source_precondition").payload()
+    except OSError as error:
+        return ActionResult(Outcome.FAILED, str(error), "source_create_failed").payload()
+    finally:
+        if temporary is not None:
+            os.unlink(temporary)
+
+
+def verify_code(path: str) -> dict:
+    """Independently inspect and compile current Python source without writing bytecode or running it."""
+    from .brain import decode_text
+    try:
+        target = _path(path)
+        if target.suffix.lower() != ".py":
+            return ActionResult(Outcome.REJECTED, str(target), "python_source_required").payload()
+        content, _ = decode_text(target.read_bytes())
+        compile(content, str(target), "exec")
+        return ActionResult(Outcome.SUCCESS, {"path": str(target), "syntax_valid": True}).payload()
+    except (OSError, ValueError, UnicodeError, SyntaxError) as error:
+        return ActionResult(Outcome.FAILED, str(error), "source_verification_failed").payload()
+
+
+def update_repo() -> dict:
+    """Fast-forward Arlo's upstream only when explicitly requested, refusing local changes."""
     from .brain import run_git
     try:
         status = subprocess.run(
-            ["git", "-C", str(ARLO_ROOT), "status", "--porcelain",
-             "--untracked-files=all"],
-            capture_output=True, text=True, errors="replace", timeout=15,
-        )
+            ["git", "-C", str(ARLO_ROOT), "status", "--porcelain", "--untracked-files=all"],
+            capture_output=True, text=True, errors="replace", timeout=15)
         if status.returncode:
-            return tr('self_code.error_checking_repository', value0=get_assistant().name, value1=status.stderr.strip())
+            return ActionResult(Outcome.FAILED, status.stderr, "git_status_failed").payload()
         if status.stdout.strip():
-            return tr('self_code.error_has_local_changes_resolve_them_before_updating', value0=get_assistant().name) + status.stdout.strip()
-        result = run_git(str(ARLO_ROOT), ["pull", "--ff-only"])
-        return result + tr('self_code.only_files_on_disk_were_updated_if_git_succeeded_restart_to_load', value0=get_assistant().name)
+            return ActionResult(Outcome.REJECTED, status.stdout, "clean_repository_required").payload()
+        return run_git(str(ARLO_ROOT), ["pull", "--ff-only"])
     except (OSError, subprocess.TimeoutExpired) as error:
-        return tr('self_code.error_updating_repository', value0=get_assistant().name, error=error)
-
-
-def get_repo_state() -> str:
-    """Return a deterministic snapshot of Arlo's current Git working tree."""
-    try:
-        result = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(ARLO_ROOT),
-                "status",
-                "--porcelain=v1",
-                "--untracked-files=all",
-            ],
-            capture_output=True,
-            text=True,
-            errors="replace",
-            timeout=15,
-        )
-        if result.returncode:
-            return ""
-        return result.stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
+        return ActionResult(Outcome.UNCERTAIN, str(error), "update_state_unknown").payload()

@@ -28,25 +28,13 @@ from PySide6.QtCore import *
 from src.init.attachments import (DesktopMessage, DesktopVoiceMessage, AttachmentSession,
     ollama_capabilities)
 
-from src.init.commands import execute_command, set_confirmation_handler
+from src.init.commands import set_confirmation_handler
 from src.init.config import load_config
 from src.init.core import Assistant
 from src.init.lang import tr
 from src.init.session_log import SessionLog
 from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
-
-
-def handle_direct_command(assistant, prompt: str) -> str | None:
-    for handler in (
-        assistant.directory_cmd,
-        assistant.git_cmd,
-        assistant.print_file_cmd,
-    ):
-        result = handler(prompt)
-        if result is not None:
-            return result
-    return None
 
 
 def select_response_surface(prompt: str, model_name: str, on_title=None) -> str | None:
@@ -295,7 +283,8 @@ class AssistantWorker(QObject):
             set_confirmation_handler(
                 lambda message: self.confirm_command(message, cancel_event,
                                                      turn_id))
-            self.command_reply = False
+            self.command_reply = (not voice_input and not message.attachments
+                                  and prompt.casefold().startswith("pwsh:"))
             if cancel_event.is_set():
                 self.finished.emit("")
                 return
@@ -316,40 +305,6 @@ class AssistantWorker(QObject):
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
-            direct_result = (handle_direct_command(self.assistant, prompt)
-                             if not voice_input and not message.attachments
-                             else None)
-            if direct_result is not None:
-                self.session.context.add_exchange(prompt, direct_result)
-                self.session.write(self.assistant.name, direct_result)
-                self.finished.emit(direct_result)
-                return
-
-            if not voice_input and not message.attachments and prompt.casefold().startswith(
-                    "pwsh:"):
-                self.command_reply = True
-                command = prompt[5:].strip()
-                raw_result = execute_command(command)
-                data = json.loads(raw_result)
-
-                output = data.get("stdout", "")
-                error = data.get("stderr", "")
-
-                reply = tr("command.result",
-                           status=tr("command.status." + data["status"]),
-                           code=data.get("exit_code", "—"), output=output)
-
-                if error:
-                    reply += tr("command.stderr", error=error)
-
-                if data["status"] == "error":
-                    reply += f"\n\n{data.get('error', '')}"
-
-                self.session.context.add_exchange(prompt, reply)
-                self.session.write(self.assistant.name, reply)
-                self.finished.emit(reply)
-                return
-
             response_title = None
 
             try:
@@ -403,7 +358,7 @@ class AssistantWorker(QObject):
                 task_state = getattr(self.assistant, "task_state", None)
                 self.session.write(self.assistant.name, reply,
                                    status=("interrupted" if cancel_event.is_set() else
-                                           "error" if task_state is not None and task_state.status == "blocked"
+                                           str(task_state.status) if task_state is not None
                                            else "completed"))
 
             self.finished.emit(reply)

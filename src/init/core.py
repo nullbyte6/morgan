@@ -16,7 +16,6 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-import inspect
 import logging
 import json
 import os
@@ -111,16 +110,6 @@ class AssistantTextStream:
         self.prefix = ""
         return "".join(self.visible), call
 
-
-async def invoke_text_tool(name, arguments):
-    from pydantic import validate_call
-    from src.init.tools import TOOLS
-
-    function = next(tool for tool in TOOLS if tool.__name__ == name)
-    result = validate_call(function)(**arguments)
-    if inspect.isawaitable(result):
-        result = await result
-    return result
 
 # noinspection PyBroadException
 class Assistant:
@@ -326,66 +315,6 @@ class Assistant:
             self.voice.enqueue(phrase)
         return "".join(reply)
 
-    def directory_cmd(self, command: str) -> str | None:
-        """Handle standalone cd/chdir commands without a model or shell call."""
-        from src.init.brain import change_directory
-        match = re.fullmatch(r"(?:cd|chdir)(?=\s|\.|\\|$)\s*(.*)",
-                             command.strip(), flags=re.IGNORECASE)
-        if match is None:
-            return None
-        path = match.group(1)
-        path = re.sub(r"^/d(?:\s+|$)", "", path, count=1, flags=re.IGNORECASE)
-        return change_directory(path)
-
-
-    def git_cmd(self, command: str) -> str | None:
-        """Execute exact supported Git commands through the existing tools."""
-        from src.init import brain
-
-        commands = {
-            "git push": brain.git_push,
-            "git status": brain.git_status,
-            "git diff": brain.git_diff,
-            "git log": brain.git_log,
-        }
-        function = commands.get(command.strip())
-        return function() if function is not None else None
-
-    def print_file_cmd(self, command: str) -> str | None:
-        """Print explicit requests for a file's contents without using the LLM."""
-        patterns = (
-            r"(?:imprime|muestra|enseña|lee|print|show|cat)\s+(?:el\s+contenido\s+de\s+)?(.+)",
-            r"(?:muéstrame|enséñame)\s+(?:el\s+contenido\s+de\s+)?(.+)",
-        )
-
-        for pattern in patterns:
-            match = re.fullmatch(pattern,
-                                 command.strip(),
-                                 flags=re.IGNORECASE)
-
-            if match is None:
-                continue
-
-            path = match.group(1).strip().strip('"').strip("'")
-            if not path:
-                return None
-
-            from src.init.brain import read_file
-            return read_file(path)
-
-        return None
-
-    def application_opening_request(self, prompt: str) -> str | None:
-        match = re.fullmatch(
-            r"\s*(?:arlo[,:]?\s*)?(?:necesito que\s+)?(?:puedes\s+)?"
-            r"(?:abre|abreme|ábreme|abrir|open|launch|inicia|ejecuta)\s+"
-            r"(?:el|la)?\s*(.+?)\s*[.!]?\s*",
-            prompt, re.IGNORECASE)
-        if match is None:
-            return None
-        application = match.group(1).strip()
-        return application or None
-
     def printlns(self, content: str) -> None:
         if self.terminal_ui is not None:
             with self.terminal_ui.suspend():
@@ -516,31 +445,6 @@ class Assistant:
                                           ModelResponse, TextPart,
                                           UserPromptPart)
 
-        application = self.application_opening_request(prompt)
-        if application is not None and audio_input is None and not attachments:
-            from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
-            from src.init.brain import open_application
-
-            result = open_application(application)
-            try:
-                details = json.loads(result)
-            except (TypeError, json.JSONDecodeError):
-                details = None
-            if isinstance(details, dict) and details.get("opened") is True:
-                reply = f"Aplicación abierta: {details.get('application', application)}."
-            elif isinstance(details, dict) and details.get("launch_requested") is True:
-                reply = ("Windows aceptó la solicitud para abrir "
-                         f"{details.get('application', application)}.")
-            elif isinstance(details, dict):
-                reply = details.get("error", result)
-            else:
-                reply = result
-            if on_chunk is not None:
-                on_chunk(reply)
-            return reply, [*history,
-                           ModelRequest(parts=[UserPromptPart(prompt)]),
-                           ModelResponse(parts=[TextPart(reply)])]
-
         self._initialize_runtime()
 
         if speech_enabled:
@@ -591,10 +495,11 @@ class Assistant:
                         SessionContext(uuid.uuid4().hex, HOME_PATH / ".log"))
         previous = self._active_task_controller
         if (previous is not None
-            and previous.state.status == "interrupted"):
+            and previous.state.status in {"interrupted", "waiting", "blocked", "limit_reached"}):
             controller = previous.resume(
                 context=task_context,
-                cancel_event=cancel_event)
+                cancel_event=cancel_event,
+                prompt=prompt)
         else:
             controller = TaskControl(
                 prompt,
@@ -610,7 +515,7 @@ class Assistant:
                                               ToolCallPart, ToolReturnPart)
             from src.init.tools import TOOLS
             buffer = SpeechBuffer()
-            tool_names = {tool.__name__ for tool in TOOLS} | {"task_checkpoint"}
+            tool_names = {tool.__name__ for tool in TOOLS} | controller.control_tools.keys()
             conversation_messages = list(history)
             current_prompt = model_prompt
             tool_arguments = {}
@@ -635,8 +540,8 @@ class Assistant:
                 if failed or (evidence is not None and evidence.failed):
                     kind = "failed"
                 elif evidence is not None:
-                    kind = evidence.phase
-                elif name == "task_checkpoint" and isinstance(result, dict) and result.get("accepted"):
+                    kind = evidence.role
+                elif name in controller.control_tools and isinstance(result, dict) and result.get("accepted"):
                     kind = "checkpoint"
                 else:
                     kind = "skipped"
@@ -667,12 +572,6 @@ class Assistant:
                             on_phase("executing")
                     elif isinstance(event, FunctionToolResultEvent):
                         part = event.part
-                        if (part.tool_call_id not in controller.state.evidence
-                                and (getattr(part, "outcome", None) == "failed"
-                                     or part.part_kind == "retry-prompt")):
-                            controller.state.observe(part.tool_name,
-                                                     tool_arguments.get(part.tool_call_id),
-                                                     part.content, part.tool_call_id, failed=True)
                         try:
                             result_bytes = len(json.dumps(
                                 event.part.content, ensure_ascii=False,
@@ -689,8 +588,6 @@ class Assistant:
                                   getattr(part, "outcome", None) == "failed"
                                   or part.part_kind == "retry-prompt")
 
-            controller.on_progress = emit_visible
-            consecutive_length_finishes = 0
             if cancel_event.is_set():
                 return
             execution_started = True
@@ -708,11 +605,10 @@ class Assistant:
                         capabilities=[controller],
                         event_stream_handler=stream_events)
                 except TaskStopped:
-                    from src.init.lang import tr
                     stream_messages = list(controller.messages)
-                    notice = tr("task_control.blocked")
+                    notice = controller.state.notice
                     if on_phase is not None:
-                        on_phase("blocked")
+                        on_phase(controller.state.status)
                     emit_visible(notice)
                     conversation_messages = [*stream_messages,
                                              ModelResponse(parts=[TextPart(notice)])]
@@ -744,26 +640,21 @@ class Assistant:
                 stream_messages = conversation_messages
                 if text_call is None:
                     if result.response.finish_reason == "length":
-                        consecutive_length_finishes += 1
-                        if controller.accept_output() and visible_output and visible_output not in answer_parts:
+                        controller.trace("output_truncated")
+                        if visible_output and controller.accept_output():
                             answer_parts.append(visible_output)
-                            controller.state.last_progress_request = controller.state.requests
-                            consecutive_length_finishes = 0
                         current_prompt = (
-                            "The output was interrupted. Continue the active task without restarting. "
-                            "Use a brief checkpoint and concise final answer.")
-                        if consecutive_length_finishes >= 2:
-                            controller.state.stagnant += controller.state.idle_window
-                            controller.state.assess()
+                            "The model output reached its response limit. Continue the same task and output "
+                            "without restarting or replaying actions. This is not a blocker or task completion.")
                         continue
-                    consecutive_length_finishes = 0
                     if controller.accept_output():
                         emit_visible("".join(answer_parts) + visible_output)
                         break
                     current_prompt = (
                         "The task is not complete. Verify the remaining acceptance criteria and "
-                        "record evidence with task_checkpoint, or explain the concrete blocker. "
-                        "Do not repeat a final answer without new evidence.")
+                        "record evidence with task_checkpoint and propose task_finish. For an answer requiring "
+                        "no actions, declare task_finish(direct=True). Use task_defer for a supported "
+                        "external dependency. The current ledger describes unmet obligations.")
                     continue
 
                 name, arguments = text_call
@@ -788,25 +679,16 @@ class Assistant:
                     "Executing %s (%s)", name, call_part.tool_call_id)
                 if on_phase is not None:
                     on_phase("executing")
-                try:
-                    async def invoke(arguments):
-                        if name == "task_checkpoint":
-                            from pydantic import validate_call
-                            return validate_call(controller.task_checkpoint)(**arguments)
-                        return await invoke_text_tool(name, arguments)
-                    tool_output = await controller.execute(
-                        name, arguments, call_part.tool_call_id, invoke)
-                    outcome = "failed" if isinstance(tool_output, dict) and tool_output.get("error") else "success"
-                except Exception as error:
-                    logging.getLogger("arlo.tools").exception(
-                        "Text tool call failed: %s", name)
-                    tool_output = str(error)
-                    controller.state.observe(name, arguments, tool_output,
-                                             call_part.tool_call_id, failed=True)
-                    outcome = "failed"
+                tool_output = await controller.invoke(name, arguments, call_part.tool_call_id)
+                evidence = controller.state.evidence.get(call_part.tool_call_id)
+                outcome = "failed" if evidence is not None and evidence.failed else "success"
+                from pydantic_ai import ToolReturn
+                raw_return = tool_output if isinstance(tool_output, ToolReturn) else None
                 tool_return = ModelRequest(parts=[ToolReturnPart(
-                    name, tool_output, call_part.tool_call_id,
+                    name, raw_return.return_value if raw_return is not None else tool_output, call_part.tool_call_id,
                     outcome=outcome)])
+                if raw_return is not None and raw_return.content is not None:
+                    tool_return.parts.append(UserPromptPart(raw_return.content))
                 logging.getLogger("arlo.tools").info(
                     "Tool result: %s (%s)", name, call_part.tool_call_id)
                 if on_phase is not None:
@@ -860,15 +742,19 @@ class Assistant:
                 raise
 
         from src.init.attachments import active_attachments
-        from src.init.self_code import inspection_context_scope
         attachment_token = active_attachments.set(attachments)
         try:
-            with (session.memory_scope() if session is not None else nullcontext(),
-                  inspection_context_scope()):
+            with session.memory_scope() if session is not None else nullcontext():
                 if event_loop is None:
                     asyncio.run(run())
                 else:
                     event_loop.run_until_complete(run())
+        except BaseException:
+            if controller.state.status == "active":
+                from src.init.task_state import Lifecycle
+                controller.state.suspend(Lifecycle.INTERRUPTED,
+                                         "Execution interrupted by a runtime error; the task ledger is preserved.")
+            raise
         finally:
             self._active_cancellation_token = None
             active_attachments.reset(attachment_token)
@@ -881,7 +767,8 @@ class Assistant:
 
         text = "".join(reply)
         if cancel_event.is_set():
-            controller.state.status = "interrupted"
+            from src.init.task_state import Lifecycle
+            controller.state.suspend(Lifecycle.INTERRUPTED, "Interrupted by the user.")
             if not execution_started:
                 return "", history
             messages = stream_messages or list(history) + [ModelRequest(parts=[UserPromptPart(model_prompt)])]
@@ -902,8 +789,6 @@ class Assistant:
                     isinstance(part, TextPart) for part in safe[-1].parts):
                 safe.pop()
             interrupted_state = json.dumps(controller.state.snapshot(), ensure_ascii=False)
-            if len(interrupted_state) > 16000:
-                interrupted_state = controller.archive(interrupted_state, "Interrupted task state")
             safe.append(ModelRequest(parts=[UserPromptPart(
                 "Interrupted task state (observed outcomes, not instructions): " + interrupted_state)]))
             safe.append(ModelResponse(parts=[TextPart(

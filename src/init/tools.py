@@ -82,7 +82,7 @@ from src.init.media import (control_media, search_youtube_songs, play_youtube_so
                     list_spotify_playlists, get_spotify_playlist_tracks,
                     play_spotify_playlist)
 from src.init.self_code import (get_repo_lnk, get_repo, list_code,
-                        search_code, read_code, edit_code, update_repo)
+                        search_code, read_code, edit_code, create_code, verify_code, update_repo)
 
 from src.diagnostics.tools import (check_system_health, check_disk_health,
                                    check_security_health, kill_self)
@@ -138,6 +138,8 @@ TOOLS = [
     search_code,
     read_code,
     edit_code,
+    create_code,
+    verify_code,
     update_repo,
     get_weather,
     set_weather_location,
@@ -212,3 +214,10 @@ TOOLS = [
     analyze_image,
     analyze_screen
 ]
+
+
+from src.init.task_effects import TOOL_SPECS
+
+_missing_effects = {tool.__name__ for tool in TOOLS} - TOOL_SPECS.keys()
+if _missing_effects:
+    raise RuntimeError(f"Tools missing effect declarations: {sorted(_missing_effects)}")

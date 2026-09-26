@@ -128,6 +128,10 @@ class TaskProgressPill(QWidget):
             self.state = "running"
         elif phase == "blocked":
             self.state = "error"
+        elif phase == "waiting":
+            self.state = "waiting"
+        elif phase in {"interrupted", "cancelled", "limit_reached"}:
+            self.state = "stopped"
         else:
             return
         self._render()
@@ -144,6 +148,7 @@ class TaskProgressPill(QWidget):
             return
         self.active = False
         self.state = ("stopped" if interrupted else "error" if failed or self.state == "error"
+                      else self.state if self.state in {"waiting", "stopped"}
                       else "finished" if self.completed == self.started else "stopped")
         self._render()
 

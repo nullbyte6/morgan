@@ -488,8 +488,5 @@
   "task_progress.step_verify": "Comprobación realizada: {tool}",
   "task_progress.step_checkpoint": "Estado de la tarea actualizado",
   "task_progress.step_failed": "Paso con error: {tool}",
-  "task_progress.step_skipped": "Paso no ejecutado: {tool}",
-  "task_control.verified": "Verificados {verified} de {total} criterios.",
-  "task_control.recovering": "No hay avance comprobado; estoy revisando la estrategia.",
-  "task_control.blocked": "La tarea está bloqueada: no he podido verificar avances tras ofrecer un cambio de estrategia. Necesito tu intervención para continuar."
+  "task_progress.step_skipped": "Paso no ejecutado: {tool}"
 }

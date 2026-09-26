@@ -488,8 +488,5 @@
   "task_progress.step_verify": "Check performed: {tool}",
   "task_progress.step_checkpoint": "Task state updated",
   "task_progress.step_failed": "Step failed: {tool}",
-  "task_progress.step_skipped": "Step not executed: {tool}",
-  "task_control.verified": "Verified {verified} of {total} criteria.",
-  "task_control.recovering": "No verified progress; I am reviewing the strategy.",
-  "task_control.blocked": "The task is blocked: no verified progress after an opportunity to change strategy. I need your input to continue."
+  "task_progress.step_skipped": "Step not executed: {tool}"
 }

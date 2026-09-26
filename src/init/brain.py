@@ -46,6 +46,7 @@ import unicodedata
 import winshell
 
 from .identity import get_assistant
+from .task_outcomes import ActionResult, Outcome
 
 try:
     import winreg
@@ -233,14 +234,14 @@ def read_notes() -> str:
 
 
 def list_files(path: str = ".", recursive: bool = False,
-               suffix: str = "") -> str:
+               suffix: str = "") -> dict:
     """List directory entries, optionally recursively and filtered by file suffix."""
     try:
         folder = resolve_safe_path(path)
         if not folder.exists():
-            return tr('brain.directory_does_not_exist', folder=folder)
+            return ActionResult(Outcome.NEGATIVE, tr('brain.directory_does_not_exist', folder=folder), "missing_resource").payload()
         if not folder.is_dir():
-            return tr('brain.not_a_directory', folder=folder)
+            return ActionResult(Outcome.REJECTED, tr('brain.not_a_directory', folder=folder), "file_precondition").payload()
         normalized_suffix = suffix.strip().casefold()
         if normalized_suffix and not normalized_suffix.startswith("."):
             normalized_suffix = "." + normalized_suffix
@@ -272,10 +273,10 @@ def list_files(path: str = ".", recursive: bool = False,
         items.sort(key=str.casefold)
         if normalized_suffix and not items:
             scope = "recursively" if recursive else "in the directory root"
-            return f"No files ending in {normalized_suffix} were found {scope}."
-        return "\n".join(items) if items else tr('brain.directory_is_empty')
+            return ActionResult(Outcome.NEGATIVE, f"No files ending in {normalized_suffix} were found {scope}.", "observed").payload()
+        return ActionResult(Outcome.SUCCESS, "\n".join(items) if items else tr('brain.directory_is_empty'), "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
 def find_directories(name: str, directory: str = "", partial: bool = False,
@@ -295,50 +296,50 @@ def find_directories(name: str, directory: str = "", partial: bool = False,
         return tr('brain.error_searching_directories', error=error)
 
 
-def create_directory(path: str, parents: bool = True) -> str:
+def create_directory(path: str, parents: bool = True) -> dict:
     """Create a directory; optionally create all missing parent directories."""
     try:
         directory_path = resolve_safe_path(path)
         if directory_path.exists():
             if directory_path.is_dir():
-                return tr('brain.directory_already_exists', directory_path=directory_path)
-            return tr('brain.a_file_already_exists_at', directory_path=directory_path)
+                return ActionResult(Outcome.SUCCESS, tr('brain.directory_already_exists', directory_path=directory_path), "observed").payload()
+            return ActionResult(Outcome.REJECTED, tr('brain.a_file_already_exists_at', directory_path=directory_path), "file_precondition").payload()
         directory_path.mkdir(parents=parents, exist_ok=False)
-        return tr('brain.directory_created', directory_path=directory_path)
+        return ActionResult(Outcome.SUCCESS, tr('brain.directory_created', directory_path=directory_path), "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def rename_directory(path: str, new_name: str) -> str:
+def rename_directory(path: str, new_name: str) -> dict:
     """Rename a directory in place; new_name must be a name, not another path."""
     try:
         directory_path = resolve_entry_path(path)
         if not directory_path.exists():
-            return tr('brain.directory_does_not_exist_d689f2', directory_path=directory_path)
+            return ActionResult(Outcome.NEGATIVE, tr('brain.directory_does_not_exist_d689f2', directory_path=directory_path), "missing_resource").payload()
         if not directory_path.is_dir():
-            return tr('brain.not_a_directory_a06036', directory_path=directory_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.not_a_directory_a06036', directory_path=directory_path), "file_precondition").payload()
         if (not new_name.strip() or new_name in (".", "..")
                 or Path(new_name).name != new_name):
-            return tr('brain.invalid_directory_name', new_name=new_name)
+            return ActionResult(Outcome.REJECTED, tr('brain.invalid_directory_name', new_name=new_name), "file_precondition").payload()
         destination = directory_path.with_name(new_name)
         if destination.exists() or destination.is_symlink():
-            return tr('brain.destination_already_exists', destination=destination)
+            return ActionResult(Outcome.REJECTED, tr('brain.destination_already_exists', destination=destination), "file_precondition").payload()
         directory_path.rename(destination)
-        return tr('brain.directory_renamed', directory_path=directory_path, destination=destination)
+        return ActionResult(Outcome.SUCCESS, tr('brain.directory_renamed', directory_path=directory_path, destination=destination), "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def delete_directory(path: str, recursive: bool = False) -> str:
+def delete_directory(path: str, recursive: bool = False) -> dict:
     """Delete a directory; recursive must be true to remove any contents."""
     try:
         directory_path = resolve_entry_path(path)
         if not directory_path.exists() and not directory_path.is_symlink():
-            return tr('brain.directory_does_not_exist_d689f2', directory_path=directory_path)
+            return ActionResult(Outcome.NEGATIVE, tr('brain.directory_does_not_exist_d689f2', directory_path=directory_path), "missing_resource").payload()
         if not directory_path.is_dir():
-            return tr('brain.not_a_directory_a06036', directory_path=directory_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.not_a_directory_a06036', directory_path=directory_path), "file_precondition").payload()
         if directory_path == Path(directory_path.anchor):
-            return tr('brain.refusing_to_delete_a_filesystem_root', directory_path=directory_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.refusing_to_delete_a_filesystem_root', directory_path=directory_path), "file_precondition").payload()
 
         is_junction = (hasattr(directory_path, "is_junction")
                        and directory_path.is_junction())
@@ -349,58 +350,58 @@ def delete_directory(path: str, recursive: bool = False) -> str:
         elif recursive:
             shutil.rmtree(directory_path)
         elif any(directory_path.iterdir()):
-            return tr('brain.directory_is_not_empty_recursive_deletion_was_not_requested',
-                      directory_path=directory_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.directory_is_not_empty_recursive_deletion_was_not_requested',
+                      directory_path=directory_path), "file_precondition").payload()
         else:
             directory_path.rmdir()
-        return tr('brain.directory_deleted', directory_path=directory_path)
+        return ActionResult(Outcome.SUCCESS, tr('brain.directory_deleted', directory_path=directory_path), "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def read_file(path: str) -> str:
+def read_file(path: str) -> dict:
     """Read a text file while detecting UTF-8, UTF-16 or Windows-1252."""
     try:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
                 "Use search_code/read_code for source inspection. "
-                "Do not retry read_file for this path.")
+                "Do not retry read_file for this path.", "self_code_required").payload())
         
         from .attachments import active_attachments
         attachments = active_attachments.get()
         if attachments is not None:
             result = attachments.read_path(str(file_path))
             if result is not None:
-                return result
+                return ActionResult(Outcome.SUCCESS, result, "observed").payload()
         if not file_path.exists():
-            return tr('brain.file_does_not_exist', file_path=file_path)
+            return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
         if not file_path.is_file():
-            return tr('brain.not_a_file', file_path=file_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.not_a_file', file_path=file_path), "file_precondition").payload()
         content, _ = decode_text(file_path.read_bytes())
-        return content
+        return ActionResult(Outcome.SUCCESS, content, "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def create_file(path: str, content: str = "", encoding: str = "utf-8") -> str:
+def create_file(path: str, content: str = "", encoding: str = "utf-8") -> dict:
     """Create a new text file and fail rather than overwrite an existing file."""
     try:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
-                "Use edit_code to modify Arlo source. "
-                "Do not retry create_file for this path.")
+                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                "Use create_code to create Arlo source. "
+                "Do not retry create_file for this path.", "self_code_required").payload())
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("x", encoding=encoding) as file:
             file.write(content)
-        return tr('brain.file_created', file_path=file_path)
+        return ActionResult(Outcome.SUCCESS, tr('brain.file_created', file_path=file_path), "observed").payload()
     except FileExistsError:
-        return tr('brain.file_already_exists', value0=resolve_safe_path(path))
+        return ActionResult(Outcome.REJECTED, tr('brain.file_already_exists', value0=resolve_safe_path(path)), "file_precondition").payload()
     except (LookupError, OSError) as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
 def write_file(path: str, content: str) -> str:
@@ -418,7 +419,7 @@ def write_file(path: str, content: str) -> str:
         return f"Error: {error}"
 
 
-def edit_file(path: str, content: str) -> str:
+def edit_file(path: str, content: str) -> dict:
     """Replace the entire contents of an existing user file.
     Use for files in the user's current working directory.
     Do not use to modify Arlo's own source code; use edit_code instead.
@@ -430,99 +431,88 @@ def edit_file(path: str, content: str) -> str:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
                 "Use edit_code to modify Arlo source. "
-                "Do not retry edit_file for this path.")
+                "Do not retry edit_file for this path.", "self_code_required").payload())
         if not file_path.exists():
-            return tr('brain.file_does_not_exist', file_path=file_path)
+            return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
         if not file_path.is_file():
-            return tr('brain.not_a_file', file_path=file_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.not_a_file', file_path=file_path), "file_precondition").payload()
         _, encoding = decode_text(file_path.read_bytes())
         atomic_write_bytes(file_path, content.encode(encoding))
-        return tr('brain.file_edited', file_path=file_path)
+        return ActionResult(Outcome.SUCCESS, tr('brain.file_edited', file_path=file_path), "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def append_file(path: str, content: str) -> str:
+def append_file(path: str, content: str) -> dict:
     """Append text to a file, preserving its existing text encoding."""
     try:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
                 "Use edit_code to modify Arlo source. "
-                "Do not retry append_file for this path.")
+                "Do not retry append_file for this path.", "self_code_required").payload())
         file_path.parent.mkdir(parents=True, exist_ok=True)
         encoding = "utf-8"
         if file_path.exists():
             if not file_path.is_file():
-                return tr('brain.not_a_file', file_path=file_path)
+                return ActionResult(Outcome.REJECTED, tr('brain.not_a_file', file_path=file_path), "file_precondition").payload()
             _, encoding = decode_text(file_path.read_bytes())
         with file_path.open("a", encoding=encoding) as file:
             file.write(content)
-        return tr('brain.content_appended_to', file_path=file_path)
+        return ActionResult(Outcome.SUCCESS, tr('brain.content_appended_to', file_path=file_path), "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def replace_in_file(path: str, old_text: str, new_text: str) -> str:
+def replace_in_file(path: str, old_text: str, new_text: str) -> dict:
     """Replace matching text in an existing file without changing its encoding."""
     try:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
                 "Use edit_code to modify Arlo source. "
-                "Do not retry replace_in_file for this path.")
+                "Do not retry replace_in_file for this path.", "self_code_required").payload())
         if not file_path.exists():
-            return tr('brain.file_does_not_exist', file_path=file_path)
+            return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
         if not file_path.is_file():
-            return tr('brain.not_a_file', file_path=file_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.not_a_file', file_path=file_path), "file_precondition").payload()
         content, encoding = decode_text(file_path.read_bytes())
         if old_text not in content:
-            return tr('brain.text_to_replace_was_not_found')
+            return ActionResult(Outcome.REJECTED, tr('brain.text_to_replace_was_not_found'), "file_precondition").payload()
         occurrences = content.count(old_text)
         updated_content = content.replace(old_text, new_text)
         atomic_write_bytes(file_path, updated_content.encode(encoding))
-        return tr('brain.replaced_occurrence_s_in', occurrences=occurrences, file_path=file_path)
+        return ActionResult(Outcome.SUCCESS, tr('brain.replaced_occurrence_s_in', occurrences=occurrences, file_path=file_path), "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def run_git(repository: str, arguments: list[str]) -> str:
-    """Run one internally selected Git operation without invoking a shell."""
+def run_git(repository: str, arguments: list[str]) -> dict:
+    """Run an internally selected Git operation and retain its actual exit status."""
     try:
         repository_path = resolve_safe_path(repository)
-        if not repository_path.exists():
-            return tr('brain.error_repository_path_does_not_exist', repository_path=repository_path)
         if not repository_path.is_dir():
-            return tr('brain.error_repository_path_is_not_a_directory', repository_path=repository_path)
+            return ActionResult(Outcome.REJECTED, str(repository_path), "repository_required").payload()
         if shutil.which("git") is None:
-            return tr('brain.error_git_is_not_installed_or_is_not_available_on_path')
-
+            return ActionResult(Outcome.EXTERNAL_BLOCKER, "Git is unavailable", "dependency_unavailable",
+                                "git_executable", "Install Git or make it available on PATH.").payload()
         environment = os.environ.copy()
         environment["GIT_TERMINAL_PROMPT"] = "0"
         result = subprocess.run(
             ["git", "-C", str(repository_path), "--no-pager", *arguments],
-            capture_output=True,
-            text=True,
-            errors="replace",
-            timeout=GIT_TIMEOUT_SECONDS,
-            env=environment,
-        )
-        output = "\n".join(
-            part.strip() for part in (result.stdout, result.stderr) if
-            part.strip()
-        )
-        if result.returncode != 0:
-            detail = output or tr('brain.git_did_not_provide_an_error_message')
-            return tr('brain.error_git_exited_with_code', value0=result.returncode, detail=detail)
-        return output or tr('brain.git_command_completed_successfully')
+            capture_output=True, text=True, errors="replace", timeout=GIT_TIMEOUT_SECONDS,
+            env=environment)
+        return ActionResult(Outcome.SUCCESS if result.returncode == 0 else Outcome.FAILED,
+                            {"stdout": result.stdout, "stderr": result.stderr,
+                             "exit_code": result.returncode}, "git_result").payload()
     except subprocess.TimeoutExpired:
-        return tr('brain.error_git_command_timed_out_after_seconds', GIT_TIMEOUT_SECONDS=GIT_TIMEOUT_SECONDS)
+        return ActionResult(Outcome.UNCERTAIN, "Git timed out; inspect before retrying.", "timeout").payload()
     except OSError as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, str(error), "git_execution_failed").payload()
 
 
 def valid_git_name(value: str, label: str) -> str | None:
@@ -544,13 +534,13 @@ def valid_git_name(value: str, label: str) -> str | None:
     return None
 
 
-def git_status(repository: str = ".") -> str:
+def git_status(repository: str = ".") -> dict:
     """Show the current branch and concise working-tree status for a repository."""
     return run_git(repository, ["status", "--short", "--branch"])
 
 
 def git_diff(repository: str = ".", staged: bool = False,
-             path: str = "") -> str:
+             path: str = "") -> dict:
     """Show unstaged changes, or staged changes when staged is true."""
     arguments = ["diff", "--no-ext-diff"]
     if staged:
@@ -558,27 +548,27 @@ def git_diff(repository: str = ".", staged: bool = False,
     if path:
         arguments.extend(["--", path])
     result = run_git(repository, arguments)
-    if result == tr('brain.git_command_completed_successfully'):
-        return tr('brain.no_differences_found')
+    if result["outcome"] == Outcome.SUCCESS and not result["data"]["stdout"]:
+        return ActionResult(Outcome.NEGATIVE, result["data"], "no_differences").payload()
     return result
 
 
-def git_add(paths: list[str], repository: str = ".") -> str:
+def git_add(paths: list[str], repository: str = ".") -> dict:
     """Stage the exact files or pathspecs supplied in paths for a later commit."""
     if not paths or any(not path or "\x00" in path for path in paths):
-        return tr('brain.error_provide_at_least_one_valid_path_to_stage')
+        return ActionResult(Outcome.REJECTED, tr('brain.error_provide_at_least_one_valid_path_to_stage'), "git_precondition").payload()
     return run_git(repository, ["add", "--", *paths])
 
 
-def git_commit(message: str, repository: str = ".") -> str:
+def git_commit(message: str, repository: str = ".") -> dict:
     """Create a commit from staged changes with the supplied commit message."""
     if not message.strip() or "\x00" in message:
-        return tr('brain.error_commit_message_cannot_be_empty')
+        return ActionResult(Outcome.REJECTED, tr('brain.error_commit_message_cannot_be_empty'), "git_precondition").payload()
     return run_git(repository, ["commit", "-m", message])
 
 
 def git_fetch(repository: str = ".", remote: str = "",
-              prune: bool = False) -> str:
+              prune: bool = False) -> dict:
     """Download remote refs without changing local files or the current branch."""
     arguments = ["fetch"]
     if prune:
@@ -586,16 +576,16 @@ def git_fetch(repository: str = ".", remote: str = "",
     if remote:
         error = valid_git_name(remote, "remote")
         if error:
-            return error
+            return ActionResult(Outcome.REJECTED, error, "git_precondition").payload()
         arguments.append(remote)
     return run_git(repository, arguments)
 
 
 def git_pull(repository: str = ".", remote: str = "", branch: str = "",
-             rebase: bool = False) -> str:
+             rebase: bool = False) -> dict:
     """Fetch and integrate a remote branch into the checked-out local branch."""
     if branch and not remote:
-        return tr('brain.error_a_remote_is_required_when_a_branch_is_supplied')
+        return ActionResult(Outcome.REJECTED, tr('brain.error_a_remote_is_required_when_a_branch_is_supplied'), "git_precondition").payload()
     arguments = ["pull"]
     if rebase:
         arguments.append("--rebase")
@@ -603,18 +593,18 @@ def git_pull(repository: str = ".", remote: str = "", branch: str = "",
         if value:
             error = valid_git_name(value, label)
             if error:
-                return error
+                return ActionResult(Outcome.REJECTED, error, "git_precondition").payload()
             arguments.append(value)
     return run_git(repository, arguments)
 
 
 def git_push(repository: str = ".", remote: str = "", branch: str = "",
-             set_upstream: bool = False) -> str:
+             set_upstream: bool = False) -> dict:
     """Publish commits to a configured remote, optionally setting the upstream."""
     if branch and not remote:
-        return tr('brain.error_a_remote_is_required_when_a_branch_is_supplied')
+        return ActionResult(Outcome.REJECTED, tr('brain.error_a_remote_is_required_when_a_branch_is_supplied'), "git_precondition").payload()
     if set_upstream and not remote:
-        return tr('brain.error_a_remote_is_required_when_setting_the_upstream')
+        return ActionResult(Outcome.REJECTED, tr('brain.error_a_remote_is_required_when_setting_the_upstream'), "git_precondition").payload()
     arguments = ["push"]
     if set_upstream:
         arguments.append("--set-upstream")
@@ -622,15 +612,15 @@ def git_push(repository: str = ".", remote: str = "", branch: str = "",
         if value:
             error = valid_git_name(value, label)
             if error:
-                return error
+                return ActionResult(Outcome.REJECTED, error, "git_precondition").payload()
             arguments.append(value)
     return run_git(repository, arguments)
 
 
-def git_log(repository: str = ".", max_count: int = 10) -> str:
+def git_log(repository: str = ".", max_count: int = 10) -> dict:
     """Show a concise recent commit history."""
     if isinstance(max_count, bool) or not 1 <= max_count <= 100:
-        return tr('brain.error_max_count_must_be_between_1_and_100')
+        return ActionResult(Outcome.REJECTED, tr('brain.error_max_count_must_be_between_1_and_100'), "git_precondition").payload()
     return run_git(
         repository,
         ["log", f"--max-count={max_count}", "--oneline", "--decorate"],
@@ -638,7 +628,7 @@ def git_log(repository: str = ".", max_count: int = 10) -> str:
 
 
 def git_list_branches(repository: str = ".",
-                      include_remote: bool = False) -> str:
+                      include_remote: bool = False) -> dict:
     """List local branches and, when requested, remote-tracking branches."""
     arguments = ["branch"]
     if include_remote:
@@ -647,11 +637,11 @@ def git_list_branches(repository: str = ".",
 
 
 def git_switch(branch: str, repository: str = ".",
-               create: bool = False) -> str:
+               create: bool = False) -> dict:
     """Switch branches, optionally creating the named branch first."""
     error = valid_git_name(branch, "branch")
     if error:
-        return error
+        return ActionResult(Outcome.REJECTED, error, "git_precondition").payload()
     arguments = ["switch"]
     if create:
         arguments.append("--create")
@@ -659,53 +649,55 @@ def git_switch(branch: str, repository: str = ".",
     return run_git(repository, arguments)
 
 
-def read_binary_file(path: str) -> str:
+def read_binary_file(path: str) -> dict:
     """Read any binary file and return its bytes encoded as Base64."""
     try:
         file_path = resolve_safe_path(path)
+        if _is_arlo_source_path(file_path):
+            return ActionResult(Outcome.REJECTED, "Use read_code for Arlo source.", "self_code_required").payload()
         if not file_path.exists():
-            return tr('brain.file_does_not_exist', file_path=file_path)
+            return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
         if not file_path.is_file():
-            return tr('brain.not_a_file', file_path=file_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.not_a_file', file_path=file_path), "file_precondition").payload()
         encoded = base64.b64encode(file_path.read_bytes()).decode("ascii")
-        return encoded
+        return ActionResult(Outcome.SUCCESS, encoded, "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
 def write_binary_file(path: str, base64_content: str,
-                      overwrite: bool = False) -> str:
+                      overwrite: bool = False) -> dict:
     """Create a binary file from Base64; set overwrite only for an existing file."""
     try:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
                 "Use edit_code to modify Arlo source. "
-                "Do not retry write_binary_file for this path.")
+                "Do not retry write_binary_file for this path.", "self_code_required").payload())
         already_exists = file_path.exists()
         if already_exists and not overwrite:
-            return tr('brain.file_already_exists_e61309', file_path=file_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.file_already_exists_e61309', file_path=file_path), "file_precondition").payload()
         content = base64.b64decode(base64_content, validate=True)
         atomic_write_bytes(file_path, content)
         action = "edited" if already_exists else "created"
-        return tr('brain.binary_file', action=action, file_path=file_path)
+        return ActionResult(Outcome.SUCCESS, tr('brain.binary_file', action=action, file_path=file_path), "observed").payload()
     except (ValueError, OSError) as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def delete_file(path: str) -> str:
+def delete_file(path: str) -> dict:
     """Permanently delete one file or symbolic link, never a directory."""
     try:
         file_path = resolve_entry_path(path)
         if not file_path.exists() and not file_path.is_symlink():
-            return tr('brain.file_does_not_exist', file_path=file_path)
+            return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
         if file_path.is_dir() and not file_path.is_symlink():
-            return tr('brain.refusing_to_delete_a_directory', file_path=file_path)
+            return ActionResult(Outcome.REJECTED, tr('brain.refusing_to_delete_a_directory', file_path=file_path), "file_precondition").payload()
         file_path.unlink()
-        return tr('brain.file_deleted', file_path=file_path)
+        return ActionResult(Outcome.SUCCESS, tr('brain.file_deleted', file_path=file_path), "observed").payload()
     except Exception as error:
-        return f"Error: {error}"
+        return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
 def open_file(path: str) -> str:
