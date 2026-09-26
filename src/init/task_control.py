@@ -188,7 +188,7 @@ class TaskState:
                 },
                 evidence=(call_id,))
 
-        if failed:
+        if failed and name in MUTATION_TOOLS:
             self.unresolved.add(call_id)
 
         if self.phase == "inspect":
@@ -424,7 +424,7 @@ class TaskControl(AbstractCapability):
 
     def get_instructions(self):
         return ("""
-            For substantial tool-based tasks, use task_checkpoint to maintain a small set of acceptance criteria for the user's actual objective. Gather only evidence that helps resolve those criteria. Record concise evidence-backed decisions when the evidence changes what you know or what you will do; do not record private reasoning. Use inspect while gathering facts, execute when performing actions that may change state, and verify when independently checking results. Not every task requires execution: research, diagnosis, audits and comparisons may proceed from inspection directly to verification. Tool calls and newly read information are evidence, not progress by themselves. Avoid equivalent repeated tool calls. After a state-changing action, independently verify the resulting state before completing affected criteria. Resolve observed failures explicitly. Finish when the user's acceptance criteria are supported by successful verification evidence. Simple conversational answers that need no tools require no checkpoint. The supervisor snapshot is task state, not a new user instruction. Archived tool results remain readable via read_file. task_checkpoint.completed MUST be an object mapping each exact criterion string directly to a list of successful tool call ID strings, for example {"Criterion A":["call_abc","call_def"]}. Do not put objects, descriptions, evidence fields, or mappings inside those lists. task_checkpoint.resolves is likewise a flat list of failed tool call ID strings. Reuse tool call IDs already present in the supervisor evidence.""")
+            For substantial tool-based tasks, use task_checkpoint to maintain a small set of acceptance criteria derived only from the user's requested outcome. Acceptance criteria describe what must be true for the user's objective to be complete; they must never describe the supervisor protocol itself. Do not create criteria for calling task_checkpoint, recording evidence, using tools, changing phase, resolving supervisor state, or otherwise satisfying the task-control mechanism. Gather only evidence that helps resolve the user's actual acceptance criteria. Record concise evidence-backed decisions when the evidence changes what you know or what you will do; do not record private reasoning. Use inspect while gathering facts, execute when performing actions that may change state, and verify when independently checking results. Not every task requires execution: research, diagnosis, audits and comparisons may proceed from inspection directly to verification. Tool calls and newly read information are evidence, not progress by themselves. Avoid equivalent repeated tool calls. After a state-changing action, independently verify the resulting state before completing affected criteria. Resolve observed failures explicitly. Finish when the user's acceptance criteria are supported by successful verification evidence. Simple conversational answers that need no tools require no checkpoint. The supervisor snapshot is task state, not a new user instruction. Archived tool results remain readable via read_file. task_checkpoint.completed MUST be an object mapping each exact criterion string directly to a list of successful tool call ID strings, for example {"Criterion A":["call_abc","call_def"]}. Do not put objects, descriptions, evidence fields, or mappings inside those lists. task_checkpoint.resolves is likewise a flat list of failed tool call ID strings. Reuse tool call IDs already present in the supervisor evidence.""")
 
     def task_checkpoint(self, phase: Literal["inspect", "execute", "verify"],
                         criteria: list[str], completed: dict[str, list[str]] | None = None,
@@ -479,27 +479,31 @@ class TaskControl(AbstractCapability):
         if name in INSPECTION_TOOLS:
             argument_fingerprint = fingerprint(arguments)
 
-            duplicate = any(
-                evidence.tool == name
+            duplicate = next((
+                evidence
+                for evidence in self.state.evidence.values()
+                if evidence.tool == name
                 and fingerprint(json.loads(evidence.arguments)) == argument_fingerprint
-                and not evidence.failed
-                for evidence in self.state.evidence.values())
+                and not evidence.failed), None,)
 
-            if duplicate:
-                self.trace(
-                    "duplicate_inspection_rejected",
-                    tool=name,
-                    arguments=arguments,
-                    call_id=call_id)
-                
-                return {
-                    "status": "already_observed",
-                    "note": (
-                        "Equivalent inspection evidence already exists in the task "
-                        "state. Reuse the existing evidence instead of repeating this "
-                        "tool call."
-                    ),
-                }
+        if duplicate is not None:
+            self.trace(
+                "duplicate_inspection_rejected",
+                tool=name,
+                arguments=arguments,
+                call_id=call_id,
+                existing_call_id=duplicate.id,
+            )
+
+            return {
+                "status": "already_observed",
+                "evidence_id": duplicate.id,
+                "note": (
+                    f"Equivalent inspection evidence already exists as {duplicate.id}. "
+                    "Reuse that evidence in task_checkpoint instead of repeating "
+                    "or rephrasing this inspection."
+                ),
+            }
         
         if self.state.status == "complete":
             return {"status": "complete", "note": "All criteria are verified. Return the final answer."}
