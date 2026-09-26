@@ -28,7 +28,8 @@ background. On desktops with a system tray, use the Arlo icon to reopen it or
 quit it completely. On other desktops, launch Arlo again to restore the existing
 instance instead of starting another one.
 
-See more of its usage/application when you launch the script :) 
+See more of its usage/application when you launch the script.
+See the [specs here](docs/SPECS.md).
 
 After updating, restart both the desktop app and its persistent TTS service so
 they use the same interruption protocol. Offline regression checks can be run
