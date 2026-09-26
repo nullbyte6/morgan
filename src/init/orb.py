@@ -337,7 +337,10 @@ class Orb(QWidget):
         if abs(target - self.thinking_mix) < 0.001:
             self.thinking_mix = target
 
-        self.thinking_rotation += 0.090 * self.thinking_mix
+        angular_speed = 2.4
+        self.thinking_rotation = (
+            self.thinking_rotation + angular_speed * self.thinking_mix
+        ) % 360.0
         self.update()
 
     def paintEvent(self, event):
@@ -399,17 +402,34 @@ class Orb(QWidget):
             painter.drawEllipse(inner_rect)
 
         if self.thinking_mix > 0.001:
-            dashed_color = QColor(inner_color)
-            dashed_color.setAlphaF(
-                inner_color.alphaF() * self.thinking_mix)
-            pen = QPen(dashed_color)
-            pen.setWidthF(self.line_width / scale)
+            segment_count = 128
+            segment_angle = 360.0 / segment_count
+            tail_angle = 240.0
+            leading_angle = 18.0
+            head_angle = 90.0 - self.thinking_rotation
+            cap_angle = math.degrees(math.atan2(self.line_width / (2.0 * scale), inner_radius))
+            gradient = QConicalGradient(QPointF(0.0, 0.0), head_angle)
+            thinking_path = QPainterPath()
+            thinking_path.arcMoveTo(inner_rect, head_angle)
+            for segment in range(segment_count + 1):
+                distance = segment * segment_angle
+                fade = max(0.0, min(1.0, (distance - leading_angle)
+                                    / (tail_angle - leading_angle)))
+                opacity = 1.0 - fade * fade * (3.0 - 2.0 * fade)
+                if distance >= 360.0 - cap_angle:
+                    opacity = 1.0
+                color = QColor(inner_color)
+                color.setAlphaF(inner_color.alphaF() * self.thinking_mix * opacity)
+                gradient.setColorAt(segment / segment_count, color)
+                if distance < tail_angle:
+                    thinking_path.arcTo(inner_rect, head_angle + distance,
+                                        min(segment_angle, tail_angle - distance))
+            gradient.setColorAt(1.0 - cap_angle / 360.0, color)
+            pen = QPen(QBrush(gradient), self.line_width / scale)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            pen.setDashPattern([5.0, 4.0])
-            pen.setDashOffset(self.thinking_rotation)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(inner_rect)
+            painter.drawPath(thinking_path)
 
         spectrum_path = QPainterPath()
         band_count = len(self.smoothed)
