@@ -259,7 +259,7 @@ class TerminalSession(QThread):
                 if os.name == "nt":
                     data = process.read(blocking=False)
                 elif select.select([process.fd], [], [], 0)[0]:
-                    data = process.read(65536)
+                    data = process.read(32768)
                 else:
                     data = ""
                 if data:

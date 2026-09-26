@@ -2,6 +2,6 @@
   "version": "1.4.10-beta",
   "model_name": "arlo-qwen3.8:27b",
   "base_model_name": "qwen3.8:27b",
-  "context_length": 65536,
+  "context_length": 32768,
   "audio_model": "gemma4:e2b"
 }
