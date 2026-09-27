@@ -142,10 +142,15 @@ maps effect obligation IDs to {'finding': 'observed reconciliation', 'evidence':
 For read_only, current successful inspection IDs can satisfy completed; you do not need to
 repeat unchanged reads in phase verify. task_finish(completed={exact_criterion: [evidence IDs]})
 can certify remaining criteria and finish. Mutations still need independent verification.
-verification keys must match criteria exactly, without a nested 'criteria' wrapper. resolutions
+For read_only, one explicit verification contract can be shared by all new criteria.
+Prefer resources=[] until actual source paths have been discovered; never invent dependencies.
+verification keys otherwise match criteria exactly, without a nested 'criteria' wrapper. resolutions
 may name only real effect obligations; an audit criterion is completed, not resolved as an effect.
 Record findings=[{'finding': 'Observed fact', 'evidence': [IDs]}] to preserve semantic findings
 across compaction. A rejected control result names field, expected, and recoverable requirements.
+search_code uses literal text, not semantic search; search one symbol at a time.
+After no_matches, change the query or list_code to discover actual filenames.
+If a reused result includes next_action, follow that repair instead of repeating unchanged arguments.
 read_code returns structured content, coverage and next_cursor. Use read_code(cursor=next_cursor)
 until exhausted; mode='index' explicitly requests an index, which is not source-body coverage.
 Finish with task_finish(output=...) after current criteria and effect obligations are verified.
@@ -190,13 +195,26 @@ and retain its consent checks. cd requests use change_directory and Git requests
                         task_title: str = "") -> dict:
         """Apply an atomic task contract. Verification entries contain method/resources;
         resolutions contain finding/evidence. phase is the next action's role, not lifecycle.
+        For read_only, a single verification contract is shared across new criteria.
         Criteria are additive; omitted criteria and evidence remain required. Keep exact keys
         across languages. Use criteria=[] for phase-only updates.
         """
         self.refresh_resources()
         values = lambda entries: {key: value.model_dump() if isinstance(value, BaseModel) else value
                                   for key, value in (entries or {}).items()}
-        result = self.state.checkpoint(phase, criteria, values(verification), completed or {},
+        contracts = copy.deepcopy(values(verification))
+        if criteria and (kind or self.state.kind) == "read_only" and len(contracts) == 1:
+            shared_key, shared = next(iter(contracts.items()))
+            for criterion in criteria:
+                if criterion not in self.state.criteria:
+                    contracts.setdefault(criterion, copy.deepcopy(shared))
+            if shared_key not in criteria and shared_key not in self.state.criteria:
+                contracts.pop(shared_key)
+        for contract in contracts.values():
+            contract["resources"] = ["file:" + resource if isinstance(resource, str)
+                                     and Path(resource).is_absolute() and not any(char in resource for char in "*?[]")
+                                     else resource for resource in contract.get("resources", [])]
+        result = self.state.checkpoint(phase, criteria, contracts, completed or {},
                                      decisions or [], strategy, values(resolutions), reopen or [],
                                      kind, resources or [], [value.model_dump() if isinstance(value, BaseModel) else value
                                                             for value in findings or []])
@@ -310,6 +328,17 @@ and retain its consent checks. cd requests use change_directory and Git requests
             payload["evidence_id"] = evidence_id
         if reused:
             payload["reused_evidence"] = True
+            data = payload.get("data")
+            if name == "read_code" and isinstance(data, dict) and data.get("next_cursor"):
+                payload["next_action"] = {"tool": "read_code", "arguments": {"cursor": data["next_cursor"]},
+                                          "reason": "This unchanged page was already read. Continue its actual coverage with this cursor."}
+            elif name == "search_code" and payload.get("code") == "no_matches":
+                payload["next_action"] = {"tool": "list_code", "arguments": {
+                    "directory": arguments.get("directory", "."), "recursive": True,
+                    "suffix": arguments.get("suffix", ".py")},
+                    "reason": "This unchanged query already returned no matches. Discover source paths or search a different single symbol."}
+            elif name == "read_code":
+                payload["inspection_notice"] = "This unchanged range is exhausted. Preserve findings with its evidence ID and inspect other relevant source."
         self.receipts[call_id] = {"tool": name, "validated": validated, "executed": executed,
                                  "control": control, "outcome": outcome, "evidence_id": evidence_id,
                                  "reused": reused}
