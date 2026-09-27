@@ -199,6 +199,7 @@ class VoiceService:
         if "<|endofprompt|>" not in text:
             text = "You are a helpful assistant.<|endofprompt|>" + text
         self.voice.add_zero_shot_spk(text, str(reference), get_assistant_identifier())
+        self._reference_prompt = text
         self.voice_reference = reference
         self._reference_key = key
         logger.info("Voice reference applied: %s", reference.name)
@@ -245,8 +246,10 @@ class VoiceService:
         speaker_id = get_assistant_identifier()
         instruction = ""
         if language is not None:
-            instruction = ("You are a helpful assistant. Please speak in "
-                           f"{language.name.replace('_', ' ').lower()}.<|endofprompt|>")
+            prefix, transcript = self._reference_prompt.split("<|endofprompt|>", 1)
+            instruction = (f"{prefix.rstrip()} Please speak in "
+                           f"{language.name.replace('_', ' ').lower()}."
+                           f"<|endofprompt|>{transcript}")
             instruction_key = (self._reference_key, language)
             instructed_id = speaker_id + "-instruct"
             if instruction_key != self._instruction_key:
@@ -265,14 +268,9 @@ class VoiceService:
                                   token_max_n=80, token_min_n=60,
                                   merge_len=20, comma_split=False)
         for phrase in phrases:
-            if instruction:
-                yield from self.voice.inference_instruct2(
-                    phrase, instruction, "", zero_shot_spk_id=speaker_id,
-                    stream=True, speed=self.speed, text_frontend=False)
-            else:
-                yield from self.voice.inference_zero_shot(
-                    phrase, "", "", zero_shot_spk_id=speaker_id,
-                    stream=True, speed=self.speed, text_frontend=False)
+            yield from self.voice.inference_zero_shot(
+                phrase, "", "", zero_shot_spk_id=speaker_id,
+                stream=True, speed=self.speed, text_frontend=False)
 
     def _tts_loop(self) -> None:
         while True:
