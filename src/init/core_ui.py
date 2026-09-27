@@ -1620,7 +1620,7 @@ def main():
         
         font = QFont(main_font, 11)
         font.setKerning(True)
-        font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 96)
+        font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 100)
         app.setFont(font)
         window = ArloWindow()
         window.show()
