@@ -203,7 +203,8 @@ class ArloWindow(DesktopWindow):
         self.input_meter.hide()
         self.status = QLabel()
         self.task_presentation = TaskPresentation(self)
-        self.activity_trail = ActivityTrail(self.task_presentation)
+        self.activity_trail = ActivityTrail(
+            self.task_presentation, steps_enabled=self.settings.value("ephemeral_steps", True, type=bool))
         self.command_output = QPlainTextEdit()
         self.active_language = None
         self.subtitles = QLabel(self.startup_greeting)
@@ -757,10 +758,12 @@ class ArloWindow(DesktopWindow):
             view = SettingsView(
                 self.subtitles_enabled,
                 self.settings.value("orb_speech_pulse", True, type=bool),
-                muted=self.muted)
+                muted=self.muted,
+                ephemeral_steps_enabled=self.settings.value("ephemeral_steps", True, type=bool))
             view.mute_changed.connect(self.toggle_mute)
             view.subtitles_changed.connect(self.toggle_subtitles)
             view.orb_pulse_changed.connect(self.toggle_orb_speech_pulse)
+            view.ephemeral_steps_changed.connect(self.toggle_ephemeral_steps)
             view.language_changed.connect(self.change_language)
             return view
         raise ValueError(f"Unknown workspace view: {view_key}")
@@ -958,6 +961,9 @@ class ArloWindow(DesktopWindow):
             with QSignalBlocker(view.orb_pulse_switch):
                 view.orb_pulse_switch.setChecked(
                     self.settings.value("orb_speech_pulse", True, type=bool))
+            with QSignalBlocker(view.ephemeral_steps_switch):
+                view.ephemeral_steps_switch.setChecked(
+                    self.settings.value("ephemeral_steps", True, type=bool))
             view.refresh_language()
 
     def refresh_privacy_indicator(self):
@@ -1039,6 +1045,12 @@ class ArloWindow(DesktopWindow):
         for orb in (self.orb, self.mascot):
             orb.set_speech_pulse_enabled(enabled)
         self.settings.setValue("orb_speech_pulse", enabled)
+        self.refresh_settings_workspaces()
+
+    @Slot(bool)
+    def toggle_ephemeral_steps(self, enabled: bool):
+        self.activity_trail.set_steps_enabled(enabled)
+        self.settings.setValue("ephemeral_steps", enabled)
         self.refresh_settings_workspaces()
 
     def set_orbs_speaking(self, speaking: bool):

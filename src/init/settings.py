@@ -137,12 +137,13 @@ class SettingsView(QWidget):
     """Desktop subtitle and interface language preferences."""
     subtitles_changed = Signal(bool)
     orb_pulse_changed = Signal(bool)
+    ephemeral_steps_changed = Signal(bool)
     mute_changed = Signal(bool)
     language_changed = Signal(str)
     model_changed = Signal(str)
 
     def __init__(self, subtitles_enabled: bool,
-                 orb_pulse_enabled: bool, parent=None, *, muted=False):
+                 orb_pulse_enabled: bool, parent=None, *, muted=False, ephemeral_steps_enabled=True):
         super().__init__(parent)
         self.setObjectName("settingsPage")
         layout = QVBoxLayout(self)
@@ -183,6 +184,17 @@ class SettingsView(QWidget):
         orb_pulse_row.addWidget(self.orb_pulse_switch)
         layout.addLayout(orb_pulse_row)
 
+        self.ephemeral_steps_label = QLabel()
+        self.ephemeral_steps_label.setObjectName("muted")
+        self.ephemeral_steps_switch = ToggleSwitch()
+        self.ephemeral_steps_switch.setChecked(ephemeral_steps_enabled)
+        self.ephemeral_steps_label.setBuddy(self.ephemeral_steps_switch)
+        ephemeral_steps_row = QHBoxLayout()
+        ephemeral_steps_row.addWidget(self.ephemeral_steps_label)
+        ephemeral_steps_row.addStretch()
+        ephemeral_steps_row.addWidget(self.ephemeral_steps_switch)
+        layout.addLayout(ephemeral_steps_row)
+
         self.language_label = QLabel()
         self.language_label.setObjectName("muted")
         self.language_dropdown = QComboBox()
@@ -216,6 +228,7 @@ class SettingsView(QWidget):
         self.refresh_language()
         self.subtitles_switch.toggled.connect(self.subtitles_changed.emit)
         self.orb_pulse_switch.toggled.connect(self.orb_pulse_changed.emit)
+        self.ephemeral_steps_switch.toggled.connect(self.ephemeral_steps_changed.emit)
         self.language_dropdown.currentIndexChanged.connect(
             lambda: self.language_changed.emit(self.language_dropdown.currentData()))
 
@@ -302,6 +315,9 @@ class SettingsView(QWidget):
         self.orb_pulse_label.setText(tr("ui.orb_speech_pulse"))
         self.orb_pulse_switch.setAccessibleName(tr("ui.orb_speech_pulse"))
         self.orb_pulse_switch.setToolTip(tr("ui.orb_speech_pulse_hint"))
+        self.ephemeral_steps_label.setText(tr("ui.ephemeral_steps"))
+        self.ephemeral_steps_switch.setAccessibleName(tr("ui.ephemeral_steps"))
+        self.ephemeral_steps_switch.setToolTip(tr("ui.ephemeral_steps_hint"))
         self.language_label.setText(tr("ui.language"))
         self.language_dropdown.setAccessibleName(tr("ui.language"))
         self.language_dropdown.setToolTip(tr("ui.language_hint"))

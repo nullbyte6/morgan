@@ -7,7 +7,7 @@ from src.init.lang import tr
 
 
 class ActivityTrail(QLabel):
-    def __init__(self, presentation, parent=None):
+    def __init__(self, presentation, parent=None, *, steps_enabled=True):
         super().__init__(parent)
         self.setObjectName("activityTrail")
         self.setProperty("orbContext", True)
@@ -16,6 +16,7 @@ class ActivityTrail(QLabel):
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.setMinimumWidth(0)
         self.presentation = presentation
+        self.steps_enabled = bool(steps_enabled)
         self.activity = ("", "")
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
@@ -33,10 +34,15 @@ class ActivityTrail(QLabel):
         self.setToolTip("")
         self.setAccessibleName("")
         self.timer.stop()
-        if view.state == "waiting" or view.lifecycle != "active" or not view.active:
+        if not self.steps_enabled or view.state == "waiting" or view.lifecycle != "active" or not view.active:
             self._render()
         else:
             self.timer.start()
+
+    def set_steps_enabled(self, enabled):
+        self.steps_enabled = bool(enabled)
+        self.timer.stop()
+        self._render()
 
     def refresh_language(self, _language=None):
         if self.activity[0] and not self.timer.isActive():
@@ -45,7 +51,7 @@ class ActivityTrail(QLabel):
     def _render(self):
         category, subject = self.activity
         key = "read_file" if category == "read" and subject else category
-        text = tr("activity." + key, name=subject) if key else ""
+        text = tr("activity." + key, name=subject) if key and self.steps_enabled else ""
         self.setToolTip(text)
         self.setAccessibleName(text)
         self.setText(self.fontMetrics().elidedText(text, Qt.ElideRight, max(1, self.width())))

@@ -25,6 +25,8 @@
   "ui.subtitles_hint": "Toggle Subtitles",
   "ui.orb_speech_pulse": "Pulse",
   "ui.orb_speech_pulse_hint": "Make the Orb grow and shrink with Arlo's voice",
+  "ui.ephemeral_steps": "Ephemeral steps",
+  "ui.ephemeral_steps_hint": "Show or hide activity steps below the orb",
   "ui.language": "Interface language",
   "ui.voice": "Voice",
   "voice.selection_restart": "The voice service does not support dynamic selection or is not responding. Restart Arlo's voice service, not just the window.",
