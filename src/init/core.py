@@ -460,6 +460,20 @@ class Assistant:
                                           ModelResponse, TextPart,
                                           UserPromptPart)
 
+        directory_command = re.fullmatch(r"cd(?:\s+(.*))?", prompt.strip(), re.IGNORECASE)
+        if directory_command is not None and attachments is None and audio_input is None:
+            if cancel_event is not None and cancel_event.is_set():
+                return "", history
+            path = directory_command.group(1) or ""
+            if path.casefold().startswith("/d "):
+                path = path[3:].strip()
+            output = brain.change_directory(path)
+            self.task_state = None
+            if on_chunk is not None:
+                on_chunk(output)
+            return output, [*history, ModelRequest(parts=[UserPromptPart(prompt)]),
+                            ModelResponse(parts=[TextPart(output)])]
+
         self._initialize_runtime()
 
         if speech_enabled:
