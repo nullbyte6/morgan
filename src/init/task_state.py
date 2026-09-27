@@ -121,6 +121,8 @@ class TaskState:
     findings: dict = field(default_factory=dict)
     restrictions: dict = field(default_factory=dict)
     last_rejection: dict = field(default_factory=dict)
+    output_recovery: dict = field(default_factory=dict)
+    final_output: str | None = None
     trace: object = field(default=None, repr=False)
 
     def record(self, event, **details):
@@ -298,6 +300,8 @@ class TaskState:
                             for value in self.criteria.values()))
 
     def requirements(self):
+        if self.kind == "direct":
+            return []
         result = []
         if self.kind is None or not self.criteria:
             result.append({"code": "contract_required", "tool": "task_checkpoint", "fields": {
@@ -317,19 +321,36 @@ class TaskState:
         result.extend({"code": "dependency_resolution_required", **asdict(value)} for value in self.dependencies)
         return result
 
-    def finish(self, direct=False):
+    def recover_output(self, code, requirements):
+        if self.status not in {Lifecycle.ACTIVE, Lifecycle.COMPLETE}:
+            raise ValueError("Only executing or completed tasks can recover output.")
+        self.status = Lifecycle.ACTIVE
+        self.final_output = None
+        self.output_recovery = {"code": code, "requirements": copy.deepcopy(requirements),
+                                "delivery": {"tool": "task_finish", "field": "output",
+                                             "expected": "A complete concise answer, or a summary with an artifact link"}}
+        self.notice = "Repair the recorded requirements with control tools, then submit the answer through task_finish(output=...)."
+        self.record("output_recovery", recovery=self.output_recovery)
+
+    def finish(self, direct=False, output=None):
         if self.status != Lifecycle.ACTIVE:
             return {"accepted": False, "reason": "Only active tasks can propose completion."}
-        if direct:
+        if (self.output_recovery or output is not None) and (not isinstance(output, str) or not output.strip()):
+            return control_rejection("Submit a complete answer through task_finish during output recovery.", "output",
+                                     "A nonempty complete answer, or a summary with an artifact link",
+                                     requirements=self.requirements(), code="output_required")
+        if direct and self.kind != "direct":
             if self.evidence or self.criteria or self.obligations or self.kind:
                 return control_rejection("Direct answers cannot bypass a supervised task.", "direct", False,
                                          requirements=self.requirements(), code="completion_requirements")
             self.kind = "direct"
-        elif not self.complete():
+        elif self.kind != "direct" and not self.complete():
             return control_rejection("Satisfy the listed contract requirements before completion.", "completed",
                                      "Current evidence IDs keyed by exact criterion", requirements=self.requirements(),
                                      code="completion_requirements")
         self.status = Lifecycle.COMPLETE
+        self.final_output = output
+        self.output_recovery = {}
         self.record("complete", direct=direct)
         return {"accepted": True, "outcome": Outcome.SUCCESS, "status": self.status}
 
@@ -405,7 +426,8 @@ class TaskState:
                 "strategy": self.strategy, "decisions": self.decisions, "notice": self.notice,
                 "sequence": self.sequence, "requests": self.requests, "inspections": self.inspections,
                 "findings": self.findings, "restrictions": self.restrictions,
-                "last_rejection": self.last_rejection, "pending_verification": self.requirements()}
+                "last_rejection": self.last_rejection, "pending_verification": self.requirements(),
+                "output_recovery": copy.deepcopy(self.output_recovery), "final_output": self.final_output}
         if include_evidence:
             snapshot["evidence"] = evidence
         return snapshot

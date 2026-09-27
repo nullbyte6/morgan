@@ -487,7 +487,7 @@ class Assistant:
             turn_model = self.audio_model
             turn_model_settings["thinking"] = False
         attachment_tools = [attachments.toolset()] if attachments else []
-        from src.init.task_control import TaskControl, TaskStopped
+        from src.init.task_control import TaskControl, TaskOutputReady, TaskStopped
         from src.init.session_log import SessionContext
         from src.init.config import HOME_PATH
         import uuid
@@ -523,7 +523,6 @@ class Assistant:
             conversation_messages = list(history)
             current_prompt = model_prompt
             tool_arguments = {}
-            answer_parts = []
 
             def emit_visible(chunk):
                 if not chunk:
@@ -607,6 +606,16 @@ class Assistant:
                         usage_limits=UsageLimits(request_limit=None),
                         capabilities=[controller],
                         event_stream_handler=stream_events)
+                except TaskOutputReady as ready:
+                    stream_messages = list(controller.messages)
+                    if controller.accept_output():
+                        output = str(ready)
+                        emit_visible(output)
+                        conversation_messages = [*stream_messages, ModelResponse(parts=[TextPart(output)])]
+                        break
+                    conversation_messages = stream_messages
+                    current_prompt = None
+                    continue
                 except TaskStopped:
                     stream_messages = list(controller.messages)
                     notice = controller.state.notice
@@ -642,22 +651,10 @@ class Assistant:
                 conversation_messages = list(result.all_messages())
                 stream_messages = conversation_messages
                 if text_call is None:
-                    if result.response.finish_reason == "length":
-                        controller.trace("output_truncated")
-                        if visible_output and controller.accept_output():
-                            answer_parts.append(visible_output)
-                        current_prompt = (
-                            "The model output reached its response limit. Continue the same task and output "
-                            "without restarting or replaying actions. This is not a blocker or task completion.")
-                        continue
-                    if controller.accept_output():
-                        emit_visible("".join(answer_parts) + visible_output)
+                    if controller.accept_output(truncated=result.response.finish_reason == "length"):
+                        emit_visible(visible_output)
                         break
-                    current_prompt = (
-                        "Completion was not accepted. Satisfy these explicit requirements and propose task_finish: "
-                        + json.dumps(controller.state.requirements(), ensure_ascii=False)
-                        + ". The structured task memory retains current coverage, evidence IDs and control errors. "
-                        "Use those IDs for read_only completion; mutations need independent verification.")
+                    current_prompt = None
                     continue
 
                 name, arguments = text_call
