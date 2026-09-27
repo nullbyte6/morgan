@@ -24,10 +24,11 @@ from src.init.lang import tr
 import ast
 import base64
 import hashlib
-from typing import Literal
+from typing import Annotated, Literal
 import json
 import logging
 import subprocess
+from pydantic import Field
 from src.init.visuals.browser_bridge import open_embedded_url
 from src.init.paths import PROJECT_ROOT
 from .task_outcomes import ActionResult, Outcome, normalize_result
@@ -263,16 +264,23 @@ def code_cursor(cursor):
         raise ValueError("Use an unchanged next_cursor returned by read_code") from error
 
 
-def read_code(path: str = "", start_line: int = 1, end_line: int = 0,
-              character_offset: int = 0, cursor: str = "",
+def read_code(path: str = "", start_line: Annotated[int, Field(ge=1)] = 1,
+              end_line: Annotated[int, Field(ge=0)] = 0,
+              character_offset: Annotated[int, Field(ge=0)] = 0, cursor: str = "",
               mode: Literal["content", "index"] = "content") -> dict:
     """Read source content, or explicitly request mode='index'.
+    Line numbers start at 1 and end_line is inclusive; 0 reads through the file's end.
+    character_offset starts at 0 within the requested range.
     Results identify actual coverage, truncated and exhausted ranges, and next_cursor.
     Continue with read_code(cursor=next_cursor), without changing any range arguments.
     A cursor is bound to the source revision; stale cursors require restarting that range.
     Index pages describe symbols and never count as source-body coverage.
     """
     from .brain import decode_text
+    def reject(field, expected, actual, reason):
+        return ActionResult(Outcome.REJECTED, {"reason": reason, "field": field,
+                            "expected": expected, "actual": actual, "recoverable": True},
+                            "inspection_precondition").payload()
     try:
         continuation = code_cursor(cursor) if cursor else None
         if continuation:
@@ -281,13 +289,19 @@ def read_code(path: str = "", start_line: int = 1, end_line: int = 0,
                     or end_line not in (0, continuation["end"])
                     or character_offset not in (0, continuation["offset"])
                     or mode not in ("content", continuation["mode"])):
-                raise ValueError("Cursor arguments conflict with the original path, range, offset or mode")
+                return reject("cursor", "An unchanged next_cursor without conflicting arguments", cursor,
+                              "Cursor arguments conflict with the original path, range, offset or mode")
             path, start_line, end_line, character_offset, mode = (continuation[key]
                 for key in ("path", "start", "end", "offset", "mode"))
-        if not path or start_line < 1 or end_line < 0 or character_offset < 0:
-            raise ValueError("Supply a source path and nonnegative range/offset values")
+        if not path:
+            return reject("path", "A source path or returned cursor", path, "Supply a source path or returned cursor")
+        for field, value, minimum in (("start_line", start_line, 1), ("end_line", end_line, 0),
+                                       ("character_offset", character_offset, 0)):
+            if value < minimum:
+                return reject(field, {"minimum": minimum}, value, f"{field} must be at least {minimum}")
         if end_line and end_line < start_line:
-            raise ValueError("end_line cannot be before start_line")
+            return reject("end_line", {"minimum": start_line, "through_file_end": 0}, end_line,
+                          "end_line must be 0 or at least start_line")
         target = _path(path)
         raw = target.read_bytes()
         revision = hashlib.sha256(raw).hexdigest()
@@ -298,11 +312,13 @@ def read_code(path: str = "", start_line: int = 1, end_line: int = 0,
         lines = content.splitlines(keepends=True)
         total_lines = len(lines)
         if start_line > max(total_lines, 1):
-            raise ValueError(f"start_line exceeds the file's {total_lines} lines")
+            return reject("start_line", {"minimum": 1, "maximum": max(total_lines, 1)}, start_line,
+                          f"start_line exceeds the file's {total_lines} lines")
         range_end = min(end_line or max(total_lines, 1), max(total_lines, 1))
         block = _source_index(path, content) if mode == "index" else "".join(lines[start_line - 1:range_end])
         if character_offset > len(block):
-            raise ValueError("Cursor/offset is beyond the requested range")
+            return reject("character_offset", {"minimum": 0, "maximum": len(block)}, character_offset,
+                          "Cursor/offset is beyond the requested range")
         page = block[character_offset:character_offset + READ_CODE_PAGE_CHARACTERS]
         page = "".join(page.splitlines(keepends=True)[:READ_CODE_MAX_LINES])
         next_offset = character_offset + len(page)
@@ -322,8 +338,8 @@ def read_code(path: str = "", start_line: int = 1, end_line: int = 0,
                 "total_lines": total_lines}
         return ActionResult(Outcome.SUCCESS if page else Outcome.NEGATIVE, data, "source_page").payload()
     except (OSError, ValueError) as error:
-        return ActionResult(Outcome.REJECTED, {"reason": str(error), "expected": "Source path or returned cursor"},
-                            "inspection_precondition").payload()
+        return reject("cursor" if cursor else "path", "A source path or unchanged returned cursor",
+                      cursor or path, str(error))
 
 
 def edit_code(path: str, old_text: str, new_text: str) -> dict:
