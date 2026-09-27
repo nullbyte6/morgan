@@ -134,8 +134,6 @@ def capture_wake_word(recognizer, settings):
 
     device = sd.query_devices(kind="input")
     if sys.platform == "win32":
-        # PortAudio's legacy MME default intermittently fails in a detached
-        # pythonw process. Prefer the matching WASAPI endpoint when present.
         host_apis = sd.query_hostapis()
         for index, candidate in enumerate(sd.query_devices()):
             host_name = host_apis[candidate["hostapi"]]["name"]
@@ -244,14 +242,11 @@ def run_listener(microphone):
             if inbox is None:
                 inbox = WakeInbox()
             if pending_request:
-                # Retain the same ID across busy-database retries.
                 inbox.enqueue(WAKE_RECORD_REQUEST, command_id=pending_id,
                               ttl=settings.delivery_seconds)
                 log.info("Wake recording request queued: %s", pending_id)
                 pending_request = False
             if pending_launch:
-                # Each activation gets one launch attempt. A stale inbox entry
-                # must never reopen a console or desktop every few seconds.
                 pending_launch = False
                 try:
                     launch_assistant()
@@ -261,7 +256,6 @@ def run_listener(microphone):
                 time.sleep(0.1)
                 continue
             try:
-                # Recheck after acquisition to close the handoff race.
                 if not audio_requested():
                     activated = capture_wake_word(recognizer, settings)
                     if activated:
