@@ -5,7 +5,7 @@ readonly ARLO_MODEL="${ARLO_MODEL:-qwen3.5:9b}"
 readonly ARLO_AUDIO_MODEL="${ARLO_AUDIO_MODEL:-gemma4:e2b}"
 readonly ARLO_VOICE_MODEL="${ARLO_VOICE_MODEL:-FunAudioLLM/Fun-CosyVoice3-0.5B-2512}"
 # shellcheck disable=SC2155
-readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$PWD/install.sh}")" && pwd -P)"
 
 info() { printf '\n[%s] %s\n' "$ASSISTANT_NAME" "$1"; }
 fail() { printf '\n[%s] ERROR: %s\n' "$ASSISTANT_NAME" "$1" >&2; exit 1; }
@@ -238,7 +238,7 @@ snapshot_download(repo_id=os.environ["ARLO_VOICE_MODEL"], local_dir=os.environ["
 }
 
 find_powershell
-[[ -f "${SCRIPT_DIR}/requirements.txt" ]] || fail "${SCRIPT_DIR}/requirements.txt was not found."
+[[ -f "${SCRIPT_DIR}/requirements.txt" ]] || fail "Run this installer inside the Arlo repository: git clone https://github.com/xddigs/arlo.git; cd arlo; bash install.sh."
 [[ -f "${SCRIPT_DIR}/scripts/arlo-run.ps1" ]] || fail "${SCRIPT_DIR}/scripts/arlo-run.ps1 was not found."
 [[ -d "${SCRIPT_DIR}/src" ]] || fail "${SCRIPT_DIR}/src was not found."
 
@@ -302,10 +302,8 @@ readonly VOICES_DIR="${SRC_DIR}/voices"
 
 mkdir -p "${SRC_DIR}/models" "$VOICES_DIR"
 
-export PYTHONPATH="${SRC_DIR};${MATCHA_DIR}${PYTHONPATH:+;${PYTHONPATH}}"
-
 info "Checking the vendored CosyVoice runtime..."
-"$VENV_PYTHON" -c 'from cosyvoice.cli.cosyvoice import AutoModel; print("CosyVoice runtime OK")'
+"$VENV_PYTHON" -c 'import sys; sys.path[:0] = sys.argv[1:]; from cosyvoice.cli.cosyvoice import AutoModel; print("CosyVoice runtime OK")' "$(to_windows_path "$SRC_DIR")" "$(to_windows_path "$MATCHA_DIR")"
 
 download_cosyvoice_model "$VOICE_MODEL_DIR"
 
