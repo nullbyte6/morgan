@@ -27,25 +27,29 @@ from num2words import num2words
 
 @lru_cache(maxsize=1)
 def speech_language_detector():
-    return LanguageDetectorBuilder.from_all_languages().build()
+    return (LanguageDetectorBuilder.from_all_languages()
+            .with_minimum_relative_distance(0.1).build())
 
 
 class SpeechNumbers:
-    """Read numeric spans in the response language without rewriting words."""
+    """Keep the response language stable for synthesis and numeric spans."""
 
     def __init__(self, context=""):
         self.context = context
         self.response = ""
+        self.language = None
 
     def observe(self, text):
         self.response += " " + text
+        if self.language is None:
+            detector = speech_language_detector()
+            self.language = (detector.detect_language_of(self.response)
+                             or detector.detect_language_of(self.context))
 
     def normalize(self, text):
-        source = self.context + " " + self.response
-        language = speech_language_detector().detect_language_of(source)
-        if language is None:
+        if self.language is None:
             return text
-        code = language.iso_code_639_1.name.lower()
+        code = self.language.iso_code_639_1.name.lower()
 
         def cardinal(value):
             try:

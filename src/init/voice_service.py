@@ -143,6 +143,7 @@ class VoiceService:
         self.voice = AutoModel(model_dir=str(self.model_path), fp16=True)
         self.sample_rate = self.voice.sample_rate
         self._reference_key = None
+        self._instruction_key = None
         self._select_reference(self.voice_reference)
 
         self._text_queue = queue.Queue()
@@ -240,7 +241,23 @@ class VoiceService:
                     self._set_subtitle(batch, "")
                 batch.done.set()
 
-    def _synthesize(self, text):
+    def _synthesize(self, text, language=None):
+        speaker_id = get_assistant_identifier()
+        instruction = ""
+        if language is not None:
+            instruction = ("You are a helpful assistant. Please speak in "
+                           f"{language.name.replace('_', ' ').lower()}.<|endofprompt|>")
+            instruction_key = (self._reference_key, language)
+            instructed_id = speaker_id + "-instruct"
+            if instruction_key != self._instruction_key:
+                frontend = self.voice.frontend
+                speaker = dict(frontend.spk2info[speaker_id])
+                speaker["prompt_text"], speaker["prompt_text_len"] = (
+                    frontend._extract_text_token(instruction))
+                frontend.spk2info[instructed_id] = speaker
+                self._instruction_key = instruction_key
+            speaker_id = instructed_id
+
         tokenize = partial(self.voice.frontend.tokenizer.encode,
                            allowed_special=self.voice.frontend.allowed_special)
         phrases = split_paragraph(text, tokenize,
@@ -248,9 +265,14 @@ class VoiceService:
                                   token_max_n=80, token_min_n=60,
                                   merge_len=20, comma_split=False)
         for phrase in phrases:
-            yield from self.voice.inference_zero_shot(
-                phrase, "", "", zero_shot_spk_id=get_assistant_identifier(),
-                stream=True, speed=self.speed, text_frontend=False)
+            if instruction:
+                yield from self.voice.inference_instruct2(
+                    phrase, instruction, "", zero_shot_spk_id=speaker_id,
+                    stream=True, speed=self.speed, text_frontend=False)
+            else:
+                yield from self.voice.inference_zero_shot(
+                    phrase, "", "", zero_shot_spk_id=speaker_id,
+                    stream=True, speed=self.speed, text_frontend=False)
 
     def _tts_loop(self) -> None:
         while True:
@@ -262,7 +284,7 @@ class VoiceService:
                 if batch.cancelled.is_set():
                     continue
                 self._select_reference(reference)
-                generator = self._synthesize(text)
+                generator = self._synthesize(text, batch.numbers.language)
                 for chunk in generator:
                     if batch.cancelled.is_set():
                         break
