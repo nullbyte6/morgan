@@ -40,11 +40,10 @@ IMAGE_TYPES = {
 }
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
-vision_agent = Agent(
-    OllamaModel(
-        VISION_MODEL,
-        provider=OllamaProvider(
-            base_url="http://localhost:11434/v1")),
+def vision_agent():
+    from .sessions import execution_identity
+    assistant = execution_identity().session.assistant
+    return Agent(assistant.backend.model(assistant.event_loop, VISION_MODEL),
     instructions=lambda: (
         f"You are {get_assistant_name()}'s image analysis module. "
         "Analyze the supplied image and answer the user's question. "
@@ -53,14 +52,15 @@ vision_agent = Agent(
         "If text is unreadable or something is uncertain, say so. "
         "Do not claim to have interacted with the computer."
     ),
-)
+    )
 
 
 async def analyze_image_async(
     image_path: str,
     question: str = "What's in the picture?") -> str:
     """Analyze a local image using the assistant's separate vision model."""
-    path = Path(image_path).expanduser().resolve(strict=True)
+    from .paths import resolve_session_path
+    path = resolve_session_path(image_path, strict=True)
     if not path.is_file():
         raise ValueError("Path is no file")
 
@@ -74,7 +74,7 @@ async def analyze_image_async(
 
     image = await asyncio.to_thread(path.read_bytes)
 
-    result = await vision_agent.run(
+    result = await vision_agent().run(
         [question, BinaryContent(data=image,
                 media_type=media_type)]
     )
@@ -86,7 +86,7 @@ async def analyze_screen(
     """Analyze the primary monitor using the assistant's local vision model."""
 
     image_data = await asyncio.to_thread(request_screen_image)
-    result = await vision_agent.run(
+    result = await vision_agent().run(
         [question,BinaryContent( data=image_data,
                 media_type="image/png")])
 
@@ -101,4 +101,6 @@ def analyze_image(image_path: str,
     Returns:
         A textual description of the image.
     """
-    return asyncio.run(analyze_image_async(image_path, question))
+    from .sessions import execution_identity
+    loop = execution_identity().session.assistant.event_loop
+    return asyncio.run_coroutine_threadsafe(analyze_image_async(image_path, question), loop).result()

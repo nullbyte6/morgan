@@ -75,4 +75,5 @@ def resolve_directory(path):
         return Path.home().resolve()
     if alias in KNOWN_FOLDERS:
         return known_folder_path(alias).resolve()
-    return Path(os.path.expandvars(alias or path)).expanduser().resolve()
+    from .paths import resolve_session_path
+    return resolve_session_path(os.path.expandvars(alias or path))

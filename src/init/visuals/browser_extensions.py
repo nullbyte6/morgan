@@ -280,10 +280,16 @@ class ExtensionsView(QWidget):
         extension = self._selected()
         if extension and extension.isEnabled() and not extension.actionPopupUrl().isEmpty():
             from PySide6.QtWebEngineWidgets import QWebEngineView
+            from .workspace import WorkspacePanel
+            owner = self.parentWidget()
+            while owner is not None and not isinstance(owner, WorkspacePanel):
+                owner = owner.parentWidget()
+            session_id = owner.property("session_id") if owner is not None else None
             key = f'browser_extension:{extension.id()}'
             for panel_id in self.workspace.panel_ids:
                 panel = self.workspace.get_panel(panel_id)
                 if (panel.property('workspaceViewKey') == key
+                        and panel.property('session_id') == session_id
                         and panel_id not in self.workspace._closing_panels):
                     self.workspace.focus_panel(panel_id)
                     return
@@ -299,11 +305,13 @@ class ExtensionsView(QWidget):
                 url = request.requestedUrl()
                 if url.scheme() in ('http', 'https'):
                     try:
-                        open_embedded_url(url.toString())
+                        open_embedded_url(url.toString(), session_id=session_id)
                     except (RuntimeError, ValueError) as error:
                         view.setToolTip(str(error))
 
             view.page().newWindowRequested.connect(open_web_link)
             layout.addWidget(view)
             view.setUrl(extension.actionPopupUrl())
-            self.workspace.open_panel(title=extension.name(), content=popup)
+            panel_id = self.workspace.open_panel(title=extension.name(), content=popup,
+                                                 target_id=owner.panel_id if owner is not None else None)
+            self.workspace.get_panel(panel_id).setProperty('session_id', session_id)

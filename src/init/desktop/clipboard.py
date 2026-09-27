@@ -28,7 +28,10 @@ from ..config import HOME_PATH
 from typing import Callable, Optional
 
 
-@dataclass
+from src.init.sessions import active_execution
+
+
+@dataclass(eq=False)
 class ClipboardRequest:
     """One clipboard read request and its completion state."""
 
@@ -36,6 +39,7 @@ class ClipboardRequest:
     success: bool = False
     error: str = ""
     value: Optional[str] = None
+    identity: object = field(default_factory=lambda: active_execution.get())
 
 
 _bridge_lock = threading.Lock()

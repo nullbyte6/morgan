@@ -19,6 +19,7 @@
 """Thread-safe navigation requests for Arlo's embedded browser."""
 
 from src.init.identity import get_assistant_name
+from src.init.sessions import ExecutionIdentity, execution_identity
 
 import threading
 from dataclasses import dataclass, field
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import QApplication
 @dataclass(eq=False)
 class BrowserRequest:
     url: str
+    identity: object = field(default_factory=execution_identity)
     completed: threading.Event = field(default_factory=threading.Event)
     error: str | None = None
 
@@ -57,8 +59,8 @@ class BrowserBridge(QObject):
         with _registry_lock:
             _bridge = self
 
-    def request(self, url, timeout=15):
-        request = BrowserRequest(url)
+    def request(self, url, timeout=15, *, identity=None):
+        request = BrowserRequest(url, identity=identity or execution_identity())
         with self._lock:
             if self._closed:
                 raise RuntimeError(f"{get_assistant_name()}'s embedded browser is unavailable")
@@ -94,12 +96,15 @@ class BrowserBridge(QObject):
             try:
                 from .browser import BrowserView
                 workspace = self.parent().workspace
-                panel = workspace.get_panel(workspace.active_panel_id)
-                if panel is None or not isinstance(panel.content, BrowserView):
-                    panel = next((workspace.get_panel(pid) for pid in workspace.panel_ids
-                                  if isinstance(workspace.get_panel(pid).content, BrowserView)
-                                  and pid not in workspace._closing_panels
-                                  and pid not in workspace._pending_closes), None)
+                identity = request.identity
+                session = self.parent().session_manager.get(identity.session_id)
+                if session is None or not session.accepts(identity.session_id, identity.turn_id):
+                    raise RuntimeError("The browser session is unavailable")
+                panel = next((workspace.get_panel(pid) for pid in workspace.panel_ids
+                              if workspace.get_panel(pid).property("session_id") == identity.session_id
+                              and isinstance(workspace.get_panel(pid).content, BrowserView)
+                              and pid not in workspace._closing_panels
+                              and pid not in workspace._pending_closes), None)
                 if panel is not None and (panel.panel_id in workspace._closing_panels
                                           or panel.panel_id in workspace._pending_closes):
                     panel = None
@@ -108,27 +113,24 @@ class BrowserBridge(QObject):
                     if view.web_view is None:
                         raise RuntimeError(f"{get_assistant_name()}'s embedded browser requires Qt WebEngine")
                     view.setProperty("workspaceViewKey", "browser")
-                    panel_id = workspace.open_panel(title="Browser", content=view)
+                    panel_id = self.parent().open_owned_panel(identity.session_id, identity.turn_id, "Browser", view, "browser")
                 else:
                     view = panel.content
                     panel_id = panel.panel_id
                     if view.web_view is None:
                         raise RuntimeError(f"{get_assistant_name()}'s embedded browser requires Qt WebEngine")
                 view.open_url(request.url)
-                workspace.focus_panel(panel_id)
-                window = self.parent()
-                restore = getattr(window, "restore_from_mascot", None)
-                if restore is not None:
-                    restore()
-                else:
-                    window.showNormal()
-                    window.raise_()
-                    window.activateWindow()
                 self._finish(request)
             except Exception as error:
                 if view is not None and view.parentWidget() is None:
                     view.deleteLater()
                 self._finish(request, str(error))
+
+    def cancel_session(self, session_id):
+        with self._lock:
+            for request in tuple(self._pending):
+                if request.identity.session_id == session_id:
+                    self._finish(request, "Browser session closed")
 
     @Slot()
     def shutdown(self):
@@ -142,7 +144,7 @@ class BrowserBridge(QObject):
                 self._finish(request, f"{get_assistant_name()}'s embedded browser was closed")
 
 
-def open_embedded_url(url: str) -> None:
+def open_embedded_url(url: str, *, session_id=None) -> None:
     """Navigate on the GUI thread, or raise without launching an external browser."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
@@ -151,4 +153,10 @@ def open_embedded_url(url: str) -> None:
         bridge = _bridge
     if bridge is None:
         raise RuntimeError(f"The embedded browser requires the running {get_assistant_name()} desktop")
-    bridge.request(url)
+    identity = None
+    if session_id is not None:
+        session = bridge.parent().session_manager.get(session_id)
+        if session is None or session.closing:
+            raise RuntimeError("The browser session is unavailable")
+        identity = ExecutionIdentity(session, session.turn_id)
+    bridge.request(url, identity=identity)

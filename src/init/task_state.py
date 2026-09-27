@@ -256,7 +256,7 @@ class TaskState:
                 or resource.startswith(("file:", "entry:")) and Path(resource.split(":", 1)[1]).is_absolute())
                for resource in declared_resources):
             return reject("Use resource identifiers, not bare paths, globs or display names.", "verification.resources",
-                          ["file:" + str(Path.cwd() / "src" / "init" / "core.py"), "domain:presentation"])
+                          ["file:" + str(Path(__file__).resolve().parent / "core.py"), "domain:presentation"])
         for criterion in criteria:
             contract = verification.get(criterion)
             if criterion not in proposed:

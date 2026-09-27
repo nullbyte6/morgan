@@ -33,7 +33,7 @@ class WorkingDirectory(QToolButton):
         self.setObjectName("directory")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAutoRaise(True)
-        self.set_directory(Path.cwd())
+        self.set_directory(parent.session.working_directory if parent is not None and hasattr(parent, "session") else Path.home())
 
     def set_directory(self, directory: Path | str):
         path = Path(directory).resolve()
@@ -51,7 +51,11 @@ class GitBranchIndicator(QToolButton):
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._directory = None
         self._updated_at = 0.0
-        self.set_directory(Path.cwd())
+        self._process = QProcess(self)
+        self._process.finished.connect(self._branch_ready)
+        self._process.errorOccurred.connect(lambda _: self._show_branch(""))
+        self._detached = False
+        self.set_directory(parent.session.working_directory if parent is not None and hasattr(parent, "session") else Path.home())
 
     def set_directory(self, directory: Path | str):
         path = str(Path(directory).resolve())
@@ -60,23 +64,20 @@ class GitBranchIndicator(QToolButton):
             return
         self._directory = path
         self._updated_at = now
-        branch = ""
-        try:
-            result = subprocess.run(
-                ["git", "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD"],
-                capture_output=True, text=True, errors="replace", timeout=1,
-            )
-            if result.returncode == 0:
-                branch = result.stdout.strip()
-            elif result.returncode == 1:
-                result = subprocess.run(
-                    ["git", "-C", path, "rev-parse", "--short", "HEAD"],
-                    capture_output=True, text=True, errors="replace", timeout=1,
-                )
-                if result.returncode == 0:
-                    branch = f"detached:{result.stdout.strip()}"
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+        if self._process.state() != QProcess.NotRunning:
+            self._process.kill()
+        self._detached = False
+        self._process.start("git", ["-C", path, "symbolic-ref", "--quiet", "--short", "HEAD"])
+
+    def _branch_ready(self, code, status):
+        output = bytes(self._process.readAllStandardOutput()).decode("utf-8", errors="replace").strip()
+        if code == 1 and not self._detached:
+            self._detached = True
+            self._process.start("git", ["-C", self._directory, "rev-parse", "--short", "HEAD"])
+            return
+        self._show_branch(("detached:" if self._detached else "") + output if code == 0 else "")
+
+    def _show_branch(self, branch):
         self.setText(f"  {branch} ")
         self.setToolTip(branch)
         self.setVisible(bool(branch))

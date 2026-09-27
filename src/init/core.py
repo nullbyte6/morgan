@@ -114,38 +114,29 @@ class AssistantTextStream:
 
 # noinspection PyBroadException
 class Assistant:
-    """One shared assistant; reading its identity never
-    starts the model or UI."""
+    """The agent executor belonging to one Arlo session."""
     @property
     def name(self) -> str:
         return get_assistant_name()
 
-    voice: VoiceClient = None
-    speech_enabled: bool = True
-    _instance = None
-    _instance_lock = threading.Lock()
-    debug_console = None
-
-    def __new__(cls):
-        with cls._instance_lock:
-            if cls._instance is None:
-                instance = super().__new__(cls)
-                instance.terminal_ui = None
-                instance.agent = None
-                instance.provider = None
-                instance.audio_model = None
-                instance.audio_model_name = None
-                instance.shutdown_requested = threading.Event()
-                instance._active_cancellation_token = None
-                instance._active_task_controller = None
-                instance.voice = None
-                instance.debug_console = None
-                instance._reload_lock = threading.Lock()
-                instance.username = getuser().capitalize()
-                instance.typewriter_delay_seconds = float(
-                    os.environ.get("TYPEWRITER_DELAY", "0"))
-                cls._instance = instance
-            return cls._instance
+    def __init__(self, session):
+        self.session = session
+        self.backend = session.backend
+        self.terminal_ui = None
+        self.agent = None
+        self.provider = None
+        self.audio_model = None
+        self.audio_model_name = None
+        self.shutdown_requested = session.manager.shutdown_requested
+        self._active_cancellation_token = None
+        self._active_task_controller = None
+        self.task_state = None
+        self.voice = session.manager.audio.channel(session)
+        self.debug_console = None
+        self._reload_lock = session.manager._reload_lock
+        self.username = getuser().capitalize()
+        self.typewriter_delay_seconds = float(os.environ.get("TYPEWRITER_DELAY", "0"))
+        self.event_loop = None
 
     @property
     def startup_greeting(self) -> str:
@@ -165,49 +156,12 @@ class Assistant:
         os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
         os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
         from pydantic_ai import Agent, Tool
-        from pydantic_ai.models.ollama import OllamaModel
-        from pydantic_ai.providers.ollama import OllamaProvider
-        from pydantic_ai.models import DEFAULT_HTTP_TIMEOUT, get_user_agent
-        from src.init.task_trace import trace_provider_request
-        import httpx2
-
-        for logger_name in (
-                "httpx",
-                "httpcore",
-                "httpcore2",
-                "openai",
-                "pydantic_ai"):
-            logger = logging.getLogger(logger_name)
-            logger.setLevel(logging.CRITICAL)
-            logger.propagate = False
-
-        from src.init.brain import MODEL_NAME
         from src.init.tools import TOOLS
 
-        if self.voice is None:
-            self.voice = VoiceClient(audio_callback=(
-                    self.terminal_ui.update_audio_levels
-                    if self.terminal_ui is not None
-                    else None))
-
-        self.MODEL_NAME = MODEL_NAME
-        self.model_settings = {
-            "thinking": False,
-            "openai_reasoning_effort": "none",
-            "temperature": 0.2,
-        }
-
-        http_client = httpx2.AsyncClient(
-            timeout=httpx2.Timeout(timeout=DEFAULT_HTTP_TIMEOUT, connect=5),
-            headers={"User-Agent": get_user_agent()}, event_hooks={"request": [trace_provider_request]})
-        self.provider = OllamaProvider(base_url="http://localhost:11434/v1", http_client=http_client)
-        self.model = OllamaModel(
-            self.MODEL_NAME,
-            provider=self.provider,
-            profile={"openai_chat_supports_multiple_system_messages": False,
-                     "openai_chat_supports_max_completion_tokens": False,
-                     "openai_supports_tool_choice_required": False},
-            settings=self.model_settings)
+        self.MODEL_NAME = self.backend.model_name
+        self.model_settings = dict(self.backend.settings)
+        self.model = self.backend.model(self.event_loop)
+        self.provider = self.model._provider
 
         self.agent = Agent(
             model=self.model,
@@ -226,49 +180,16 @@ class Assistant:
             "this capability is unavailable.")
 
     def reload_source(self) -> str:
-        """Reload source modules and rebuild the model and tools for next turn."""
-        with self._reload_lock:
+        def reload():
             from src.init.hot_reload import reload_project_modules
-
             reloaded, errors = reload_project_modules()
-            from src.init.brain import MODEL_NAME
-            self.MODEL_NAME = MODEL_NAME
-            self.audio_model = None
-            self.audio_model_name = None
-
-            if self.agent is not None:
-                from pydantic_ai.models.ollama import OllamaModel
-                from src.init.tools import TOOLS
-
-                self.model = OllamaModel(
-                    self.MODEL_NAME, provider=self.provider,
-                    profile={"openai_chat_supports_multiple_system_messages": False,
-                             "openai_chat_supports_max_completion_tokens": False,
-                             "openai_supports_tool_choice_required": False},
-                    settings=self.model_settings)
-                self.agent = Agent(
-                    model=self.model,
-                    tools=[Tool(function, sequential=True)
-                           for function in TOOLS])
-                self.agent.instructions(self.current_instructions)
-                self.agent.instructions(self.current_datetime_instructions)
-                self.agent.instructions(self.wd_instructions)
-                from src.init.memory.integration import memory_instructions
-                self.agent.instructions(memory_instructions)
-
-                self.agent.instructions(
-                    "When the user explicitly requests a flowchart, diagram, "
-                    "workflow, decision tree, or process visualization, call "
-                    "render_flowchart with newly supplied nodes and edges. "
-                    "It does not require an existing diagram. Do not claim "
-                    "this capability is unavailable.")
-
+            for session in tuple(self.session.manager.sessions.values()):
+                if session.assistant is not None:
+                    session.assistant.agent = None
             summary = f"Reloaded {len(reloaded)} source modules"
-            if errors:
-                summary += "; failures: " + " | ".join(errors)
-            else:
-                summary += "; the refreshed tools will be used on the next turn."
-            return summary
+            return summary + ("; failures: " + " | ".join(errors) if errors else
+                              "; the refreshed tools will be used on the next turn.")
+        return self.session.manager.reload(reload, self.session)
 
     def suspend_terminal(self):
         if self.terminal_ui is None:
@@ -475,6 +396,7 @@ class Assistant:
                             ModelResponse(parts=[TextPart(output)])]
 
         self._initialize_runtime()
+        speech_enabled = speech_enabled and self.voice.owns_audio
 
         if speech_enabled:
             self.voice.audio_callback = on_audio
@@ -503,18 +425,9 @@ class Assistant:
         if audio_input is not None:
             model_prompt = [BinaryContent(data=audio_input, media_type="audio/wav")]
         if voice_model_active:
-            from pydantic_ai.models.ollama import OllamaModel
             from src.init.config import load_dev_file
-
-            audio_model_name = load_dev_file()["audio_model"]
-            if self.audio_model is None or self.audio_model_name != audio_model_name:
-                self.audio_model_name = audio_model_name
-                self.audio_model = OllamaModel(
-                    self.audio_model_name, provider=self.provider,
-                    profile={"openai_chat_supports_multiple_system_messages": False,
-                             "openai_chat_supports_max_completion_tokens": False,
-                             "openai_supports_tool_choice_required": False},
-                    settings={"thinking": False, "openai_reasoning_effort": "none"})
+            self.audio_model_name = load_dev_file()["audio_model"]
+            self.audio_model = self.backend.model(self.event_loop, self.audio_model_name)
             turn_model = self.audio_model
             turn_model_settings["thinking"] = False
         attachment_tools = [attachments.toolset()] if attachments else []
@@ -914,7 +827,7 @@ class Assistant:
         """Cancel the active PydanticAI run from the worker thread."""
         token = self._active_cancellation_token
         if token is not None:
-            token.cancel()
+            self.event_loop.call_soon_threadsafe(token.cancel)
 
     def start_debug_console(self):
         from src.init.lang import tr

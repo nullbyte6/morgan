@@ -52,7 +52,8 @@ active_attachments: ContextVar[AttachmentSession | None] = ContextVar("active_at
 
 
 def normalized_path(path: str) -> str:
-    return os.path.normcase(os.path.abspath(os.path.expanduser(path)))
+    from .paths import resolve_session_path
+    return os.path.normcase(str(resolve_session_path(path)))
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,8 @@ class Attachment:
 
     @classmethod
     def pending(cls, path: str):
-        path = os.path.abspath(os.path.expanduser(path))
+        from .paths import resolve_session_path
+        path = str(resolve_session_path(path))
         return cls(uuid4().hex, Path(path).name, path, Path(path).suffix.lower())
 
 

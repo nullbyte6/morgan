@@ -147,7 +147,8 @@ def execute_command(command: str, working_directory: str = ".",
         if working_directory == ".":
             working_directory = get_working_directory()
 
-        cwd = str(Path(working_directory).expanduser().resolve(strict=True))
+        from .paths import resolve_session_path
+        cwd = str(resolve_session_path(working_directory, strict=True))
         if not Path(cwd).is_dir():
             raise ValueError(tr("command.not_directory"))
         argv = _shell_command(command, shell)

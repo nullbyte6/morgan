@@ -25,7 +25,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import PROJECT_ROOT
+from .paths import PROJECT_ROOT, session_directory
 
 
 @dataclass(frozen=True)
@@ -95,11 +95,14 @@ register("open_file open_directory open_browser get_repo_lnk open_current_sessio
 
 
 def file_resource(path):
-    return "file:" + str(Path(path).expanduser().resolve())
+    from .paths import resolve_session_path
+    return "file:" + str(resolve_session_path(path))
 
 
 def entry_resource(path):
-    path = Path(path).expanduser().absolute()
+    path = Path(path).expanduser()
+    if not path.is_absolute():
+        path = session_directory() / path
     return "entry:" + str(path.parent.resolve() / path.name)
 
 
@@ -177,10 +180,10 @@ def resources_for(name, arguments):
         raise ValueError(f"Tool has no effect declaration: {name}")
     resources = []
     if spec.domain:
-        resources.append("domain:" + spec.domain + (":" + str((PROJECT_ROOT if spec.source else Path.cwd()).joinpath(arguments.get("repository", ".")).resolve())
+        resources.append("domain:" + spec.domain + (":" + str((PROJECT_ROOT if spec.source else session_directory()).joinpath(arguments.get("repository", ".")).resolve())
                                                         if spec.domain == "git" else ""))
     if spec.path_argument:
-        base = PROJECT_ROOT if spec.source else Path.cwd()
+        base = PROJECT_ROOT if spec.source else session_directory()
         path = arguments.get(spec.path_argument, ".")
         if name == "read_code" and arguments.get("cursor"):
             from .self_code import code_cursor

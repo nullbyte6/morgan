@@ -29,6 +29,11 @@ import tempfile
 import threading
 import uuid
 
+def _owner():
+    from .sessions import execution_identity
+    return execution_identity().session_id
+
+
 _jobs = {}
 _candidates = {}
 _lock = threading.RLock()
@@ -88,7 +93,7 @@ def _start(arguments, mutation=False):
                 log.close()
                 raise
             job_id = uuid.uuid4().hex
-            _jobs[job_id] = {"process": process, "log": log,
+            _jobs[job_id] = {"process": process, "log": log, "session_id": _owner(),
                              "mutation": mutation}
             return _result("running", job_id=job_id, command=command,
                            instruction=tr('app_manager.use_get_app_operation_until_finished_do_not_repeat_the_operation'))
@@ -100,7 +105,7 @@ def get_app_operation(job_id: str) -> str:
     """Check a winget operation in this Arlo session. Only completed means exit code zero."""
     with _lock:
         job = _jobs.get(job_id)
-        if not job:
+        if not job or job["session_id"] != _owner():
             return _result("unknown", error=tr('app_manager.unknown_job_or_assistant_restarted_inspect_installed_apps_before_retr'))
         if "result" in job:
             return job["result"]
@@ -197,7 +202,7 @@ def scan_app_residues(app_name: str) -> str:
                     token = uuid.uuid4().hex
                     with _lock:
                         _candidates[token] = (path, root, info.st_dev,
-                                              info.st_ino)
+                                              info.st_ino, _owner())
                     results.append({"candidate_id": token, "path": str(path)})
                 except (OSError, ValueError):
                     continue
@@ -216,10 +221,10 @@ def clean_app_residue(candidate_id: str) -> str:
             return _result("error",
                            error=tr('app_manager.wait_for_the_running_app_operation_to_finish_before_cleanup'))
         candidate = _candidates.get(candidate_id)
-        if not candidate:
+        if not candidate or candidate[-1] != _owner():
             return _result("error",
                            error=tr('app_manager.unknown_candidate_scan_again_and_select_a_folder'))
-        path, root, device, inode = candidate
+        path, root, device, inode, owner = candidate
         try:
             _safe(path, root)
             info = path.stat()
@@ -246,3 +251,28 @@ def clean_app_residue(candidate_id: str) -> str:
                            error=tr('app_manager.install_assistant_requirements_send2trash_to_enable_recoverable_clean'))
         except (OSError, ValueError) as error:
             return _result("error", error=str(error))
+
+
+def cancel_session_operations(session_id):
+    with _lock:
+        for job in _jobs.values():
+            if job["session_id"] == session_id and job["process"].poll() is None:
+                try:
+                    job["process"].terminate()
+                except OSError:
+                    pass
+
+
+def close_session_operations(session_id):
+    with _lock:
+        jobs = [(key, job) for key, job in _jobs.items() if job["session_id"] == session_id]
+        if any(job["process"].poll() is None for key, job in jobs):
+            return False
+        for key, job in jobs:
+            if not job["log"].closed:
+                job["log"].close()
+            _jobs.pop(key, None)
+        for key, candidate in tuple(_candidates.items()):
+            if candidate[-1] == session_id:
+                _candidates.pop(key, None)
+        return True

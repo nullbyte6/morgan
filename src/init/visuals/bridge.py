@@ -19,6 +19,7 @@
 """Request/result handoff from assistant tools to the existing Qt application."""
 
 from src.init.identity import get_assistant_name
+from src.init.sessions import execution_identity
 
 import threading
 import uuid
@@ -35,6 +36,7 @@ from src.init.visuals.schema import Flowchart
 class FlowchartRequest:
     """One validated request whose outcome is protected by the bridge lock."""
     chart: Flowchart
+    identity: object = field(default_factory=execution_identity)
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     completed: threading.Event = field(default_factory=threading.Event)
     result: dict | None = None
@@ -125,11 +127,9 @@ class FlowchartBridge(QObject):
                 self._workspace_connected = True
             widget = FlowchartWidget(request.chart)
 
-            panel_id = workspace.open_panel(
-                title=request.chart.title,
-                content=widget,
-                target_id=window.main_workspace_panel_id,
-                direction=Qt.Key_Right)
+            identity = request.identity
+            panel_id = window.open_owned_panel(identity.session_id, identity.turn_id,
+                                               request.chart.title, widget, "flowchart")
 
             self._panel_requests[panel_id] = request.id
             widget.destroyed.connect(
@@ -157,6 +157,12 @@ class FlowchartBridge(QObject):
         request_id = self._panel_requests.pop(panel_id, None)
         if request_id is not None:
             self.windows.pop(request_id, None)
+
+    def cancel_session(self, session_id):
+        with self._lock:
+            for request in tuple(self._pending.values()):
+                if request.identity.session_id == session_id:
+                    self._complete(request, _failure("cancelled", "Flowchart session closed"))
 
     @Slot()
     def shutdown(self):

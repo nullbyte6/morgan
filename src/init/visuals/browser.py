@@ -119,15 +119,18 @@ class BrowserView(QWidget):
         if workspace is None:
             self.status.setText(f"Open the browser in an {get_assistant_name()} workspace to manage extensions")
             return
+        owner_session_id = workspace.get_panel(target_id).property("session_id")
         for panel_id in workspace.panel_ids:
             panel = workspace.get_panel(panel_id)
             if (panel.property("workspaceViewKey") == "browser_extensions"
+                    and panel.property("session_id") == owner_session_id
                     and panel_id not in workspace._closing_panels):
                 workspace.focus_panel(panel_id)
                 return
-        workspace.open_panel(title="Extensions",
-                             content=ExtensionsView(self.session, workspace),
-                             target_id=target_id)
+        panel_id = workspace.open_panel(title="Extensions",
+                                       content=ExtensionsView(self.session, workspace),
+                                       target_id=target_id)
+        workspace.get_panel(panel_id).setProperty("session_id", owner_session_id)
 
     def _open_new_window(self, request):
         """Keep links requesting a new window inside this browser panel."""

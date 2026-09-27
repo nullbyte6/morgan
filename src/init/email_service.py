@@ -55,13 +55,11 @@ PROVIDERS = {
 }
 
 
-_EMAIL_DRAFT = {
-    "to": "",
-    "subject": "",
-    "body": "",
-    "cc": "",
-    "bcc": "",
-}
+def _draft():
+    from .sessions import execution_identity
+    return execution_identity().session.tools("email_draft",
+        lambda: dict(to="", subject="", body="", cc="", bcc=""))
+
 
 
 def draft_email(
@@ -72,22 +70,22 @@ def draft_email(
     bcc: str = "") -> str:
     """Create or replace the current email draft without sending it."""
 
-    global _EMAIL_DRAFT
-
-    _EMAIL_DRAFT = {
+    draft = _draft()
+    draft.clear()
+    draft.update({
         "to": to.strip(),
         "subject": subject.strip(),
         "body": body.strip(),
         "cc": cc.strip(),
         "bcc": bcc.strip(),
-    }
+    })
 
-    return _result("drafted", draft=_EMAIL_DRAFT)
+    return _result("drafted", draft=_draft())
 
 
 def get_email_draft() -> str:
     """Return the current unsent email draft."""
-    return _result("ok", draft=_EMAIL_DRAFT)
+    return _result("ok", draft=_draft())
 
 
 def edit_email_draft(
@@ -100,28 +98,28 @@ def edit_email_draft(
     """Modify fields of the current unsent email draft."""
 
     if to:
-        _EMAIL_DRAFT["to"] = to.strip()
+        _draft()["to"] = to.strip()
     if subject:
-        _EMAIL_DRAFT["subject"] = subject.strip()
+        _draft()["subject"] = subject.strip()
     if body:
-        _EMAIL_DRAFT["body"] = body.strip()
+        _draft()["body"] = body.strip()
     if cc:
-        _EMAIL_DRAFT["cc"] = cc.strip()
+        _draft()["cc"] = cc.strip()
     if bcc:
-        _EMAIL_DRAFT["bcc"] = bcc.strip()
+        _draft()["bcc"] = bcc.strip()
 
-    return _result("drafted", draft=_EMAIL_DRAFT)
+    return _result("drafted", draft=_draft())
 
 
 def send_email_draft() -> str:
     """Send the current email draft."""
 
     return send_email(
-        to=_EMAIL_DRAFT["to"],
-        subject=_EMAIL_DRAFT["subject"],
-        body=_EMAIL_DRAFT["body"],
-        cc=_EMAIL_DRAFT["cc"],
-        bcc=_EMAIL_DRAFT["bcc"],
+        to=_draft()["to"],
+        subject=_draft()["subject"],
+        body=_draft()["body"],
+        cc=_draft()["cc"],
+        bcc=_draft()["bcc"],
     )
 
 

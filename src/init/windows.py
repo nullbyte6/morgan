@@ -120,6 +120,11 @@ def get_open_windows():
 
 def launch_application(target, timeout=8.0):
     """Submit a Shell launch and confirm a window belonging to its process."""
+    from .paths import resolve_session_path
+    if not target.startswith("shell:"):
+        resolved_target = resolve_session_path(target)
+        if resolved_target.is_file():
+            target = str(resolved_target)
     class ShellExecuteInfo(ctypes.Structure):
         _fields_ = [
             ("cbSize", wt.DWORD), ("fMask", wt.ULONG), ("hwnd", wt.HWND),
@@ -156,7 +161,7 @@ def launch_application(target, timeout=8.0):
         if not shell.ShellExecuteExW(ctypes.byref(info)):
             raise ctypes.WinError(ctypes.get_last_error())
         pid = kernel.GetProcessId(info.hProcess) if info.hProcess else None
-        expected_path = os.path.normcase(os.path.abspath(target)) if os.path.isfile(target) else None
+        expected_path = os.path.normcase(target) if os.path.isfile(target) else None
         expected_app_id = target.removeprefix("shell:AppsFolder\\") if target.startswith("shell:AppsFolder\\") else None
         deadline = time.monotonic() + timeout
         while True:

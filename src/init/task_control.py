@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Deterministic supervision of Arlo's single model agent."""
+"""Deterministic supervision of one Arlo session's model agent."""
 
 import asyncio
 import base64
@@ -40,6 +40,7 @@ from pydantic_ai.messages import ModelRequest, ModelMessagesTypeAdapter, UserPro
 from pydantic_ai.toolsets import FunctionToolset
 
 from .lang import tr
+from .paths import session_directory
 from .task_effects import TOOL_SPECS, content_revision, resources_for
 from .task_outcomes import ActionResult, Outcome, normalize_result
 from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint, normalize_task_title
@@ -480,7 +481,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         if resource.startswith(("file:", "entry:", "domain:git:")):
             return content_revision(resource)
         if resource == "domain:working_directory":
-            return str(Path.cwd())
+            return str(session_directory())
         return self.state.revisions.get(resource, "0")
 
     def refresh_resources(self):
@@ -725,7 +726,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         capture.__annotations__ = function.__annotations__
         validator = validate_call(capture)
         async def handler(values):
-            result = function(**values)
+            result = (function(**values) if inspect.iscoroutinefunction(function)
+                      else await asyncio.to_thread(function, **values))
             return await result if inspect.isawaitable(result) else result
         return await self.execute(name, arguments, call_id, handler, validator=lambda values: validator(**values))
 

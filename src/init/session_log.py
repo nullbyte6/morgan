@@ -23,6 +23,7 @@ import json
 import logging
 import re
 import uuid
+import threading
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -33,18 +34,21 @@ from .lang import tr
 from .output import markdown_text
 
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}\.md")
-session_header = ""
 MAX_DAYS = 24
 _current_session_path: Path | None = None
+_log_lock = threading.RLock()
 
 
 def open_current_session_log() -> str:
     """Open this the assistant process's current session log in the default application."""
     from .brain import open_file
 
-    if _current_session_path is None:
+    from .sessions import active_execution
+    identity = active_execution.get()
+    path = identity.session.log.path if identity is not None else _current_session_path
+    if path is None:
         return tr("session.none")
-    return open_file(str(_current_session_path))
+    return open_file(str(path))
 
 
 TOOL_ARTIFACT_MIN_BYTES = 4096
@@ -101,9 +105,9 @@ class SessionContext:
 
 
 class SessionLog:
-    def __init__(self, directory=None, *, memory_service=None):
+    def __init__(self, directory=None, *, memory_service=None, session_id=None):
         self.private = False
-        self.session_id = uuid.uuid4().hex
+        self.session_id = session_id or uuid.uuid4().hex
         context_directory = Path(directory) if directory is not None else HOME_PATH / ".log"
         self.context = SessionContext(self.session_id, context_directory)
         self.started_at = datetime.now().astimezone().isoformat()
@@ -134,26 +138,27 @@ class SessionLog:
         return tr("privacy.on" if self.private else "privacy.off")
 
     def _start_day(self, started):
-        self.path = self.directory / f"{started:%Y-%m-%d}.md"
-        try:
-            log = self.path.open("x", encoding="utf-8")
-        except FileExistsError:
-            pass
-        else:
-            with log:
-                session_header = f"{get_assistant().name} Log — {started:%Y-%m-%d}"
-                log.write(session_header)
-        self._prune()
-        global _current_session_path
-        _current_session_path = self.path
+        with _log_lock:
+            self.path = self.directory / f"{started:%Y-%m-%d}.md"
+            try:
+                log = self.path.open("x", encoding="utf-8")
+            except FileExistsError:
+                pass
+            else:
+                with log:
+                    log.write(f"{get_assistant().name} Log — {started:%Y-%m-%d}")
+            self._prune()
+            global _current_session_path
+            _current_session_path = self.path
 
     def _prune(self):
         logs = []
+        header = f"{get_assistant().name} Log —"
         for path in self.directory.iterdir():
             if (SESSION_NAME.fullmatch(path.name) and not path.is_symlink()
                     and path.is_file()):
                 with path.open(encoding="utf-8") as log:
-                    if log.read(256).lstrip().startswith(session_header):
+                    if log.read(256).lstrip().startswith(header):
                         logs.append(path)
         oldest = sorted((path for path in logs if path != self.path),
                         key=lambda path: path.name)
@@ -178,10 +183,10 @@ class SessionLog:
             self._start_day(now)
 
         original = text
-        with self.path.open("a", encoding="utf-8") as log:
+        with _log_lock, self.path.open("a", encoding="utf-8") as log:
             log.write("\n\n")
             source_ref = str(self.path) + "#byte=" + str(log.tell())
-            log.write(f"[{now:%H:%M:%S %z}] \n{role}: {text}")
+            log.write(f"[{now:%H:%M:%S %z}] [session:{self.session_id}] \n{role}: {text}")
         assistant = get_assistant()
         canonical_role = ("assistant" if role == assistant.name else
                           "system" if role == "System" else "user")

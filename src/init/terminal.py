@@ -19,6 +19,7 @@
 """Embedded terminal with an independent, persistent shell per workspace."""
 from __future__ import annotations
 from src.init.identity import get_assistant_name
+from src.init.sessions import execution_identity
 
 import os
 import base64
@@ -48,6 +49,7 @@ class TerminalRequest:
     directory: str
     command: str
     timeout: int | None
+    identity: object = field(default_factory=execution_identity)
     started: threading.Event = field(default_factory=threading.Event)
     completed: threading.Event = field(default_factory=threading.Event)
     result: dict | None = None
@@ -88,9 +90,15 @@ class TerminalBridge(QObject):
                 if not request.started.is_set():
                     self._complete(request, status="error", error="Terminal did not open; request cancelled")
                     self.cancel_requested.emit(request)
-        if not request.completed.wait(None if timeout is None else timeout + 15):
-            self._complete(request, status="timeout", error="Terminal command did not finish in time")
-            self.cancel_requested.emit(request)
+        deadline = None if timeout is None else time.monotonic() + timeout + 15
+        cancelled = False
+        while not request.completed.wait(0.05):
+            if request.identity.session.worker.cancel_event.is_set() and not cancelled:
+                cancelled = True
+                self.cancel_requested.emit(request)
+            if deadline is not None and time.monotonic() >= deadline:
+                self.cancel_requested.emit(request)
+                deadline = None
         return request.result
 
     def _complete(self, request, **result):
@@ -113,8 +121,8 @@ class TerminalBridge(QObject):
                 view = TerminalView(directory=request.directory, argv=request.argv,
                                     timeout=request.timeout, autostart=False)
                 view.setProperty("workspaceViewKey", "terminal")
-                request.panel_id = workspace.open_panel(title="Terminal", content=view)
-                self.parent().restore_from_mascot()
+                request.panel_id = self.parent().open_owned_panel(
+                    request.identity.session_id, request.identity.turn_id, "Terminal", view, "terminal")
                 view.start_session(on_created=lambda session: self._watch_session(session, request))
                 view.receive_output(request.command.replace("\n", "\r\n") + "\r\n")
                 request.started.set()
@@ -165,6 +173,17 @@ class TerminalBridge(QObject):
         for session, pending in tuple(self._sessions.items()):
             if pending is request:
                 session.stop()
+
+    def cancel_session(self, session_id):
+        for request in tuple(self._pending):
+            if request.identity.session_id == session_id:
+                self._cancel(request)
+                if request.panel_id is None:
+                    self._complete(request, status="cancelled", error="Session closed")
+
+    def session_running(self, session_id):
+        return any(request.identity.session_id == session_id and terminal.isRunning()
+                   for terminal, request in self._sessions.items())
 
     @Slot()
     def shutdown(self):
@@ -475,7 +494,7 @@ class TerminalView(QWidget):
         if on_created is not None:
             on_created(self.session)
         self.session.start()
-        if self.isVisible():
+        if self.isVisible() and self.window().isActiveWindow() and self.hasFocus():
             self.display.setFocus()
 
     def dispose(self):
