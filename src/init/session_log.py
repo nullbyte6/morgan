@@ -50,6 +50,18 @@ def open_current_session_log() -> str:
 TOOL_ARTIFACT_MIN_BYTES = 4096
 
 
+def message_status(lifecycle):
+    """Translate task lifecycle to the independent conversation persistence domain."""
+    status = str(lifecycle)
+    if status in {"complete", "completed"}:
+        return "completed"
+    if status in {"active", "waiting", "blocked", "interrupted", "cancelled"}:
+        return "interrupted"
+    if status in {"limit_reached", "failed", "error"}:
+        return "error"
+    raise ValueError(f"Unknown conversation lifecycle: {status}")
+
+
 class SessionContext:
     """Conversation state and external artifacts for one live session."""
 
@@ -155,6 +167,7 @@ class SessionLog:
         if self.private:
             return
 
+        status = message_status(status)
         text = markdown_text(text) if text else ""
         if not text.strip():
             return

@@ -265,10 +265,11 @@ class AssistantWorker(QObject):
                 audio_lease.reclaim()
 
             if reply:
+                from .session_log import message_status
                 task_state = getattr(self.assistant, "task_state", None)
                 self.session.write(self.assistant.name, reply,
                                    status=("interrupted" if cancel_event.is_set() else
-                                           str(task_state.status) if task_state is not None
+                                           message_status(task_state.status) if task_state is not None
                                            else "completed"))
 
             self.finished.emit(reply)
@@ -278,7 +279,7 @@ class AssistantWorker(QObject):
             message = tr("ui.error_detail", error=error,
                          cause=cause) if cause is not None else str(
                 error)
-            self.session.write("System", message)
+            self.session.write("System", message, status="error")
             self.failed.emit(message)
 
         finally:
