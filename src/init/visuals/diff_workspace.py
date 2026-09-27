@@ -20,10 +20,13 @@
 from __future__ import annotations
 
 import uuid
+import os
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
-from PySide6.QtWidgets import QFrame, QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget
+
+from .file_viewer import FileTask
 
 
 class DiffWorkspacePanel(QFrame):
@@ -52,6 +55,20 @@ class DiffWorkspacePanel(QFrame):
         panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(0)
 
+        self.directory = os.getcwd()
+        self._task = None
+        self._disposed = False
+        toolbar = QHBoxLayout()
+        self.reload_button = QPushButton("Reload", self)
+        self.reload_button.clicked.connect(self.reload)
+        toolbar.addWidget(self.reload_button)
+        toolbar.addStretch()
+        panel_layout.addLayout(toolbar)
+        self.status = QLabel(self.directory, self)
+        self.status.setTextFormat(Qt.PlainText)
+        self.status.setWordWrap(True)
+        panel_layout.addWidget(self.status)
+
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.NoFrame)
@@ -72,10 +89,10 @@ class DiffWorkspacePanel(QFrame):
         self.diff_editor.setFont(QFont("JetBrains Mono NL", 10))
         self.diff_editor.setStyleSheet("""
             QPlainTextEdit {
-                background: #1e1e1e;
-                color: #d4d4d4;
+                background: #24273a;
+                color: #cad3f5;
                 border: none;
-                selection-background-color: #264f78;
+                selection-background-color: #494d64;
                 padding: 8px;
                 font-family: "JetBrains Mono NL", monospace;
             }
@@ -88,23 +105,76 @@ class DiffWorkspacePanel(QFrame):
         self.scroll_area.setWidget(content_widget)
         panel_layout.addWidget(self.scroll_area)
         self.current_diff: str | None = None
+        QTimer.singleShot(0, self.reload)
+
+    def set_directory(self, directory):
+        if directory != self.directory:
+            self.directory = directory
+            self.reload()
+
+    def reload(self):
+        if self._disposed:
+            return
+        if self._task is not None:
+            self._task.cancelled.set()
+        directory = self.directory
+        self.status.setText(directory + "\nLoading…")
+        self.reload_button.setEnabled(False)
+
+        def load(cancelled):
+            from src.init.brain import git_diff, git_status
+            from src.init.task_outcomes import Outcome
+            patches = []
+            status = git_status(directory)
+            if status["outcome"] != Outcome.SUCCESS:
+                data = status.get("data", {})
+                return {"error": (data.get("stderr") or str(data)) if isinstance(data, dict) else str(data)}
+            for staged in (True, False):
+                if cancelled.is_set():
+                    return None
+                result = git_diff(repository=directory, staged=staged)
+                if result["outcome"] not in {Outcome.SUCCESS, Outcome.NEGATIVE}:
+                    data = result.get("data", {})
+                    return {"error": (data.get("stderr") or str(data)) if isinstance(data, dict) else str(data)}
+                patch = result["data"]["stdout"]
+                if patch:
+                    patches.append(("Staged changes" if staged else "Working tree changes") + "\n" + patch)
+            return {"directory": directory, "status": status["data"]["stdout"], "diff": "\n".join(patches)}
+
+        self._task = FileTask(self, load)
+
+    def loaded(self, result):
+        self.reload_button.setEnabled(True)
+        if not result:
+            return
+        if result.get("error"):
+            self.status.setText(self.directory + "\n" + result["error"])
+            self.set_diff("")
+            return
+        self.status.setText(result["directory"] + "\n" + result["status"].strip())
+        self.set_diff(result["diff"] or "No differences in tracked files.")
+
+    def dispose(self):
+        self._disposed = True
+        if self._task is not None:
+            self._task.cancelled.set()
 
     def _setup_diff_styles(self):
         """Set up color styles for diff lines."""
         self.addition_style = QTextCharFormat()
-        self.addition_style.setBackground(QColor("#0f5323"))
-        self.addition_style.setForeground(QColor("#7ec86e"))
+        self.addition_style.setBackground(QColor("#36463a"))
+        self.addition_style.setForeground(QColor("#a6da95"))
 
         self.deletion_style = QTextCharFormat()
-        self.deletion_style.setBackground(QColor("#5c1919"))
-        self.deletion_style.setForeground(QColor("#f14c4c"))
+        self.deletion_style.setBackground(QColor("#503640"))
+        self.deletion_style.setForeground(QColor("#ed8796"))
 
         self.context_style = QTextCharFormat()
-        self.context_style.setForeground(QColor("#d4d4d4"))
+        self.context_style.setForeground(QColor("#cad3f5"))
 
         self.header_style = QTextCharFormat()
         self.header_style.setFontWeight(QFont.Bold)
-        self.header_style.setForeground(QColor("#9cdcfe"))
+        self.header_style.setForeground(QColor("#8aadf4"))
 
     def set_diff(self, diff_text: str) -> None:
         """Set the diff text to display. Supports dynamic updates."""

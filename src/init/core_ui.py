@@ -768,6 +768,11 @@ class AssistantWindow(DesktopWindow):
         if view_key == "terminal":
             from src.init.terminal import TerminalView
             return TerminalView()
+        if view_key == "git_diff":
+            from src.init.visuals.diff_workspace import create_diff_workspace_panel
+            view = create_diff_workspace_panel()
+            self.worker.directory.connect(view.set_directory)
+            return view
         if view_key == "browser":
             from src.init.visuals.browser import BrowserView
             return BrowserView()
