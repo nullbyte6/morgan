@@ -4,7 +4,7 @@ QFrame#commandPalette {
     border-radius: 16px;
 }
 
-QLineEdit#commandPaletteSearch {
+QPlainTextEdit#commandPaletteSearch {
     background-color: #1e2030;
     color: #cad3f5;
     border: 1px solid #494d64;

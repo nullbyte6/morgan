@@ -5,7 +5,7 @@ from typing import Callable
 
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QLabel, QLayout, QLineEdit, QListWidget, QListWidgetItem,
+    QApplication, QFrame, QLabel, QLayout, QPlainTextEdit, QListWidget, QListWidgetItem, QMessageBox,
     QVBoxLayout, QWidget,
 )
 from shiboken6 import isValid
@@ -51,8 +51,9 @@ class CommandPalette(QFrame):
         layout.setSizeConstraint(QLayout.SetNoConstraint)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
-        self.search_input = QLineEdit(self)
+        self.search_input = QPlainTextEdit(self)
         self.search_input.setObjectName("commandPaletteSearch")
+        self.search_input.setFrameShape(QFrame.NoFrame)
         self.results = QListWidget(self)
         self.results.setObjectName("commandPaletteResults")
         self.results.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -107,7 +108,9 @@ class CommandPalette(QFrame):
         selected = self.results.currentItem()
         selected_id = selected.data(Qt.UserRole).id if selected else None
         self.results.clear()
-        for command in self.registry.search(self.search_input.text()):
+        query = self.search_input.toPlainText()
+        shell = self._shell_command()
+        for command in self.registry.search(query) if shell is None else ():
             item = QListWidgetItem(tr(command.label), self.results)
             item.setData(Qt.UserRole, command)
             item.setToolTip(item.text())
@@ -117,8 +120,16 @@ class CommandPalette(QFrame):
             elif self.results.currentItem() is None or command.id == selected_id:
                 self.results.setCurrentItem(item)
         self.results.setVisible(self.results.count() > 0)
-        self.empty.setVisible(bool(self.search_input.text().strip()) and self.results.count() == 0)
+        self.empty.setText(tr("palette.shell") if shell is not None else tr("palette.empty"))
+        self.empty.setVisible(bool(query.strip()) and self.results.count() == 0)
         self._place()
+
+    def _shell_command(self):
+        text = self.search_input.toPlainText()
+        if not text.startswith(">"):
+            return None
+        command = text[1:]
+        return command[1:] if command.startswith(" ") else command
 
     def _move(self, direction):
         row = self.results.currentRow()
@@ -130,6 +141,23 @@ class CommandPalette(QFrame):
                 return
 
     def _execute(self, item=None):
+        if self.host is None:
+            return
+        shell = self._shell_command()
+        if shell is not None:
+            if not shell.strip():
+                return
+            self.dismiss(restore_focus=False)
+            try:
+                self.owner.open_terminal_command(shell)
+            except Exception as error:
+                message = QMessageBox(self.owner)
+                message.setIcon(QMessageBox.Critical)
+                message.setWindowTitle(tr("palette.shell_error"))
+                message.setText(str(error))
+                message.setDetailedText(shell)
+                message.exec()
+            return
         item = item or self.results.currentItem()
         if item is None:
             return
@@ -145,10 +173,12 @@ class CommandPalette(QFrame):
             return
         area = self.host.rect().adjusted(12, 12, -12, -12)
         width = max(0, min(560, area.width()))
+        self.search_input.setFixedHeight(min(6, self.search_input.document().blockCount())
+                                        * self.search_input.fontMetrics().lineSpacing() + 24)
         row_height = max(32, self.results.fontMetrics().height() + 18)
         margins = self.layout().contentsMargins()
         overhead = (margins.top() + margins.bottom() + self.layout().spacing()
-                    + self.search_input.sizeHint().height())
+                    + self.search_input.height())
         orb = getattr(self.owner, "orb", None)
         if orb is not None and self.host.isAncestorOf(orb):
             orb_top = orb.mapTo(self.host, orb.rect().topLeft()).y()
@@ -183,7 +213,11 @@ class CommandPalette(QFrame):
               and event.modifiers() == Qt.NoModifier
               and event.key() in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape)):
             event.accept()
+            if self._shell_command() is not None and event.key() in (Qt.Key_Up, Qt.Key_Down):
+                return False
             if event.type() == QEvent.KeyPress:
+                if event.isAutoRepeat() and event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                    return True
                 if event.key() == Qt.Key_Escape:
                     self.dismiss()
                 elif event.key() in (Qt.Key_Return, Qt.Key_Enter):

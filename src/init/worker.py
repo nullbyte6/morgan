@@ -240,7 +240,7 @@ class AssistantWorker(QObject):
                     audio_lease.yield_to_wake_listener()
                 self.speaking.emit(turn_id, speaking)
 
-            reply, history = self.assistant.run_desktop_turn(
+            reply, history = self.assistant.run(
                 prompt,
                 self.history,
                 on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),

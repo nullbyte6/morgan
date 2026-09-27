@@ -818,6 +818,19 @@ class AssistantWindow(DesktopWindow):
                 "Failed to open workspace view %s", view_key)
             return
 
+    def open_terminal_command(self, command: str) -> None:
+        from src.init.terminal import TerminalView
+        view = TerminalView(directory=os.getcwd(), command=command,
+                            preserve_output=True, autostart=False)
+        try:
+            self.workspace.open_registered_panel("terminal", "Terminal", lambda: view)
+            view.start_session()
+        except Exception:
+            view.dispose()
+            if view.parentWidget() is None:
+                view.deleteLater()
+            raise
+
     @Slot(str)
     def on_workspace_opened(self, panel_id: str) -> None:
         """Focus a panel after it has been added to the main workspace."""

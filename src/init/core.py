@@ -435,7 +435,7 @@ class Assistant:
             "without supporting evidence."
         )
 
-    def run_desktop_turn(
+    def run(
             self,
             prompt: str,
             history: list,

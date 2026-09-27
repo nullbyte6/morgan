@@ -21,6 +21,9 @@ from __future__ import annotations
 from src.init.identity import get_assistant_name
 
 import os
+import base64
+import shlex
+from collections import deque
 import queue
 import select
 import shutil
@@ -177,6 +180,7 @@ class TerminalSession(QThread):
     """Own the PTY off the GUI thread; all writes and resizes are queued."""
 
     output = Signal(str)
+    ready = Signal()
     failed = Signal(str)
     exited = Signal(int)
 
@@ -241,6 +245,7 @@ class TerminalSession(QThread):
                     self.argv or [shell, "-i"], cwd=str(self.directory), env=environment,
                     dimensions=(self.rows, self.columns))
             self.pid = process.pid
+            self.ready.emit()
             started = time.monotonic()
             while not self.isInterruptionRequested():
                 if self.timeout is not None and time.monotonic() - started >= self.timeout:
@@ -304,9 +309,11 @@ class TerminalSession(QThread):
 class TerminalScreen(pyte.HistoryScreen):
     """Reply to terminal device/cursor queries through the same PTY."""
 
-    def __init__(self, send):
+    def __init__(self, send, *, preserve_output=False):
         self.send = send
         super().__init__(80, 24, history=1000)
+        if preserve_output:
+            self.history = self.history._replace(top=deque(), bottom=deque())
 
     def write_process_input(self, data):
         self.send(data)
@@ -413,7 +420,8 @@ class TerminalView(QWidget):
          "#8bd5ca", "#cad3f5", "#6e738d", "#f5a9b8", "#bce6af", "#f5e0b5",
          "#b7bdf8", "#d5b8ff", "#a6e3db", "#ffffff")))
 
-    def __init__(self, parent=None, *, directory=None, argv=None, timeout=None, autostart=True):
+    def __init__(self, parent=None, *, directory=None, argv=None, timeout=None, autostart=True,
+                 command=None, preserve_output=False):
         super().__init__(parent)
         self.setObjectName("terminalPage")
         self.directory = Path(directory or os.environ.get("USERPROFILE") or Path.home())
@@ -421,8 +429,10 @@ class TerminalView(QWidget):
         self.timeout = timeout
         self.session = None
         self._disposed = False
+        self._pending_command = command
+        self.output_history = [] if preserve_output else None
         self.display = TerminalDisplay(self)
-        self.screen = TerminalScreen(self.send_input)
+        self.screen = TerminalScreen(self.send_input, preserve_output=preserve_output)
         self.stream = pyte.Stream(self.screen)
         self.status = QLabel(str(self.directory))
         self.status.setObjectName("terminalStatus")
@@ -438,6 +448,8 @@ class TerminalView(QWidget):
         self.render_timer.setInterval(33)
         self.render_timer.timeout.connect(self.render_screen)
         self.setFocusProxy(self.display)
+        if command is not None:
+            self.receive_output(command.replace("\r\n", "\n").replace("\n", "\r\n") + "\r\n")
         if autostart:
             QTimer.singleShot(0, self.start_session)
 
@@ -447,12 +459,14 @@ class TerminalView(QWidget):
             return
         if self.session is not None and self.session.isRunning():
             return
-        self.screen.reset()
+        if self._pending_command is None:
+            self.screen.reset()
         self.stream = pyte.Stream(self.screen)
         self.status.setText(str(self.directory))
         self.session = TerminalSession(self.directory, *self.display.terminal_size(),
                                        argv=self.argv, timeout=self.timeout)
         self.session.output.connect(self.receive_output)
+        self.session.ready.connect(self._submit_command)
         self.session.failed.connect(self.show_error)
         self.session.exited.connect(self.session_exited)
         self.destroyed.connect(self.session.stop)
@@ -467,6 +481,7 @@ class TerminalView(QWidget):
     def dispose(self):
         """Stop promptly on panel removal, before Qt's deferred deletion."""
         self._disposed = True
+        self._pending_command = None
         self.render_timer.stop()
         if self.session is not None:
             self.session.stop()
@@ -476,8 +491,22 @@ class TerminalView(QWidget):
         if self.session is not None:
             self.session.write(text)
 
+    @Slot()
+    def _submit_command(self):
+        if self._disposed or self.session is None or self._pending_command is None:
+            return
+        command, self._pending_command = self._pending_command, None
+        if os.name == "nt":
+            encoded = base64.b64encode(command.encode("utf-8")).decode("ascii")
+            text = ". ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded + "'))))"
+        else:
+            text = "eval " + shlex.quote(command)
+        self.send_input(text + "\r")
+
     @Slot(str)
     def receive_output(self, text):
+        if self.output_history is not None:
+            self.output_history.append(text)
         self.stream.feed(text)
         if not self.render_timer.isActive():
             self.render_timer.start()
@@ -486,6 +515,7 @@ class TerminalView(QWidget):
     def show_error(self, message):
         self.status.setText(f"Terminal error: {message}")
         self.status.setToolTip(message)
+        self.receive_output(f"\r\nTerminal error: {message}\r\n")
 
     @Slot(int)
     def session_exited(self, code):
