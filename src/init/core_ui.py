@@ -113,6 +113,7 @@ from src.init.desktop.clipboard import (
 )
 from src.init.desktop.task_progress import TaskProgressPill
 from src.init.desktop.composition import CompositionLayout, CompositionSurface
+from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
 from src.init.desktop.file_drop import FileDropRouter
@@ -242,6 +243,7 @@ class ArloWindow(DesktopWindow):
         self.wake_command_id = None
 
         self.build_ui()
+        self.build_command_palette()
 
         self._workspace_shortcut_map = {
             options["shortcut"].rsplit("+", 1)[-1]: view_key
@@ -590,13 +592,40 @@ class ArloWindow(DesktopWindow):
         if self.ready:
             self.input.setFocus()
 
+    def build_command_palette(self):
+        commands = [
+            Command("workspace.new", "palette.new_workspace", self.open_workspace,
+                    ("new workspace", "nuevo espacio")),
+            Command("workspace.chat", "palette.chat", self.focus_main_workspace,
+                    ("chat", "home", "inicio"),
+                    lambda: self.workspace.get_panel(self.main_workspace_panel_id) is not None),
+        ]
+        commands.extend(
+            Command(f"workspace.{key}", f"palette.{key}",
+                    lambda key=key: self.open_workspace_view(key), (key,))
+            for key in WORKSPACE_VIEW_CONFIG)
+        self.command_palette = CommandPalette(CommandRegistry(commands), self)
+        self.workspace.panel_focused.connect(
+            lambda _panel_id: self.command_palette.dismiss(restore_focus=False))
+        self.workspace.panel_closed.connect(
+            lambda _panel_id: self.command_palette.dismiss(restore_focus=False))
+
+    def open_command_palette(self):
+        if self.quitting or self._workspace_hiding or not self.isVisible():
+            return
+        panel = self.workspace.get_panel(self.workspace.active_panel_id)
+        if panel is not None:
+            self._workspace_chord_timer.stop()
+            self._workspace_chord_pending = False
+            self.command_palette.open(panel.content_host)
+
     def eventFilter(self, watched, event):
         if event.type() == QEvent.WindowDeactivate and watched is self:
             self._workspace_chord_timer.stop()
             self._workspace_chord_pending = False
         if (event.type() == QEvent.ShortcutOverride and
                 QApplication.activeWindow() == self and
-                ((event.key() == Qt.Key_N and event.modifiers() == Qt.ControlModifier)
+                ((event.key() in (Qt.Key_N, Qt.Key_K) and event.modifiers() == Qt.ControlModifier)
                  or (self._workspace_chord_pending and
                      event.modifiers() in (Qt.NoModifier, Qt.ControlModifier) and
                      event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down,
@@ -606,6 +635,11 @@ class ArloWindow(DesktopWindow):
         if (event.type() == QEvent.KeyPress and
                 QApplication.activeWindow() == self):
             modifiers = event.modifiers()
+            if event.key() == Qt.Key_K and modifiers == Qt.ControlModifier:
+                if not event.isAutoRepeat():
+                    self.open_command_palette()
+                event.accept()
+                return True
             if event.key() == Qt.Key_N and modifiers == Qt.ControlModifier:
                 if event.isAutoRepeat():
                     return True
@@ -896,6 +930,8 @@ class ArloWindow(DesktopWindow):
         if language == self.active_language:
             return
         self.active_language = language
+        if hasattr(self, "command_palette"):
+            self.command_palette.refresh_language()
         self.task_progress.refresh_language(language)
         self.refresh_settings_workspaces()
         self.attachment_tray.refresh()
@@ -1122,6 +1158,7 @@ class ArloWindow(DesktopWindow):
         """Switch to compact desktop mode."""
         if self.quitting or self._workspace_hiding:
             return
+        self.command_palette.dismiss(restore_focus=False)
         if not self.mascot.isVisible():
             self.mascot.move_mascot()
         self.mascot.pop_in()

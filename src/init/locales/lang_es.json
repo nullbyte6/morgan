@@ -488,5 +488,16 @@
   "task_progress.step_verify": "Comprobación realizada: {tool}",
   "task_progress.step_checkpoint": "Estado de la tarea actualizado",
   "task_progress.step_failed": "Paso con error: {tool}",
-  "task_progress.step_skipped": "Paso no ejecutado: {tool}"
+  "task_progress.step_skipped": "Paso no ejecutado: {tool}",
+  "palette.search": "Buscar comandos…",
+  "palette.commands": "Comandos",
+  "palette.empty": "No hay comandos coincidentes",
+  "palette.unavailable": "No disponible ahora",
+  "palette.new_workspace": "Nuevo espacio de trabajo",
+  "palette.chat": "Ir al chat",
+  "palette.logs": "Abrir registros",
+  "palette.browser": "Abrir navegador",
+  "palette.editor": "Abrir editor",
+  "palette.settings": "Abrir ajustes",
+  "palette.terminal": "Abrir terminal"
 }

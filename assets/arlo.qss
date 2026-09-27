@@ -1,3 +1,42 @@
+QFrame#commandPalette {
+    background-color: #24273a;
+    border: 2px solid #494d64;
+    border-radius: 16px;
+}
+
+QLineEdit#commandPaletteSearch {
+    background-color: #1e2030;
+    color: #cad3f5;
+    border: 1px solid #494d64;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 16px;
+}
+
+QListWidget#commandPaletteResults {
+    background: transparent;
+    color: #cad3f5;
+    border: none;
+    outline: none;
+    font-size: 15px;
+}
+
+QListWidget#commandPaletteResults::item {
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+QListWidget#commandPaletteResults::item:selected {
+    background-color: #494d64;
+    color: #cad3f5;
+}
+
+QListWidget#commandPaletteResults::item:disabled,
+QLabel#commandPaletteEmpty {
+    color: #a5adcb;
+    background: transparent;
+}
+
 QWidget#root,
 QWidget#settingsPage {
     background-color: transparent;

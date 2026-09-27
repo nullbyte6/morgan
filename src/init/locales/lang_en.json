@@ -488,5 +488,16 @@
   "task_progress.step_verify": "Check performed: {tool}",
   "task_progress.step_checkpoint": "Task state updated",
   "task_progress.step_failed": "Step failed: {tool}",
-  "task_progress.step_skipped": "Step not executed: {tool}"
+  "task_progress.step_skipped": "Step not executed: {tool}",
+  "palette.search": "Search commands…",
+  "palette.commands": "Commands",
+  "palette.empty": "No matching commands",
+  "palette.unavailable": "Unavailable right now",
+  "palette.new_workspace": "New workspace",
+  "palette.chat": "Focus Chat",
+  "palette.logs": "Open logs",
+  "palette.browser": "Open browser",
+  "palette.editor": "Open editor",
+  "palette.settings": "Open settings",
+  "palette.terminal": "Open terminal"
 }
