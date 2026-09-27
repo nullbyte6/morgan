@@ -1338,7 +1338,7 @@ class ArloWindow(DesktopWindow):
 
     @Slot(object)
     def render_task_view(self, view):
-        self.set_orbs_thinking(False)
+        self.set_orbs_thinking(view.active and view.orb_state == Orb.State.PROCESSING)
         self.set_orbs_visual_state(view.orb_state)
 
     @Slot(int)
