@@ -84,6 +84,7 @@ class TaskControl(AbstractCapability):
         self.token_scale = 1.0
         self.last_budget = {}
         self.selected_tools = None
+        self.tools_selected_for_budget = False
         self.available_tools = {}
         self.recovery_attempts = 0
         self.force_compaction = False
@@ -139,6 +140,7 @@ TaskControl validates execution and evidence, never strategy or textual progress
 For greetings, conversation or short explanations needing no external work, answer directly in plain text.
 Do not create a task contract or call supervisor tools for those answers.
 Before any tool work, establish the single task contract through task_checkpoint.
+For implementation tasks, declare kind='mutation' even when the first phase is inspect.
 For example task_checkpoint(kind='read_only', phase='inspect', criteria=['Review tool contracts'],
 verification={'Review tool contracts': {'method': 'Inspect contracts and cite findings', 'resources': []}}).
 Before effects, declare the user's outcome with task_checkpoint(kind='mutation', criteria=[...],
@@ -240,6 +242,9 @@ and retain its consent checks. cd requests use change_directory and Git requests
                                                             for value in findings or []])
         if result["accepted"]:
             self.set_task_title(task_title)
+            if self.state.kind == "mutation" and self.tools_selected_for_budget:
+                self.selected_tools = set([*dict.fromkeys([
+                    "edit_code", "create_code", "verify_code", "execute_command", *sorted(self.selected_tools)])][:12])
         return result
 
     def set_task_title(self, title):
@@ -366,6 +371,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
             return control_rejection("Select at most twelve names from task_read_state(field='tools').",
                                      "names", "Known tool names")
         self.selected_tools = set(names)
+        self.tools_selected_for_budget = False
         return {"accepted": True, "outcome": Outcome.SUCCESS,
                 "active_tools": sorted(self.selected_tools | self.control_tools.keys())}
 
@@ -940,8 +946,9 @@ and retain its consent checks. cd requests use change_directory and Git requests
             recent = [part.tool_name for message in history[-6:] for part in message.parts if part.part_kind == "tool-call"]
             essentials = ["read_code", "search_code", "list_code", "read_file", "list_files", "git_status", "git_diff"]
             if self.state.kind == "mutation":
-                essentials += ["edit_code", "execute_command", "verify_code"]
+                essentials += ["edit_code", "create_code", "execute_command", "verify_code"]
             self.selected_tools = set([*dict.fromkeys([*recent, *essentials])][:12])
+            self.tools_selected_for_budget = True
             request_context.model_request_parameters = replace(parameters, function_tools=[
                 tool for tool in parameters.function_tools if tool.name in self.control_tools or tool.name in self.selected_tools])
             self.trace("tool_schemas_selected", active_tools=sorted(self.selected_tools), reason="context_budget")

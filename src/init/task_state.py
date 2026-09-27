@@ -265,8 +265,15 @@ class TaskState:
                                   "verification." + criterion, {"method": "Describe the observable check", "resources": []})
                 proposed[criterion] = Criterion(contract["method"], list(contract.get("resources", [])))
             elif contract:
-                if not contract["method"].strip() or not set(proposed[criterion].resources).issubset(contract["resources"]):
-                    return reject("Retain existing verification dependencies when refining the method.")
+                removed = set(proposed[criterion].resources) - set(contract["resources"])
+                if not contract["method"].strip() or removed and (
+                        criterion not in reopen or any(
+                            not resource.startswith(("file:", "entry:"))
+                            or self.revisions.get(resource) != "missing"
+                            or any(contains(scope, resource) or contains(resource, scope)
+                                   for scope in self.changed_at) for resource in removed)):
+                    return reject("Retain observed verification dependencies. To correct an unobserved missing path, reopen the criterion and supply its actual resources.",
+                                  "verification." + criterion, {"reopen": [criterion], "resources": "Retain existing observed dependencies"})
                 if contract["method"] != proposed[criterion].verification or contract["resources"] != proposed[criterion].resources:
                     proposed[criterion] = Criterion(contract["method"], list(contract["resources"]))
         if not proposed or set(verification) - set(proposed):
@@ -327,6 +334,10 @@ class TaskState:
                 "verification": {"User outcome": {"method": "Observable check", "resources": []}}}})
         for name, criterion in self.criteria.items():
             if not self.valid_evidence(criterion.evidence, criterion.resources, inspection=self.kind == "read_only"):
+                missing = [resource for resource in criterion.resources
+                           if resource.startswith(("file:", "entry:")) and self.revisions.get(resource) == "missing"
+                           and not any(contains(scope, resource) or contains(resource, scope)
+                                       for scope in self.changed_at)]
                 result.append({"code": "criterion_evidence_required", "criterion": name,
                                "method": criterion.verification, "resources": criterion.resources,
                                "evidence_ids": [ref for ref, item in self.evidence.items()
@@ -334,7 +345,9 @@ class TaskState:
                                                 and (not criterion.resources or any(
                                                     contains(resource, target) or contains(target, resource)
                                                     for resource in item.revisions for target in criterion.resources))],
-                               "repair": "Cite current evidence IDs in completed; read_only accepts inspection evidence."})
+                               "repair": ("If these paths were declared incorrectly, use task_checkpoint with reopen=[criterion] and verification keyed by the exact criterion to replace missing resources with discovered paths."
+                                          if missing else "Cite current evidence IDs in completed; read_only accepts inspection evidence."),
+                               **({"missing_resources": missing} if missing else {})})
         result.extend({"code": "effect_verification_required", **asdict(value)} for value in self.obligations.values())
         result.extend({"code": "dependency_resolution_required", **asdict(value)} for value in self.dependencies)
         return result
