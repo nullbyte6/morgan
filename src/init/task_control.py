@@ -34,6 +34,7 @@ from pydantic_ai.exceptions import ModelRetry
 from pydantic_ai.messages import ModelRequest, ModelMessagesTypeAdapter, UserPromptPart
 from pydantic_ai.toolsets import FunctionToolset
 
+from .lang import tr
 from .task_effects import TOOL_SPECS, content_revision, resources_for
 from .task_outcomes import ActionResult, Outcome, normalize_result
 from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint, normalize_task_title
@@ -130,8 +131,9 @@ verification={'Review tool contracts': {'method': 'Inspect contracts and cite fi
 Before effects, declare the user's outcome with task_checkpoint(kind='mutation', criteria=[...],
 verification={exact_criterion: {'method': 'specific independent check', 'resources': [resource IDs]}}).
 For research/audits use kind='read_only'. Each criterion must describe the user's outcome,
-never supervisor protocol. Retain criteria and verification contracts; reopen completed criteria
-when needed. Resources are file:absolute-path, entry:absolute-path or domain:name as shown in evidence.
+never supervisor protocol. Criteria updates are additive: omitted existing criteria and their evidence
+are preserved. Use stable exact criterion keys; do not translate or rename them after registration.
+For phase-only updates use criteria=[] and omit verification. Reopen completed criteria when needed. Resources are file:absolute-path, entry:absolute-path or domain:name as shown in evidence.
 Use phase='verify' before independent observations, and resources=[...] to declare the dependencies
 you are inspecting when a tool's intrinsic scope does not identify them. Semantic relevance and
 interpretation are your responsibility. Successful mutation messages cannot verify mutations.
@@ -188,6 +190,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
                         task_title: str = "") -> dict:
         """Apply an atomic task contract. Verification entries contain method/resources;
         resolutions contain finding/evidence. phase is the next action's role, not lifecycle.
+        Criteria are additive; omitted criteria and evidence remain required. Keep exact keys
+        across languages. Use criteria=[] for phase-only updates.
         """
         self.refresh_resources()
         values = lambda entries: {key: value.model_dump() if isinstance(value, BaseModel) else value
@@ -577,9 +581,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self._task_stalls = self._task_stalls + 1 if progress == self._task_progress else 0
         self._task_progress = progress
         if self._task_stalls >= 12:
-            self.state.suspend(Lifecycle.LIMIT_REACHED,
-                               "Task paused after repeated requests without new validated evidence or criterion progress. "
-                               "The task and evidence are preserved. Resume only after changing the approach.")
+            self.state.suspend(Lifecycle.LIMIT_REACHED, tr("task_control.stalled_warning"))
             self.trace("task_stalled", consecutive_requests=self._task_stalls)
             self.publish_activity()
             raise TaskStopped(self.state.notice)

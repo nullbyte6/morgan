@@ -243,8 +243,6 @@ class TaskState:
             return reject("A mutation contract cannot be weakened to read_only.")
         if any(not value.strip() for value in criteria) or len(set(criteria)) != len(criteria):
             return reject("Acceptance criteria must be distinct and nonempty.")
-        if criteria and not set(self.criteria).issubset(criteria):
-            return reject("Retain all original acceptance criteria.")
         proposed = copy.deepcopy(self.criteria)
         declared_resources = list(resources)
         for key, contract in verification.items():
@@ -310,7 +308,8 @@ class TaskState:
         for finding in findings:
             self.findings[fingerprint(finding)] = finding
         self.record("checkpoint", completed=completed, resolutions=resolutions, reopened=reopen)
-        return {"accepted": True, "outcome": Outcome.SUCCESS, "status": "accepted", "ready_to_complete": self.complete()}
+        return {"accepted": True, "outcome": Outcome.SUCCESS, "status": "accepted", "ready_to_complete": self.complete(),
+                "criteria": list(self.criteria)}
 
     def complete(self):
         return bool(self.kind and self.criteria and not self.obligations and not self.dependencies
