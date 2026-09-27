@@ -522,5 +522,7 @@
   "activity.waiting_user": "Esperando tu respuesta",
   "activity.waiting": "Esperando una dependencia",
   "agent.assistant_is_awake": "{assistant_name} está listo.",
-  "task_control.stalled_warning": "La tarea se ha pausado tras varias peticiones sin nueva evidencia validada ni avances en los criterios. La tarea y la evidencia se conservan. Reanuda solo después de cambiar el enfoque."
+  "task_control.stalled_warning": "La tarea se ha pausado tras varias peticiones sin nueva evidencia validada ni avances en los criterios. La tarea y la evidencia se conservan. Reanuda solo después de cambiar el enfoque.",
+  "task_control.output_recovery_exhausted": "No se pudo completar correctamente la salida tras varios intentos de recuperación.",
+  "task_control.output_recovery_resume": "Reanuda la tarea conservada para repararla y entregar su resultado."
 }
