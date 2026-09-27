@@ -33,7 +33,8 @@ from src.init.paths import PROJECT_ROOT
 from .task_outcomes import ActionResult, Outcome, normalize_result
 
 READ_CODE_MAX_CHARACTERS = 3000
-READ_CODE_MAX_LINES = 160
+READ_CODE_PAGE_CHARACTERS = 12000
+READ_CODE_MAX_LINES = 320
 LIST_CODE_MAX_ENTRIES = 200
 SEARCH_CODE_MAX_RESULTS = 20
 
@@ -216,7 +217,8 @@ def search_code(query: str, directory: str = ".",
                 "exact_matches=0 term_matches=0 returned_bytes=0",
                 query,
                 directory)
-            return ActionResult(Outcome.NEGATIVE, {"matches": [], "query": query}, "no_matches").payload()
+            return ActionResult(Outcome.NEGATIVE, {"matches": [], "query": query,
+                                "repair": "Search a different single symbol or use list_code to discover actual source paths. Terms must all occur on the same line."}, "no_matches").payload()
 
         output = "\n".join(matches)
         allowance = _inspection_allowance(len(output))
@@ -301,7 +303,7 @@ def read_code(path: str = "", start_line: int = 1, end_line: int = 0,
         block = _source_index(path, content) if mode == "index" else "".join(lines[start_line - 1:range_end])
         if character_offset > len(block):
             raise ValueError("Cursor/offset is beyond the requested range")
-        page = block[character_offset:character_offset + READ_CODE_MAX_CHARACTERS]
+        page = block[character_offset:character_offset + READ_CODE_PAGE_CHARACTERS]
         page = "".join(page.splitlines(keepends=True)[:READ_CODE_MAX_LINES])
         next_offset = character_offset + len(page)
         truncated = next_offset < len(block)
