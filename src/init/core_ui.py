@@ -81,6 +81,11 @@ WORKSPACE_VIEW_CONFIG = {
         "shortcut": "Ctrl+T",
         "icon": "",
     },
+    "git_diff": {
+        "title": "Git Diff",
+        "shortcut": "Ctrl+G",
+        "icon": "",
+    },
 }
 
 from src.init.attachment_widgets import AttachmentTray
