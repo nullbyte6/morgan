@@ -307,6 +307,11 @@ class TaskState:
             if not self.valid_evidence(criterion.evidence, criterion.resources, inspection=self.kind == "read_only"):
                 result.append({"code": "criterion_evidence_required", "criterion": name,
                                "method": criterion.verification, "resources": criterion.resources,
+                               "evidence_ids": [ref for ref, item in self.evidence.items()
+                                                if self.valid_evidence([ref], [], inspection=self.kind == "read_only")
+                                                and (not criterion.resources or any(
+                                                    contains(resource, target) or contains(target, resource)
+                                                    for resource in item.revisions for target in criterion.resources))],
                                "repair": "Cite current evidence IDs in completed; read_only accepts inspection evidence."})
         result.extend({"code": "effect_verification_required", **asdict(value)} for value in self.obligations.values())
         result.extend({"code": "dependency_resolution_required", **asdict(value)} for value in self.dependencies)
