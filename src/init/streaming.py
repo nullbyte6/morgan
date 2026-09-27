@@ -57,7 +57,11 @@ class MarkdownSpeechFilter:
             if self.line_start and self.inline_ticks == 0:
                 newline = self.pending.find("\n", index)
                 if newline < 0 and not final:
-                    break
+                    prefix = self.pending[index:]
+                    if (not prefix.strip() or prefix.lstrip().startswith("|")
+                            or re.match(r"^ {0,3}[`~]", prefix)
+                            or prefix.startswith("    ") or prefix.startswith("\t")):
+                        break
 
                 available = (
                     self.pending[index:]
