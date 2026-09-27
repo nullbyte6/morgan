@@ -479,12 +479,12 @@ class AssistantWindow(DesktopWindow):
 
         main_content = CompositionSurface()
         main_content.setObjectName("mainWorkspaceContent")
-        main_layout = QVBoxLayout(main_content)
+        main_layout = QGridLayout(main_content)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         self.task_progress = TaskProgressPill(self.task_presentation, main_content)
-        main_layout.addWidget(self.task_progress, 0, Qt.AlignLeft)
-        main_layout.addWidget(root, 1)
+        main_layout.addWidget(root, 0, 0)
+        main_layout.addWidget(self.task_progress, 0, 0, Qt.AlignLeft | Qt.AlignTop)
         main_content.minimum_changed.connect(self._update_main_workspace_minimum)
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=f"{get_assistant_name()} {load_dev_file()["version"]}",
