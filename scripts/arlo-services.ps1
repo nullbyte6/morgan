@@ -94,7 +94,7 @@ function Wait-TcpPort {
     return $false
 }
 
-Write-Host "$assistantName SERVICES" -ForegroundColor Cyan
+Write-Host "$($assistantName.ToUpper()) SERVICES" -ForegroundColor Cyan
 Write-Host "-------------"
 Write-Host "[1/3] Checking Ollama..."
 if (-not (Test-TcpPort -Address "127.0.0.1" -Port 11434)) {
