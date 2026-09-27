@@ -40,7 +40,9 @@ from .voice_profiles import selected_voice, resolve_voice
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
-logger = logging.getLogger("arlo.tts")
+from .identity import get_assistant_identifier
+
+logger = logging.getLogger(f"{get_assistant_identifier()}.tts")
 
 def _silence_tts_loggers():
     prefixes = (
@@ -227,7 +229,7 @@ class VoiceService:
                 if transcript.is_file() else self.reference_text)
         if "<|endofprompt|>" not in text:
             text = "You are a helpful assistant.<|endofprompt|>" + text
-        self.voice.add_zero_shot_spk(text, str(reference), "arlo")
+        self.voice.add_zero_shot_spk(text, str(reference), get_assistant_identifier())
         self.voice_reference = reference
         self._reference_key = key
         logger.info("Voice reference applied: %s", reference.name)
@@ -281,7 +283,7 @@ class VoiceService:
                     continue
                 self._select_reference(reference)
                 generator = self.voice.inference_zero_shot(
-                    text, "", "", zero_shot_spk_id="arlo", stream=True,
+                    text, "", "", zero_shot_spk_id=get_assistant_identifier(), stream=True,
                     speed=self.speed)
                 for chunk in generator:
                     if batch.cancelled.is_set():

@@ -12,15 +12,17 @@ from collections import deque
 from dataclasses import dataclass
 
 from .voice import pcm_rms
+from .identity import get_assistant_name
 
 SAMPLE_RATE = 16000
 BLOCK_SECONDS = 0.1
-_WAKE = re.compile(r"^[\W_]*(?:(?:hola|hey|oye)[\W_]+arlo|holaarlo|arlo)(?!\w)", re.I)
 
 
 def extract_command(text: str) -> str | None:
     """None means no wake prefix; an empty string means just the wake phrase."""
-    match = _WAKE.match(text)
+    name = re.escape(get_assistant_name())
+    wake = re.compile(rf"^[\W_]*(?:(?:hola|hey|oye)[\W_]*{name}|{name})(?!\w)", re.I)
+    match = wake.match(text)
     if match is None:
         return None
     command = re.sub(r"^[\W_]+", "", text[match.end():]).strip()

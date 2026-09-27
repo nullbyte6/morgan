@@ -43,6 +43,7 @@ from src.init.voice_ipc import (
     audio_requested,
     voice_directory,
 )
+from src.init.identity import get_assistant_name, get_assistant_identifier
 from src.init.wake_capture import BLOCK_SECONDS, SAMPLE_RATE, WakeCapture, WakeSettings
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -52,7 +53,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="[Wake] %(message)s")
 
-log = logging.getLogger("arlo.wake")
+log = logging.getLogger(f"{get_assistant_identifier()}.wake")
 
 
 def prioritize_listener() -> None:
@@ -233,7 +234,7 @@ def run_listener(microphone):
         compute_type="int8",
     )
     recognizer = Recognizer(model)
-    log.info(tr("wake.listening", phrase="Hola Arlo"))
+    log.info(tr("wake.listening", phrase=f"Hola {get_assistant_name()}"))
     pending_request = False
     pending_id = None
     pending_launch = False

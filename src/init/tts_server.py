@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 from src.init.lang import tr
+from .identity import get_assistant_identifier
 
 import json
 import logging
@@ -41,7 +42,7 @@ PORT = 18765
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s")
-logger = logging.getLogger("arlo.tts.server")
+logger = logging.getLogger(f"{get_assistant_identifier()}.tts.server")
 
 
 class TTSServer:
@@ -153,7 +154,7 @@ class TTSServer:
                         threading.Thread(
                             target=self._wait_for_audio,
                             args=(client, message.get("turn_id"), self.voice.current_batch()),
-                            name="arlo-tts-wait",
+                            name=f"{get_assistant_identifier()}-tts-wait",
                             daemon=True,
                         ).start()
 

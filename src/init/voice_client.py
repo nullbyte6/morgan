@@ -26,6 +26,7 @@ import uuid
 
 import numpy as np
 from .lang import tr
+from .identity import get_assistant_identifier
 from .voice_profiles import selected_voice
 
 
@@ -60,7 +61,7 @@ class VoiceClient:
 
         self._thread = threading.Thread(
             target=self._listen,
-            name="arlo-voice-client",
+            name=f"{get_assistant_identifier()}-voice-client",
             daemon=True)
         self._thread.start()
         self._send({"type": "hello"})
