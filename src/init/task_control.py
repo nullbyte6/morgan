@@ -430,8 +430,6 @@ and retain its consent checks. cd requests use change_directory and Git requests
 
     def evidence_next_action(self, item, delivery, page=None):
         offset = delivery["next_offset"]
-        if offset is None and page is not None:
-            offset = page.get("next_offset")
         if offset is not None:
             return {"tool": "task_read_evidence", "arguments": {
                 "call_id": item.id, "offset": offset, "limit": 2000,
