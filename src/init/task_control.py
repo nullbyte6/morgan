@@ -1011,9 +1011,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self._recovery_stalls = self._recovery_stalls + 1 if progress == self._recovery_progress else 0
             if self._recovery_progress is not None and progress != self._recovery_progress:
                 self.recovery_attempts = 0
+
             self._recovery_progress = progress
-            if self._recovery_stalls >= 4:
-                self.stop_output_recovery("Output recovery repeated control turns without new evidence or contract progress.")
         else:
             self._recovery_progress = None
             self._recovery_stalls = 0
@@ -1101,7 +1100,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.trace("model_output_recovery", reason=reason, attempt=self.recovery_attempts,
                    maximum_attempts=3, previous_budget=self.last_budget)
         if self.recovery_attempts > 3:
-            self.stop_output_recovery("Model output recovery exhausted three safe retries.")
+            self.stop_output_recovery(tr("task_control.output_recovery_exhausted"))
         self.state.recover_output("output_truncated" if reason == "length" else "output_rejected",
                                   self.state.requirements())
         self.state.notice = ("The previous output was incomplete or lacked required certification. "
@@ -1110,7 +1109,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
                              "For a direct answer with no external work, complete the answer in text.")
 
     def stop_output_recovery(self, reason):
-        self.state.suspend(Lifecycle.LIMIT_REACHED, reason + " Resume the preserved task to repair and submit its output.")
+        self.state.suspend(Lifecycle.LIMIT_REACHED, reason + tr("task_control.output_recovery_resume"))
         self.publish_activity()
         raise TaskStopped(self.state.notice)
 
