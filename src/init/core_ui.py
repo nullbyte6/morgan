@@ -81,11 +81,6 @@ WORKSPACE_VIEW_CONFIG = {
         "shortcut": "Ctrl+T",
         "icon": "",
     },
-    "git_diff": {
-        "title": "Git Diff",
-        "shortcut": "Ctrl+G",
-        "icon": "",
-    },
 }
 
 from src.init.attachment_widgets import AttachmentTray
@@ -242,6 +237,7 @@ class AssistantWindow(DesktopWindow):
         self.showing_greeting = True
         self.current_reply = None
         self.current_response_view = None
+        self._completed_git_diff = None
         self.response_timer = QElapsedTimer()
         self.response_timer_running = False
         self.response_timer_display = QLabel()
@@ -737,6 +733,7 @@ class AssistantWindow(DesktopWindow):
         self.worker.permission_denied.connect(self.on_permission_denied)
         self.worker.subtitle.connect(self.on_subtitle)
         self.worker.finished.connect(self.on_finished)
+        self.worker.git_diff_ready.connect(self.on_git_diff_ready)
         self.worker.failed.connect(self.on_error)
         self.worker.screenshot_requested.connect(self.on_screenshot_requested)
         self.worker.clipboard_requested.connect(self.on_clipboard_requested)
@@ -768,11 +765,6 @@ class AssistantWindow(DesktopWindow):
         if view_key == "terminal":
             from src.init.terminal import TerminalView
             return TerminalView()
-        if view_key == "git_diff":
-            from src.init.visuals.diff_workspace import create_diff_workspace_panel
-            view = create_diff_workspace_panel()
-            self.worker.directory.connect(view.set_directory)
-            return view
         if view_key == "browser":
             from src.init.visuals.browser import BrowserView
             return BrowserView()
@@ -1614,6 +1606,13 @@ class AssistantWindow(DesktopWindow):
             QTimer.singleShot(0, self.request_quit)
             return
 
+        snapshot, self._completed_git_diff = self._completed_git_diff, None
+        if snapshot is not None and not interrupted and not task_failed:
+            from src.init.visuals.diff_workspace import DiffWorkspacePanel
+            directory, diff = snapshot
+            self.workspace.open_registered_panel(
+                "git_diff", tr("git_workspace.title"), lambda: DiffWorkspacePanel(directory, diff))
+
         if self.pending_wake_barge:
             self.pending_wake_barge = False
             self.start_recording(automatic=True)
@@ -1629,6 +1628,10 @@ class AssistantWindow(DesktopWindow):
             self.resume_live_listening()
         if self.quitting:
             QTimer.singleShot(0, self.close)
+
+    @Slot(str, str)
+    def on_git_diff_ready(self, directory, diff):
+        self._completed_git_diff = (directory, diff)
 
     def resume_pending_prompt(self):
         if self.worker.assistant.shutdown_requested.is_set():
@@ -1847,6 +1850,7 @@ def main():
 
         main_font = load_font("Inter_24pt-Regular.ttf")
         nerd_font = load_font("JetBrainsMonoNLNerdFontMono-Medium.ttf")
+        app.setProperty("codeFontFamily", nerd_font)
         
         font = QFont(main_font, 11)
         font.setKerning(True)

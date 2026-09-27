@@ -134,6 +134,7 @@ class AssistantWorker(QObject):
     task_title = Signal(int, str)
     permission_denied = Signal(int)
     finished = Signal(str)
+    git_diff_ready = Signal(str, str)
     failed = Signal(str)
     ready = Signal()
     confirmation_requested = Signal(int, str)
@@ -316,6 +317,15 @@ class AssistantWorker(QObject):
                                    status=("interrupted" if cancel_event.is_set() else
                                            message_status(task_state.status) if task_state is not None
                                            else "completed"))
+
+            task_state = getattr(self.assistant, "task_state", None)
+            if (not cancel_event.is_set() and not self.assistant.shutdown_requested.is_set()
+                    and (task_state is None or task_state.status == "complete")):
+                from src.init.visuals.git_diff_connector import get_git_patch
+                directory = str(Path.cwd())
+                patch = get_git_patch(directory)
+                if patch:
+                    self.git_diff_ready.emit(directory, patch)
 
             self.finished.emit(reply)
 

@@ -49,7 +49,7 @@ class CommandRegistry:
     def search(self, query):
         tokens = query.casefold().split()
         if not tokens:
-            return []
+            return list(self.commands)
         return [command for command in self.commands
                 if all(token in " ".join((tr(command.label), command.id,
                                            *command.keywords)).casefold()
@@ -128,6 +128,7 @@ class CommandPalette(QFrame):
         self.results.clear()
         query = self.search_input.toPlainText()
         shell = self._shell_command()
+        current = None
         for command in self.registry.search(query) if shell is None else ():
             item = QListWidgetItem(tr(command.label), self.results)
             item.setData(Qt.UserRole, command)
@@ -135,8 +136,9 @@ class CommandPalette(QFrame):
             if not command.available():
                 item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
                 item.setToolTip(item.text() + "\n" + tr("palette.unavailable"))
-            elif self.results.currentItem() is None or command.id == selected_id:
-                self.results.setCurrentItem(item)
+            elif current is None or command.id == selected_id:
+                current = item
+        self.results.setCurrentItem(current)
         self.results.setVisible(self.results.count() > 0)
         self.empty.setText(tr("palette.shell") if shell is not None else tr("palette.empty"))
         self.empty.setVisible(bool(query.strip()) and self.results.count() == 0)
@@ -151,6 +153,8 @@ class CommandPalette(QFrame):
 
     def _move(self, direction):
         row = self.results.currentRow()
+        if row < 0 and direction < 0:
+            row = self.results.count()
         for candidate in range(row + direction, self.results.count() if direction > 0 else -1, direction):
             item = self.results.item(candidate)
             if item.flags() & Qt.ItemIsEnabled:

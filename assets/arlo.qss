@@ -359,7 +359,8 @@ QWidget#editorPage {
     color: #cad3f5;
 }
 
-QPlainTextEdit#codeEditor {
+QPlainTextEdit#codeEditor,
+QPlainTextEdit#diffWorkspaceEditor {
     background-color: #1e2030;
     color: #cad3f5;
     border: none;
@@ -368,59 +369,73 @@ QPlainTextEdit#codeEditor {
     selection-color: #cad3f5;
 }
 
-QPlainTextEdit#codeEditor QScrollBar:vertical {
+QPlainTextEdit#codeEditor QScrollBar:vertical,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar:vertical {
     background-color: #1e2030;
     width: 12px;
     margin: 0;
 }
 
-QPlainTextEdit#codeEditor QScrollBar::handle:vertical {
+QPlainTextEdit#codeEditor QScrollBar::handle:vertical,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::handle:vertical {
     background-color: #494d64;
     border-radius: 4px;
     min-height: 28px;
 }
 
-QPlainTextEdit#codeEditor QScrollBar::handle:vertical:hover {
+QPlainTextEdit#codeEditor QScrollBar::handle:vertical:hover,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::handle:vertical:hover {
     background-color: #6e738d;
 }
 
 QPlainTextEdit#codeEditor QScrollBar::add-line:vertical,
-QPlainTextEdit#codeEditor QScrollBar::sub-line:vertical {
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::add-line:vertical,
+QPlainTextEdit#codeEditor QScrollBar::sub-line:vertical,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::sub-line:vertical {
     height: 0;
     border: none;
     background: transparent;
 }
 
 QPlainTextEdit#codeEditor QScrollBar::add-page:vertical,
-QPlainTextEdit#codeEditor QScrollBar::sub-page:vertical {
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::add-page:vertical,
+QPlainTextEdit#codeEditor QScrollBar::sub-page:vertical,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::sub-page:vertical {
     background: transparent;
 }
 
-QPlainTextEdit#codeEditor QScrollBar:horizontal {
+QPlainTextEdit#codeEditor QScrollBar:horizontal,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar:horizontal {
     background-color: #1e2030;
     height: 10px;
     margin: 0;
 }
 
-QPlainTextEdit#codeEditor QScrollBar::handle:horizontal {
+QPlainTextEdit#codeEditor QScrollBar::handle:horizontal,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::handle:horizontal {
     background-color: #494d64;
     border-radius: 5px;
     min-width: 28px;
 }
 
-QPlainTextEdit#codeEditor QScrollBar::handle:horizontal:hover {
+QPlainTextEdit#codeEditor QScrollBar::handle:horizontal:hover,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::handle:horizontal:hover {
     background-color: #6e738d;
 }
 
 QPlainTextEdit#codeEditor QScrollBar::add-line:horizontal,
-QPlainTextEdit#codeEditor QScrollBar::sub-line:horizontal {
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::add-line:horizontal,
+QPlainTextEdit#codeEditor QScrollBar::sub-line:horizontal,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::sub-line:horizontal {
     width: 0;
     border: none;
     background: transparent;
 }
 
 QPlainTextEdit#codeEditor QScrollBar::add-page:horizontal,
-QPlainTextEdit#codeEditor QScrollBar::sub-page:horizontal {
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::add-page:horizontal,
+QPlainTextEdit#codeEditor QScrollBar::sub-page:horizontal,
+QPlainTextEdit#diffWorkspaceEditor QScrollBar::sub-page:horizontal {
     background: transparent;
 }
 
@@ -551,7 +566,8 @@ QMessageBox QLabel {
     selection-background-color: #494d64;
 }
 
-#fileViewerStatus {
+#fileViewerStatus,
+#diffWorkspaceDirectory {
     color: #a5adcb;
     border: none;
     font-size: 12px;
