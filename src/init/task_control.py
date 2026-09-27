@@ -514,7 +514,9 @@ and retain its consent checks. cd requests use change_directory and Git requests
                 data = item.result.get("data") if isinstance(item.result, dict) else None
                 content = data.get("content") if isinstance(data, dict) else data
                 field = "content" if isinstance(content, str) else "result"
-                externalized = len(encoded(payload)) > 4096
+                bounded_source = (item.tool == "read_code" and isinstance(data, dict)
+                                  and data.get("kind") in {"content", "index"} and isinstance(content, str))
+                externalized = len(encoded(payload)) > 4096 and not bounded_source
                 if externalized:
                     delivery = self.state.evidence_delivery.get(item.id, {}).get(field, {})
                     offset = (delivery.get("next_offset") or 0) if reused else 0
@@ -819,10 +821,14 @@ and retain its consent checks. cd requests use change_directory and Git requests
     async def compact(self, messages, measure, input_limit, *, force=False):
         result = copy.deepcopy(messages)
         before = (await measure(result))["estimated_input_tokens"]
+        if before <= input_limit and not force:
+            return result
         latest_response = next((index for index in range(len(result) - 1, -1, -1)
                                 if result[index].kind == "response"), len(result))
         externalized = []
         for message in result[:latest_response]:
+            if externalized and not force and (await measure(result))["estimated_input_tokens"] <= input_limit:
+                break
             for part in message.parts:
                 if part.part_kind == "tool-return" and len(encoded(part.content)) > 2000 and not (
                         isinstance(part.content, dict) and "artifact" in part.content and "data" not in part.content):
