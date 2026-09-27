@@ -149,11 +149,16 @@ class CommandPalette(QFrame):
         margins = self.layout().contentsMargins()
         overhead = (margins.top() + margins.bottom() + self.layout().spacing()
                     + self.search_input.sizeHint().height())
+        orb = getattr(self.owner, "orb", None)
+        if orb is not None and self.host.isAncestorOf(orb):
+            orb_top = orb.mapTo(self.host, orb.rect().topLeft()).y()
+            if orb_top - 12 >= area.y() + overhead:
+                area.setBottom(min(area.bottom(), orb_top - 12))
         self.results.setFixedHeight(max(0, min(row_height * min(8, self.results.count()) + 4,
                                               area.height() - overhead)))
         height = min(max(0, area.height()), self.layout().sizeHint().height())
         self.setGeometry(area.x() + (area.width() - width) // 2,
-                         area.y() + max(0, (area.height() - height) // 3), width, height)
+                         area.y(), width, height)
 
     def eventFilter(self, watched, event):
         if self.host is None:
@@ -164,6 +169,9 @@ class CommandPalette(QFrame):
             elif event.type() in (QEvent.Hide, QEvent.DeferredDelete):
                 self.dismiss(restore_focus=False)
                 return False
+        elif (watched is getattr(self.owner, "orb", None)
+              and event.type() in (QEvent.Move, QEvent.Resize)):
+            self._place()
         if event.type() == QEvent.WindowDeactivate and watched is self.owner:
             self.dismiss(restore_focus=False)
         elif event.type() == QEvent.MouseButtonPress:
