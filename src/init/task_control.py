@@ -88,6 +88,7 @@ class TaskControl(AbstractCapability):
         self.recovery_attempts = 0
         self.force_compaction = False
         self.retrieved_pages = set()
+        self.state_page_delivery = {}
         self._recovery_progress = None
         self._recovery_stalls = 0
         self._task_progress = None
@@ -297,7 +298,12 @@ and retain its consent checks. cd requests use change_directory and Git requests
         """
         item = self.state.evidence.get(call_id)
         if item is None:
-            return {"accepted": True, "outcome": Outcome.NEGATIVE, "found": False}
+            return {"accepted": True, "outcome": Outcome.NEGATIVE, "found": False,
+                    "code": "evidence_not_found", "field": "call_id", "actual": call_id,
+                    "expected": "A registered evidence_id returned by an observation",
+                    "reason": "Control call IDs are not evidence IDs. Supervisor state is recovered with task_read_state.",
+                    "recoverable": True, "next_action": {"tool": "task_read_state", "arguments": {
+                        "field": "evidence", "offset": 0, "limit": 2000}}}
         page = self.evidence_page(item, field, offset, limit, digest)
         delivery = self.record_delivery(item, page)
         self.trace("evidence_page_read", evidence_id=call_id, offset=offset,
@@ -310,7 +316,9 @@ and retain its consent checks. cd requests use change_directory and Git requests
         return payload
 
     def task_read_state(self, field: str, offset: int = 0, limit: int = 2000, digest: str = "", query: str = "") -> dict:
-        """Read bounded JSON pages; query filters tool names/descriptions or collection keys."""
+        """Read supervisor metadata, not source files, in pages of at most 2000 characters.
+        query filters tool names/descriptions or collection keys. Follow next_action for unread state.
+        """
         snapshot = self.state.snapshot(include_evidence=False)
         if field == "tools":
             value = {name: tool.description for name, tool in self.available_tools.items()
@@ -326,11 +334,31 @@ and retain its consent checks. cd requests use change_directory and Git requests
                 value = {key: item for key, item in value.items() if query.casefold() in key.casefold()}
         else:
             return control_rejection("Unknown state field", "field", [*snapshot, "tools", "evidence"])
-        page = self.page(encoded(value), offset, limit, digest)
-        self.retrieved_pages.add(("state", field, page["digest"], offset, len(page["content"])))
+        try:
+            page = self.page(encoded(value), offset, limit, digest)
+        except ValueError as error:
+            return {**control_rejection(str(error), "offset/digest/limit", "A current state page and positive limit"),
+                    "next_action": {"tool": "task_read_state", "arguments": {
+                        "field": field, "query": query, "offset": 0, "limit": 2000}}}
+        key = (field, page["digest"])
+        previous = self.state_page_delivery.get(key, {})
+        delivery = self.page_delivery({**page, "field": field}, previous)
+        new_characters = delivery["delivered_characters"] - previous.get("delivered_characters", 0)
+        self.state_page_delivery[key] = delivery
+        if new_characters:
+            self.retrieved_pages.add(("state", field, page["digest"], offset, len(page["content"])))
         self.trace("state_page_read", field=field, offset=offset,
-                   characters=len(page["content"]), digest=page["digest"])
-        return {"accepted": True, "outcome": Outcome.SUCCESS, "field": field, "query": query, "data": page}
+                   characters=len(page["content"]), digest=page["digest"], new_characters=new_characters)
+        payload = {"accepted": True, "outcome": Outcome.SUCCESS, "field": field, "query": query,
+                   "content_kind": "supervisor_state", "data": page, "delivery": delivery,
+                   "reused": not bool(new_characters)}
+        if delivery["next_offset"] is not None:
+            payload["next_action"] = {"tool": "task_read_state", "arguments": {
+                "field": field, "query": query, "offset": delivery["next_offset"],
+                "limit": 2000, "digest": page["digest"]}}
+        if field == "inspections":
+            payload["inspection_notice"] = "These entries describe prior observations. Read source bodies with read_code or registered evidence content with task_read_evidence."
+        return payload
 
     def task_select_tools(self, names: list[str]) -> dict:
         """Select up to twelve tool schemas for subsequent requests; supervisor tools stay active."""
@@ -368,9 +396,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             page["format"] = "text_character_page"
         return page
 
-    def record_delivery(self, item, page):
-        fields = self.state.evidence_delivery.setdefault(item.id, {})
-        previous = fields.get(page["field"], {})
+    @staticmethod
+    def page_delivery(page, previous):
         ranges = previous.get("delivered_ranges", [])
         merged = []
         for start, end in sorted([*ranges, [page["offset"], page["offset"] + len(page["content"])]]):
@@ -386,13 +413,18 @@ and retain its consent checks. cd requests use change_directory and Git requests
             if start > next_offset:
                 break
             next_offset = end
-        delivery = {"content_preserved": True, "field": page["field"], "digest": page["digest"],
+        return {"field": page["field"], "digest": page["digest"],
                     "total_characters": page["total_characters"], "delivered_ranges": merged,
                     "delivered_characters": delivered,
                     "remaining_characters": page["total_characters"] - delivered,
                     "next_offset": next_offset if next_offset < page["total_characters"] else None}
+
+    def record_delivery(self, item, page):
+        fields = self.state.evidence_delivery.setdefault(item.id, {})
+        previous = fields.get(page["field"], {})
+        delivery = {"content_preserved": True, **self.page_delivery(page, previous)}
         fields[page["field"]] = delivery
-        if delivered > previous.get("delivered_characters", 0):
+        if delivery["delivered_characters"] > previous.get("delivered_characters", 0):
             self.retrieved_pages.add(("evidence", item.id, page["digest"], page["offset"], len(page["content"])))
         return copy.deepcopy(delivery)
 
@@ -519,7 +551,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
             receipt_evidence = payload.get("evidence", {}).get("evidence_id", "")
         self.receipts[call_id] = {"tool": name, "validated": validated, "executed": executed,
                                  "control": control, "outcome": outcome, "evidence_id": receipt_evidence,
-                                 "reused": reused}
+                                 "reused": payload.get("reused", False) if name == "task_read_state" else reused}
         if control and outcome == Outcome.REJECTED:
             payload.setdefault("status", "rejected")
             payload.setdefault("field", "arguments")
@@ -810,11 +842,19 @@ and retain its consent checks. cd requests use change_directory and Git requests
                             reference["reused_evidence"] = True
                         part.content = reference
                     else:
+                        payload = part.content if isinstance(part.content, dict) else {}
                         raw = encoded(part.content)
                         part.content = {"artifact": self.archive(raw, f"Tool return {part.tool_call_id}"),
                                         "digest": hashlib.sha256(raw.encode("utf-8")).hexdigest(), "tool": part.tool_name,
                                         "call_id": part.tool_call_id, "characters": len(raw),
                                         "read": {"tool": "read_file", "offset": 0, "limit": 2000}}
+                        if part.tool_name == "task_read_state" and isinstance(payload.get("data"), dict):
+                            page = payload["data"]
+                            action = {"tool": "task_read_state", "arguments": {
+                                "field": payload["field"], "query": payload.get("query", ""),
+                                "offset": page["offset"], "limit": 2000, "digest": page["digest"]}}
+                            part.content.update(content_kind="supervisor_state", read=action,
+                                                next_action=payload.get("next_action", action))
                     externalized.append(part.tool_call_id)
         after = (await measure(result))["estimated_input_tokens"]
         archive = None
