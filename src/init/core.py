@@ -163,6 +163,9 @@ class Assistant:
         from pydantic_ai import Agent, Tool
         from pydantic_ai.models.ollama import OllamaModel
         from pydantic_ai.providers.ollama import OllamaProvider
+        from pydantic_ai.models import DEFAULT_HTTP_TIMEOUT, get_user_agent
+        from src.init.task_trace import trace_provider_request
+        import httpx2
 
         for logger_name in (
                 "httpx",
@@ -191,7 +194,10 @@ class Assistant:
             "max_tokens": 32768,
         }
 
-        self.provider = OllamaProvider(base_url="http://localhost:11434/v1")
+        http_client = httpx2.AsyncClient(
+            timeout=httpx2.Timeout(timeout=DEFAULT_HTTP_TIMEOUT, connect=5),
+            headers={"User-Agent": get_user_agent()}, event_hooks={"request": [trace_provider_request]})
+        self.provider = OllamaProvider(base_url="http://localhost:11434/v1", http_client=http_client)
         self.model = OllamaModel(
             self.MODEL_NAME,
             provider=self.provider,
@@ -508,6 +514,12 @@ class Assistant:
                 cancel_event)
 
         self._active_task_controller = controller
+        from src.init.config import load_dev_file
+        request_config = load_dev_file()
+        controller.request_configuration = {
+            "operational_context_tokens": request_config["context_length"],
+            "configured_model": request_config["model_name"],
+            "source": "dev/core.json; configured_only_not_runner_verified"}
         if not controller.state.title:
             from src.init.task_state import normalize_task_title
             controller.state.title = normalize_task_title(task_title)

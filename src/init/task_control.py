@@ -37,7 +37,8 @@ from pydantic_ai.toolsets import FunctionToolset
 from .task_effects import TOOL_SPECS, content_revision, resources_for
 from .task_outcomes import ActionResult, Outcome, normalize_result
 from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint
-from .task_trace import TaskJournal
+from .task_trace import (TaskJournal, active_model_request, measurement_error, response_metrics,
+                         serialized_metrics, settings_metadata)
 from .task_activity import TaskActivity, tool_activity
 
 
@@ -76,6 +77,7 @@ class TaskControl(AbstractCapability):
         self.context_characters = 48000
         self._recovery_progress = None
         self._recovery_stalls = 0
+        self.request_configuration = {}
         self.read_cache = {}
         self.receipts = {}
         self.on_action = None
@@ -526,20 +528,72 @@ and retain its consent checks. cd requests use change_directory and Git requests
         messages = self.compact([message for message in request_context.messages
                                  if not (message.metadata or {}).get("arlo_task_snapshot")])
         snapshot = self.state.snapshot(include_evidence=False)
-        messages.append(ModelRequest(parts=[UserPromptPart("Supervisor task state: " + encoded(snapshot))],
+        history_count = len(messages)
+        snapshot_text = encoded(snapshot)
+        try:
+            history_metrics = serialized_metrics(ModelMessagesTypeAdapter.dump_json(messages))
+        except Exception as error:
+            history_metrics = None
+            measurement_error(self.trace, "request_measurement_unavailable", error,
+                              request_id=f"{self.state.id}:{self.state.requests}")
+        messages.append(ModelRequest(parts=[UserPromptPart("Supervisor task state: " + snapshot_text)],
                                      metadata={"arlo_task_snapshot": True}))
         request_context.messages = messages
         if self.state.output_recovery:
             request_context.model_request_parameters = replace(
                 request_context.model_request_parameters, allow_text_output=False, output_tools=[])
-        self.trace("request_ready", memory_digest=fingerprint(snapshot))
+        correlation = active_model_request.get()
+        if correlation is not None:
+            parameters = request_context.model_request_parameters
+            correlation.update(request_id=f"{self.state.id}:{self.state.requests}",
+                               request_ordinal=self.state.requests, transport_attempt=0,
+                               tool_names={tool.name for tool in [*parameters.function_tools, *parameters.output_tools]})
+        try:
+            parameters = request_context.model_request_parameters
+            settings = {**(request_context.model.settings or {}), **(request_context.model_settings or {})}
+            measurements = {"recovery_required": bool(self.state.output_recovery),
+                            "recovery_code": self.state.output_recovery.get("code"), "history_message_count": history_count,
+                            "history_payload": history_metrics, "history_serialization": "pydantic_ai_messages_json_utf8",
+                            "supervisor_snapshot": serialized_metrics(snapshot_text),
+                            "supervisor_message": serialized_metrics("Supervisor task state: " + snapshot_text),
+                            "request_configuration": self.request_configuration,
+                            "intended_completion_limit": settings.get("max_tokens"), "reserved_completion_tokens": None,
+                            "model_settings": settings_metadata(settings), "model": request_context.model.model_name,
+                            "streaming": request_context.streaming, "tool_output_required": not parameters.allow_text_output,
+                            "function_tool_count": len(parameters.function_tools), "output_tool_count": len(parameters.output_tools),
+                            "available_tool_count": len(parameters.function_tools) + len(parameters.output_tools),
+                            "instruction_characters": sum(len(part.content) for part in parameters.instruction_parts or [])}
+        except Exception as error:
+            measurements = {}
+            measurement_error(self.trace, "request_measurement_unavailable", error,
+                              request_id=f"{self.state.id}:{self.state.requests}")
+        self.trace("request_ready", memory_digest=fingerprint(snapshot),
+                   request_id=f"{self.state.id}:{self.state.requests}", request_ordinal=self.state.requests, **measurements)
         self.publish_activity("model_request")
         return request_context
 
+    async def wrap_run(self, ctx, *, handler):
+        token = active_model_request.set({"trace": self.trace})
+        try:
+            return await handler()
+        finally:
+            active_model_request.reset(token)
+
     async def after_model_request(self, ctx, *, request_context, response):
         self.publish_activity()
+        try:
+            measurements = response_metrics(response, request_context.model_request_parameters)
+        except Exception as error:
+            measurements = {}
+            measurement_error(self.trace, "response_measurement_unavailable", error,
+                              request_id=f"{self.state.id}:{self.state.requests}")
         self.trace("model_response", model=response.model_name, finish_reason=response.finish_reason,
+                   request_id=f"{self.state.id}:{self.state.requests}", request_ordinal=self.state.requests,
+                   recovery_required=bool(self.state.output_recovery), measurements=measurements,
                    parts=[vars(part) for part in response.parts if part.part_kind in ("text", "tool-call")])
+        correlation = active_model_request.get()
+        if correlation is not None:
+            correlation["request_id"] = None
         if self.state.output_recovery and (response.finish_reason == "length" or not any(
                 part.part_kind == "tool-call" for part in response.parts)):
             self.stop_output_recovery("The required output-recovery tool turn was truncated or returned no tool call.")

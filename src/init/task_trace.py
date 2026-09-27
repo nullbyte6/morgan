@@ -21,8 +21,99 @@
 import copy
 import hashlib
 import json
+import logging
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+active_model_request = ContextVar("arlo_model_request_trace", default=None)
+
+
+def serialized_metrics(raw):
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+    return {"characters": len(raw.decode("utf-8")), "bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest()}
+
+
+def payload_metrics(value):
+    return serialized_metrics(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+
+
+def settings_metadata(settings):
+    return {key: settings[key] for key in (
+        "max_tokens", "max_completion_tokens", "thinking", "temperature", "top_p", "seed",
+        "openai_reasoning_effort", "parallel_tool_calls") if key in settings
+        and isinstance(settings[key], (str, int, float, bool, type(None)))}
+
+
+async def trace_provider_request(request):
+    correlation = active_model_request.get()
+    if correlation is None or not correlation.get("request_id") or request.url.path.rstrip("/").split("/")[-1] != "completions":
+        return
+    correlation["transport_attempt"] += 1
+    identity = {key: correlation[key] for key in ("request_id", "request_ordinal", "transport_attempt")}
+    trace = correlation["trace"]
+    try:
+        raw = request.content
+        body = json.loads(raw)
+        messages = body.get("messages", [])
+        tools = body.get("tools", [])
+        tool_choice = body.get("tool_choice")
+        if isinstance(tool_choice, dict):
+            name = tool_choice.get("function", {}).get("name")
+            tool_choice = {"type": tool_choice.get("type"),
+                           "function": name if name in correlation["tool_names"] else None}
+        elif tool_choice not in (None, "auto", "none", "required"):
+            tool_choice = None
+        controls = {key: body[key] for key in (
+            "reasoning_effort", "think", "thinking", "temperature", "top_p", "seed",
+            "parallel_tool_calls", "stream") if key in body
+            and isinstance(body[key], (str, int, float, bool, type(None)))}
+        options = body.get("options")
+        if isinstance(options, dict):
+            controls["options"] = {key: options[key] for key in ("num_ctx", "num_predict", "think")
+                                   if key in options and isinstance(options[key], (int, bool, type(None)))}
+        trace("provider_request", **identity, model=body.get("model"),
+              token_limits={key: body[key] for key in ("max_tokens", "max_completion_tokens", "num_predict")
+                            if key in body and isinstance(body[key], (int, type(None)))},
+              controls=controls, tool_choice=tool_choice, wire_payload=serialized_metrics(raw),
+              message_count=len(messages), messages=payload_metrics(messages),
+              tool_count=len(tools), tools=payload_metrics(tools),
+              response_format=payload_metrics(body["response_format"]) if "response_format" in body else None,
+              component_serialization="canonical_json_utf8")
+    except Exception as error:
+        trace("provider_request_measurement_unavailable", **identity, error_type=type(error).__name__)
+
+
+def response_metrics(response, parameters):
+    thinking = [part for part in response.parts if part.part_kind == "thinking"]
+    text = [part for part in response.parts if part.part_kind == "text"]
+    calls = [part for part in response.parts if part.part_kind == "tool-call"]
+    names = {tool.name for tool in [*parameters.function_tools, *parameters.output_tools]}
+    usage = response.usage
+    return {"provider_response_id": response.provider_response_id,
+            "provider_finish_reason": (response.provider_details or {}).get("finish_reason"),
+            "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens,
+            "total_tokens": usage.input_tokens + usage.output_tokens,
+            "usage_source": "pydantic_ai_request_usage; zero_can_mean_unavailable",
+            "total_tokens_source": "input_plus_output",
+            "reasoning_tokens": usage.details.get("reasoning_tokens"),
+            "thinking_part_count": len(thinking),
+            "thinking_characters": sum(len(part.content) for part in thinking),
+            "text_part_count": len(text), "visible_text_characters": sum(len(part.content) for part in text),
+            "tool_call_part_count": len(calls),
+            "tool_call_names": sorted({part.tool_name for part in calls if part.tool_name in names}),
+            "unknown_tool_call_count": sum(part.tool_name not in names for part in calls),
+            "tool_argument_characters": sum(len(part.args_as_json_str()) for part in calls),
+            "recovery_actionable": response.finish_reason != "length" and bool(calls),
+            "length_cause": "unavailable_at_provider_boundary" if response.finish_reason == "length" else None}
+
+
+def measurement_error(trace, event, error, **identity):
+    logging.getLogger("arlo.task_control").warning("Model trace measurement unavailable: %s", type(error).__name__)
+    trace(event, **identity, error_type=type(error).__name__)
 
 
 def _changes(previous, current, path=()):
