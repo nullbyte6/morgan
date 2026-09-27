@@ -30,6 +30,8 @@ class CommandRegistry:
 
     def search(self, query):
         tokens = query.casefold().split()
+        if not tokens:
+            return []
         return [command for command in self.commands
                 if all(token in " ".join((tr(command.label), command.id,
                                            *command.keywords)).casefold()
@@ -115,7 +117,7 @@ class CommandPalette(QFrame):
             elif self.results.currentItem() is None or command.id == selected_id:
                 self.results.setCurrentItem(item)
         self.results.setVisible(self.results.count() > 0)
-        self.empty.setVisible(self.results.count() == 0)
+        self.empty.setVisible(bool(self.search_input.text().strip()) and self.results.count() == 0)
         self._place()
 
     def _move(self, direction):
