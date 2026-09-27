@@ -862,7 +862,8 @@ class Assistant:
         if token is not None:
             token.cancel()
 
-    def run(self):
+    def start_debug_console(self):
+        from src.init.lang import tr
         try:
             self.debug_console = DebugConsole()
             self.debug_console.start()
