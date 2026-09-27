@@ -156,6 +156,7 @@ class TaskProgressPill(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self.raise_()
         self._render()
 
     def eventFilter(self, watched, event):
