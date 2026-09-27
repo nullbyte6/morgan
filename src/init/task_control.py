@@ -113,6 +113,8 @@ class TaskControl(AbstractCapability):
     def get_instructions(self):
         return """You are the only agent. Choose your own strategy, inspection, repairs and next actions.
 TaskControl validates execution and evidence, never strategy or textual progress.
+For greetings, conversation or explanations needing no external work, answer directly in plain text.
+Do not create a task contract or call supervisor tools for those answers.
 Before any tool work, establish the single task contract through task_checkpoint.
 For example task_checkpoint(kind='read_only', phase='inspect', criteria=['Review tool contracts'],
 verification={'Review tool contracts': {'method': 'Inspect contracts and cite findings', 'resources': []}}).
@@ -136,7 +138,10 @@ across compaction. A rejected control result names field, expected, and recovera
 read_code returns structured content, coverage and next_cursor. Use read_code(cursor=next_cursor)
 until exhausted; mode='index' explicitly requests an index, which is not source-body coverage.
 Finish with task_finish after current criteria and effect obligations are verified. For an answer
-needing no external actions use task_finish(direct=True); it cannot bypass an existing task ledger.
+needing no external actions, plain text is accepted without task_finish when no contract exists.
+If an unused read_only contract was created by mistake and direct_answer_allowed is true,
+use task_finish(direct=True, output=...) to deliver the answer without inventing evidence.
+Direct completion cannot bypass observations, resource dependencies or a mutation contract.
 Propose waiting/blocked with task_defer, naming an outstanding criterion/obligation, a concrete
 external dependency, supporting evidence IDs and the change that permits continuation. Repetition,
 failed searches and generic execution errors are not blockers. Continue or repair them yourself.
@@ -531,6 +536,9 @@ and retain its consent checks. cd requests use change_directory and Git requests
     def accept_output(self, *, truncated=False):
         self.check_cancelled()
         self.refresh_resources()
+        if (not truncated and not self.state.output_recovery and self.state.status == Lifecycle.ACTIVE
+                and self.state.kind in {None, "direct"} and self.state.can_finish_direct()):
+            self.state.finish(direct=True)
         if self.state.output_recovery:
             self.stop_output_recovery("Final text cannot satisfy the pending output-recovery control protocol.")
         accepted = self.state.status == Lifecycle.COMPLETE and (

@@ -350,6 +350,13 @@ class TaskState:
         self.notice = "Repair the recorded requirements with control tools, then submit the answer through task_finish(output=...)."
         self.record("output_recovery", recovery=self.output_recovery)
 
+    def can_finish_direct(self):
+        return (self.kind in {None, "direct", "read_only"}
+                and not (self.evidence or self.obligations or self.dependencies or self.inspections
+                         or self.findings or self.restrictions or self.revisions or self.changed_at
+                         or self.role_resources)
+                and all(not (criterion.resources or criterion.evidence) for criterion in self.criteria.values()))
+
     def finish(self, direct=False, output=None):
         if self.status != Lifecycle.ACTIVE:
             return {"accepted": False, "reason": "Only active tasks can propose completion."}
@@ -358,9 +365,10 @@ class TaskState:
                                      "A nonempty complete answer, or a summary with an artifact link",
                                      requirements=self.requirements(), code="output_required")
         if direct and self.kind != "direct":
-            if self.evidence or self.criteria or self.obligations or self.kind:
+            if not self.can_finish_direct():
                 return control_rejection("Direct answers cannot bypass a supervised task.", "direct", False,
                                          requirements=self.requirements(), code="completion_requirements")
+            self.criteria = {}
             self.kind = "direct"
         elif self.kind != "direct" and not self.complete():
             return control_rejection("Satisfy the listed contract requirements before completion.", "completed",
@@ -445,6 +453,7 @@ class TaskState:
                 "sequence": self.sequence, "requests": self.requests, "inspections": self.inspections,
                 "findings": self.findings, "restrictions": self.restrictions,
                 "last_rejection": self.last_rejection, "pending_verification": self.requirements(),
+                "direct_answer_allowed": self.can_finish_direct(),
                 "output_recovery": copy.deepcopy(self.output_recovery), "final_output": self.final_output}
         if include_evidence:
             snapshot["evidence"] = evidence
