@@ -5,7 +5,7 @@ from typing import Callable
 
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    QApplication, QFrame, QLabel, QLayout, QLineEdit, QListWidget, QListWidgetItem,
     QVBoxLayout, QWidget,
 )
 from shiboken6 import isValid
@@ -46,6 +46,7 @@ class CommandPalette(QFrame):
         self.setObjectName("commandPalette")
         self.setFrameShape(QFrame.NoFrame)
         layout = QVBoxLayout(self)
+        layout.setSizeConstraint(QLayout.SetNoConstraint)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         self.search_input = QLineEdit(self)
@@ -73,6 +74,7 @@ class CommandPalette(QFrame):
         self.previous_focus = host.window().focusWidget() or QApplication.focusWidget()
         self.host = host
         self.setParent(host)
+        self.results.setCurrentRow(-1)
         self.search_input.clear()
         self._filter()
         self.show()
@@ -109,7 +111,7 @@ class CommandPalette(QFrame):
             item.setToolTip(item.text())
             if not command.available():
                 item.setFlags(item.flags() & ~Qt.ItemIsEnabled & ~Qt.ItemIsSelectable)
-                item.setToolTip(tr("palette.unavailable"))
+                item.setToolTip(item.text() + "\n" + tr("palette.unavailable"))
             elif self.results.currentItem() is None or command.id == selected_id:
                 self.results.setCurrentItem(item)
         self.results.setVisible(self.results.count() > 0)
@@ -142,8 +144,11 @@ class CommandPalette(QFrame):
         area = self.host.rect().adjusted(12, 12, -12, -12)
         width = max(0, min(560, area.width()))
         row_height = max(32, self.results.fontMetrics().height() + 18)
-        self.results.setMinimumHeight(0)
-        self.results.setMaximumHeight(row_height * min(8, self.results.count()) + 4)
+        margins = self.layout().contentsMargins()
+        overhead = (margins.top() + margins.bottom() + self.layout().spacing()
+                    + self.search_input.sizeHint().height())
+        self.results.setFixedHeight(max(0, min(row_height * min(8, self.results.count()) + 4,
+                                              area.height() - overhead)))
         height = min(max(0, area.height()), self.layout().sizeHint().height())
         self.setGeometry(area.x() + (area.width() - width) // 2,
                          area.y() + max(0, (area.height() - height) // 3), width, height)
@@ -160,11 +165,12 @@ class CommandPalette(QFrame):
         if event.type() == QEvent.WindowDeactivate and watched is self.owner:
             self.dismiss(restore_focus=False)
         elif event.type() == QEvent.MouseButtonPress:
-            if not isinstance(watched, QWidget) or (watched is not self and not self.isAncestorOf(watched)):
+            if not self.rect().contains(self.mapFromGlobal(event.globalPosition().toPoint())):
                 self.dismiss(restore_focus=False)
         elif (event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress)
               and isinstance(watched, QWidget)
               and (watched is self or self.isAncestorOf(watched))
+              and event.modifiers() == Qt.NoModifier
               and event.key() in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape)):
             event.accept()
             if event.type() == QEvent.KeyPress:
