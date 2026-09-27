@@ -989,8 +989,20 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.refresh_resources()
         if self.state.status == Lifecycle.COMPLETE and self.state.final_output is not None:
             raise TaskOutputReady(self.state.final_output)
+        
         progress = self.progress_fingerprint()
-        self._task_stalls = self._task_stalls + 1 if progress == self._task_progress else 0
+        finalization_pending = (
+            self.state.status == Lifecycle.ACTIVE
+            and self.state.kind is not None
+            and not self.state.requirements())
+
+        if finalization_pending:
+            self._task_stalls = 0
+        elif progress == self._task_progress:
+            self._task_stalls += 1
+        else:
+            self._task_stalls = 0
+
         self._task_progress = progress
         if self._task_stalls >= 12:
             self.state.suspend(Lifecycle.LIMIT_REACHED, tr("task_control.stalled_warning"))

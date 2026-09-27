@@ -258,7 +258,6 @@ class ResponseView(QWidget):
         position = scrollbar.value()
         rendered = self._renderer.render(self._source)
         self.document_view.setHtml(
-            '<div style="color:#cad3f5; font-family:sans-serif; '
-            'font-size:14px; line-height:1.45;">' + rendered + "</div>")
+            '<div style="color:#cad3f5; font-size:14px; line-height:1.45;">' + rendered + "</div>")
         scrollbar = self.document_view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum() if follow_tail else position)
