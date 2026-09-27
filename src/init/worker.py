@@ -17,11 +17,9 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import asyncio
-import json
 import logging
 import threading
 from pathlib import Path
-from urllib.request import Request, urlopen
 
 from PySide6.QtCore import *
 
@@ -31,109 +29,10 @@ from src.init.attachments import (DesktopMessage, DesktopVoiceMessage, Attachmen
 from src.init.commands import set_confirmation_handler
 from src.init.config import load_config
 from src.init.core import Assistant
-from src.init.task_state import normalize_task_title
 from src.init.lang import tr
 from src.init.session_log import SessionLog
 from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
-
-
-def select_response_surface(prompt: str, model_name: str, on_title=None) -> str | None:
-    """Let the local LLM choose the output surface before generation."""
-    if not prompt.strip():
-        return None
-
-    schema = {
-        "type": "object",
-        "properties": {
-            "surface": {
-                "type": "string",
-                "enum": ["chat", "response_view"],
-            },
-            "title": {"type": "string"},
-            "task_title": {"type": "string", "pattern": r"^\S+(?:\s+\S+){0,3}$"},
-        },
-        "required": ["surface", "title", "task_title"],
-        "additionalProperties": False,
-    }
-
-    payload = {
-        "model": model_name,
-        "stream": False,
-        "think": False,
-        "format": schema,
-        "options": {
-            "temperature": 0,
-            "num_predict": 96,
-        },
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Choose how a local desktop assistant should display its next answer. "
-                    "Return only the requested JSON. "
-                    
-                    "Follow these rules in strict priority order. "
-                    "First, if the user explicitly specifies where the answer itself must be "
-                    "displayed, obey that requested output surface. An explicit request for a "
-                    "response workspace or separate document-like response must select "
-                    "response_view, regardless of task complexity, tools requested, diagrams, "
-                    "or other intermediate work. An explicit request to keep the answer in the "
-                    "main chat must select chat. "
-                    
-                    "Second, when the user does not explicitly choose an output surface, select "
-                    "response_view for substantial explanations, tutorials, documentation, or "
-                    "multiple code examples that would benefit from a document-like view. "
-                    "Otherwise select chat for ordinary conversation, short answers, and "
-                    "operational commands. "
-                    
-                    "Distinguish the destination of the final answer from tools or intermediate "
-                    "views mentioned in the request. A request to use a tool, create a diagram, "
-                    "inspect files, or perform other work does not override an explicit request "
-                    "about where the final answer must appear. "
-                    
-                    "Interpret the user's meaning in any language rather than matching specific "
-                    "keywords. If there is no explicit surface request and the best surface is "
-                    "unclear, choose chat. "
-                    
-                    "For response_view, provide a short relevant panel title. "
-                    "For every surface, task_title must name the user's objective in at most "
-                    "4 words, in the user's language. Name the action and subject, not current progress. "
-                    "Examples: Audit Arlo Architecture; Fix Workspace Layout. Never use status text "
-                    "such as Working on, Currently checking, Investigating, or Processing. "
-                    "Do not truncate or copy the beginning of the request. "
-                    "Do not answer the user's actual question."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ],
-    }
-
-    request = Request(
-        "http://127.0.0.1:11434/api/chat",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
-    with urlopen(request, timeout=30) as response:
-        result = json.load(response)
-
-    decision = json.loads(result["message"]["content"])
-    surface = decision["surface"]
-    title = str(decision.get("title") or "").strip()[:72]
-    task_title = normalize_task_title(decision.get("task_title"))
-    if on_title is not None and task_title:
-        on_title(task_title)
-
-    logging.getLogger("arlo.response").info(
-        "Surface decision: %s; title=%r", surface, title
-    )
-
-    if surface == "response_view":
-        return title or "Response"
-
-    return None
 
 
 class VoiceInputWorker(QThread):
@@ -310,7 +209,6 @@ class AssistantWorker(QObject):
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
-            response_title = None
             previous = getattr(self.assistant, "_active_task_controller", None)
             task_title = previous.state.title if previous is not None else ""
 
@@ -323,26 +221,19 @@ class AssistantWorker(QObject):
             if task_title:
                 self.task_title.emit(turn_id, task_title)
 
-            try:
-                response_title = select_response_surface(
-                    prompt, self.assistant.MODEL_NAME,
-                    on_title=receive_task_title)
-
-            except Exception:
-                logging.getLogger("arlo.response").exception(
-                    "Unable to select response surface; falling back to chat")
-
-            if cancel_event.is_set():
-                self.finished.emit("")
-                return
-
-            if response_title is not None:
-                from src.init.visuals.response import request_response_workspace
-                result = request_response_workspace(response_title)
-                logging.getLogger("arlo.response").info(
-                    "Response workspace result: %s", result)
-
-            speech_enabled = response_title is None
+            def receive_surface(surface, title):
+                if surface != "response_view":
+                    return True
+                try:
+                    from src.init.visuals.response import request_response_workspace
+                    result = request_response_workspace(title or "Response")
+                    logging.getLogger("arlo.response").info(
+                        "Response workspace result: %s", result)
+                    return False
+                except Exception:
+                    logging.getLogger("arlo.response").exception(
+                        "Unable to open response workspace; falling back to chat")
+                    return True
 
             def speaking_changed(speaking):
                 if speaking:
@@ -365,8 +256,9 @@ class AssistantWorker(QObject):
                 session=self.session,
                 audio_input=(message.audio_wav
                              if voice_input and not prompt else None),
-                speech_enabled=speech_enabled,
-                task_title=task_title)
+                task_title=task_title,
+                on_surface=receive_surface,
+                on_task_title=receive_task_title)
 
             self.history[:] = history
             if not self.cancel_event.is_set():

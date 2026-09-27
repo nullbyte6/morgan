@@ -442,7 +442,8 @@ class Assistant:
             attachments=None,
             session=None,
             audio_input=None, *,
-            speech_enabled: bool = True, task_title: str = "", on_activity=None):
+            speech_enabled: bool = True, task_title: str = "", on_activity=None,
+            on_surface=None, on_task_title=None):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
@@ -526,6 +527,7 @@ class Assistant:
         self.task_state = controller.state
         controller.on_action = on_phase
         controller.on_activity = on_activity
+        controller.on_task_title = on_task_title
         controller.publish_activity()
 
         async def generate():
@@ -550,6 +552,13 @@ class Assistant:
                 if speech_enabled:
                     for phrase in buffer.feed(chunk):
                         self.voice.enqueue(phrase)
+
+            def deliver_output(output):
+                nonlocal speech_enabled
+                if on_surface is not None:
+                    allow_speech = on_surface(controller.output_surface, controller.output_title)
+                    speech_enabled = speech_enabled and allow_speech
+                emit_visible(output)
 
             def emit_step(name, call_id, result, failed=False):
                 if on_phase is None:
@@ -625,7 +634,7 @@ class Assistant:
                     stream_messages = list(controller.messages)
                     if controller.accept_output():
                         output = str(ready)
-                        emit_visible(output)
+                        deliver_output(output)
                         conversation_messages = [*stream_messages, ModelResponse(parts=[TextPart(output)])]
                         break
                     conversation_messages = stream_messages
@@ -667,7 +676,7 @@ class Assistant:
                 stream_messages = conversation_messages
                 if text_call is None:
                     if controller.accept_output(truncated=result.response.finish_reason == "length"):
-                        emit_visible(visible_output)
+                        deliver_output(visible_output)
                         break
                     current_prompt = None
                     continue

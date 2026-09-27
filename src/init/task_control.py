@@ -36,7 +36,7 @@ from pydantic_ai.toolsets import FunctionToolset
 
 from .task_effects import TOOL_SPECS, content_revision, resources_for
 from .task_outcomes import ActionResult, Outcome, normalize_result
-from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint
+from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint, normalize_task_title
 from .task_trace import (TaskJournal, active_model_request, measurement_error, response_metrics,
                          serialized_metrics, settings_metadata)
 from .task_activity import TaskActivity, tool_activity
@@ -82,6 +82,9 @@ class TaskControl(AbstractCapability):
         self.receipts = {}
         self.on_action = None
         self.on_activity = None
+        self.on_task_title = None
+        self.output_surface = "chat"
+        self.output_title = ""
         self.toolset = FunctionToolset()
         self.control_tools = {function.__name__: function for function in (
             self.task_checkpoint, self.task_finish, self.task_defer, self.task_request_input, self.task_resolve_dependency,
@@ -117,7 +120,7 @@ class TaskControl(AbstractCapability):
     def get_instructions(self):
         return """You are the only agent. Choose your own strategy, inspection, repairs and next actions.
 TaskControl validates execution and evidence, never strategy or textual progress.
-For greetings, conversation or explanations needing no external work, answer directly in plain text.
+For greetings, conversation or short explanations needing no external work, answer directly in plain text.
 Do not create a task contract or call supervisor tools for those answers.
 Before any tool work, establish the single task contract through task_checkpoint.
 For example task_checkpoint(kind='read_only', phase='inspect', criteria=['Review tool contracts'],
@@ -141,11 +144,21 @@ Record findings=[{'finding': 'Observed fact', 'evidence': [IDs]}] to preserve se
 across compaction. A rejected control result names field, expected, and recoverable requirements.
 read_code returns structured content, coverage and next_cursor. Use read_code(cursor=next_cursor)
 until exhausted; mode='index' explicitly requests an index, which is not source-body coverage.
-Finish with task_finish after current criteria and effect obligations are verified. For an answer
+Finish with task_finish(output=...) after current criteria and effect obligations are verified.
+Include the complete final answer in output to deliver it without another model request. For an answer
 needing no external actions, plain text is accepted without task_finish when no contract exists.
 If an unused read_only contract was created by mistake and direct_answer_allowed is true,
 use task_finish(direct=True, output=...) to deliver the answer without inventing evidence.
 Direct completion cannot bypass observations, resource dependencies or a mutation contract.
+Choose the final desktop output surface within this turn, without a separate routing request.
+Obey explicit requests to answer in the main chat or a separate response workspace, in any language.
+Otherwise use surface='response_view' for substantial explanations, tutorials, documentation or
+multiple code examples, and surface='chat' for ordinary conversation and operational commands.
+Tools, diagrams and intermediate views do not override the explicitly requested final destination.
+For a response workspace use task_finish(output=..., surface='response_view', title='Short panel title');
+use direct=True when no external work is needed. Plain text defaults to the main chat.
+Provide task_title naming the user's objective in at most four words, in the user's language,
+through task_checkpoint or task_finish. Describe the action and subject, never progress.
 Propose waiting/blocked with task_defer, naming an outstanding criterion/obligation, a concrete
 external dependency, supporting evidence IDs and the change that permits continuation. Repetition,
 failed searches and generic execution errors are not blockers. Continue or repair them yourself.
@@ -169,28 +182,47 @@ and retain its consent checks. cd requests use change_directory and Git requests
                         decisions: list[str] | None = None, strategy: str = "",
                         resolutions: dict[str, EvidenceFinding] | None = None, reopen: list[str] | None = None,
                         kind: Literal["read_only", "mutation"] | None = None,
-                        resources: list[str] | None = None, findings: list[EvidenceFinding] | None = None) -> dict:
+                        resources: list[str] | None = None, findings: list[EvidenceFinding] | None = None,
+                        task_title: str = "") -> dict:
         """Apply an atomic task contract. Verification entries contain method/resources;
         resolutions contain finding/evidence. phase is the next action's role, not lifecycle.
         """
         self.refresh_resources()
         values = lambda entries: {key: value.model_dump() if isinstance(value, BaseModel) else value
                                   for key, value in (entries or {}).items()}
-        return self.state.checkpoint(phase, criteria, values(verification), completed or {},
+        result = self.state.checkpoint(phase, criteria, values(verification), completed or {},
                                      decisions or [], strategy, values(resolutions), reopen or [],
                                      kind, resources or [], [value.model_dump() if isinstance(value, BaseModel) else value
                                                             for value in findings or []])
+        if result["accepted"]:
+            self.set_task_title(task_title)
+        return result
+
+    def set_task_title(self, title):
+        title = normalize_task_title(title)
+        if title and not self.state.title:
+            self.state.title = title
+            if self.on_task_title is not None:
+                self.on_task_title(title)
 
     def task_finish(self, direct: bool = False, completed: dict[str, list[str]] | None = None,
-                    output: str | None = None) -> dict:
-        """Propose verified completion. During output recovery include the complete answer in output."""
+                    output: str | None = None, surface: Literal["chat", "response_view"] | None = None,
+                    title: str = "", task_title: str = "") -> dict:
+        """Propose verified completion with the complete answer in output for immediate delivery."""
         self.refresh_resources()
         if completed:
             result = self.state.checkpoint(self.state.role, [], {}, completed, [], "", {}, [],
                                            self.state.kind, self.state.role_resources)
             if not result["accepted"]:
                 return result
-        return self.state.finish(direct, output)
+        result = self.state.finish(direct, output)
+        if result["accepted"]:
+            self.set_task_title(task_title)
+            if surface is not None:
+                self.output_surface = surface
+            if title.strip():
+                self.output_title = title.strip()[:72]
+        return result
 
     def task_defer(self, status: Literal["waiting", "blocked"], obligation: str,
                    dependency: str, evidence: list[str], required_change: str) -> dict:
