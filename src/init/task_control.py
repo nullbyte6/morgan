@@ -639,9 +639,11 @@ and retain its consent checks. cd requests use change_directory and Git requests
     def accept_output(self, *, truncated=False):
         self.check_cancelled()
         self.refresh_resources()
-        if (not truncated and not self.state.output_recovery and self.state.status == Lifecycle.ACTIVE
-                and self.state.kind in {None, "direct"} and self.state.can_finish_direct()):
-            self.state.finish(direct=True)
+        if not truncated and not self.state.output_recovery and self.state.status == Lifecycle.ACTIVE:
+            if self.state.kind in {None, "direct"} and self.state.can_finish_direct():
+                self.state.finish(direct=True)
+            elif self.state.complete():
+                self.state.finish()
         if self.state.output_recovery:
             self.stop_output_recovery("Final text cannot satisfy the pending output-recovery control protocol.")
         accepted = self.state.status == Lifecycle.COMPLETE and (
