@@ -274,8 +274,12 @@ def read_code(path: str = "", start_line: int = 1, end_line: int = 0,
     try:
         continuation = code_cursor(cursor) if cursor else None
         if continuation:
-            if path or start_line != 1 or end_line or character_offset or mode != "content":
-                raise ValueError("Use cursor alone, without path, range, offset or mode arguments")
+            if ((path and _path(path) != _path(continuation["path"]))
+                    or start_line not in (1, continuation["start"])
+                    or end_line not in (0, continuation["end"])
+                    or character_offset not in (0, continuation["offset"])
+                    or mode not in ("content", continuation["mode"])):
+                raise ValueError("Cursor arguments conflict with the original path, range, offset or mode")
             path, start_line, end_line, character_offset, mode = (continuation[key]
                 for key in ("path", "start", "end", "offset", "mode"))
         if not path or start_line < 1 or end_line < 0 or character_offset < 0:
