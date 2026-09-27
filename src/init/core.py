@@ -195,6 +195,7 @@ class Assistant:
             "thinking": False,
             "openai_reasoning_effort": "none",
             "temperature": 0.2,
+            "max_tokens": 32768,
         }
 
         http_client = httpx2.AsyncClient(
@@ -204,9 +205,7 @@ class Assistant:
         self.model = OllamaModel(
             self.MODEL_NAME,
             provider=self.provider,
-            profile={"openai_chat_supports_multiple_system_messages": False,
-                     "openai_chat_supports_max_completion_tokens": False,
-                     "openai_supports_tool_choice_required": False},
+            profile={"openai_chat_supports_multiple_system_messages": False},
             settings=self.model_settings)
 
         self.agent = Agent(
@@ -242,9 +241,7 @@ class Assistant:
 
                 self.model = OllamaModel(
                     self.MODEL_NAME, provider=self.provider,
-                    profile={"openai_chat_supports_multiple_system_messages": False,
-                             "openai_chat_supports_max_completion_tokens": False,
-                             "openai_supports_tool_choice_required": False},
+                    profile={"openai_chat_supports_multiple_system_messages": False},
                     settings=self.model_settings)
                 self.agent = Agent(
                     model=self.model,
@@ -497,9 +494,7 @@ class Assistant:
                 self.audio_model_name = audio_model_name
                 self.audio_model = OllamaModel(
                     self.audio_model_name, provider=self.provider,
-                    profile={"openai_chat_supports_multiple_system_messages": False,
-                             "openai_chat_supports_max_completion_tokens": False,
-                             "openai_supports_tool_choice_required": False},
+                    profile={"openai_chat_supports_multiple_system_messages": False},
                     settings={"thinking": False, "openai_reasoning_effort": "none"})
             turn_model = self.audio_model
             turn_model_settings["thinking"] = False
@@ -526,14 +521,10 @@ class Assistant:
         self._active_task_controller = controller
         from src.init.config import load_dev_file
         request_config = load_dev_file()
-        from src.init.attachments import ollama_capabilities
-        _, provider_context = ollama_capabilities((turn_model or self.model).model_name)
         controller.request_configuration = {
             "operational_context_tokens": request_config["context_length"],
-            "provider_context_tokens": provider_context,
-            "effective_context_tokens": min(request_config["context_length"], provider_context),
             "configured_model": request_config["model_name"],
-            "source": "minimum_of_dev_configuration_and_ollama_show_or_ps; provider_fallback_4096"}
+            "source": "dev/core.json; configured_only_not_runner_verified"}
         if not controller.state.title:
             from src.init.task_state import normalize_task_title
             controller.state.title = normalize_task_title(task_title)
