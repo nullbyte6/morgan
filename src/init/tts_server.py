@@ -21,10 +21,12 @@ from __future__ import annotations
 from src.init.lang import tr
 from .identity import get_assistant_identifier
 
+import base64
 import json
 import logging
 import socket
 import threading
+import time
 
 import numpy as np
 
@@ -51,6 +53,8 @@ class TTSServer:
         self._client = None
         self._client_lock = threading.Lock()
         self._send_lock = threading.Lock()
+        self._playback_reference = False
+        self._last_audio_update = 0.0
         logger.info(tr('tts_server.loading_cosyvoice'))
 
         self.voice = VoiceService(
@@ -88,17 +92,29 @@ class TTSServer:
         with self._client_lock:
             if self._client is None:
                 return
+            reference = self._playback_reference
+
+        now = time.monotonic()
+        if not reference and now - self._last_audio_update < 0.10:
+            return
+        self._last_audio_update = now
 
         samples = np.asarray(samples, dtype=np.float32).reshape(-1)
         if samples.size == 0:
             return
 
-        self._send({
+        message = {
             "type": "audio",
             "turn_id": turn_id,
-            "samples": samples.tolist(),
             "sample_rate": sample_rate,
-        })
+        }
+        if reference:
+            pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2").tobytes()
+            message["pcm"] = base64.b64encode(pcm).decode("ascii")
+        else:
+            indices = np.linspace(0, samples.size - 1, min(128, samples.size), dtype=int)
+            message["samples"] = samples[indices].tolist()
+        self._send(message)
 
     def _wait_for_audio(self, client, turn_id, batch) -> None:
         try:
@@ -116,6 +132,7 @@ class TTSServer:
     def _handle_client(self, client: socket.socket) -> None:
         with self._client_lock:
             self._client = client
+            self._playback_reference = False
 
         logger.info(tr('tts_server.assistant_connected'))
 
@@ -131,6 +148,10 @@ class TTSServer:
                         self._send({"type": "hello", "interruptible": True,
                                     "voice_selection": True,
                                     "playback_reference": True}, client)
+
+                    elif kind == "playback_reference":
+                        with self._client_lock:
+                            self._playback_reference = bool(message.get("enabled"))
 
                     elif kind == "enqueue":
                         text = message.get("text", "")

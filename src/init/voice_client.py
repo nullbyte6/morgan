@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import base64
 import json
 import socket
 import threading
@@ -105,9 +106,11 @@ class VoiceClient:
                     callback = self.audio_callback
                     if callback is not None:
                         try:
-                            samples = np.asarray(
-                                message["samples"],
-                                dtype=np.float32)
+                            if "pcm" in message:
+                                samples = np.frombuffer(base64.b64decode(message["pcm"]),
+                                                        dtype="<i2").astype(np.float32) / 32768.0
+                            else:
+                                samples = np.asarray(message["samples"], dtype=np.float32)
                             callback(
                                 samples,
                                 message["sample_rate"])
@@ -155,6 +158,9 @@ class VoiceClient:
             self._muted = bool(muted)
             if self._muted:
                 self.stop()
+
+    def set_playback_reference(self, enabled: bool) -> None:
+        self._send({"type": "playback_reference", "enabled": bool(enabled)})
 
     def begin_turn(self, language_context="") -> None:
         with self._playback_lock:

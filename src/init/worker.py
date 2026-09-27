@@ -19,6 +19,7 @@
 import asyncio
 import logging
 import threading
+import time
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -113,6 +114,9 @@ class VoiceInputWorker(QThread):
     def report_audio(self, pcm_data, sample_rate):
         import numpy as np
 
+        if (self.waiting_response.is_set() and self.capture is not None
+                and not self.capture.started):
+            return
         samples = np.frombuffer(pcm_data, dtype="<i2").astype(
             np.float32) / 32768.0
         self.levels.emit(spectrum_levels(samples, sample_rate).tolist())
@@ -154,6 +158,7 @@ class AssistantWorker(QObject):
         self.cancel_event = threading.Event()
         self.command_reply = False
         self.live_capture = None
+        self._last_audio_update = 0.0
         self.event_loop = None
 
     @Slot()
@@ -332,6 +337,10 @@ class AssistantWorker(QObject):
             capture = self.live_capture
             if capture is not None:
                 capture.playback(samples, sample_rate)
+            now = time.monotonic()
+            if now - self._last_audio_update < 0.10:
+                return
+            self._last_audio_update = now
             self.audio.emit(turn_id, spectrum_levels(samples,
                                                      sample_rate).tolist())
 

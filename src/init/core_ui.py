@@ -1331,6 +1331,12 @@ class AssistantWindow(DesktopWindow):
             self.status.setText(tr("voice.restart"))
             self.status.show()
             return
+        try:
+            self.worker.assistant.voice.set_playback_reference(True)
+        except RuntimeError as error:
+            self.status.setText(str(error))
+            self.status.show()
+            return
         self.voice_thread = VoiceInputWorker(self, automatic=True, live=True)
         self.worker.live_capture = self.voice_thread
         self.voice_thread.levels.connect(self.on_voice_levels)
@@ -1408,6 +1414,10 @@ class AssistantWindow(DesktopWindow):
             return
         self.voice_thread = None
         self.worker.live_capture = None
+        try:
+            self.worker.assistant.voice.set_playback_reference(False)
+        except RuntimeError:
+            logging.getLogger("assistant.voice").exception("Unable to stop playback reference")
         self.recording = False
         self.set_orbs_listening(False)
         self.input_meter.hide()
