@@ -59,7 +59,7 @@ class CommandPalette(QFrame):
         self.results.setTextElideMode(Qt.ElideRight)
         self.empty = QLabel(self)
         self.empty.setObjectName("commandPaletteEmpty")
-        self.empty.setAlignment(Qt.AlignCenter)
+        self.empty.setAlignment(Qt.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         layout.addWidget(self.search_input)
         layout.addWidget(self.results)
         layout.addWidget(self.empty)
