@@ -191,9 +191,6 @@ class MarkdownSpeechFilter:
         return ". ".join(cells) + ".\n" if cells else ""
 
 class SpeechBuffer:
-    FIRST_PHRASE_MIN = 24
-    FIRST_PHRASE_LIMIT = 40
-
     def __init__(self):
         self.buffer = ""
         self.first = True
@@ -203,15 +200,11 @@ class SpeechBuffer:
         self.buffer += self.markdown.feed(text)
         phrases = []
         while self.buffer:
-            pattern = (r'(?<=[,.!?;:])["»”’]?\s+' if self.first
+            pattern = (r'(?<=[.!?])["»”’]?\s+' if self.first
                        else r'(?<=[.!?;:])["»”’]?\s+')
             match = next((m for m in re.finditer(pattern, self.buffer)
                           if m.end() >= 20), None)
             end = match.end() if match else -1
-            if (end == -1 and self.first
-                    and len(self.buffer) >= self.FIRST_PHRASE_LIMIT):
-                end = self.buffer.rfind(
-                    " ", self.FIRST_PHRASE_MIN, self.FIRST_PHRASE_LIMIT)
             if end <= 0:
                 break
             phrase = self.buffer[:end].strip()
