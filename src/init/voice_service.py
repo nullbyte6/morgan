@@ -315,7 +315,6 @@ class VoiceService:
 
     def _play_loop(self) -> None:
         frame_size = max(1, int(self.sample_rate * 0.04))
-        last_ui_update = 0.0
         stream = None
         while True:
             batch, samples, timeline, sample_offset = self._audio_queue.get()
@@ -337,11 +336,8 @@ class VoiceService:
                             batch, timeline.text_at(sample_offset + start))
                     frame = samples[start:start + frame_size]
                     stream.write(frame)
-                    now = time.monotonic()
-                    if (not batch.cancelled.is_set() and self.audio_callback is not None
-                            and now - last_ui_update >= 0.10):
+                    if not batch.cancelled.is_set() and self.audio_callback is not None:
                         self.audio_callback(frame, self.sample_rate, batch.turn_id)
-                        last_ui_update = now
                
                 if batch.cancelled.is_set():
                     stream.abort()

@@ -93,16 +93,10 @@ class TTSServer:
         if samples.size == 0:
             return
 
-        indices = np.linspace(
-            0,
-            samples.size - 1,
-            min(128, samples.size),
-            dtype=int)
-
         self._send({
             "type": "audio",
             "turn_id": turn_id,
-            "samples": samples[indices].tolist(),
+            "samples": samples.tolist(),
             "sample_rate": sample_rate,
         })
 
@@ -135,7 +129,8 @@ class TTSServer:
                     if kind == "hello":
                         logger.info(tr('tts_server.voice_client_ready'))
                         self._send({"type": "hello", "interruptible": True,
-                                    "voice_selection": True}, client)
+                                    "voice_selection": True,
+                                    "playback_reference": True}, client)
 
                     elif kind == "enqueue":
                         text = message.get("text", "")

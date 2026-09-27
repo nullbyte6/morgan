@@ -923,8 +923,9 @@ class AssistantWindow(DesktopWindow):
     def update_send_button(self):
         self.has_text = bool(self.input.toPlainText().strip())
         voice_active = self.voice_thread is not None
+        live_active = voice_active and self.voice_thread.live
         stopping_available = self.busy and self.speaking and not self.stopping
-        self.send.setText("" if stopping_available or self.recording else
+        self.send.setText("" if stopping_available or self.recording or live_active else
                           "" if self.has_text else "")
 
         font = self.send.font()
@@ -932,7 +933,7 @@ class AssistantWindow(DesktopWindow):
         self.send.setFont(font)
 
         self.send.setEnabled(
-            self.ready and (self.recording or stopping_available or (
+            self.ready and (live_active or self.recording or stopping_available or (
                     not voice_active and not self.busy and
                     self.submitting is None and self.attachment_tray.can_send)))
         editable = self.ready and self.submitting is None and not voice_active
@@ -941,7 +942,7 @@ class AssistantWindow(DesktopWindow):
         self.input.setEnabled(editable)
         self.attach.setToolTip(tr("ui.attach_files"))
         self.attach.setAccessibleName(tr("ui.attach_files"))
-        key = ("ui.stop" if stopping_available or self.recording else
+        key = ("ui.stop" if stopping_available or self.recording or live_active else
                "ui.send" if self.has_text else "voice.record")
         label = tr(key)
         self.send.setAccessibleName(label)
@@ -1197,13 +1198,15 @@ class AssistantWindow(DesktopWindow):
         self.submitting = None
         self.busy = False
         self.current_reply = None
+        if self.voice_thread is not None and self.voice_thread.live:
+            self.voice_thread.stop_event.set()
         self.update_send_button()
         QMessageBox.warning(self, tr("ui.attach_files"), error)
 
     @Slot()
     def on_mascot_record(self):
         """Start or stop microphone recording from compact mode."""
-        if self.recording:
+        if self.recording or self.voice_thread is not None:
             self.on_send_clicked()
             return
 
@@ -1291,7 +1294,16 @@ class AssistantWindow(DesktopWindow):
 
     @Slot()
     def on_send_clicked(self):
-        if self.recording:
+        if self.voice_thread is not None and self.voice_thread.live:
+            self.voice_thread.stop_event.set()
+            if isinstance(self.pending_prompt, DesktopVoiceMessage):
+                self.pending_prompt = None
+            if self.busy and not self.stopping:
+                self.stop_response()
+            self.recording = False
+            self.set_orbs_listening(False)
+            self.update_send_button()
+        elif self.recording:
             self.voice_thread.stop_event.set()
             self.recording = False
             self.update_send_button()
@@ -1310,11 +1322,16 @@ class AssistantWindow(DesktopWindow):
         if (not self.ready or self.busy or self.submitting is not None or
                 self.voice_thread is not None):
             return
-        self.voice_thread = VoiceInputWorker(self, automatic=automatic)
-        self.voice_thread.levels.connect(self.input_meter.set_levels)
-        self.voice_thread.levels.connect(self.mascot.set_levels)
-        self.voice_thread.levels.connect(self.orb.set_levels)
+        if not self.worker.assistant.voice.supports_playback_reference:
+            self.status.setText(tr("voice.restart"))
+            self.status.show()
+            return
+        self.voice_thread = VoiceInputWorker(self, automatic=True, live=True)
+        self.worker.live_capture = self.voice_thread
+        self.voice_thread.levels.connect(self.on_voice_levels)
         self.voice_thread.processing.connect(self.on_voice_processing)
+        self.voice_thread.speech_started.connect(self.on_voice_started)
+        self.voice_thread.utterance.connect(self.on_voice_utterance)
         self.voice_thread.finished.connect(self.on_voice_finished)
         self.recording = True
         self.set_orbs_visual_state(Orb.State.WRITING)
@@ -1325,6 +1342,49 @@ class AssistantWindow(DesktopWindow):
         self.set_orbs_thinking(False)
         self.update_send_button()
         self.voice_thread.start()
+
+    @Slot(object)
+    def on_voice_levels(self, levels):
+        if not self.busy or self.stopping:
+            self.input_meter.set_levels(levels)
+            self.mascot.set_levels(levels)
+            self.orb.set_levels(levels)
+
+    @Slot()
+    def on_voice_started(self):
+        if self.voice_thread is None or self.voice_thread.stop_event.is_set():
+            return
+        if self.busy and not self.stopping:
+            self.stop_response()
+        self.recording = True
+        self.set_orbs_listening(True)
+        self.set_orbs_visual_state(Orb.State.WRITING)
+        self.input.hide()
+        self.input_meter.show()
+
+    @Slot(object)
+    def on_voice_utterance(self, message):
+        if (self.quitting or self.voice_thread is None or
+                self.voice_thread.stop_event.is_set()):
+            return
+        if self.busy:
+            self.pending_prompt = message
+            if not self.stopping:
+                self.stop_response()
+        else:
+            self.start_prompt(message)
+
+    def resume_live_listening(self):
+        if (self.voice_thread is None or not self.voice_thread.live or
+                self.voice_thread.stop_event.is_set() or self.busy or self.quitting):
+            return
+        self.voice_thread.waiting_response.clear()
+        self.recording = True
+        self.set_orbs_visual_state(Orb.State.WRITING)
+        self.set_orbs_listening(True)
+        self.input.hide()
+        self.input_meter.show()
+        self.update_send_button()
 
     @Slot()
     def on_voice_processing(self):
@@ -1339,7 +1399,10 @@ class AssistantWindow(DesktopWindow):
     @Slot()
     def on_voice_finished(self):
         worker = self.voice_thread
+        if worker is None:
+            return
         self.voice_thread = None
+        self.worker.live_capture = None
         self.recording = False
         self.set_orbs_listening(False)
         self.input_meter.hide()
@@ -1354,7 +1417,7 @@ class AssistantWindow(DesktopWindow):
         if worker.error:
             self.status.setText(worker.error)
             self.status.show()
-        elif worker.audio_wav:
+        elif worker.audio_wav and not worker.live:
             self.start_prompt(DesktopVoiceMessage(worker.audio_wav,
                                                   worker.transcript))
 
@@ -1543,6 +1606,7 @@ class AssistantWindow(DesktopWindow):
             QTimer.singleShot(0, self.start_recording)
         else:
             self.resume_pending_prompt()
+            self.resume_live_listening()
         if self.quitting:
             QTimer.singleShot(0, self.close)
 
@@ -1556,6 +1620,8 @@ class AssistantWindow(DesktopWindow):
 
     @Slot(str)
     def on_error(self, error):
+        if self.voice_thread is not None and self.voice_thread.live:
+            self.voice_thread.stop_event.set()
         if self.task_stop_requested:
             self.cancel_current_task()
         if not self.ready:

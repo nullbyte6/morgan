@@ -19,6 +19,7 @@
 import asyncio
 import logging
 import threading
+from contextlib import nullcontext
 from pathlib import Path
 
 from PySide6.QtCore import *
@@ -38,10 +39,15 @@ from src.init.utils import spectrum_levels
 class VoiceInputWorker(QThread):
     levels = Signal(object)
     processing = Signal()
+    speech_started = Signal()
+    utterance = Signal(object)
 
-    def __init__(self, parent=None, *, automatic=False):
+    def __init__(self, parent=None, *, automatic=False, live=False):
         super().__init__(parent)
         self.automatic = automatic
+        self.live = live
+        self.capture = None
+        self.waiting_response = threading.Event()
         self.stop_event = threading.Event()
         self.audio_wav = b""
         self.transcript = ""
@@ -54,6 +60,9 @@ class VoiceInputWorker(QThread):
             with desktop_audio(stop_event=self.stop_event, tail=0):
                 if self.isInterruptionRequested():
                     return
+                if self.live:
+                    self.run_live()
+                    return
                 recording = record_voice(
                     on_audio=self.report_audio, stop_event=self.stop_event,
                     stop_on_silence=self.automatic)
@@ -65,6 +74,41 @@ class VoiceInputWorker(QThread):
             self.audio_wav = recording_to_wav(*recording)
         except Exception as error:
             self.error = str(error)
+
+    def run_live(self):
+        import sounddevice as sound
+        from src.init.voice import LiveVoiceCapture, recording_to_wav
+
+        device = sound.query_devices(kind="input")
+        sample_rate = int(device.get("default_samplerate") or 16000)
+        self.capture = LiveVoiceCapture(sample_rate)
+        with sound.RawInputStream(samplerate=sample_rate,
+                                  blocksize=max(1, int(sample_rate * 0.05)),
+                                  device=device["index"], channels=1,
+                                  dtype="int16") as stream:
+            while not self.stop_event.is_set() and not self.isInterruptionRequested():
+                data, overflow = stream.read(max(1, int(sample_rate * 0.05)))
+                if overflow:
+                    raise RuntimeError("Microphone overflow; restart voice conversation")
+                pcm = bytes(data)
+                if self.waiting_response.is_set():
+                    self.capture.idle = 0.0
+                recording = self.capture.feed(pcm)
+                self.report_audio(pcm, sample_rate)
+                if self.capture.event == "timeout":
+                    return
+                if self.capture.event == "started":
+                    self.speech_started.emit()
+                if recording is not None:
+                    self.waiting_response.set()
+                    self.processing.emit()
+                    self.utterance.emit(DesktopVoiceMessage(
+                        recording_to_wav(recording, sample_rate), live=True))
+
+    def playback(self, samples, sample_rate):
+        capture = self.capture
+        if capture is not None:
+            capture.playback(samples, sample_rate)
 
     def report_audio(self, pcm_data, sample_rate):
         import numpy as np
@@ -109,6 +153,7 @@ class AssistantWorker(QObject):
         self._pending_confirmation = None
         self.cancel_event = threading.Event()
         self.command_reply = False
+        self.live_capture = None
         self.event_loop = None
 
     @Slot()
@@ -154,7 +199,10 @@ class AssistantWorker(QObject):
     @Slot(int, object)
     def ask(self, turn_id, message):
         try:
-            with desktop_audio(stop_event=self.cancel_event) as audio_lease:
+            live = (isinstance(message, DesktopVoiceMessage) and message.live
+                    and self.live_capture is not None)
+            lease = nullcontext() if live else desktop_audio(stop_event=self.cancel_event)
+            with lease as audio_lease:
                 self._ask(turn_id, message, audio_lease)
         except Exception as error:
             self.rejected.emit(turn_id, str(error))
@@ -229,7 +277,7 @@ class AssistantWorker(QObject):
                     return True
 
             def speaking_changed(speaking):
-                if speaking:
+                if speaking and audio_lease is not None:
                     audio_lease.yield_to_wake_listener()
                 self.speaking.emit(turn_id, speaking)
 
@@ -253,7 +301,7 @@ class AssistantWorker(QObject):
                 on_task_title=receive_task_title)
 
             self.history[:] = history
-            if not self.cancel_event.is_set():
+            if not self.cancel_event.is_set() and audio_lease is not None:
                 audio_lease.reclaim()
 
             if reply:
@@ -281,6 +329,9 @@ class AssistantWorker(QObject):
 
     def report_audio(self, turn_id, samples, sample_rate):
         if not self.cancel_event.is_set():
+            capture = self.live_capture
+            if capture is not None:
+                capture.playback(samples, sample_rate)
             self.audio.emit(turn_id, spectrum_levels(samples,
                                                      sample_rate).tolist())
 

@@ -96,6 +96,7 @@ class DesktopMessage:
 class DesktopVoiceMessage:
     audio_wav: bytes
     transcript: str = ""
+    live: bool = False
 
     @property
     def text(self):

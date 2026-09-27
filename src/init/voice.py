@@ -20,6 +20,8 @@ import io
 import json
 import os
 import sys
+import threading
+import time
 import wave
 from array import array
 from collections import deque
@@ -36,6 +38,103 @@ VOICE_START_TIMEOUT_SECONDS = 10
 VOICE_END_SILENCE_SECONDS = 1.2
 VOICE_SILENCE_THRESHOLD = 400
 _VOICE_MODEL = None
+
+
+class LiveVoiceCapture:
+    def __init__(self, sample_rate, *, silence_seconds=0.6, idle_seconds=30):
+        import numpy as np
+        from scipy.signal import correlate, resample_poly
+
+        self.correlate = correlate
+        self.resample = resample_poly
+        self.sample_rate = sample_rate
+        self.silence_seconds = silence_seconds
+        self.idle_seconds = idle_seconds
+        self.reference = np.empty(0, dtype=np.float32)
+        self.reference_time = 0.0
+        self.reference_lock = threading.Lock()
+        self.pre_roll = deque(maxlen=4)
+        self.frames = []
+        self.started = False
+        self.speech_seconds = 0.0
+        self.silent_seconds = 0.0
+        self.idle = 0.0
+        self.event = None
+
+    def playback(self, samples, sample_rate):
+        import numpy as np
+
+        samples = np.asarray(samples, dtype=np.float32).reshape(-1)
+        if sample_rate != self.sample_rate:
+            divisor = gcd(sample_rate, self.sample_rate)
+            samples = self.resample(samples, self.sample_rate // divisor,
+                                    sample_rate // divisor)
+        with self.reference_lock:
+            now = time.monotonic()
+            if now - self.reference_time > 0.8:
+                self.reference = self.reference[:0]
+            self.reference = np.concatenate((self.reference, samples))[
+                -int(self.sample_rate * 0.8):]
+            self.reference_time = now
+
+    def suppress_echo(self, samples):
+        import numpy as np
+
+        with self.reference_lock:
+            recent = time.monotonic() - self.reference_time < 0.8
+            reference = self.reference.copy() if recent else self.reference[:0]
+        if len(reference) < len(samples):
+            return samples, recent
+        probe = samples.astype(np.float64)
+        source = reference.astype(np.float64)
+        correlation = self.correlate(source, probe, mode="valid", method="fft")
+        energy = np.concatenate(([0.0], np.cumsum(source * source)))
+        windows = energy[len(probe):] - energy[:-len(probe)]
+        scores = np.abs(correlation) / np.sqrt(
+            np.maximum(windows * np.dot(probe, probe), 1e-12))
+        offset = int(np.argmax(scores))
+        if scores[offset] < 0.35:
+            return samples, recent
+        echo = reference[offset:offset + len(samples)]
+        if len(echo) != len(samples):
+            return samples, recent
+        gain = np.clip(np.dot(samples, echo) / max(np.dot(echo, echo), 1e-9), -3, 3)
+        return samples - gain * echo, recent
+
+    def feed(self, pcm_data):
+        import numpy as np
+
+        self.event = None
+        samples = np.frombuffer(pcm_data, dtype="<i2").astype(np.float32) / 32768.0
+        samples, playback = self.suppress_echo(samples)
+        pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2").tobytes()
+        duration = len(samples) / self.sample_rate
+        speech = pcm_rms(pcm) >= VOICE_SILENCE_THRESHOLD
+        if not self.frames:
+            self.idle = 0.0 if playback else self.idle + duration
+            if not speech:
+                self.pre_roll.append(pcm)
+                if self.idle >= self.idle_seconds:
+                    self.event = "timeout"
+                return None
+            self.frames.extend(self.pre_roll)
+            self.pre_roll.clear()
+        self.frames.append(pcm)
+        self.silent_seconds = 0.0 if speech else self.silent_seconds + duration
+        self.speech_seconds = self.speech_seconds + duration if speech else 0.0
+        if not self.started and self.speech_seconds >= (0.3 if playback else 0.15):
+            self.started = True
+            self.event = "started"
+        if (self.silent_seconds >= self.silence_seconds or
+                sum(map(len, self.frames)) >= self.sample_rate * 2 * VOICE_MAX_SECONDS):
+            recording = b"".join(self.frames) if self.started else None
+            self.frames.clear()
+            self.started = False
+            self.speech_seconds = self.silent_seconds = self.idle = 0.0
+            if recording is not None:
+                self.event = "utterance"
+            return recording
+        return None
 
 
 def pcm_rms(pcm_data: bytes) -> float:
