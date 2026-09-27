@@ -546,13 +546,18 @@ class Assistant:
         async def generate():
             nonlocal completed_history, stream_messages, execution_started
             from pydantic_ai.messages import (FunctionToolCallEvent, FunctionToolResultEvent,
+                                              PartStartEvent, PartDeltaEvent, TextPartDelta,
                                               ToolCallPart, ToolReturnPart)
             from src.init.tools import TOOLS
-            buffer = SpeechBuffer(low_latency=voice_model_active)
+            buffer = SpeechBuffer()
             tool_names = {tool.__name__ for tool in TOOLS} | controller.control_tools.keys()
             conversation_messages = list(history)
             current_prompt = model_prompt
             tool_arguments = {}
+            direct_stream = None
+            direct_allowed = True
+            streamed_output = ""
+            delivered_output = None
 
             def emit_visible(chunk):
                 if not chunk:
@@ -566,12 +571,23 @@ class Assistant:
                     for phrase in buffer.feed(chunk):
                         self.voice.enqueue(phrase)
 
-            def deliver_output(output):
-                nonlocal speech_enabled
+            def deliver_output(output, *, streamed=""):
+                nonlocal speech_enabled, delivered_output
+                if delivered_output == output:
+                    return
                 if on_surface is not None:
                     allow_speech = on_surface(controller.output_surface, controller.output_title)
                     speech_enabled = speech_enabled and allow_speech
-                emit_visible(output)
+                emit_visible(output[len(streamed):] if output.startswith(streamed) else output)
+                if speech_enabled:
+                    for phrase in buffer.finish():
+                        self.voice.enqueue(phrase)
+                delivered_output = output
+
+            def emit_direct(chunk):
+                nonlocal streamed_output
+                streamed_output += chunk
+                emit_visible(chunk)
 
             def emit_step(name, call_id, result, failed=False):
                 if on_phase is None:
@@ -602,11 +618,24 @@ class Assistant:
                                               ensure_ascii=False))
 
             async def stream_events(ctx, events):
-                nonlocal stream_messages
+                nonlocal stream_messages, direct_stream, direct_allowed
                 stream_messages = ctx.messages
                 async for event in events:
                     if cancel_event.is_set():
                         return
+                    chunk = ""
+                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                        chunk = event.part.content
+                    elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                        chunk = event.delta.content_delta
+                    if isinstance(event, PartStartEvent) and isinstance(event.part, ToolCallPart):
+                        direct_allowed = False
+                    if (chunk and direct_allowed and controller.state.can_finish_direct()
+                            and not controller.state.output_recovery
+                            and controller.output_surface == "chat"):
+                        if direct_stream is None:
+                            direct_stream = AssistantTextStream(tool_names, emit_direct)
+                        direct_stream.feed(chunk)
                     if isinstance(event, FunctionToolCallEvent):
                         tool_arguments[event.part.tool_call_id] = event.part.args
                         logging.getLogger("assistant.tools").info(
@@ -626,12 +655,21 @@ class Assistant:
                         emit_step(part.tool_name, part.tool_call_id, part.content,
                                   getattr(part, "outcome", None) == "failed"
                                   or part.part_kind == "retry-prompt")
+                        if (part.tool_name == "task_finish"
+                                and isinstance(part.content, dict)
+                                and part.content.get("accepted")
+                                and controller.state.final_output is not None
+                                and controller.accept_output()):
+                            deliver_output(controller.state.final_output)
 
             if cancel_event.is_set():
                 return
             execution_started = True
             from pydantic_ai.usage import UsageLimits
             while True:
+                direct_stream = None
+                direct_allowed = True
+                streamed_output = ""
                 try:
                     result = await self.agent.run(
                         current_prompt,
@@ -695,7 +733,9 @@ class Assistant:
                 stream_messages = conversation_messages
                 if text_call is None:
                     if controller.accept_output(truncated=result.response.finish_reason == "length", output=visible_output):
-                        deliver_output(visible_output)
+                        if direct_stream is not None:
+                            direct_stream.finish()
+                        deliver_output(visible_output, streamed=streamed_output)
                         break
                     current_prompt = None
                     continue
