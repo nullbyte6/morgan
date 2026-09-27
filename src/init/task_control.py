@@ -74,6 +74,8 @@ class TaskControl(AbstractCapability):
         self.artifacts = {}
         self.tool_lock = asyncio.Lock()
         self.context_characters = 48000
+        self._recovery_progress = None
+        self._recovery_stalls = 0
         self.read_cache = {}
         self.receipts = {}
         self.on_action = None
@@ -506,6 +508,21 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.refresh_resources()
         if self.state.status == Lifecycle.COMPLETE and self.state.final_output is not None:
             raise TaskOutputReady(self.state.final_output)
+        if self.state.output_recovery:
+            self.state.output_recovery["requirements"] = self.state.requirements()
+            progress = fingerprint({
+                "kind": self.state.kind, "criteria": self.state.criteria,
+                "evidence": self.state.evidence, "obligations": self.state.obligations,
+                "dependencies": self.state.dependencies, "inspections": self.state.inspections,
+                "findings": self.state.findings, "revisions": self.state.revisions,
+                "changed_at": self.state.changed_at, "restrictions": self.state.restrictions})
+            self._recovery_stalls = self._recovery_stalls + 1 if progress == self._recovery_progress else 0
+            self._recovery_progress = progress
+            if self._recovery_stalls >= 4:
+                self.stop_output_recovery("Output recovery repeated control turns without new evidence or contract progress.")
+        else:
+            self._recovery_progress = None
+            self._recovery_stalls = 0
         messages = self.compact([message for message in request_context.messages
                                  if not (message.metadata or {}).get("arlo_task_snapshot")])
         snapshot = self.state.snapshot(include_evidence=False)
@@ -556,6 +573,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
     def resume(self, context, cancel_event, prompt=""):
         self.context = context
         self.cancel_event = cancel_event
+        self._recovery_progress = None
+        self._recovery_stalls = 0
         self.state.resume()
         if prompt:
             result = ActionResult(Outcome.SUCCESS, prompt, "user_input")
