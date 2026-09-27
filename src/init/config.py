@@ -22,6 +22,9 @@ from src.init.lang import tr
 import json
 import os
 import re
+import socket
+import subprocess
+import unicodedata
 import tempfile
 import warnings
 from copy import deepcopy
@@ -285,3 +288,101 @@ def load_dev_file() -> dict:
                       RuntimeWarning)
         result = deepcopy(DEFAULTS)
     return result
+
+
+def _migrate_storage() -> Path:
+    """Migrate named storage at startup while retaining a single config locator."""
+    anchor = Path.home() / ".arlo"
+    if not CONFIG_FILE.exists():
+        return HOME_PATH
+    try:
+        config = validate_config(json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig")))
+        name = unicodedata.normalize("NFKC", config["assistant"]["name"]).casefold()
+        identifier = re.sub(r"[^\w-]+", "-", name).strip("-_")
+        if identifier.split(".")[0] in {"con", "prn", "aux", "nul", *[f"com{i}" for i in range(1, 10)], *[f"lpt{i}" for i in range(1, 10)]}:
+            identifier = "_" + identifier
+        target = anchor.parent / ("." + identifier)
+        current = anchor.resolve()
+        if current == target:
+            return current
+        if current.parent != anchor.parent.resolve() or target.parent.resolve() != anchor.parent.resolve():
+            raise OSError("Assistant storage migration must remain inside the user home directory")
+        if target.exists() and target != anchor:
+            raise OSError(f"Assistant storage destination already exists: {target}")
+        with socket.socket() as probe:
+            probe.settimeout(0.1)
+            if probe.connect_ex(("127.0.0.1", 18765)) == 0:
+                raise OSError("Stop the voice service before migrating assistant storage")
+        locks = []
+        try:
+            for path in (current / "voice").glob("*.lock"):
+                file = path.open("r+b")
+                locks.append(file)
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(file.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            for file in locks:
+                file.close()
+        linked = current != anchor
+        if linked:
+            if os.name == "nt":
+                os.rmdir(anchor)
+            else:
+                anchor.unlink()
+        try:
+            current.rename(target)
+            if target != anchor:
+                if os.name == "nt":
+                    result = subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(anchor), str(target)],
+                                            capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                    if result.returncode:
+                        raise OSError("Could not create the assistant storage compatibility junction")
+                else:
+                    anchor.symlink_to(target, target_is_directory=True)
+        except OSError:
+            if target.exists() and not current.exists():
+                target.rename(current)
+            if linked and not anchor.exists():
+                if os.name == "nt":
+                    subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(anchor), str(current)],
+                                   capture_output=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
+                else:
+                    anchor.symlink_to(current, target_is_directory=True)
+            raise
+        return target
+    except (OSError, ValueError) as error:
+        warnings.warn(f"Assistant storage migration deferred: {error}", RuntimeWarning)
+        return anchor.resolve()
+
+
+def initialize_storage() -> Path:
+    """Serialize storage relocation across desktop and service startups."""
+    lock_path = Path(tempfile.gettempdir()) / "arlo-storage-migration.lock"
+    with lock_path.open("a+b") as lock:
+        lock.seek(0, os.SEEK_END)
+        if not lock.tell():
+            lock.write(b"\0")
+            lock.flush()
+        lock.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            return _migrate_storage()
+        finally:
+            lock.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+HOME_PATH = initialize_storage()
+CONFIG_FILE = HOME_PATH / "json" / "config.json"

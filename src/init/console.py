@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 from src.init.lang import tr
+from .identity import get_assistant_identifier
 import logging
 import os
 import subprocess
@@ -69,8 +70,8 @@ class LogStream:
 
 # noinspection PyBroadException
 class DebugConsole:
-    def __init__(self, name: str = "Arlo"):
-        log_dir = Path(tempfile.gettempdir()) / "arlo"
+    def __init__(self, name: str | None = None):
+        log_dir = Path(tempfile.gettempdir()) / get_assistant_identifier()
         log_dir.mkdir(parents=True, exist_ok=True)
 
         self.log_path = log_dir / "agent.log"

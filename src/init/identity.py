@@ -47,3 +47,9 @@ def get_assistant_name(config: dict | None = None) -> str:
         from .config import load_config
         config = load_config()
     return config["assistant"]["name"]
+
+
+def get_assistant_identifier() -> str:
+    """Return the name namespace shared by the running storage and services."""
+    from .config import HOME_PATH
+    return HOME_PATH.name.removeprefix(".")

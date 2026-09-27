@@ -26,13 +26,15 @@ import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from .config import HOME_PATH
+from .identity import get_assistant_identifier
 
 
-WAKE_RECORD_REQUEST = "arlo://voice/start-recording"
+WAKE_RECORD_REQUEST = f"{get_assistant_identifier()}://voice/start-recording"
 
 
 def voice_directory() -> Path:
-    path = Path.home() / ".arlo" / "voice"
+    path = HOME_PATH / "voice"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

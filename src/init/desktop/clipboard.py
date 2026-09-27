@@ -24,6 +24,7 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from ..config import HOME_PATH
 from typing import Callable, Optional
 
 
@@ -105,7 +106,7 @@ def read_clipboard_on_gui_thread() -> Optional[str]:
     if mime.hasImage():
         image = app.clipboard().image()
         if not image.isNull():
-            directory = Path.home() / ".arlo" / "clipboard"
+            directory = HOME_PATH / "clipboard"
             directory.mkdir(parents=True, exist_ok=True)
             path = (directory / f"clipboard-{uuid.uuid4().hex}.png").resolve()
             if not image.save(str(path), "PNG"):

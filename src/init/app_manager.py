@@ -32,8 +32,11 @@ import uuid
 _jobs = {}
 _candidates = {}
 _lock = threading.RLock()
+from .config import HOME_PATH
+from .identity import get_assistant_identifier
+
 _SHARED = {"microsoft", "windows", "packages", "programs", "temp", "cache",
-           "google", "mozilla", "adobe", "common files", "arlo", ".arlo"}
+           "google", "mozilla", "adobe", "common files", "arlo", ".arlo", HOME_PATH.name, get_assistant_identifier()}
 
 
 def _result(status, **values):

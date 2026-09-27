@@ -1,6 +1,8 @@
 """Shared, persistent Chromium session for all Arlo browser panels."""
 
 from pathlib import Path
+from ..config import HOME_PATH
+from ..identity import get_assistant_identifier
 from weakref import WeakSet
 
 from PySide6.QtCore import QObject, QThread
@@ -16,13 +18,13 @@ class BrowserSession(QObject):
 
     def __init__(self, parent, *, data_path=None):
         super().__init__(parent)
-        self.data_path = Path(data_path or Path.home() / '.arlo' / 'browser')
+        self.data_path = Path(data_path or HOME_PATH / 'browser')
         self.data_path.mkdir(parents=True, exist_ok=True)
         try:
             from PySide6.QtWebEngineCore import QWebEngineProfileBuilder
         except ImportError:
             builder = None
-            settings = QWebEngineProfile('arlo-browser', self)
+            settings = QWebEngineProfile(f'{get_assistant_identifier()}-browser', self)
         else:
             builder = QWebEngineProfileBuilder()
             settings = builder
@@ -31,7 +33,7 @@ class BrowserSession(QObject):
         settings.setHttpCacheType(QWebEngineProfile.DiskHttpCache)
         settings.setHttpCacheMaximumSize(512 * 1024 * 1024)
         settings.setPersistentCookiesPolicy(QWebEngineProfile.ForcePersistentCookies)
-        self.profile = builder.createProfile('arlo-browser', self) if builder else settings
+        self.profile = builder.createProfile(f'{get_assistant_identifier()}-browser', self) if builder else settings
 
         web_settings = self.profile.settings()
         web_settings.setAttribute(QWebEngineSettings.DnsPrefetchEnabled, True)

@@ -10,11 +10,6 @@ $ollamaUrl = "http://127.0.0.1:11434"
 $ttsHost = "127.0.0.1"
 $ttsPort = 18765
 
-$logDir = Join-Path $env:TEMP "arlo"
-$ttsLog = Join-Path $logDir "tts.log"
-$agentLog = Join-Path $logDir "agent.log"
-$consoleScript = Join-Path $logDir "console.ps1"
-
 $env:PYTHONPATH = @(
     $root
     (Join-Path $root "src")
@@ -30,6 +25,16 @@ Set-Location -LiteralPath $root
 if (-not (Test-Path -LiteralPath $python)) {
     throw "Python environment not found: $python"
 }
+
+$assistantId = & $python -B -c "from src.init.identity import get_assistant_identifier; print(get_assistant_identifier())"
+if ($LASTEXITCODE -ne 0 -or -not $assistantId) {
+    throw "Could not resolve the assistant service namespace."
+}
+$env:ARLO_LOG_DIR = Join-Path $env:TEMP $assistantId.Trim()
+$logDir = $env:ARLO_LOG_DIR
+$ttsLog = Join-Path $logDir "tts.log"
+$agentLog = Join-Path $logDir "agent.log"
+$consoleScript = Join-Path $logDir "console.ps1"
 
 New-Item -ItemType Directory -Path $logDir -Force |
     Out-Null
@@ -289,7 +294,7 @@ if (-not $NoConsole) {
     $consoleContent = @'
 $Host.UI.RawUI.WindowTitle = "ARLO Console"
 
-$logDir = Join-Path $env:TEMP "arlo"
+$logDir = $env:ARLO_LOG_DIR
 
 $files = @(
     @{

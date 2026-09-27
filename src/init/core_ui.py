@@ -29,7 +29,7 @@ import tempfile
 from getpass import getuser
 from tkinter import font
 
-from src.init.identity import get_assistant_name, register_assistant
+from src.init.identity import get_assistant_name, get_assistant_identifier, register_assistant
 from src.init.utils import *
 
 if not __package__:
@@ -37,7 +37,7 @@ if not __package__:
 
 os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 os.environ["TORCH_LOGS"] = "-all"
-ARLO_INSTANCE_SERVER = "Diego.Arlo.Desktop"
+ARLO_INSTANCE_SERVER = f"Diego.{get_assistant_identifier().capitalize()}.Desktop"
 
 from PySide6.QtCore import *
 from PySide6.QtGui import *
@@ -86,7 +86,7 @@ WORKSPACE_VIEW_CONFIG = {
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
 from src.init.brain import kill_self
-from src.init.config import load_dev_file, load_config
+from src.init.config import HOME_PATH, load_dev_file, load_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
 from src.init.logs import LogView
@@ -131,7 +131,7 @@ class ArloWindow(DesktopWindow):
 
     def __init__(self):
         super().__init__()
-        log_path = Path(tempfile.gettempdir()) / "arlo" / "agent.log"
+        log_path = Path(tempfile.gettempdir()) / get_assistant_identifier() / "agent.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         root_logger = logging.getLogger()
         if not any(isinstance(handler, logging.FileHandler)
@@ -222,7 +222,7 @@ class ArloWindow(DesktopWindow):
         self.response_bridge = ResponseBridge(self)
         self.thread = QThread(self)
 
-        self.log_dir = Path.home() / ".arlo" / ".log"
+        self.log_dir = HOME_PATH / ".log"
 
         self.busy = False
         self.ready = False
@@ -309,7 +309,7 @@ class ArloWindow(DesktopWindow):
         if command is None:
             return
         command_id, text = command
-        if text == WAKE_RECORD_REQUEST:
+        if text == WAKE_RECORD_REQUEST or text.partition("://")[2] == "voice/start-recording":
             self.wake_command_id = command_id
             if barge_candidate:
                 self.pending_wake_barge = True
@@ -1623,7 +1623,7 @@ def set_windows_app_id():
         import ctypes
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            "Diego.Arlo.Desktop")
+            ARLO_INSTANCE_SERVER)
 
 
 def notify_running_instance(timeout_ms: int = 1500) -> bool:
@@ -1646,7 +1646,7 @@ def acquire_instance_lock() -> QLockFile | None:
     """Keep initialization races from creating two desktop processes."""
     lock_path = (Path(QStandardPaths.writableLocation(
         QStandardPaths.StandardLocation.TempLocation)) /
-                 f"arlo-desktop-{getuser()}.lock")
+                 f"{get_assistant_identifier()}-desktop-{getuser()}.lock")
     lock = QLockFile(str(lock_path))
     return lock if lock.tryLock(100) else None
 
