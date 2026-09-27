@@ -19,9 +19,11 @@
 """Git Diff Workspace Panel for Arlo's desktop interface."""
 from __future__ import annotations
 
-from PySide6.QtCore import *
-from PySide6.QtGui import *
-from PySide6.QtWidgets import *
+import uuid
+
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QColor, QFont, QTextCharFormat, QTextCursor
+from PySide6.QtWidgets import QFrame, QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget
 
 
 class DiffWorkspacePanel(QFrame):
@@ -31,7 +33,7 @@ class DiffWorkspacePanel(QFrame):
     focus_requested = Signal(str)
     move_requested = Signal(str, str)
     title_changed = Signal(str, str)
-    diff_updated = Signal(str)  # Emits diff text when updated
+    diff_updated = Signal(str)
 
     def __init__(
         self,
@@ -40,10 +42,16 @@ class DiffWorkspacePanel(QFrame):
         parent: QWidget | None = None):
         super().__init__(parent)
 
+        self.panel_id = panel_id
+        self.title = title
+        self.setWindowTitle(title)
         self.setObjectName("diffWorkspacePanel")
         self.setProperty("diffWorkspacePanel", True)
 
-        # Main scroll area
+        panel_layout = QVBoxLayout(self)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(0)
+
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.NoFrame)
@@ -54,14 +62,13 @@ class DiffWorkspacePanel(QFrame):
             }
         """)
 
-        # Content widget with plain text editor for diff display
         content_widget = QWidget()
         layout = QVBoxLayout(content_widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Plain text editor for displaying diff
         self.diff_editor = QPlainTextEdit()
+        self.diff_editor.setReadOnly(True)
         self.diff_editor.setFont(QFont("JetBrains Mono NL", 10))
         self.diff_editor.setStyleSheet("""
             QPlainTextEdit {
@@ -74,116 +81,72 @@ class DiffWorkspacePanel(QFrame):
             }
         """)
 
-        # Set up diff highlighting styles
         self._setup_diff_styles()
 
         layout.addWidget(self.diff_editor)
-        content_widget.setLayout(layout)
 
         self.scroll_area.setWidget(content_widget)
-        self.layout().addWidget(self.scroll_area)
-
-        # Store current diff for dynamic updates
+        panel_layout.addWidget(self.scroll_area)
         self.current_diff: str | None = None
 
     def _setup_diff_styles(self):
         """Set up color styles for diff lines."""
-        # Additions (green)
         self.addition_style = QTextCharFormat()
-        self.addition_style.setBackground(QColor("#0f5323"))  # Dark green background
-        self.addition_style.setForeground(QColor("#7ec86e"))  # Light green text
+        self.addition_style.setBackground(QColor("#0f5323"))
+        self.addition_style.setForeground(QColor("#7ec86e"))
 
-        # Deletions (red)
         self.deletion_style = QTextCharFormat()
-        self.deletion_style.setBackground(QColor("#5c1919"))  # Dark red background
-        self.deletion_style.setForeground(QColor("#f14c4c"))  # Light red text
+        self.deletion_style.setBackground(QColor("#5c1919"))
+        self.deletion_style.setForeground(QColor("#f14c4c"))
 
-        # Context (default gray)
         self.context_style = QTextCharFormat()
         self.context_style.setForeground(QColor("#d4d4d4"))
 
-        # Header style for file names
         self.header_style = QTextCharFormat()
         self.header_style.setFontWeight(QFont.Bold)
-        self.header_style.setForeground(QColor("#9cdcfe"))  # Light blue
+        self.header_style.setForeground(QColor("#9cdcfe"))
 
     def set_diff(self, diff_text: str) -> None:
         """Set the diff text to display. Supports dynamic updates."""
-        if not diff_text:
-            return
-
         self.current_diff = diff_text
-
-        # Parse and format the diff
         formatted_lines = self._parse_and_format_diff(diff_text)
-
-        # Set formatted text to editor
         document = self.diff_editor.document()
-        document.setPlainText("\n".join(formatted_lines))
-
-        # Scroll to top when updating
+        document.clear()
+        cursor = QTextCursor(document)
+        for index, (line_format, line) in enumerate(formatted_lines):
+            if index:
+                cursor.insertBlock()
+            cursor.insertText(line, line_format)
+        self.diff_editor.moveCursor(QTextCursor.Start)
+        self.diff_editor.verticalScrollBar().setValue(0)
         self.scroll_area.verticalScrollBar().setValue(0)
-
-        # Emit signal for external listeners
         self.diff_updated.emit(diff_text)
 
-    def _parse_and_format_diff(self, diff_text: str) -> list[str]:
-        """Parse diff text and apply appropriate formatting."""
-        lines = []
-        current_block = {"type": "header", "format": self.header_style}
+    def _parse_and_format_diff(self, diff_text: str) -> list[tuple[QTextCharFormat, str]]:
+        """Classify diff lines while preserving their content and prefixes."""
         formatted_lines = []
-
+        in_hunk = False
         for line in diff_text.split("\n"):
-            if not line:
-                continue
-
-            # Detect diff hunk header (@@ ... @@)
-            if line.startswith("@@") or line.startswith("diff ") or \
-               line.startswith("index ") or line.startswith("new file") or \
-               line.startswith("deleted file") or line.startswith("old mode") or \
-               line.startswith("new mode"):
-                # New header block
-                if current_block["type"] != "header":
-                    formatted_lines.append((current_block["format"], "\n".join(current_block["lines"])))
-                current_block = {"type": "header", "format": self.header_style, "lines": [line]}
-                continue
-
-            # Detect addition lines (+)
-            if line.startswith("+") and not line.startswith("+++"):
-                current_block["lines"].append(line[1:])  # Remove + prefix
-                continue
-
-            # Detect deletion lines (-)
-            if line.startswith("-") and not line.startswith("---"):
-                current_block["lines"].append(line[1:])  # Remove - prefix
-                continue
-
-            # Context or other lines (.)
-            current_block["lines"].append(line)
-
-        # Don't forget the last block
-        if current_block["type"] != "header":
-            formatted_lines.append((current_block["format"], "\n".join(current_block["lines"])))
-
-        # Apply formatting and return
-        result = []
-        for fmt, text in formatted_lines:
-            # For headers, just use plain text
-            if fmt == self.header_style:
-                result.append(text)
+            if line.startswith("diff "):
+                in_hunk = False
+                line_format = self.header_style
+            elif line.startswith("@@"):
+                in_hunk = True
+                line_format = self.header_style
+            elif line.startswith("+") and (in_hunk or not line.startswith("+++")):
+                line_format = self.addition_style
+            elif line.startswith("-") and (in_hunk or not line.startswith("---")):
+                line_format = self.deletion_style
+            elif not in_hunk and line.startswith((
+                "index ", "new file", "deleted file", "old mode", "new mode",
+                "---", "+++", "rename from ", "rename to ", "copy from ",
+                "copy to ", "similarity index ", "dissimilarity index ",
+            )):
+                line_format = self.header_style
             else:
-                # For content lines, apply color based on first character of each line
-                for char in text.split("\n"):
-                    if not char:
-                        continue
-                    if char.startswith("+") and not char.startswith("+++"):
-                        result.append(f"+{char[1:]}")  # Keep + for visual clarity
-                    elif char.startswith("-") and not char.startswith("---"):
-                        result.append(f"-{char[1:]}")  # Keep - for visual clarity
-                    else:
-                        result.append(char)
-
-        return result
+                line_format = self.context_style
+            formatted_lines.append((line_format, line))
+        return formatted_lines
 
     def update_diff(self, diff_text: str) -> None:
         """Update the displayed diff without closing the panel."""
