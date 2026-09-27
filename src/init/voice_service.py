@@ -25,6 +25,7 @@ import sys
 import threading
 import time
 import warnings
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -34,7 +35,7 @@ from transformers.utils import logging as transformers_logging
 
 from src.init.lang import tr
 from .config import load_config
-from .speech_text import prepare_speech
+from .speech_text import SpeechNumbers, prepare_speech
 from .subtitle_timing import StreamingWordTimeline
 from .voice_profiles import selected_voice, resolve_voice
 
@@ -78,6 +79,7 @@ torch.backends.cuda.enable_math_sdp(True)
 
 _silence_tts_loggers()
 from cosyvoice.cli.cosyvoice import AutoModel
+from cosyvoice.utils.frontend_utils import contains_chinese, split_paragraph
 _silence_tts_loggers()
 
 import shutil
@@ -102,46 +104,12 @@ def _clean_for_speech(text: str) -> str:
     return text
 
 
-from decimal import InvalidOperation
-from num2words import num2words
-
-SPANISH_NUMBER = re.compile(
-    r"(?<![\w./\\])"
-    r"-?(?:\d{1,3}(?:\.\d{3})+|\d+)"
-    r"(?:,\d+)?"
-    r"(?![\w./\\])"
-)
-
-
-def normalize_spanish_numbers(text: str) -> str:
-    """Convert Spanish-formatted numbers to spoken Spanish."""
-    def replace(match: re.Match) -> str:
-        original = match.group()
-        try:
-            if "," in original:
-                integer, fractional = original.split(",", 1)
-                integer = integer.replace(".", "")
-                whole = num2words(int(integer), lang="es")
-                decimal_digits = " ".join(
-                    num2words(int(digit), lang="es")
-                    for digit in fractional)
-                return f"{whole} coma {decimal_digits}"
-
-            number = int(original.replace(".", ""))
-            return num2words(number, lang="es")
-
-        except (ValueError, InvalidOperation):
-            return original
-
-    return SPANISH_NUMBER.sub(replace, text)
-
-
-
 class SpeechBatch:
     """Lifetime and completion belong to one turn, including in-flight synthesis."""
 
-    def __init__(self, turn_id):
+    def __init__(self, turn_id, language_context=""):
         self.turn_id = turn_id
+        self.numbers = SpeechNumbers(language_context)
         self.cancelled = threading.Event()
         self.done = threading.Event()
         self.done.set()
@@ -192,13 +160,10 @@ class VoiceService:
         self._player_worker = threading.Thread(target=self._play_loop, daemon=True)
         self._player_worker.start()
 
-    def enqueue(self, text: str, turn_id=None, voice_reference=None) -> None:
+    def enqueue(self, text: str, turn_id=None, voice_reference=None,
+                language_context="") -> None:
         subtitle = _clean_for_speech(text)
-        text = prepare_speech(subtitle, load_config().get("pronunciations", {}))
-        text = normalize_spanish_numbers(text)
-        spoken_chars = sum(char.isalnum() for char in text)
-
-        if spoken_chars < 4:
+        if not any(char.isalnum() for char in subtitle):
             return
 
         reference = (resolve_voice(voice_reference) if voice_reference is not None
@@ -209,9 +174,12 @@ class VoiceService:
         with self._state_lock:
             if self._batch.turn_id != turn_id or self._batch.cancelled.is_set():
                 self.stop()
-                self._batch = SpeechBatch(turn_id)
+                self._batch = SpeechBatch(turn_id, language_context)
 
             batch = self._batch
+            batch.numbers.observe(subtitle)
+            text = prepare_speech(subtitle, load_config().get("pronunciations", {}))
+            text = batch.numbers.normalize(text)
             batch.pending += 1
             batch.done.clear()
             self._text_queue.put((batch, text, subtitle, reference))
@@ -272,6 +240,18 @@ class VoiceService:
                     self._set_subtitle(batch, "")
                 batch.done.set()
 
+    def _synthesize(self, text):
+        tokenize = partial(self.voice.frontend.tokenizer.encode,
+                           allowed_special=self.voice.frontend.allowed_special)
+        phrases = split_paragraph(text, tokenize,
+                                  "zh" if contains_chinese(text) else "en",
+                                  token_max_n=80, token_min_n=60,
+                                  merge_len=20, comma_split=False)
+        for phrase in phrases:
+            yield from self.voice.inference_zero_shot(
+                phrase, "", "", zero_shot_spk_id=get_assistant_identifier(),
+                stream=True, speed=self.speed, text_frontend=False)
+
     def _tts_loop(self) -> None:
         while True:
             batch, text, subtitle, reference = self._text_queue.get()
@@ -282,9 +262,7 @@ class VoiceService:
                 if batch.cancelled.is_set():
                     continue
                 self._select_reference(reference)
-                generator = self.voice.inference_zero_shot(
-                    text, "", "", zero_shot_spk_id=get_assistant_identifier(), stream=True,
-                    speed=self.speed)
+                generator = self._synthesize(text)
                 for chunk in generator:
                     if batch.cancelled.is_set():
                         break

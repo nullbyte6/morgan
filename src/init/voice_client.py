@@ -41,6 +41,7 @@ class VoiceClient:
         self._playback_lock = threading.RLock()
         self._muted = False
         self._turn_id = uuid.uuid4().hex
+        self._language_context = ""
         self.supports_interruptions = False
         self.supports_voice_selection = False
         self._hello = threading.Event()
@@ -153,9 +154,10 @@ class VoiceClient:
             if self._muted:
                 self.stop()
 
-    def begin_turn(self) -> None:
+    def begin_turn(self, language_context="") -> None:
         with self._playback_lock:
             self._begin_turn()
+            self._language_context = language_context
 
     def _begin_turn(self) -> None:
         if self._closed:
@@ -202,7 +204,8 @@ class VoiceClient:
             raise RuntimeError("No WAV voice references available")
         self._done.clear()
         self._send({"type": "enqueue", "text": text, "turn_id": self._turn_id,
-                    "voice_reference": reference.name})
+                    "voice_reference": reference.name,
+                    "language_context": self._language_context})
 
     def request_done(self) -> None:
         with self._playback_lock:

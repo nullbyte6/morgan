@@ -142,7 +142,8 @@ class TTSServer:
                         if text.strip():
                             try:
                                 self.voice.enqueue(text, message.get("turn_id"),
-                                                   message.get("voice_reference"))
+                                                   message.get("voice_reference"),
+                                                   message.get("language_context", ""))
                             except (OSError, ValueError) as error:
                                 self._send({"type": "error", "message": str(error),
                                             "turn_id": message.get("turn_id")}, client)

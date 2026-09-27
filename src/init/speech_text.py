@@ -41,7 +41,7 @@ class SpeechNumbers:
         self.response += " " + text
 
     def normalize(self, text):
-        source = self.response if any(c.isalpha() for c in self.response) else self.context
+        source = self.context + " " + self.response
         language = speech_language_detector().detect_language_of(source)
         if language is None:
             return text
