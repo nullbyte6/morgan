@@ -19,12 +19,15 @@
 """Deterministic supervision of Arlo's single model agent."""
 
 import asyncio
+import base64
 import copy
 import hashlib
 import inspect
+import io
 import logging
 import math
 import uuid
+import wave
 from dataclasses import replace
 from pathlib import Path
 from typing import Literal
@@ -812,11 +815,29 @@ and retain its consent checks. cd requests use change_directory and Git requests
                       "tool_schemas": len(encoded(tools).encode("utf-8"))}
         if parameters.output_object is not None:
             components["output_schema"] = len(encoded(model._map_json_schema(parameters.output_object)).encode("utf-8"))
-        proxy = math.ceil(sum(components.values()) / 4) + 32 * len(mapped) + 256
+        audio_bytes = audio_tokens = 0
+        for message in mapped:
+            content = message.get("content")
+            for part in content if isinstance(content, list) else []:
+                if not isinstance(part, dict) or part.get("type") != "input_audio":
+                    continue
+                audio = part.get("input_audio", {})
+                if audio.get("format") != "wav" or not isinstance(audio.get("data"), str):
+                    continue
+                try:
+                    with wave.open(io.BytesIO(base64.b64decode(audio["data"], validate=True)), "rb") as wav:
+                        duration = wav.getnframes() / wav.getframerate()
+                    if duration > 0:
+                        audio_bytes += len(audio["data"])
+                        audio_tokens += math.ceil(duration * 50) + 128
+                except (ValueError, EOFError, wave.Error):
+                    continue
+        proxy = math.ceil((sum(components.values()) - audio_bytes) / 4) + 32 * len(mapped) + 256 + audio_tokens
         return {"estimated_input_tokens": math.ceil(proxy * self.token_scale),
-                "estimator": "provider_json_utf8_div4_with_framing_and_usage_calibration",
+                "estimator": ("provider_json_utf8_div4_with_wav_duration_and_usage_calibration"
+                              if audio_bytes else "provider_json_utf8_div4_with_framing_and_usage_calibration"),
                 "estimator_scale": self.token_scale, "unscaled_input_tokens": proxy,
-                "component_bytes": components}
+                "component_bytes": components, "audio_tokens": audio_tokens}
 
     async def compact(self, messages, measure, input_limit, *, force=False):
         result = copy.deepcopy(messages)
