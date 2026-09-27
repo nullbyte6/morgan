@@ -39,3 +39,11 @@ def get_assistant() -> AssistantIdentity:
     if _assistant_factory is None:
         raise RuntimeError(tr('identity.the_application_has_not_registered_its_assistant'))
     return _assistant_factory()
+
+
+def get_assistant_name(config: dict | None = None) -> str:
+    """Resolve the assistant display name from the existing configuration."""
+    if config is None:
+        from .config import load_config
+        config = load_config()
+    return config["assistant"]["name"]

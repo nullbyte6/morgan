@@ -24,6 +24,8 @@ import datetime
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from .identity import get_assistant_name
+from .config import DEFAULTS
 
 from PySide6.QtCore import *
 from PySide6.QtGui import *
@@ -44,6 +46,7 @@ class LogMessage:
     timestamp: str
     author: str
     content: str
+    role: str = ""
 
 
 def parse_log(content: str) -> list[LogMessage]:
@@ -53,6 +56,10 @@ def parse_log(content: str) -> list[LogMessage]:
     """
     messages: list[LogMessage] = []
     lines = content.splitlines(keepends=True)
+    assistant_names = {get_assistant_name().casefold(), DEFAULTS["assistant"]["name"].casefold()}
+    header = re.match(r"^(.*?) Log ", lines[0]) if lines else None
+    if header is not None:
+        assistant_names.add(header.group(1).casefold())
     current_time: str | None = None
     current_author: str | None = None
     current_content: list[str] = []
@@ -69,7 +76,9 @@ def parse_log(content: str) -> list[LogMessage]:
             LogMessage(
                 timestamp=current_time,
                 author=current_author,
-                content=body))
+                content=body,
+                role="assistant" if current_author.casefold() in assistant_names
+                else "system" if current_author.casefold() == "system" else "user"))
 
     index = 0
 
@@ -145,9 +154,9 @@ class LogMessageCard(QFrame):
         self.setObjectName("logMessageCard")
         self.setProperty(
             "role",
-            "assistant" if message.author.casefold() == "arlo"
+            message.role or ("assistant" if message.author.casefold() in {get_assistant_name().casefold(), DEFAULTS["assistant"]["name"].casefold()}
             else "user" if message.author.casefold() != "system"
-            else "system")
+            else "system"))
 
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,

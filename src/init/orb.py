@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import math
 from enum import Enum
+from src.init.identity import get_assistant_name
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
@@ -95,7 +96,7 @@ class Orb(QWidget):
             smoothing=spectrum_smoothing,
             deformation=spectrum_deformation)
         self.set_size(size)
-        self.setToolTip("Arlo")
+        self.setToolTip(get_assistant_name())
 
         self.levels = [0.0] * 15
         self.smoothed = [0.0] * 15

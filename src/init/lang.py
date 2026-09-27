@@ -58,4 +58,7 @@ def tr(key: str, /, **values) -> str:
     template = catalog(language).get(key)
     if template is None:
         template = catalog("english")[key]
+    if "{assistant_name}" in template and "assistant_name" not in values:
+        from .identity import get_assistant_name
+        values["assistant_name"] = get_assistant_name()
     return template.format(**values) if values else template

@@ -82,9 +82,12 @@ def memory_instructions():
 
 
 def explicit_intent(prompt, action):
+    from ..identity import get_assistant_name
+    name = "".join(char for char in unicodedata.normalize("NFKD", get_assistant_name().casefold())
+                   if not unicodedata.combining(char))
     prompt = "".join(char for char in unicodedata.normalize("NFKD", prompt.casefold())
                      if not unicodedata.combining(char))
-    prefix = (r"^\s*(?:(?:please|por favor)[, ]+)?(?:(?:arlo)[, ]+)?"
+    prefix = (rf"^\s*(?:(?:please|por favor)[, ]+)?(?:(?:{re.escape(name)})[, ]+)?"
               r"(?:(?:can you|could you|would you|puedes|podrias)\s+)?"
               r"(?:(?:please|por favor)\s+)?")
     expressions = {

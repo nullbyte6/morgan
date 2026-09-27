@@ -31,6 +31,7 @@ from getpass import getuser
 from pydantic_ai import Agent, Tool
 
 from src.init.console import DebugConsole
+from src.init.identity import get_assistant_name
 from src.init.voice_client import VoiceClient
 
 def _tool_payload(value, tool_names):
@@ -115,7 +116,10 @@ class AssistantTextStream:
 class Assistant:
     """One shared assistant; reading its identity never
     starts the model or UI."""
-    name = "Arlo"
+    @property
+    def name(self) -> str:
+        return get_assistant_name()
+
     voice: VoiceClient = None
     speech_enabled: bool = True
     _instance = None
@@ -153,7 +157,7 @@ class Assistant:
     @property
     def banner(self):
         from pyfiglet import figlet_format
-        return figlet_format(self.name.strip('o'), font="4max", width=128)
+        return figlet_format(self.name, font="4max", width=128)
 
     def _initialize_runtime(self):
         if self.agent is not None:

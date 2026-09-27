@@ -19,10 +19,7 @@
 """Minimal bootstrap instructions; configurable behavior belongs in config.json."""
 
 from src.init.lang import tr
-from .identity import get_assistant
-
-INSTRUCTIONS = (
-    tr('rules.you_are_a_personal_desktop_assistant_follow_the_current_configur'))
+from .identity import get_assistant_name
 
 
 def current_instructions() -> str:
@@ -30,13 +27,16 @@ def current_instructions() -> str:
     from .config import load_config
 
     config = load_config()
+    name = get_assistant_name(config)
     personality = config["personality"]
     instructions = config["instructions"]
     sections = "\n".join(
-        f"{key}: {value}" for key, value in instructions.items() if value)
+        f"{key}: {value.replace('{assistant_name}', name) if key == 'identity' else value}"
+        for key, value in instructions.items() if value)
     style = "\n".join(
         f"{key}: {value}" for key, value in personality.items() if value)
     return (
-            INSTRUCTIONS.replace("{assistant_name}", get_assistant().name)
+            tr('rules.you_are_a_personal_desktop_assistant_follow_the_current_configur',
+               assistant_name=name)
             + tr('rules.current_instructions_apply_to_this_response') + sections
             + tr('rules.current_personality_apply_to_this_response') + style)

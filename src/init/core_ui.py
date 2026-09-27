@@ -29,7 +29,7 @@ import tempfile
 from getpass import getuser
 from tkinter import font
 
-from src.init.identity import register_assistant
+from src.init.identity import get_assistant_name, register_assistant
 from src.init.utils import *
 
 if not __package__:
@@ -525,7 +525,7 @@ class ArloWindow(DesktopWindow):
         navigation.setContentsMargins(0, 0, 0, 0)
         navigation.setSpacing(8)
 
-        buttons = [("󰭹", "chatNav", "Arlo", None)]
+        buttons = [("󰭹", "chatNav", get_assistant_name(), None)]
         buttons.extend((options["icon"], f"{view_key}Nav", options["title"], view_key)
                        for view_key, options in WORKSPACE_VIEW_CONFIG.items())
 
@@ -705,7 +705,7 @@ class ArloWindow(DesktopWindow):
 
     @property
     def startup_greeting(self) -> str:
-        return tr(self.greeting_key, username=self.username, name="Arlo")
+        return tr(self.greeting_key, username=self.username, name=get_assistant_name())
 
     def set_orbs_thinking(self, thinking: bool):
         for orb in (self.orb, self.mascot):
@@ -950,9 +950,16 @@ class ArloWindow(DesktopWindow):
 
     def refresh_language(self):
         language = get_language()
-        if language == self.active_language:
+        name = get_assistant_name()
+        if language == self.active_language and name == getattr(self, "active_assistant_name", None):
             return
         self.active_language = language
+        self.active_assistant_name = name
+        for orb in (self.orb, self.mascot):
+            orb.setToolTip(name)
+        chat = self.findChild(QPushButton, "chatNav")
+        if chat is not None:
+            chat.setToolTip(name)
         if hasattr(self, "command_palette"):
             self.command_palette.refresh_language()
         self.task_progress.refresh_language(language)
