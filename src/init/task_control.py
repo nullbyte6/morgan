@@ -263,10 +263,16 @@ and retain its consent checks. cd requests use change_directory and Git requests
         """Propose verified completion with the complete answer in output for immediate delivery."""
         self.refresh_resources()
         if completed:
-            result = self.state.checkpoint(self.state.role, [], {}, completed, [], "", {}, [],
-                                           self.state.kind, self.state.role_resources)
-            if not result["accepted"]:
-                return result
+            pending = {name: refs for name, refs in completed.items()
+                       if name not in self.state.criteria or not self.state.valid_evidence(
+                           self.state.criteria[name].evidence, self.state.criteria[name].resources,
+                           inspection=self.state.kind == "read_only")}
+            if pending:
+                result = self.state.checkpoint(self.state.role, [], {}, pending, [], "", {}, [],
+                                               self.state.kind, self.state.role_resources)
+                if not result["accepted"]:
+                    result["requirements"] = self.state.requirements()
+                    return result
         result = self.state.finish(direct, output)
         if result["accepted"]:
             self.set_task_title(task_title)
@@ -1023,14 +1029,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
             raise TaskOutputReady(self.state.final_output)
         
         progress = self.progress_fingerprint()
-        finalization_pending = (
-            self.state.status == Lifecycle.ACTIVE
-            and self.state.kind is not None
-            and not self.state.requirements())
-
-        if finalization_pending:
-            self._task_stalls = 0
-        elif progress == self._task_progress:
+        if progress == self._task_progress:
             self._task_stalls += 1
         else:
             self._task_stalls = 0
