@@ -112,7 +112,7 @@ def list_code(directory: str = ".", recursive: bool = False,
         result = list_files(str(_path(directory)), recursive=recursive,
                             suffix=suffix)
         observation = normalize_result(result)
-        if not observation.successful:
+        if observation.outcome != Outcome.SUCCESS:
             return observation.payload()
         result = observation.data
         entries = result.splitlines()
@@ -151,7 +151,7 @@ def list_code(directory: str = ".", recursive: bool = False,
 
 def search_code(query: str, directory: str = ".",
                 suffix: str = ".py",
-                limit: int = SEARCH_CODE_MAX_RESULTS) -> dict:
+                limit: Annotated[int, Field(ge=1, le=SEARCH_CODE_MAX_RESULTS)] = SEARCH_CODE_MAX_RESULTS) -> dict:
     """Search the assistant's local source checkout for text or symbols.
     Plain-text search only; regular expressions are not supported.
     An exact phrase match is preferred. If the complete query does not occur
