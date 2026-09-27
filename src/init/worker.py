@@ -49,8 +49,7 @@ class VoiceInputWorker(QThread):
 
     def run(self):
         try:
-            from src.init.voice import (record_voice, recording_to_wav,
-                                        transcribe_voice)
+            from src.init.voice import record_voice, recording_to_wav
 
             with desktop_audio(stop_event=self.stop_event, tail=0):
                 if self.isInterruptionRequested():
@@ -64,12 +63,6 @@ class VoiceInputWorker(QThread):
                 return
             self.processing.emit()
             self.audio_wav = recording_to_wav(*recording)
-            try:
-                self.transcript, _ = transcribe_voice(*recording)
-            except Exception as error:
-                logging.getLogger("assistant.voice").warning(
-                    "Voice transcript unavailable; continuing with native audio: %s",
-                    error)
         except Exception as error:
             self.error = str(error)
 
@@ -181,7 +174,7 @@ class AssistantWorker(QObject):
             self.rejected.emit(turn_id, str(error))
             return
         self.accepted.emit(turn_id)
-        prompt = (message.transcript.strip() if voice_input else message.text)
+        prompt = "" if voice_input else message.text
         try:
             cancel_event = self.cancel_event
             set_confirmation_handler(
@@ -254,8 +247,7 @@ class AssistantWorker(QObject):
                 event_loop=self.event_loop,
                 attachments=attachment_session,
                 session=self.session,
-                audio_input=(message.audio_wav
-                             if voice_input and not prompt else None),
+                audio_input=message.audio_wav if voice_input else None,
                 task_title=task_title,
                 on_surface=receive_surface,
                 on_task_title=receive_task_title)

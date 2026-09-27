@@ -548,7 +548,7 @@ class Assistant:
             from pydantic_ai.messages import (FunctionToolCallEvent, FunctionToolResultEvent,
                                               ToolCallPart, ToolReturnPart)
             from src.init.tools import TOOLS
-            buffer = SpeechBuffer()
+            buffer = SpeechBuffer(low_latency=voice_model_active)
             tool_names = {tool.__name__ for tool in TOOLS} | controller.control_tools.keys()
             conversation_messages = list(history)
             current_prompt = model_prompt

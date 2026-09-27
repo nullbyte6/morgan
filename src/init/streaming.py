@@ -191,10 +191,11 @@ class MarkdownSpeechFilter:
         return ". ".join(cells) + ".\n" if cells else ""
 
 class SpeechBuffer:
-    def __init__(self):
+    def __init__(self, *, low_latency=False):
         self.buffer = ""
         self.first = True
         self.markdown = MarkdownSpeechFilter()
+        self.low_latency = low_latency
 
     def feed(self, text):
         self.buffer += self.markdown.feed(text)
@@ -202,9 +203,14 @@ class SpeechBuffer:
         while self.buffer:
             pattern = (r'(?<=[.!?])["»”’]?\s+' if self.first
                        else r'(?<=[.!?;:])["»”’]?\s+')
+            minimum = 8 if self.low_latency else 20
+            if self.low_latency:
+                pattern = r'(?<=[.!?;:,])["»”’]?\s+|\n+'
             match = next((m for m in re.finditer(pattern, self.buffer)
-                          if m.end() >= 20), None)
+                          if m.end() >= minimum), None)
             end = match.end() if match else -1
+            if end <= 0 and self.low_latency and len(self.buffer) >= 160:
+                end = self.buffer.rfind(" ", 80, 160)
             if end <= 0:
                 break
             phrase = self.buffer[:end].strip()
