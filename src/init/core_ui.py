@@ -229,6 +229,9 @@ class ArloWindow(DesktopWindow):
         self.speaking = False
         self.stopping = False
         self.pending_prompt = None
+        self.active_prompt = None
+        self.paused_prompt = None
+        self.task_stop_requested = False
         self.turn_id = 0
         self.status_key = "status.waking"
         self.showing_greeting = True
@@ -608,6 +611,15 @@ class ArloWindow(DesktopWindow):
             Command("workspace.chat", "palette.chat", self.focus_main_workspace,
                     ("chat", "home", "inicio"),
                     lambda: self.workspace.get_panel(self.main_workspace_panel_id) is not None),
+            Command("task.stop", "palette.stop_task", self.stop_current_task,
+                    ("stop task", "detener tarea", "cancelar"),
+                    lambda: self.ready and (self.busy and not self.stopping or self.paused_prompt is not None)),
+            Command("task.pause", "palette.pause_task", self.pause_current_task,
+                    ("pause task", "pausar tarea"),
+                    lambda: self.ready and self.busy and not self.stopping),
+            Command("task.resume", "palette.resume_task", self.resume_current_task,
+                    ("resume task", "resumir tarea", "reanudar", "continuar"),
+                    self.can_resume_task),
         ]
         commands.extend(
             Command(f"workspace.{key}", f"palette.{key}",
@@ -1215,6 +1227,10 @@ class ArloWindow(DesktopWindow):
         self.close()
 
     def start_prompt(self, prompt):
+        self.active_prompt = prompt
+        self.paused_prompt = None
+        self.task_stop_requested = False
+        self.set_status("")
         self.turn_id += 1
         self.task_presentation.begin(self.turn_id)
         self.showing_greeting = False
@@ -1313,6 +1329,49 @@ class ArloWindow(DesktopWindow):
         if self.isVisible():
             self.input.setFocus()
 
+    def can_resume_task(self):
+        return (self.ready and self.paused_prompt is not None and not self.busy
+                and not self.stopping and not self.recording and self.voice_thread is None
+                and self.submitting is None and self.pending_prompt is None and not self.quitting)
+
+    def pause_current_task(self):
+        if not self.ready or not self.busy or self.stopping:
+            return
+        self.paused_prompt = self.active_prompt
+        self.stop_response()
+
+    def cancel_current_task(self):
+        from src.init.task_state import Lifecycle
+
+        controller = getattr(self.worker.assistant, "_active_task_controller", None)
+        if controller is not None and controller.state.status in {
+                Lifecycle.INTERRUPTED, Lifecycle.WAITING, Lifecycle.BLOCKED, Lifecycle.LIMIT_REACHED}:
+            controller.state.suspend(Lifecycle.CANCELLED, "Stopped by the user.")
+            self.worker.assistant._active_task_controller = None
+        self.task_stop_requested = False
+
+    def stop_current_task(self):
+        if not self.ready or not (self.busy or self.paused_prompt is not None):
+            return
+        self.paused_prompt = None
+        self.task_stop_requested = True
+        self.set_status("")
+        if self.busy:
+            if not self.stopping:
+                self.stop_response()
+        else:
+            self.cancel_current_task()
+
+    def resume_current_task(self):
+        if not self.can_resume_task():
+            return
+        prompt = self.paused_prompt
+        controller = getattr(self.worker.assistant, "_active_task_controller", None)
+        if (controller is not None and controller.state.requests
+                and controller.state.status in {"interrupted", "waiting", "blocked", "limit_reached"}):
+            prompt = DesktopMessage(tr("palette.resume_prompt"), prompt.attachments)
+        self.start_prompt(prompt)
+
     def stop_response(self):
         self._stop_response_timer()
         self.stopping = True
@@ -1399,6 +1458,11 @@ class ArloWindow(DesktopWindow):
         self.task_presentation.finish(self.turn_id, interrupted=interrupted,
                                       failed=self.permission_denied_state)
         task_state = getattr(self.worker.assistant, "task_state", None)
+        if self.paused_prompt is not None and (
+                task_state is not None and task_state.status == "complete" or task_state is None and reply):
+            self.paused_prompt = None
+        if self.task_stop_requested:
+            self.cancel_current_task()
         task_failed = self.task_presentation.view.state in {"error", "waiting", "stopped"}
         self.finish_wake_command("failed" if interrupted or task_failed else "completed",
                                  "Interrupted" if interrupted else
@@ -1409,8 +1473,8 @@ class ArloWindow(DesktopWindow):
             self.command_output.show()
             self.update_subtitles(reply.splitlines()[0])
         elif not self.current_reply:
-            self.update_subtitles(reply or tr("status.stopped"
-                                              if interrupted else "ui.no_response"))
+            self.update_subtitles(reply or tr("status.paused" if self.paused_prompt is not None else
+                                              "status.stopped" if interrupted else "ui.no_response"))
         else:
             self.update_subtitles("")
 
@@ -1419,6 +1483,8 @@ class ArloWindow(DesktopWindow):
         self.busy = False
         self.speaking = False
         self.stopping = False
+        if self.paused_prompt is not None:
+            self.set_status("status.paused")
         self.orb.clear()
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
@@ -1458,6 +1524,8 @@ class ArloWindow(DesktopWindow):
 
     @Slot(str)
     def on_error(self, error):
+        if self.task_stop_requested:
+            self.cancel_current_task()
         if not self.ready:
             self.status_key = ""
             self.status.setText(tr("ui.error", error=error))
