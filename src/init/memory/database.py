@@ -19,6 +19,7 @@
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from src.init.identity import get_assistant_name
 from pathlib import Path
 
 def timestamp():
@@ -119,7 +120,7 @@ class Database:
             connection.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)")
             versions = [row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version")]
             if versions != list(range(1, len(versions) + 1)) or len(versions) > len(MIGRATIONS):
-                raise RuntimeError("Unsupported memory schema; upgrade Arlo or restore a compatible backup")
+                raise RuntimeError(f"Unsupported memory schema; upgrade {get_assistant_name()} or restore a compatible backup")
             for version, statements in enumerate(MIGRATIONS, 1):
                 if version <= len(versions):
                     continue
@@ -130,7 +131,7 @@ class Database:
         except sqlite3.OperationalError as error:
             connection.rollback()
             if "fts5" in str(error).lower():
-                raise RuntimeError("Arlo memory requires SQLite with FTS5 enabled") from error
+                raise RuntimeError(f"{get_assistant_name()} memory requires SQLite with FTS5 enabled") from error
             raise
         except BaseException:
             connection.rollback()

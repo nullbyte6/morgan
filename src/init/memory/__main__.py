@@ -20,13 +20,14 @@
 import argparse
 import json
 import sys
+from src.init.identity import get_assistant_name
 from pathlib import Path
 
 from .service import MemoryService
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Arlo local memory maintenance")
+    parser = argparse.ArgumentParser(description=f"{get_assistant_name()} local memory maintenance")
     parser.add_argument("--database", type=Path)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check")

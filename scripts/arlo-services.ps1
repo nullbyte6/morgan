@@ -26,12 +26,16 @@ if (-not (Test-Path -LiteralPath $python)) {
     throw "Python environment not found: $python"
 }
 
-$assistantId = & $python -B -c "from src.init.identity import get_assistant_identifier; print(get_assistant_identifier())"
-if ($LASTEXITCODE -ne 0 -or -not $assistantId) {
+$assistantMetadata = & $python -X utf8 -B -c "import json; from src.init.identity import get_assistant_identifier, get_assistant_name; from src.init.lang import tr; print(json.dumps(dict(identifier=get_assistant_identifier(), name=get_assistant_name(), console_title=tr('console.console_title'))))"
+if ($LASTEXITCODE -ne 0 -or -not $assistantMetadata) {
     throw "Could not resolve the assistant service namespace."
 }
-$env:ARLO_LOG_DIR = Join-Path $env:TEMP $assistantId.Trim()
-$logDir = $env:ARLO_LOG_DIR
+$assistantMetadata = $assistantMetadata | ConvertFrom-Json
+$assistantName = $assistantMetadata.name
+$env:ASSISTANT_NAME = $assistantName
+$env:ASSISTANT_CONSOLE_TITLE = $assistantMetadata.console_title
+$env:ASSISTANT_LOG_DIR = Join-Path $env:TEMP $assistantMetadata.identifier
+$logDir = $env:ASSISTANT_LOG_DIR
 $ttsLog = Join-Path $logDir "tts.log"
 $agentLog = Join-Path $logDir "agent.log"
 $consoleScript = Join-Path $logDir "console.ps1"
@@ -90,7 +94,7 @@ function Wait-TcpPort {
     return $false
 }
 
-Write-Host "ARLO SERVICES" -ForegroundColor Cyan
+Write-Host "$assistantName SERVICES" -ForegroundColor Cyan
 Write-Host "-------------"
 Write-Host "[1/3] Checking Ollama..."
 if (-not (Test-TcpPort -Address "127.0.0.1" -Port 11434)) {
@@ -120,7 +124,7 @@ $modelName = $env:MODEL
 $managedModel = [string]::IsNullOrWhiteSpace($modelName)
 if ([string]::IsNullOrWhiteSpace($modelName)) {
     if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
-        throw "ARLO model configuration not found: $corePath"
+        throw "$assistantName model configuration not found: $corePath"
     }
 
     $core = Get-Content -LiteralPath $corePath -Raw -Encoding utf8 | ConvertFrom-Json
@@ -227,7 +231,7 @@ $ownedTts = @($pythonProcesses | Where-Object {
     $_.CreationDate -lt $latestVoiceChange
 })
 foreach ($ttsOwner in $ownedTts) {
-    Write-Host "Reloading the updated Arlo voice service..."
+    Write-Host "Reloading the updated $assistantName voice service..."
     $ttsChildren = @($pythonProcesses | Where-Object {
         $_.ParentProcessId -eq $ttsOwner.ProcessId -and
         $_.CommandLine -match '\s-m\s+src\.init\.tts_server(?:\s|$)'
@@ -292,9 +296,9 @@ Write-Host "[3/3] Preparing debug console..."
 
 if (-not $NoConsole) {
     $consoleContent = @'
-$Host.UI.RawUI.WindowTitle = "ARLO Console"
+$Host.UI.RawUI.WindowTitle = $env:ASSISTANT_CONSOLE_TITLE
 
-$logDir = $env:ARLO_LOG_DIR
+$logDir = $env:ASSISTANT_LOG_DIR
 
 $files = @(
     @{
@@ -313,7 +317,7 @@ foreach ($file in $files) {
     $positions[$file.Name] = 0L
 }
 
-Write-Host "ARLO DEBUG CONSOLE" -ForegroundColor Cyan
+Write-Host "$env:ASSISTANT_NAME DEBUG CONSOLE" -ForegroundColor Cyan
 Write-Host "------------------"
 
 while ($true) {
@@ -424,4 +428,4 @@ while ($true) {
 }
 
 Write-Host "All services ready." -ForegroundColor Green
-Write-Host "You can now launch Arlo normally."
+Write-Host "You can now launch $assistantName normally."

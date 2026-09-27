@@ -32,11 +32,11 @@ import uuid
 _jobs = {}
 _candidates = {}
 _lock = threading.RLock()
-from .config import HOME_PATH
+from .config import DEFAULTS, HOME_PATH
 from .identity import get_assistant_identifier
 
 _SHARED = {"microsoft", "windows", "packages", "programs", "temp", "cache",
-           "google", "mozilla", "adobe", "common files", "arlo", ".arlo", HOME_PATH.name, get_assistant_identifier()}
+           "google", "mozilla", "adobe", "common files", DEFAULTS["assistant"]["name"].casefold(), "." + DEFAULTS["assistant"]["name"].casefold(), HOME_PATH.name, get_assistant_identifier()}
 
 
 def _result(status, **values):
@@ -101,7 +101,7 @@ def get_app_operation(job_id: str) -> str:
     with _lock:
         job = _jobs.get(job_id)
         if not job:
-            return _result("unknown", error=tr('app_manager.unknown_job_or_arlo_restarted_inspect_installed_apps_before_retr'))
+            return _result("unknown", error=tr('app_manager.unknown_job_or_assistant_restarted_inspect_installed_apps_before_retr'))
         if "result" in job:
             return job["result"]
         code = job["process"].poll()
@@ -243,6 +243,6 @@ def clean_app_residue(candidate_id: str) -> str:
                            disk_space_reclaimed=False)
         except ImportError:
             return _result("error",
-                           error=tr('app_manager.install_arlo_requirements_send2trash_to_enable_recoverable_clean'))
+                           error=tr('app_manager.install_assistant_requirements_send2trash_to_enable_recoverable_clean'))
         except (OSError, ValueError) as error:
             return _result("error", error=str(error))

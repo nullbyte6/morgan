@@ -18,6 +18,8 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Small embedded browser view used by the Arlo workspace."""
 
+from src.init.identity import get_assistant_name
+
 from PySide6.QtCore import QUrl, Qt, Slot
 from PySide6.QtWidgets import *
 
@@ -115,7 +117,7 @@ class BrowserView(QWidget):
                 target_id = workspace.panel_id
             workspace = workspace.parentWidget()
         if workspace is None:
-            self.status.setText("Open the browser in an Arlo workspace to manage extensions")
+            self.status.setText(f"Open the browser in an {get_assistant_name()} workspace to manage extensions")
             return
         for panel_id in workspace.panel_ids:
             panel = workspace.get_panel(panel_id)

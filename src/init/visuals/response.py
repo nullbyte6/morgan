@@ -18,6 +18,8 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Streaming Markdown responses displayed inside workspace panels."""
 
+from src.init.identity import get_assistant_name
+
 import threading
 from dataclasses import dataclass, field
 
@@ -65,7 +67,7 @@ class ResponseBridge(QObject):
         request = ResponseRequest(title.strip() or "Response")
         with self._lock:
             if self._closed:
-                raise RuntimeError("Arlo's response workspace is unavailable")
+                raise RuntimeError(f"{get_assistant_name()}'s response workspace is unavailable")
             self._pending.add(request)
         try:
             if QThread.currentThread() == self.thread():
@@ -140,14 +142,14 @@ class ResponseBridge(QObject):
         with self._lock:
             self._closed = True
             for request in tuple(self._pending):
-                self._complete(request, error="Arlo's response workspace was closed")
+                self._complete(request, error=f"{get_assistant_name()}'s response workspace was closed")
 
 
 def request_response_workspace(title: str = "Response") -> str:
     with _registry_lock:
         bridge = _bridge
     if bridge is None:
-        raise RuntimeError("The response workspace requires the running Arlo desktop")
+        raise RuntimeError(f"The response workspace requires the running {get_assistant_name()} desktop")
     return bridge.request(title)
 
 class ResponseView(QWidget):

@@ -31,7 +31,7 @@ def current_instructions() -> str:
     personality = config["personality"]
     instructions = config["instructions"]
     sections = "\n".join(
-        f"{key}: {value.replace('{assistant_name}', name) if key == 'identity' else value}"
+        f"{key}: {value.replace('{assistant_name}', name)}"
         for key, value in instructions.items() if value)
     style = "\n".join(
         f"{key}: {value}" for key, value in personality.items() if value)

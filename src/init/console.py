@@ -18,7 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 from src.init.lang import tr
-from .identity import get_assistant_identifier
+from .identity import get_assistant_identifier, get_assistant_environment
 import logging
 import os
 import subprocess
@@ -88,12 +88,14 @@ class DebugConsole:
     def start(self):
         self.log_path.touch(exist_ok=True)
 
-        if os.environ.get("ARLO_EXTERNAL_CONSOLE") == "1":
+        if get_assistant_environment("EXTERNAL_CONSOLE") == "1":
             return
 
         log_path = str(self.log_path).replace("'", "''")
+        title = tr("console.console_title")
+        script_title = title.replace("'", "''")
         self.console_script.write_text(
-            "$Host.UI.RawUI.WindowTitle = 'ARLO Console'\n"
+            f"$Host.UI.RawUI.WindowTitle = '{script_title}'\n"
             f"Get-Content -LiteralPath '{log_path}' -Tail 30 -Wait\n",
             encoding="utf-8")
 
@@ -110,7 +112,7 @@ class DebugConsole:
             wt,
             "-w", "new",
             "new-tab",
-            "--title", "ARLO Console",
+            "--title", title,
             "--",
             pwsh,
             "-NoLogo",
@@ -145,8 +147,8 @@ class DebugConsole:
         root.setLevel(logging.DEBUG)
 
     def redirect_streams(self):
-        sys.stdout = LogStream("arlo.stdout", logging.INFO)
-        sys.stderr = LogStream("arlo.stderr", logging.INFO)
+        sys.stdout = LogStream("assistant.stdout", logging.INFO)
+        sys.stderr = LogStream("assistant.stderr", logging.INFO)
 
     def restore_streams(self):
         sys.stdout = self.original_stdout
@@ -199,8 +201,8 @@ class DebugConsole:
         except Exception:
             pass
 
-        self._original_fd1 = self._pipe_native_stream(1,"arlo.native.stdout")
-        self._original_fd2 = self._pipe_native_stream(2, "arlo.native.stderr")
+        self._original_fd1 = self._pipe_native_stream(1,"assistant.native.stdout")
+        self._original_fd2 = self._pipe_native_stream(2, "assistant.native.stderr")
 
     def restore_native_streams(self):
         if self._original_fd1 is not None:

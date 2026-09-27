@@ -8,7 +8,7 @@ $module = "entry.desktop"
 
 foreach ($path in @($python, $services)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        throw "ARLO required file not found: $path"
+        throw "Assistant required file not found: $path"
     }
 }
 
@@ -18,7 +18,7 @@ $env:PYTHONPATH = @(
     (Join-Path $root "src\third_party\Matcha-TTS")
 ) -join [IO.Path]::PathSeparator
 
-$env:ARLO_EXTERNAL_CONSOLE = "1"
+$env:ASSISTANT_EXTERNAL_CONSOLE = "1"
 
 Set-Location -LiteralPath $root
 
@@ -30,10 +30,10 @@ else {
 }
 
 if (-not $?) {
-    throw "ARLO services failed to start."
+    throw "Assistant services failed to start."
 }
 
-Write-Host "Starting ARLO: $Mode"
+Write-Host "Starting $env:ASSISTANT_NAME`: $Mode"
 
 if ($Mode -eq "Desktop") {
     Start-Process `
@@ -42,7 +42,7 @@ if ($Mode -eq "Desktop") {
         -WorkingDirectory $root `
         -WindowStyle Hidden
 
-    Write-Host "ARLO started independently in the background."
+    Write-Host "$env:ASSISTANT_NAME started independently in the background."
     exit 0
 }
 

@@ -23,6 +23,7 @@ import importlib
 import re
 import sys
 import unicodedata
+from .identity import get_assistant_name
 from pathlib import Path
 
 
@@ -72,13 +73,16 @@ def is_reload_command(text: str) -> bool:
                       "update modules", "update all modules",
                       "reload modules", "reload all modules"}:
         return True
+    assistant_name = re.escape("".join(
+        character for character in unicodedata.normalize("NFKD", get_assistant_name().casefold())
+        if not unicodedata.combining(character)))
     return re.fullmatch(
         r"(?:reload|recarga|recargar|actualiza|actualizar|update|refresh) (?:(?:los|todos los|sus|all|the) )?(?:"
         r"modulos|modules|archivos|ficheros|files)"
-        r"(?: de (?:arlo|init(?: y diagnostics)?|diagnostics)|"
-        r" in (?:arlo|init(?: and diagnostics)?))?|"
+        rf"(?: de (?:{assistant_name}|init(?: y diagnostics)?|diagnostics)|"
+        rf" in (?:{assistant_name}|init(?: and diagnostics)?))?|"
         r"(?:reload|recarga|recargar|actualiza|actualizar|update|refresh) (?:(?:el|the) )?(?:"
-        r"arlo|codigo|source|the source|"
+        rf"{assistant_name}|codigo|source|the source|"
         r"la hoja de estilos|hoja de estilos|los estilos|estilos|stylesheet)",
         normalized,
     ) is not None

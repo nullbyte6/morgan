@@ -21,6 +21,7 @@
 import sys
 from html import escape
 from pathlib import Path
+from src.init.identity import get_assistant_name
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QFont, QFontDatabase, QPainter
@@ -140,7 +141,7 @@ class FlowchartWindow(QMainWindow):
     def __init__(self, chart: Flowchart | None = None, parent=None):
         super().__init__(parent)
         self.chart = chart if chart is not None else demo_flowchart()
-        self.setWindowTitle(f"Arlo Flowchart — {self.chart.title}")
+        self.setWindowTitle(f"{get_assistant_name()} Flowchart — {self.chart.title}")
         self.resize(800, 720)
         self.setMinimumSize(400, 360)
         try:

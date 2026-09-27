@@ -18,6 +18,8 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Thread-safe navigation requests for Arlo's embedded browser."""
 
+from src.init.identity import get_assistant_name
+
 import threading
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
@@ -59,7 +61,7 @@ class BrowserBridge(QObject):
         request = BrowserRequest(url)
         with self._lock:
             if self._closed:
-                raise RuntimeError("Arlo's embedded browser is unavailable")
+                raise RuntimeError(f"{get_assistant_name()}'s embedded browser is unavailable")
             self._pending.add(request)
         try:
             if QThread.currentThread() == self.thread():
@@ -104,14 +106,14 @@ class BrowserBridge(QObject):
                 if panel is None:
                     view = BrowserView(initial_url=None)
                     if view.web_view is None:
-                        raise RuntimeError("Arlo's embedded browser requires Qt WebEngine")
+                        raise RuntimeError(f"{get_assistant_name()}'s embedded browser requires Qt WebEngine")
                     view.setProperty("workspaceViewKey", "browser")
                     panel_id = workspace.open_panel(title="Browser", content=view)
                 else:
                     view = panel.content
                     panel_id = panel.panel_id
                     if view.web_view is None:
-                        raise RuntimeError("Arlo's embedded browser requires Qt WebEngine")
+                        raise RuntimeError(f"{get_assistant_name()}'s embedded browser requires Qt WebEngine")
                 view.open_url(request.url)
                 workspace.focus_panel(panel_id)
                 window = self.parent()
@@ -137,7 +139,7 @@ class BrowserBridge(QObject):
         with self._lock:
             self._closed = True
             for request in tuple(self._pending):
-                self._finish(request, "Arlo's embedded browser was closed")
+                self._finish(request, f"{get_assistant_name()}'s embedded browser was closed")
 
 
 def open_embedded_url(url: str) -> None:
@@ -148,5 +150,5 @@ def open_embedded_url(url: str) -> None:
     with _registry_lock:
         bridge = _bridge
     if bridge is None:
-        raise RuntimeError("The embedded browser requires the running Arlo desktop")
+        raise RuntimeError(f"The embedded browser requires the running {get_assistant_name()} desktop")
     bridge.request(url)

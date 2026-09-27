@@ -17,6 +17,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
+from src.init.identity import get_assistant_name
 
 from pathlib import Path
 
@@ -279,7 +280,7 @@ class EditorView(QWidget):
             self.open_file(path)
         except (OSError, UnicodeError, ValueError) as error:
             QMessageBox.warning(
-                self, "Arlo", str(error))
+                self, f"{get_assistant_name()}", str(error))
 
     def save_current(self):
         editor = self.current_editor()
@@ -305,7 +306,7 @@ class EditorView(QWidget):
             editor.save_file(path)
         except (OSError, ValueError) as error:
             QMessageBox.warning(
-                self, "Arlo", str(error))
+                self, f"{get_assistant_name()}", str(error))
             return False
 
         self.update_title()

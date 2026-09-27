@@ -852,7 +852,7 @@ class Assistant:
             self.debug_console = DebugConsole()
             self.debug_console.start()
             self.debug_console.configure_logging()
-            logging.getLogger("arlo").info(tr('agent.arlo_is_awake'))
+            logging.getLogger("assistant").info(tr('agent.assistant_is_awake'))
 
         except (EOFError, KeyboardInterrupt):
             pass

@@ -123,7 +123,7 @@ class TTSServer:
         with self._client_lock:
             self._client = client
 
-        logger.info(tr('tts_server.arlo_connected'))
+        logger.info(tr('tts_server.assistant_connected'))
 
         try:
             with client.makefile(
@@ -170,7 +170,7 @@ class TTSServer:
                     self._client = None
 
             client.close()
-            logger.info(tr('tts_server.arlo_disconnected'))
+            logger.info(tr('tts_server.assistant_disconnected'))
             self.voice.stop()
 
     def run(self) -> None:

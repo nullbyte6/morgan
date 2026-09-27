@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Embedded terminal with an independent, persistent shell per workspace."""
 from __future__ import annotations
+from src.init.identity import get_assistant_name
 
 import os
 import queue
@@ -76,7 +77,7 @@ class TerminalBridge(QObject):
         request = TerminalRequest(argv, directory, command, timeout)
         with self._lock:
             if self._closed:
-                raise RuntimeError("Arlo's terminal is shutting down")
+                raise RuntimeError(f"{get_assistant_name()}'s terminal is shutting down")
             self._pending.add(request)
         self.requested.emit(request)
         if not request.started.wait(15):
@@ -167,7 +168,7 @@ class TerminalBridge(QObject):
         with self._lock:
             self._closed = True
             for request in tuple(self._pending):
-                self._complete(request, status="cancelled", error="Arlo's terminal was closed")
+                self._complete(request, status="cancelled", error=f"{get_assistant_name()}'s terminal was closed")
             for session in self._sessions:
                 session.stop()
 
