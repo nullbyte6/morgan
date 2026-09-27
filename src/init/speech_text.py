@@ -17,6 +17,60 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import re
+from functools import lru_cache
+
+from babel import UnknownLocaleError
+from babel.numbers import NumberFormatError, parse_decimal
+from lingua import LanguageDetectorBuilder
+from num2words import num2words
+
+
+@lru_cache(maxsize=1)
+def speech_language_detector():
+    return LanguageDetectorBuilder.from_all_languages().build()
+
+
+class SpeechNumbers:
+    """Read numeric spans in the response language without rewriting words."""
+
+    def __init__(self, context=""):
+        self.context = context
+        self.response = ""
+
+    def observe(self, text):
+        self.response += " " + text
+
+    def normalize(self, text):
+        source = self.response if any(c.isalpha() for c in self.response) else self.context
+        language = speech_language_detector().detect_language_of(source)
+        if language is None:
+            return text
+        code = language.iso_code_639_1.name.lower()
+
+        def cardinal(value):
+            try:
+                return num2words(value, lang=code)
+            except (NotImplementedError, OverflowError, ValueError):
+                return str(value)
+
+        def replace(match):
+            original = match.group()
+            try:
+                number = parse_decimal(original, locale=code, strict=True)
+            except (NumberFormatError, UnknownLocaleError):
+                spoken = re.sub(r"\d+", lambda part: cardinal(int(part.group())), original)
+            else:
+                spoken = cardinal(number)
+                if spoken == str(number):
+                    return original
+            if match.start() and text[match.start() - 1].isalnum():
+                spoken = " " + spoken
+            if match.end() < len(text) and text[match.end()].isalpha():
+                spoken += " "
+            return spoken
+
+        return re.sub(r"(?<!\w)-\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*", replace, text)
+
 
 LETTER_NAMES = {
     "a": "a", "b": "be", "c": "ce", "d": "de", "e": "e",
