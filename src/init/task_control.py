@@ -77,6 +77,8 @@ class TaskControl(AbstractCapability):
         self.context_characters = 48000
         self._recovery_progress = None
         self._recovery_stalls = 0
+        self._task_progress = None
+        self._task_stalls = 0
         self.request_configuration = {}
         self.read_cache = {}
         self.receipts = {}
@@ -498,7 +500,23 @@ and retain its consent checks. cd requests use change_directory and Git requests
 
     def compact(self, messages):
         result = copy.deepcopy(messages)
-        for message in result:
+        pending = set()
+        boundaries = []
+        latest_response = None
+        for index, message in enumerate(result):
+            if message.kind == "response":
+                latest_response = index
+            for part in message.parts:
+                if part.part_kind == "tool-call":
+                    pending.add(part.tool_call_id)
+                elif part.part_kind in ("tool-return", "retry-prompt"):
+                    pending.discard(getattr(part, "tool_call_id", None))
+            if not pending:
+                boundaries.append(index + 1)
+        if latest_response is None:
+            return result
+        protected = latest_response
+        for message in result[:protected]:
             for part in message.parts:
                 if part.part_kind == "tool-return":
                     raw = encoded(part.content)
@@ -508,30 +526,43 @@ and retain its consent checks. cd requests use change_directory and Git requests
         raw = ModelMessagesTypeAdapter.dump_json(result).decode()
         if len(raw) <= self.context_characters:
             return result
-        pending = set()
-        boundaries = []
-        responded = False
-        for index, message in enumerate(result):
-            responded = responded or message.kind == "response"
-            for part in message.parts:
-                if part.part_kind == "tool-call":
-                    pending.add(part.tool_call_id)
-                elif part.part_kind in ("tool-return", "retry-prompt"):
-                    pending.discard(getattr(part, "tool_call_id", None))
-            if not pending and responded:
-                boundaries.append(index + 1)
-        for boundary in boundaries:
-            suffix = result[boundary:]
-            if len(ModelMessagesTypeAdapter.dump_json(suffix)) <= self.context_characters // 2:
-                archive = self.archive(ModelMessagesTypeAdapter.dump_json(
-                    result[:boundary]).decode(), "Earlier conversation and tool evidence")
-                self.trace("context_compacted", archived_messages=boundary,
-                           retained_messages=len(suffix), archive=archive,
-                           archived_tool_calls=[part.tool_call_id for message in result[:boundary]
-                                                for part in message.parts if part.part_kind == "tool-return"])
-                return [ModelRequest(parts=[UserPromptPart(
-                    "Earlier context archived without discarding evidence: " + archive)]), *suffix]
-        return result
+        user_index = next((index for index in range(len(result) - 1, -1, -1)
+                           if (message := result[index]).kind == "request"
+                           and not (message.metadata or {}).get("task_context_archive")
+                           and any(part.part_kind == "user-prompt" for part in message.parts)), None)
+        user_message = (replace(result[user_index], parts=[part for part in result[user_index].parts
+                        if part.part_kind == "user-prompt"]) if user_index is not None else None)
+        candidates = [boundary for boundary in boundaries if boundary <= protected]
+        if not candidates:
+            return result
+        boundary = candidates[-1]
+        for candidate in candidates:
+            suffix = result[candidate:]
+            retained = ([user_message] if user_index is not None and user_index < candidate else []) + suffix
+            if len(ModelMessagesTypeAdapter.dump_json(retained).decode()) <= self.context_characters - 2048:
+                boundary = candidate
+                break
+        suffix = result[boundary:]
+        if user_index is not None and user_index < boundary:
+            suffix.insert(0, user_message)
+        archive = self.archive(ModelMessagesTypeAdapter.dump_json(
+            result[:boundary]).decode(), "Earlier conversation and tool evidence")
+        self.trace("context_compacted", archived_messages=boundary,
+                   retained_messages=len(suffix), archive=archive,
+                   archived_tool_calls=[part.tool_call_id for message in result[:boundary]
+                                        for part in message.parts if part.part_kind == "tool-return"])
+        return [ModelRequest(parts=[UserPromptPart(
+            "Earlier context archived without discarding evidence: " + archive)],
+            metadata={"task_context_archive": True}), *suffix]
+
+    def progress_fingerprint(self):
+        observations = sorted({fingerprint({"tool": evidence.tool, "arguments": evidence.arguments,
+                               "outcome": evidence.outcome, "revisions": evidence.revisions,
+                               "digest": evidence.digest, "effects": evidence.effects})
+                               for evidence in self.state.evidence.values() if not evidence.failed})
+        return fingerprint({"kind": self.state.kind, "criteria": self.state.criteria,
+                            "observations": observations, "findings": self.state.findings,
+                            "revisions": self.state.revisions, "changed_at": self.state.changed_at})
 
     async def before_model_request(self, ctx, request_context):
         self.check_cancelled()
@@ -542,6 +573,18 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.refresh_resources()
         if self.state.status == Lifecycle.COMPLETE and self.state.final_output is not None:
             raise TaskOutputReady(self.state.final_output)
+        progress = self.progress_fingerprint()
+        self._task_stalls = self._task_stalls + 1 if progress == self._task_progress else 0
+        self._task_progress = progress
+        if self._task_stalls >= 12:
+            self.state.suspend(Lifecycle.LIMIT_REACHED,
+                               "Task paused after repeated requests without new validated evidence or criterion progress. "
+                               "The task and evidence are preserved. Resume only after changing the approach.")
+            self.trace("task_stalled", consecutive_requests=self._task_stalls)
+            self.publish_activity()
+            raise TaskStopped(self.state.notice)
+        if self._task_stalls == 6:
+            self.trace("task_stall_warning", consecutive_requests=self._task_stalls)
         if self.state.output_recovery:
             self.state.output_recovery["requirements"] = self.state.requirements()
             progress = fingerprint({
@@ -562,6 +605,11 @@ and retain its consent checks. cd requests use change_directory and Git requests
         snapshot = self.state.snapshot(include_evidence=False)
         history_count = len(messages)
         snapshot_text = encoded(snapshot)
+        if self._task_stalls >= 6:
+            snapshot_text += ("\nProgress guard: recent requests added no new validated evidence or criterion progress. "
+                              "Do not repeat unchanged reads or checkpoints. Continue source pages with only their next_cursor, "
+                              "record evidence-backed findings, and certify completed criteria with existing evidence IDs. "
+                              "Finish the verified answer or defer for a concrete blocker.")
         try:
             history_metrics = serialized_metrics(ModelMessagesTypeAdapter.dump_json(messages))
         except Exception as error:
@@ -663,6 +711,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.cancel_event = cancel_event
         self._recovery_progress = None
         self._recovery_stalls = 0
+        self._task_progress = None
+        self._task_stalls = 0
         self.state.resume()
         if prompt:
             result = ActionResult(Outcome.SUCCESS, prompt, "user_input")
