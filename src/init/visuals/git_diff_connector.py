@@ -1,89 +1,105 @@
-"""Conector entre el panel Git Diff y la herramienta git_diff."""
+"""Connect the Git Diff panel to repository changes and status information."""
 
+import os
 import subprocess
-from pathlib import Path
+
+
+def _run_git(repo_path: str, arguments: list[str]) -> subprocess.CompletedProcess:
+    """Run Git with literal paths and predictable text output."""
+    return subprocess.run(
+        ['git', '--literal-pathspecs', *arguments],
+        cwd=repo_path,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='surrogateescape',
+        check=False,
+        timeout=10
+    )
+
+
+def _parse_status(output: str) -> list[tuple[str, str, str | None]]:
+    """Read NUL-delimited porcelain records, including rename source paths."""
+    entries = []
+    records = iter(output.split('\0'))
+    for record in records:
+        if len(record) < 4:
+            continue
+        status = record[:2]
+        file_path = record[3:]
+        source_path = next(records, None) if 'R' in status or 'C' in status else None
+        entries.append((status, file_path, source_path))
+    return entries
+
+
+def _parse_diff(output: str) -> list[dict]:
+    """Extract changed and context lines without removing source whitespace."""
+    lines = []
+    in_hunk = False
+    for line in output.split('\n'):
+        if line.startswith('diff '):
+            in_hunk = False
+        elif line.startswith('@@'):
+            in_hunk = True
+        elif in_hunk:
+            if line.startswith('+'):
+                lines.append({'type': 'added', 'text': line[1:]})
+            elif line.startswith('-'):
+                lines.append({'type': 'deleted', 'text': line[1:]})
+            elif line.startswith(' '):
+                lines.append({'type': 'context', 'text': line[1:]})
+            elif line.startswith('\\'):
+                lines.append({'type': 'context', 'text': line})
+    return lines
 
 
 def get_git_diff(repo_path: str) -> list[dict]:
-    """
-    Obtiene el diff del repositorio Git actual.
-    
-    Args:
-        repo_path: Ruta al repositorio Git
-        
-    Returns:
-        Lista de dicts con la información del diff
+    """Return file diffs for staged, unstaged, and untracked changes.
+
+    Each entry contains the file path, a lowercase Git status code, and
+    added, deleted, or context lines. Unavailable repositories return no entries.
     """
     diffs = []
-    
     try:
-        # Ejecutar git status para obtener los archivos modificados
-        result = subprocess.run(
-            ['git', 'status', '--porcelain'],
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        
-        lines = result.stdout.strip().split('\n') if result.stdout.strip() else []
-        
-        for line in lines:
-            if not line:
-                continue
-            
-            # Formato de git status --porcelain:
-            # M archivo (modificado)
-            # A archivo (añadido)
-            # D archivo (eliminado)
-            
-            status = line[0]
-            file_path = line[2:]  # Saltamos los primeros 2 caracteres
-            
-            if status in ['M', 'A', 'D', 'R', 'C', 'U']:
-                # Obtener el diff del archivo
-                diff_result = subprocess.run(
-                    ['git', 'diff', '--no-color', '--unified=3', file_path],
-                    cwd=repo_path,
-                    capture_output=True,
-                    text=True,
-                    check=False  # No fallar si no hay cambios
-                )
-                
-                if diff_result.returncode == 0 or not diff_result.stdout.strip():
-                    lines_diff = []
-                    
-                    if diff_result.stdout.strip():
-                        for line in diff_result.stdout.split('\n'):
-                            if line.startswith('+') and not line.startswith('+++'):
-                                lines_diff.append({'type': 'added', 'text': line[1:]})
-                            elif line.startswith('-') and not line.startswith('---'):
-                                lines_diff.append({'type': 'deleted', 'text': line[1:]})
-                            elif line.startswith(' ') or line.startswith('\\'):
-                                lines_diff.append({'type': 'context', 'text': line.strip()})
-                    
-                    diffs.append({
-                        'file': file_path,
-                        'status': status.lower(),
-                        'lines': lines_diff
-                    })
-    
-    except subprocess.CalledProcessError as e:
-        # Ignorar errores de Git (no es un repositorio o no hay cambios)
+        result = _run_git(repo_path, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+        if result.returncode != 0:
+            return diffs
+
+        for status, file_path, source_path in _parse_status(result.stdout):
+            lines = []
+            if status == '??':
+                diff_result = _run_git(repo_path, [
+                    'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv',
+                    '--unified=3', '--', os.devnull, file_path
+                ])
+                if diff_result.returncode not in (0, 1):
+                    continue
+                lines.extend(_parse_diff(diff_result.stdout))
+                status_code = 'a'
+            else:
+                paths = [file_path] if source_path is None else [source_path, file_path]
+                for column, cached in ((0, ['--cached']), (1, [])):
+                    if status[column] not in 'MADRCUT':
+                        continue
+                    diff_result = _run_git(repo_path, [
+                        'diff', *cached, '--no-color', '--no-ext-diff', '--no-textconv',
+                        '--unified=3', '--', *paths
+                    ])
+                    if diff_result.returncode == 0:
+                        lines.extend(_parse_diff(diff_result.stdout))
+                status_code = (status[1] if status[1] != ' ' else status[0]).lower()
+
+            diffs.append({'file': file_path, 'status': status_code, 'lines': lines})
+    except (OSError, subprocess.SubprocessError):
         pass
-    
     return diffs
 
 
 def get_git_status(repo_path: str) -> dict:
-    """
-    Obtiene el estado del repositorio Git.
-    
-    Args:
-        repo_path: Ruta al repositorio Git
-        
-    Returns:
-        Dict con información del estado del repositorio
+    """Return repository validity and modified, added, and deleted file paths.
+
+    Both index and working tree changes are included. Clean repositories are
+    valid, and untracked files are listed as added files.
     """
     status = {
         'is_repo': False,
@@ -91,35 +107,18 @@ def get_git_status(repo_path: str) -> dict:
         'added_files': [],
         'deleted_files': []
     }
-    
     try:
-        result = subprocess.run(
-            ['git', 'status', '--porcelain'],
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        
-        if result.returncode == 0 and result.stdout.strip():
-            status['is_repo'] = True
-            lines = result.stdout.strip().split('\n')
-            
-            for line in lines:
-                if not line:
-                    continue
-                
-                status_char = line[0]
-                file_path = line[2:]
-                
-                if status_char == 'M':
-                    status['modified_files'].append(file_path)
-                elif status_char == 'A':
-                    status['added_files'].append(file_path)
-                elif status_char == 'D':
-                    status['deleted_files'].append(file_path)
-    
-    except Exception:
+        result = _run_git(repo_path, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
+        if result.returncode != 0:
+            return status
+        status['is_repo'] = True
+        for file_status, file_path, source_path in _parse_status(result.stdout):
+            if file_status == '??' or 'A' in file_status or 'C' in file_status:
+                status['added_files'].append(file_path)
+            if 'D' in file_status:
+                status['deleted_files'].append(file_path)
+            if any(code in file_status for code in 'MRTU'):
+                status['modified_files'].append(file_path)
+    except (OSError, subprocess.SubprocessError):
         pass
-    
     return status
