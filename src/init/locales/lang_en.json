@@ -475,7 +475,7 @@
   "task_progress.voice_request": "Voice request",
   "task_progress.pending_title": "Task",
   "task_progress.step_count": "{completed} of {total} steps finished",
-  "task_progress.waiting": "Awaiting permission",
+  "task_progress.waiting": "Waiting for input",
   "task_progress.stopped": "Stopped",
   "task_progress.error": "Finished with issues",
   "task_progress.finished": "Execution finished",
@@ -499,5 +499,17 @@
   "palette.browser": "Open browser",
   "palette.editor": "Open editor",
   "palette.settings": "Open settings",
-  "palette.terminal": "Open terminal"
+  "palette.terminal": "Open terminal",
+  "activity.read": "Reading files",
+  "activity.read_file": "Reading {name}",
+  "activity.search": "Searching references",
+  "activity.git": "Checking Git",
+  "activity.verify": "Verifying results",
+  "activity.execute": "Executing action",
+  "activity.inspect": "Inspecting information",
+  "activity.web": "Consulting the web",
+  "activity.response": "Preparing response",
+  "activity.permission": "Awaiting permission",
+  "activity.waiting_user": "Waiting for your input",
+  "activity.waiting": "Waiting for a dependency"
 }

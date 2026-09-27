@@ -435,7 +435,7 @@ class Assistant:
             attachments=None,
             session=None,
             audio_input=None, *,
-            speech_enabled: bool = True, task_title: str = ""):
+            speech_enabled: bool = True, task_title: str = "", on_activity=None):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
@@ -512,6 +512,8 @@ class Assistant:
             controller.state.title = normalize_task_title(task_title)
         self.task_state = controller.state
         controller.on_action = on_phase
+        controller.on_activity = on_activity
+        controller.publish_activity()
 
         async def generate():
             nonlocal completed_history, stream_messages, execution_started
@@ -754,6 +756,7 @@ class Assistant:
             raise
         finally:
             self._active_cancellation_token = None
+            controller.publish_activity()
             active_attachments.reset(attachment_token)
             self.voice.audio_callback = None
             self.voice.speaking_callback = None
@@ -766,6 +769,7 @@ class Assistant:
         if cancel_event.is_set():
             from src.init.task_state import Lifecycle
             controller.state.suspend(Lifecycle.INTERRUPTED, "Interrupted by the user.")
+            controller.publish_activity()
             if not execution_started:
                 return "", history
             messages = stream_messages or list(history) + [ModelRequest(parts=[UserPromptPart(model_prompt)])]

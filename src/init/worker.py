@@ -190,6 +190,7 @@ class AssistantWorker(QObject):
     speaking = Signal(int, bool)
     subtitle = Signal(int, str)
     phase = Signal(int, str)
+    activity = Signal(int, object)
     task_title = Signal(int, str)
     permission_denied = Signal(int)
     finished = Signal(str)
@@ -357,6 +358,7 @@ class AssistantWorker(QObject):
                 on_speaking=speaking_changed,
                 on_subtitle=lambda text: self.subtitle.emit(turn_id, text),
                 on_phase=lambda phase: self.phase.emit(turn_id, phase),
+                on_activity=lambda activity: self.activity.emit(turn_id, activity),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
                 attachments=attachment_session,

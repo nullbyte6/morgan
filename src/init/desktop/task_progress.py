@@ -17,30 +17,20 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import json
-
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import *
 
 from src.init.lang import tr
-from src.init.task_state import normalize_task_title
 
 class TaskProgressPill(QWidget):
-    """A dismissible view of the desktop's existing execution-phase signals."""
-    def __init__(self, parent=None):
+    """A dismissible view of the shared task presentation."""
+    def __init__(self, presentation, parent=None):
         super().__init__(parent)
-        if parent is not None:
-            parent.installEventFilter(self)
         self.setObjectName("taskProgressHost")
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.turn_id = None
-        self.started = 0
-        self.completed = 0
-        self.active = False
+        self.view = presentation.view
         self.dismissed = False
-        self.state = "running"
-        self.order_title = ""
-        self.step_detail = None
+        presentation.changed.connect(self.on_view)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 8, 12, 8)
@@ -88,74 +78,24 @@ class TaskProgressPill(QWidget):
         self.refresh_language()
         self.hide()
 
-    def begin(self, turn_id, title=""):
-        self.turn_id = turn_id
-        self.order_title = normalize_task_title(title)
-        self.started = self.completed = 0
-        self.active = True
-        self.dismissed = False
-        self.state = "running"
-        self.step_detail = None
-        self.setVisible(False)
+    @property
+    def state(self):
+        return self.view.state
+
+    def sizeHint(self):
+        size = super().sizeHint()
+        size.setWidth(self.fontMetrics().averageCharWidth() * 48)
+        return size
+
+    @Slot(object)
+    def on_view(self, view):
+        if view.turn_id != self.view.turn_id:
+            self.dismissed = False
+            self.hide()
+        self.view = view
         self._render()
-
-    @Slot(int, str)
-    def on_phase(self, turn_id, phase):
-        if turn_id != self.turn_id or not self.active:
-            return
-        if phase.startswith("step:"):
-            try:
-                detail = json.loads(phase[5:])
-            except ValueError:
-                return
-            if (not isinstance(detail, dict)
-                    or detail.get("kind") not in ("inspect", "execute", "verify", "checkpoint", "failed", "skipped")
-                    or not isinstance(detail.get("tool"), str)):
-                return
-            subject = detail.get("subject", "")
-            if not isinstance(subject, str):
-                return
-            self.step_detail = (detail["kind"], " ".join(detail["tool"].split())[:80]," ".join(subject.split())[:80], self.completed)
-        elif phase == "executing":
-            self.started += 1
-            self.state = "running"
-        elif phase == "processing" and self.completed < self.started:
-            self.completed += 1
-            self.state = "running"
-        elif phase == "blocked":
-            self.state = "error"
-        elif phase == "waiting":
-            self.state = "waiting"
-        elif phase in {"interrupted", "cancelled", "limit_reached"}:
-            self.state = "stopped"
-        else:
-            return
-        self._render()
-        if (self.started >= 2 or phase == "blocked") and not self.dismissed:
-            self.setVisible(True)
-
-    @Slot(int, str)
-    def set_task_title(self, turn_id, title):
-        if turn_id != self.turn_id or not self.active or self.order_title:
-            return
-        title = normalize_task_title(title)
-        if title:
-            self.order_title = title
-            self._render()
-
-    def awaiting_permission(self, turn_id, *, waiting=True):
-        if turn_id == self.turn_id and self.active:
-            self.state = "waiting" if waiting else "running"
-            self._render()
-
-    def finish(self, turn_id, *, interrupted=False, failed=False):
-        if turn_id != self.turn_id or not self.active:
-            return
-        self.active = False
-        self.state = ("stopped" if interrupted else "error" if failed or self.state == "error"
-                      else self.state if self.state in {"waiting", "stopped"}
-                      else "finished" if self.completed == self.started else "stopped")
-        self._render()
+        if (view.started >= 2 or view.lifecycle == "blocked") and not self.dismissed:
+            self.show()
 
     @Slot()
     def dismiss(self):
@@ -163,6 +103,7 @@ class TaskProgressPill(QWidget):
         self.setVisible(False)
 
     def refresh_language(self, _language=None):
+        self.setMaximumWidth(self.fontMetrics().averageCharWidth() * 48)
         close = tr("task_progress.hide")
         self.close_button.setToolTip(close)
         self.close_button.setAccessibleName(close)
@@ -170,29 +111,31 @@ class TaskProgressPill(QWidget):
         self._render()
 
     def _render(self):
-        title = self.order_title or tr("task_progress.pending_title")
+        title = self.view.title or tr("task_progress.pending_title")
         self.title.setToolTip(title)
         self.title.setAccessibleName(title)
         self.title.setText(self.title.fontMetrics().elidedText(
             title, Qt.ElideRight, max(1, self.title.width())))
-        count = tr("task_progress.step_count", completed=self.completed, total=self.started)
+        count = tr("task_progress.step_count", completed=self.view.completed, total=self.view.started)
         if self.state == "running":
-            detail = (tr("task_progress.executing", step=self.completed + 1)
-                      if self.completed < self.started else "")
+            detail = (tr("task_progress.executing", step=self.view.completed + 1)
+                      if self.view.completed < self.view.started else "")
+        elif self.state == "waiting":
+            detail = tr("activity." + self.view.activity[0])
         else:
             detail = tr("task_progress." + self.state)
         self.step.setText(tr("task_progress.summary", detail=detail, count=count))
         subtitle = ""
-        if self.step_detail:
-            kind, tool, subject, step = self.step_detail
+        if self.view.step_detail:
+            kind, tool, subject, step = self.view.step_detail
             detail = tr("task_progress.step_" + kind, tool=tool)
             if subject and kind != "checkpoint":
                 detail += "\n" + subject
             subtitle = tr("task_progress.step_detail", step=step, detail=detail)
         self.subtitle.setText(subtitle)
-        self.subtitle.setVisible(self.step_detail is not None)
-        self.bar.setRange(0, max(1, self.started))
-        self.bar.setValue(self.completed)
+        self.subtitle.setVisible(self.view.step_detail is not None)
+        self.bar.setRange(0, max(1, self.view.started))
+        self.bar.setValue(self.view.completed)
         self.bar.setAccessibleName(self.step.text())
         for widget in (self.pill, self.bar):
             if widget.property("state") != self.state:
@@ -201,21 +144,6 @@ class TaskProgressPill(QWidget):
                 widget.style().polish(widget)
                 widget.update()
         self._fit_height()
-        self._place()
-
-    def _place(self):
-        host = self.parentWidget()
-        if host is None:
-            return
-        width = min(host.width(), self.fontMetrics().averageCharWidth() * 48)
-        height = self.layout().totalHeightForWidth(width)
-        if height < 0:
-            height = self.layout().sizeHint().height()
-        target = self.geometry()
-        target.setRect(0, 0, max(0, width), min(host.height(), max(0, height)))
-        if self.geometry() != target:
-            self.setGeometry(target)
-        self.raise_()
 
     def _fit_height(self):
         height = self.pill.layout().totalHeightForWidth(self.pill.width())
@@ -233,6 +161,4 @@ class TaskProgressPill(QWidget):
     def eventFilter(self, watched, event):
         if watched is self.pill and event.type() == event.Type.Resize:
             self._fit_height()
-        if watched is self.parentWidget() and event.type() == event.Type.Resize:
-            self._place()
         return super().eventFilter(watched, event)

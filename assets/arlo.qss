@@ -45,10 +45,16 @@ QWidget#settingsPage {
 
 QLabel#muted,
 QLabel#status,
+QLabel#activityTrail,
 QLabel#subtitles {
     background: transparent;
     color: #cad3f5;
     font-size: 16px;
+}
+
+QLabel#activityTrail {
+    color: #a5adcb;
+    font-size: 14px;
 }
 
 

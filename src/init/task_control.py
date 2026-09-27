@@ -38,6 +38,7 @@ from .task_effects import TOOL_SPECS, content_revision, resources_for
 from .task_outcomes import ActionResult, Outcome, normalize_result
 from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint
 from .task_trace import TaskJournal
+from .task_activity import TaskActivity, tool_activity
 
 
 class VerificationContract(BaseModel):
@@ -76,6 +77,7 @@ class TaskControl(AbstractCapability):
         self.read_cache = {}
         self.receipts = {}
         self.on_action = None
+        self.on_activity = None
         self.toolset = FunctionToolset()
         self.control_tools = {function.__name__: function for function in (
             self.task_checkpoint, self.task_finish, self.task_defer, self.task_request_input, self.task_resolve_dependency,
@@ -92,6 +94,21 @@ class TaskControl(AbstractCapability):
 
     def get_toolset(self):
         return self.toolset
+
+    def publish_activity(self, event="state", *, name="", arguments=None, call_id="", spec=None):
+        if self.on_activity is None:
+            return
+        category, subject = "", ""
+        if self.state.status == Lifecycle.WAITING:
+            category = ("waiting_user" if any(dependency.dependency == "user_input"
+                                             for dependency in self.state.dependencies) else "waiting")
+        elif self.state.status == Lifecycle.ACTIVE:
+            if event == "started" and spec is not None:
+                category, subject = tool_activity(name, arguments or {}, self.state.role, spec)
+            elif event == "model_request":
+                category = "response"
+        self.on_activity(TaskActivity(self.state.id, str(self.state.status), self.state.role,
+                                      event, call_id, category, subject))
 
     def get_instructions(self):
         return """You are the only agent. Choose your own strategy, inspection, repairs and next actions.
@@ -199,6 +216,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
     def check_cancelled(self):
         if self.cancel_event.is_set():
             self.state.suspend(Lifecycle.INTERRUPTED, "Interrupted by the user; reconcile actions already started.")
+            self.publish_activity()
             raise asyncio.CancelledError()
 
     def revision(self, resource):
@@ -257,6 +275,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.trace("tool_return", tool=name, call_id=call_id, receipt=self.receipts[call_id],
                    result=payload if control or not evidence_id else {key: value for key, value in payload.items()
                                                                      if key != "data"})
+        if control:
+            self.publish_activity()
         if isinstance(result, ToolReturn):
             return ToolReturn(payload, content=result.content, metadata=result.metadata, tools=result.tools)
         return payload
@@ -329,6 +349,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
             interrupted = False
             raw = None
             self.trace("execution_started", tool=name, call_id=call_id)
+            self.publish_activity("started", name=name, arguments=arguments, call_id=call_id, spec=spec)
             if self.on_action is not None:
                 self.on_action("executing")
             try:
@@ -376,12 +397,14 @@ and retain its consent checks. cd requests use change_directory and Git requests
                     "summary": str(data.get("content", result.data))[:400]}
                 if key:
                     self.read_cache[key] = call_id
+            self.publish_activity("finished", call_id=call_id)
             if self.on_action is not None:
                 self.on_action("processing")
             returned = self._return(name, arguments, call_id, {**result.payload(), "resources": after},
                                     executed=True, evidence_id=item.id)
             if interrupted:
                 self.state.suspend(Lifecycle.INTERRUPTED, "Action interrupted; inspect unresolved effects before retrying.")
+                self.publish_activity()
                 raise asyncio.CancelledError()
             self.check_cancelled()
             if isinstance(raw, ToolReturn):
@@ -488,9 +511,11 @@ and retain its consent checks. cd requests use change_directory and Git requests
             request_context.model_request_parameters = replace(
                 request_context.model_request_parameters, allow_text_output=False, output_tools=[])
         self.trace("request_ready", memory_digest=fingerprint(snapshot))
+        self.publish_activity("model_request")
         return request_context
 
     async def after_model_request(self, ctx, *, request_context, response):
+        self.publish_activity()
         self.trace("model_response", model=response.model_name, finish_reason=response.finish_reason,
                    parts=[vars(part) for part in response.parts if part.part_kind in ("text", "tool-call")])
         if self.state.output_recovery and (response.finish_reason == "length" or not any(
@@ -500,6 +525,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
 
     def stop_output_recovery(self, reason):
         self.state.suspend(Lifecycle.LIMIT_REACHED, reason + " Resume the preserved task to repair and submit its output.")
+        self.publish_activity()
         raise TaskStopped(self.state.notice)
 
     def accept_output(self, *, truncated=False):

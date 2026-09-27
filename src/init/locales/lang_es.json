@@ -475,7 +475,7 @@
   "task_progress.voice_request": "Orden de voz",
   "task_progress.pending_title": "Tarea",
   "task_progress.step_count": "{completed} de {total} pasos realizados",
-  "task_progress.waiting": "Esperando permiso",
+  "task_progress.waiting": "Esperando información",
   "task_progress.stopped": "Detenida",
   "task_progress.error": "Finalizada con incidencias",
   "task_progress.finished": "Ejecución finalizada",
@@ -499,5 +499,17 @@
   "palette.browser": "Abrir navegador",
   "palette.editor": "Abrir editor",
   "palette.settings": "Abrir ajustes",
-  "palette.terminal": "Abrir terminal"
+  "palette.terminal": "Abrir terminal",
+  "activity.read": "Leyendo archivos",
+  "activity.read_file": "Leyendo {name}",
+  "activity.search": "Buscando referencias",
+  "activity.git": "Consultando Git",
+  "activity.verify": "Verificando resultados",
+  "activity.execute": "Ejecutando acción",
+  "activity.inspect": "Consultando información",
+  "activity.web": "Consultando la web",
+  "activity.response": "Preparando respuesta",
+  "activity.permission": "Esperando permiso",
+  "activity.waiting_user": "Esperando tu respuesta",
+  "activity.waiting": "Esperando una dependencia"
 }

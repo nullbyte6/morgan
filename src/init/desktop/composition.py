@@ -62,10 +62,17 @@ class CompositionLayout(QLayout):
         diameter = max(0, min(self.items[0].sizeHint().width(), area.width(),
                               area.height() - reserved))
         slack = max(0, area.height() - reserved - diameter)
+        contextual = 0
+        for item in tail:
+            if item.widget() is None or not item.widget().property("orbContext"):
+                break
+            contextual += 1
         self.items[0].setGeometry(QRect(area.x() + (area.width() - diameter) // 2,
                                        area.y() + slack // 2, diameter, diameter))
-        y = area.y() + slack + diameter
-        for item, height in zip(tail, heights):
+        y = area.y() + slack // 2 + diameter
+        for index, (item, height) in enumerate(zip(tail, heights)):
+            if index == contextual:
+                y += slack - slack // 2
             y += spacing
             item.setGeometry(QRect(area.x(), y, area.width(), height))
             y += height

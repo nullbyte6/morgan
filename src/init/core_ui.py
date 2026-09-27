@@ -114,6 +114,8 @@ from src.init.desktop.clipboard import (
 from src.init.desktop.task_progress import TaskProgressPill
 from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
+from src.init.desktop.activity_trail import ActivityTrail
+from src.init.desktop.task_presentation import TaskPresentation
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
 from src.init.desktop.file_drop import FileDropRouter
@@ -200,6 +202,8 @@ class ArloWindow(DesktopWindow):
         self.input_meter.setFixedHeight(48)
         self.input_meter.hide()
         self.status = QLabel()
+        self.task_presentation = TaskPresentation(self)
+        self.activity_trail = ActivityTrail(self.task_presentation)
         self.command_output = QPlainTextEdit()
         self.active_language = None
         self.subtitles = QLabel(self.startup_greeting)
@@ -244,6 +248,7 @@ class ArloWindow(DesktopWindow):
 
         self.build_ui()
         self.build_command_palette()
+        self.task_presentation.changed.connect(self.render_task_view)
 
         self._workspace_shortcut_map = {
             options["shortcut"].rsplit("+", 1)[-1]: view_key
@@ -338,8 +343,10 @@ class ArloWindow(DesktopWindow):
 
         main = CompositionLayout(root)
         main.addWidget(self.orb)
+        main.addWidget(self.activity_trail)
 
         self.status.setObjectName("status")
+        self.status.setProperty("orbContext", True)
         self.status.setAlignment(Qt.AlignCenter)
         main.addWidget(self.status)
 
@@ -466,14 +473,15 @@ class ArloWindow(DesktopWindow):
             self.workspace_content
         )
 
-        main_content = QWidget()
+        main_content = CompositionSurface()
         main_content.setObjectName("mainWorkspaceContent")
         main_layout = QVBoxLayout(main_content)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-        self.task_progress = TaskProgressPill(main_content)
+        self.task_progress = TaskProgressPill(self.task_presentation, main_content)
+        main_layout.addWidget(self.task_progress, 0, Qt.AlignLeft)
         main_layout.addWidget(root, 1)
-        root.minimum_changed.connect(self._update_main_workspace_minimum)
+        main_content.minimum_changed.connect(self._update_main_workspace_minimum)
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=f"Arlo {load_dev_file()["version"]}",
             content=main_content,
@@ -705,9 +713,9 @@ class ArloWindow(DesktopWindow):
         self.worker.chunk.connect(self.on_chunk)
         self.worker.audio.connect(self.on_audio)
         self.worker.speaking.connect(self.on_speaking)
-        self.worker.phase.connect(self.on_phase)
-        self.worker.phase.connect(self.task_progress.on_phase)
-        self.worker.task_title.connect(self.task_progress.set_task_title)
+        self.worker.activity.connect(self.task_presentation.on_activity)
+        self.worker.phase.connect(self.task_presentation.on_phase)
+        self.worker.task_title.connect(self.task_presentation.set_task_title)
         self.worker.permission_denied.connect(self.on_permission_denied)
         self.worker.subtitle.connect(self.on_subtitle)
         self.worker.finished.connect(self.on_finished)
@@ -860,8 +868,7 @@ class ArloWindow(DesktopWindow):
         if self.stopping:
             self.worker.resolve_confirmation(False)
             return
-        self.task_progress.awaiting_permission(turn_id)
-        self.set_orbs_visual_state(Orb.State.AWAITING_PERMISSION)
+        self.task_presentation.awaiting_permission(turn_id)
         dialog = QMessageBox(self)
         dialog.setWindowTitle(tr("command.title"))
         dialog.setIcon(QMessageBox.Question)
@@ -873,12 +880,13 @@ class ArloWindow(DesktopWindow):
         dialog.setDefaultButton(QMessageBox.No)
 
         accepted = dialog.exec() == QMessageBox.Yes
-        self.task_progress.awaiting_permission(turn_id, waiting=False)
+        self.task_presentation.awaiting_permission(turn_id, waiting=False)
         self.worker.resolve_confirmation(accepted)
 
     def set_status(self, key):
         self.status_key = key
         self.status.setText(tr(key) if key else "")
+        self.status.setVisible(bool(key))
 
     def set_enabled(self, enabled):
         self.input.setEnabled(enabled and self.submitting is None)
@@ -933,6 +941,7 @@ class ArloWindow(DesktopWindow):
         if hasattr(self, "command_palette"):
             self.command_palette.refresh_language()
         self.task_progress.refresh_language(language)
+        self.activity_trail.refresh_language(language)
         self.refresh_settings_workspaces()
         self.attachment_tray.refresh()
         self.set_status(self.status_key)
@@ -1127,8 +1136,7 @@ class ArloWindow(DesktopWindow):
             return
 
         self._reset_response_timer()
-        self.task_progress.finish(turn_id, failed=True)
-        self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
+        self.task_presentation.finish(turn_id, failed=True)
         self.finish_wake_command("failed", error)
         self.submitting = None
         self.busy = False
@@ -1196,7 +1204,7 @@ class ArloWindow(DesktopWindow):
 
     def start_prompt(self, prompt):
         self.turn_id += 1
-        self.task_progress.begin(self.turn_id)
+        self.task_presentation.begin(self.turn_id)
         self.showing_greeting = False
         self.worker.cancel_event = threading.Event()
         self.stopping = False
@@ -1212,9 +1220,7 @@ class ArloWindow(DesktopWindow):
         self.update_subtitles(prompt.display_text)
 
         self.busy = True
-        self.set_orbs_visual_state(Orb.State.PROCESSING)
         self.set_enabled(True)
-        self.set_orbs_thinking(True)
 
         try:
             if not self.thread.isRunning():
@@ -1287,6 +1293,7 @@ class ArloWindow(DesktopWindow):
             return
         if worker.error:
             self.status.setText(worker.error)
+            self.status.show()
         elif worker.audio_wav:
             self.start_prompt(DesktopVoiceMessage(worker.audio_wav,
                                                   worker.transcript))
@@ -1297,7 +1304,7 @@ class ArloWindow(DesktopWindow):
     def stop_response(self):
         self._stop_response_timer()
         self.stopping = True
-        self.task_progress.finish(self.turn_id, interrupted=True)
+        self.task_presentation.finish(self.turn_id, interrupted=True)
         self.worker.interrupt()
         self.speaking = False
         self.orb.clear()
@@ -1317,21 +1324,16 @@ class ArloWindow(DesktopWindow):
         except Exception as error:
             self.mascot.setToolTip(f"{error}")
 
-    @Slot(int, str)
-    def on_phase(self, turn_id, phase):
-        if turn_id != self.turn_id or self.stopping:
-            return
-        if phase == "executing":
-            self.set_orbs_visual_state(Orb.State.EXECUTING)
-        elif phase == "processing" and not self.speaking:
-            self.set_orbs_visual_state(Orb.State.PROCESSING)
+    @Slot(object)
+    def render_task_view(self, view):
+        self.set_orbs_thinking(False)
+        self.set_orbs_visual_state(view.orb_state)
 
     @Slot(int)
     def on_permission_denied(self, turn_id):
         if turn_id == self.turn_id:
             self.permission_denied_state = True
-            self.set_orbs_visual_state(Orb.State.DENIED_ERROR,
-                                        fade_in=100, fade_out=300)
+            self.task_presentation.permission_denied(turn_id)
 
     @Slot(int, str)
     def on_chunk(self, turn_id, chunk):
@@ -1341,8 +1343,7 @@ class ArloWindow(DesktopWindow):
         self.current_reply += chunk
         if self.current_response_view is not None:
             self.current_response_view.append_chunk(chunk)
-        if not self.speaking:
-            self.set_orbs_visual_state(Orb.State.WRITING)
+        self.task_presentation.writing(turn_id)
 
     def _forget_response_view(self, response_view):
         if self.current_response_view is response_view:
@@ -1368,17 +1369,12 @@ class ArloWindow(DesktopWindow):
             return
         self.speaking = (speaking and not self.muted and (self.busy or not self.ready)
                          and not self.stopping)
-        if self.speaking:
-            self.set_orbs_visual_state(Orb.State.READING)
-        elif self.busy and not self.stopping:
-            self.set_orbs_visual_state(Orb.State.PROCESSING)
-        self.set_orbs_thinking(
-            self.busy and not self.speaking and not self.stopping)
+        if not self.ready:
+            self.set_orbs_visual_state(Orb.State.READING if self.speaking else Orb.State.IDLE)
+        else:
+            self.task_presentation.speaking(turn_id, self.speaking)
 
         self.set_orbs_speaking(self.speaking)
-
-        if not self.stopping and self.busy:
-            self.set_orbs_thinking(False)
 
         self.update_send_button()
 
@@ -1388,11 +1384,10 @@ class ArloWindow(DesktopWindow):
         interrupted = self.stopping
         if self.current_response_view is not None:
             self.current_response_view.finish(reply)
-        self.task_progress.finish(self.turn_id, interrupted=interrupted,
-                                  failed=self.permission_denied_state)
+        self.task_presentation.finish(self.turn_id, interrupted=interrupted,
+                                      failed=self.permission_denied_state)
         task_state = getattr(self.worker.assistant, "task_state", None)
-        task_failed = self.task_progress.state in {"error", "waiting", "stopped"} or (
-            task_state is not None and task_state.status != "complete")
+        task_failed = self.task_presentation.view.state in {"error", "waiting", "stopped"}
         self.finish_wake_command("failed" if interrupted or task_failed else "completed",
                                  "Interrupted" if interrupted else
                                  task_state.notice if task_failed and task_state is not None else
@@ -1415,11 +1410,7 @@ class ArloWindow(DesktopWindow):
         self.orb.clear()
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
-        result_state = (Orb.State.DENIED_ERROR if self.permission_denied_state
-                        else Orb.State.SUCCESS)
-        self.set_orbs_visual_state(result_state, fade_in=120, fade_out=260)
-        QTimer.singleShot(700, lambda: self.set_orbs_visual_state(
-            Orb.State.IDLE) if not self.busy else None)
+        QTimer.singleShot(700, lambda turn_id=self.turn_id: self.task_presentation.settle(turn_id))
         self.refresh_privacy_indicator()
         self.set_enabled(True)
         if self.isVisible():
@@ -1458,9 +1449,10 @@ class ArloWindow(DesktopWindow):
         if not self.ready:
             self.status_key = ""
             self.status.setText(tr("ui.error", error=error))
+            self.status.show()
 
         self._reset_response_timer()
-        self.task_progress.finish(self.turn_id, failed=True)
+        self.task_presentation.finish(self.turn_id, failed=True)
         self.finish_wake_command("failed", error)
         self.showing_greeting = False
         self.update_subtitles(tr("ui.error", error=error))
@@ -1474,10 +1466,9 @@ class ArloWindow(DesktopWindow):
         self.orb.clear()
         self.set_orbs_speaking(False)
         self.set_orbs_thinking(False)
-        self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
-
-        QTimer.singleShot(700, lambda: self.set_orbs_visual_state(
-            Orb.State.IDLE) if not self.busy else None)
+        if not self.ready:
+            self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
+        QTimer.singleShot(700, lambda turn_id=self.turn_id: self.task_presentation.settle(turn_id))
 
         self.set_enabled(self.ready)
         if self.pending_wake_barge:
