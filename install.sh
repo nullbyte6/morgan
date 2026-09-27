@@ -225,11 +225,11 @@ download_cosyvoice_model() {
     info "Downloading ARLO's CosyVoice model (${ARLO_VOICE_MODEL})..."
     info "This is a large download and may take several minutes."
     mkdir -p "$model_dir"
-    ARLO_VOICE_MODEL="$ARLO_VOICE_MODEL" ARLO_VOICE_MODEL_DIR="$model_dir_windows" "$VENV_PYTHON" -c '
-import os
+    "$VENV_PYTHON" -c '
+import sys
 from huggingface_hub import snapshot_download
-snapshot_download(repo_id=os.environ["ARLO_VOICE_MODEL"], local_dir=os.environ["ARLO_VOICE_MODEL_DIR"])
-'
+snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2])
+' "$ARLO_VOICE_MODEL" "$model_dir_windows"
     local model_file
     for model_file in cosyvoice3.yaml llm.pt flow.pt hift.pt; do
         [[ -f "${model_dir}/${model_file}" ]] || fail "CosyVoice model is incomplete: missing ${model_file}."
