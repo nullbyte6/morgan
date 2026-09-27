@@ -27,7 +27,7 @@ class DesktopWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("arloWindow")
+        self.setObjectName("assistantWindow")
         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self._screen_tracking_started = False

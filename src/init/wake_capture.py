@@ -12,7 +12,7 @@ from collections import deque
 from dataclasses import dataclass
 
 from .voice import pcm_rms
-from .identity import get_assistant_name
+from .identity import get_assistant_name, get_assistant_environment
 
 SAMPLE_RATE = 16000
 BLOCK_SECONDS = 0.1
@@ -48,7 +48,7 @@ class WakeSettings:
 
     @classmethod
     def from_environment(cls):
-        return cls(**{name: float(os.environ.get("ARLO_WAKE_" + name.upper(), default))
+        return cls(**{name: float(get_assistant_environment("WAKE_" + name.upper(), default))
                       for name, default in vars(cls()).items()})
 
 

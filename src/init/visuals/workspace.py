@@ -467,7 +467,7 @@ class Workspace(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
 
-        self.setObjectName("arloWorkspace")
+        self.setObjectName("assistantWorkspace")
 
         self._panels: dict[str, WorkspacePanel] = {}
         self._active_panel_id: str | None = None

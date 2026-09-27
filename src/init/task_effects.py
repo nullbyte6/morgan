@@ -25,7 +25,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import ARLO_ROOT
+from .paths import PROJECT_ROOT
 
 
 @dataclass(frozen=True)
@@ -177,10 +177,10 @@ def resources_for(name, arguments):
         raise ValueError(f"Tool has no effect declaration: {name}")
     resources = []
     if spec.domain:
-        resources.append("domain:" + spec.domain + (":" + str((ARLO_ROOT if spec.source else Path.cwd()).joinpath(arguments.get("repository", ".")).resolve())
+        resources.append("domain:" + spec.domain + (":" + str((PROJECT_ROOT if spec.source else Path.cwd()).joinpath(arguments.get("repository", ".")).resolve())
                                                         if spec.domain == "git" else ""))
     if spec.path_argument:
-        base = ARLO_ROOT if spec.source else Path.cwd()
+        base = PROJECT_ROOT if spec.source else Path.cwd()
         path = arguments.get(spec.path_argument, ".")
         if name == "read_code" and arguments.get("cursor"):
             from .self_code import code_cursor

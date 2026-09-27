@@ -1,5 +1,6 @@
 """Shared, persistent Chromium session for all Arlo browser panels."""
 
+from src.init.identity import get_assistant_name
 from pathlib import Path
 from ..config import HOME_PATH
 from ..identity import get_assistant_identifier
@@ -50,7 +51,7 @@ class BrowserSession(QObject):
         )
 
         if self.profile is None:
-            raise RuntimeError('The Arlo browser profile is already in use')
+            raise RuntimeError(f'The {get_assistant_name()} browser profile is already in use')
         self._pages = WeakSet()
         self._closed = False
         from .browser_extensions import BrowserExtensions
@@ -84,8 +85,8 @@ def get_browser_session():
     app = QApplication.instance()
     if app is None or QThread.currentThread() != app.thread():
         raise RuntimeError('Browser sessions require the QApplication GUI thread')
-    session = getattr(app, '_arlo_browser_session', None)
+    session = getattr(app, '_assistant_browser_session', None)
     if session is None:
         session = BrowserSession(app)
-        app._arlo_browser_session = session
+        app._assistant_browser_session = session
     return session

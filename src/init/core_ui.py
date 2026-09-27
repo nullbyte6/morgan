@@ -37,7 +37,7 @@ if not __package__:
 
 os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 os.environ["TORCH_LOGS"] = "-all"
-ARLO_INSTANCE_SERVER = f"Diego.{get_assistant_identifier().capitalize()}.Desktop"
+ASSISTANT_INSTANCE_SERVER = f"Diego.{get_assistant_identifier().capitalize()}.Desktop"
 
 from PySide6.QtCore import *
 from PySide6.QtGui import *
@@ -86,7 +86,7 @@ WORKSPACE_VIEW_CONFIG = {
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
 from src.init.brain import kill_self
-from src.init.config import HOME_PATH, load_dev_file, load_config
+from src.init.config import DEFAULTS, HOME_PATH, load_dev_file, load_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
 from src.init.logs import LogView
@@ -124,8 +124,8 @@ from src.init.visuals.browser_bridge import BrowserBridge
 from src.init.terminal import TerminalBridge
 
 # noinspection PyBroadException
-class ArloWindow(DesktopWindow):
-    """Arlo window class, not its brain, which is somewhere else"""
+class AssistantWindow(DesktopWindow):
+    """Assistant window class, not its brain, which is somewhere else"""
     request = Signal(int, object)
     username = getuser().capitalize()
 
@@ -145,14 +145,14 @@ class ArloWindow(DesktopWindow):
             root_logger.addHandler(handler)
 
         root_logger.setLevel(logging.INFO)
-        logging.getLogger("arlo.desktop").info(
+        logging.getLogger("assistant.desktop").info(
             "Desktop backend logging initialized")
 
-        self.settings = QSettings("ARLO", "desktop")
+        self.settings = QSettings(DEFAULTS["assistant"]["name"].upper(), "desktop")
         self.muted = self.settings.value("muted", False, type=bool)
         subtitles_enabled = self.settings.value("subtitles", True, type=bool)
         orb_speech_pulse = self.settings.value("orb_speech_pulse", True, type=bool)
-        self.setWindowTitle(f"{load_config()["assistant"]["name"]} {load_dev_file()["version"]}")
+        self.setWindowTitle(f"{get_assistant_name()} {load_dev_file()["version"]}")
         icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "arlo.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -303,7 +303,7 @@ class ArloWindow(DesktopWindow):
                 self.wake_inbox = WakeInbox()
             command = self.wake_inbox.claim()
         except Exception:
-            logging.getLogger("arlo.wake").exception(
+            logging.getLogger("assistant.wake").exception(
                 "Wake inbox unavailable; will retry")
             return
         if command is None:
@@ -331,7 +331,7 @@ class ArloWindow(DesktopWindow):
             try:
                 self.wake_inbox.finish(command_id, state, detail)
             except Exception:
-                logging.getLogger("arlo.wake").exception(
+                logging.getLogger("assistant.wake").exception(
                     "Wake acknowledgement failed")
 
     def build_ui(self):
@@ -487,7 +487,7 @@ class ArloWindow(DesktopWindow):
         main_layout.addWidget(root, 1)
         main_content.minimum_changed.connect(self._update_main_workspace_minimum)
         self.main_workspace_panel_id = self.workspace.open_panel(
-            title=f"{load_config()["assistant"]["name"]} {load_dev_file()["version"]}",
+            title=f"{get_assistant_name()} {load_dev_file()["version"]}",
             content=main_content,
             panel_id="main",
         )
@@ -750,7 +750,7 @@ class ArloWindow(DesktopWindow):
         try:
             self.workspace._open_shortcut_panel(direction=direction)
         except Exception:
-            logging.getLogger("arlo.workspace").exception(
+            logging.getLogger("assistant.workspace").exception(
                 "Failed to open a workspace")
             raise
 
@@ -800,7 +800,7 @@ class ArloWindow(DesktopWindow):
                 panel.set_content(content)
                 self.workspace.focus_panel(panel.panel_id)
             except Exception:
-                logging.getLogger("arlo.workspace").exception(
+                logging.getLogger("assistant.workspace").exception(
                     "Failed to replace workspace view %s", view_key)
             return
         count = getattr(self, "_workspace_view_counts", {}).get(view_key, 0) + 1
@@ -814,7 +814,7 @@ class ArloWindow(DesktopWindow):
                 title,
                 lambda: self._workspace_view_factory(view_key))
         except Exception:
-            logging.getLogger("arlo.workspace").exception(
+            logging.getLogger("assistant.workspace").exception(
                 "Failed to open workspace view %s", view_key)
             return
 
@@ -955,6 +955,18 @@ class ArloWindow(DesktopWindow):
             return
         self.active_language = language
         self.active_assistant_name = name
+        title = f"{name} {load_dev_file()['version']}"
+        self.setWindowTitle(title)
+        if hasattr(self, "workspace"):
+            panel = self.workspace.get_panel(getattr(self, "main_workspace_panel_id", "main"))
+            if panel is not None:
+                panel.set_title(title)
+        tray = getattr(self, "tray_icon", None)
+        if tray is not None:
+            tray.setToolTip(tr("tray.running"))
+            actions = tray.contextMenu().actions()
+            actions[0].setText(tr("tray.open"))
+            actions[1].setText(tr("tray.quit"))
         for orb in (self.orb, self.mascot):
             orb.setToolTip(name)
         chat = self.findChild(QPushButton, "chatNav")
@@ -1212,7 +1224,7 @@ class ArloWindow(DesktopWindow):
             self.close()
 
     def restore_from_mascot(self):
-        """Restore the full Arlo interface."""
+        """Restore the full assistant interface."""
         if self.quitting:
             return
         self.mascot.pop_out()
@@ -1618,19 +1630,19 @@ class ArloWindow(DesktopWindow):
 
 
 def set_windows_app_id():
-    """Identify Arlo as an independent Windows application."""
+    """Identify the assistant as an independent Windows application."""
     if sys.platform == "win32":
         import ctypes
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            ARLO_INSTANCE_SERVER)
+            ASSISTANT_INSTANCE_SERVER)
 
 
 def notify_running_instance(timeout_ms: int = 1500) -> bool:
     """Ask an existing desktop process to bring its window to the front."""
     socket = QLocalSocket()
     socket.connectToServer(
-        ARLO_INSTANCE_SERVER,
+        ASSISTANT_INSTANCE_SERVER,
         QIODevice.OpenModeFlag.WriteOnly,
     )
     if not socket.waitForConnected(timeout_ms):
@@ -1655,16 +1667,16 @@ def start_instance_server() -> QLocalServer:
     """Open the local activation endpoint for the lock-owning process."""
     server = QLocalServer()
     server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
-    if server.listen(ARLO_INSTANCE_SERVER):
+    if server.listen(ASSISTANT_INSTANCE_SERVER):
         return server
 
-    QLocalServer.removeServer(ARLO_INSTANCE_SERVER)
-    if not server.listen(ARLO_INSTANCE_SERVER):
+    QLocalServer.removeServer(ASSISTANT_INSTANCE_SERVER)
+    if not server.listen(ASSISTANT_INSTANCE_SERVER):
         raise RuntimeError(server.errorString())
     return server
 
 
-def install_tray_icon(app: QApplication, window: ArloWindow, icon: QIcon):
+def install_tray_icon(app: QApplication, window: AssistantWindow, icon: QIcon):
     """Install the system tray UI where the desktop environment supports it."""
     if not QSystemTrayIcon.isSystemTrayAvailable():
         return None
@@ -1741,7 +1753,7 @@ def main():
         font.setKerning(True)
         font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 100)
         app.setFont(font)
-        window = ArloWindow()
+        window = AssistantWindow()
         window.show()
         icon_font = QFont(nerd_font, 18)
 
@@ -1768,6 +1780,6 @@ def main():
         sys.exit(app.exec())
     finally:
         instance_server.close()
-        QLocalServer.removeServer(ARLO_INSTANCE_SERVER)
+        QLocalServer.removeServer(ASSISTANT_INSTANCE_SERVER)
         instance_lock.unlock()
         running_lock.release()

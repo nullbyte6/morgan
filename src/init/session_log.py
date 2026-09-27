@@ -193,7 +193,7 @@ class SessionLog:
             self.memory_error = None
         except Exception as error:
             self.memory_error = str(error)
-            logging.getLogger("arlo.memory").exception("Conversation retained in Markdown; database persistence failed")
+            logging.getLogger("assistant.memory").exception("Conversation retained in Markdown; database persistence failed")
 
     def _get_memory_service(self):
         if self._use_configured_memory:
@@ -210,7 +210,7 @@ class SessionLog:
                 service = self._get_memory_service()
             except Exception as error:
                 self.memory_error = str(error)
-                logging.getLogger("arlo.memory").exception("Memory tools unavailable")
+                logging.getLogger("assistant.memory").exception("Memory tools unavailable")
         token = active_memory.set(MemoryTurn(service, self.session_id,
                                             self.last_user_message_id, self.last_user_text,
                                             self.private, self.memory_error))
@@ -226,5 +226,5 @@ class SessionLog:
                 service.end_session(self.session_id)
         except Exception as error:
             self.memory_error = str(error)
-            logging.getLogger("arlo.memory").exception("Memory session could not be closed")
+            logging.getLogger("assistant.memory").exception("Memory session could not be closed")
 

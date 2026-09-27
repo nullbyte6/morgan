@@ -43,7 +43,7 @@ from src.init.voice_ipc import (
     audio_requested,
     voice_directory,
 )
-from src.init.identity import get_assistant_name, get_assistant_identifier
+from src.init.identity import get_assistant_name, get_assistant_identifier, get_assistant_environment
 from src.init.wake_capture import BLOCK_SECONDS, SAMPLE_RATE, WakeCapture, WakeSettings
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -75,7 +75,7 @@ def prioritize_listener() -> None:
         log.exception("Unable to raise wake-listener priority")
 
 
-def is_arlo_running() -> bool:
+def is_assistant_running() -> bool:
     """Check the lifetime lock without activating or launching the desktop."""
     lock = ProcessLock("desktop-running")
     if not lock.acquire():
@@ -84,12 +84,12 @@ def is_arlo_running() -> bool:
     return False
 
 
-def launch_arlo() -> None:
+def launch_assistant() -> None:
     """Start the desktop without waiting for its services or UI."""
     if not LAUNCHER.is_file():
         log.error(tr("wake.launcher_not_found", path=LAUNCHER))
         return
-    if is_arlo_running():
+    if is_assistant_running():
         return
 
     log.info(tr("wake.activation_detected"))
@@ -229,7 +229,7 @@ def run_listener(microphone):
     inbox = None
     log.info(tr("wake.loading_model"))
     model = WhisperModel(
-        os.environ.get("ARLO_WAKE_MODEL", "tiny"),
+        get_assistant_environment("WAKE_MODEL", "tiny"),
         device="cpu",
         compute_type="int8",
     )
@@ -254,7 +254,7 @@ def run_listener(microphone):
                 # must never reopen a console or desktop every few seconds.
                 pending_launch = False
                 try:
-                    launch_arlo()
+                    launch_assistant()
                 except OSError:
                     log.exception("Unable to launch Arlo")
             if audio_requested() or not microphone.acquire():
@@ -267,7 +267,7 @@ def run_listener(microphone):
                     if activated:
                         pending_request = True
                         pending_id = uuid.uuid4().hex
-                        pending_launch = not is_arlo_running()
+                        pending_launch = not is_assistant_running()
             finally:
                 microphone.release()
         except Exception:

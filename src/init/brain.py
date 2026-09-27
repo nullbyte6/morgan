@@ -38,6 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from functools import lru_cache
 from math import asin, cos, radians, sin, sqrt
+from src.init.identity import get_assistant_name
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -84,12 +85,12 @@ _LAST_GEOCODE_REQUEST_AT = 0.0
 
 
 def kill_self() -> str:
-    """Close Arlo itself gracefully, only when the user explicitly asks to exit.
+    """Close the assistant application gracefully, only when the user explicitly asks to exit.
     Requests shutdown after the current turn; never shuts down Windows or
     terminates another application or the shared model/voice services.
     """
     get_assistant().shutdown_requested.set()
-    return "Arlo shutdown requested."
+    return f"{get_assistant_name()} shutdown requested."
 
 
 def get_version() -> str:
@@ -101,9 +102,9 @@ def get_version() -> str:
 
 
 def refresh() -> str:
-    """Reload loaded Arlo Python modules and rebuild model tools without restarting.
+    """Reload loaded assistant Python modules and rebuild model tools without restarting.
 
-    Use this when the user asks to refresh, reload, or update Arlo's modules
+    Use this when the user asks to refresh, reload, or update the assistant's modules
     or source code. Modules under src.init and src.diagnostics are included.
     """
     try:
@@ -365,7 +366,7 @@ def read_file(path: str) -> dict:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
+                ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 "Use search_code/read_code for source inspection. "
                 "Do not retry read_file for this path.", "self_code_required").payload())
         
@@ -391,8 +392,8 @@ def create_file(path: str, content: str = "", encoding: str = "utf-8") -> dict:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
-                "Use create_code to create Arlo source. "
+                ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
+                f"Use create_code to create {get_assistant_name()} source. "
                 "Do not retry create_file for this path.", "self_code_required").payload())
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("x", encoding=encoding) as file:
@@ -410,8 +411,8 @@ def write_file(path: str, content: str) -> str:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
-                "Use edit_code to modify Arlo source. "
+                f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
+                f"Use edit_code to modify {get_assistant_name()} source. "
                 "Do not retry write_file for this path.")
         atomic_write_bytes(file_path, content.encode("utf-8"))
         return tr('brain.file_written', file_path=file_path)
@@ -422,7 +423,7 @@ def write_file(path: str, content: str) -> str:
 def edit_file(path: str, content: str) -> dict:
     """Replace the entire contents of an existing user file.
     Use for files in the user's current working directory.
-    Do not use to modify Arlo's own source code; use edit_code instead.
+    Do not use to modify the assistant's own source code; use edit_code instead.
     Args:
         path: Path to the existing user file.
         content: Complete replacement contents of the file.
@@ -431,8 +432,8 @@ def edit_file(path: str, content: str) -> dict:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
-                "Use edit_code to modify Arlo source. "
+                ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
+                f"Use edit_code to modify {get_assistant_name()} source. "
                 "Do not retry edit_file for this path.", "self_code_required").payload())
         if not file_path.exists():
             return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
@@ -451,8 +452,8 @@ def append_file(path: str, content: str) -> dict:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
-                "Use edit_code to modify Arlo source. "
+                ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
+                f"Use edit_code to modify {get_assistant_name()} source. "
                 "Do not retry append_file for this path.", "self_code_required").payload())
         file_path.parent.mkdir(parents=True, exist_ok=True)
         encoding = "utf-8"
@@ -473,8 +474,8 @@ def replace_in_file(path: str, old_text: str, new_text: str) -> dict:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
-                "Use edit_code to modify Arlo source. "
+                ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
+                f"Use edit_code to modify {get_assistant_name()} source. "
                 "Do not retry replace_in_file for this path.", "self_code_required").payload())
         if not file_path.exists():
             return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
@@ -654,7 +655,7 @@ def read_binary_file(path: str) -> dict:
     try:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
-            return ActionResult(Outcome.REJECTED, "Use read_code for Arlo source.", "self_code_required").payload()
+            return ActionResult(Outcome.REJECTED, f"Use read_code for {get_assistant_name()} source.", "self_code_required").payload()
         if not file_path.exists():
             return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
         if not file_path.is_file():
@@ -672,8 +673,8 @@ def write_binary_file(path: str, base64_content: str,
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
             return (
-                ActionResult(Outcome.REJECTED, "SELF_CODE_REQUIRED: This path belongs to Arlo's own repository. "
-                "Use edit_code to modify Arlo source. "
+                ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
+                f"Use edit_code to modify {get_assistant_name()} source. "
                 "Do not retry write_binary_file for this path.", "self_code_required").payload())
         already_exists = file_path.exists()
         if already_exists and not overwrite:
@@ -754,7 +755,7 @@ def open_directory(path: str = ".") -> str:
 
 
 def open_browser(url: str) -> str:
-    """Open a website in Arlo's integrated browser workspace."""
+    """Open a website in the assistant's integrated browser workspace."""
     try:
         if "://" not in url:
             url = "https://" + url
@@ -768,7 +769,7 @@ def open_browser(url: str) -> str:
 
 
 def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
-    """Show a search in Arlo's browser and return web results for inspection and citation."""
+    """Show a search in the assistant's browser and return web results for inspection and citation."""
     query = query.strip()
     if not query:
         return tr('brain.error_search_query_is_empty')
@@ -804,7 +805,7 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
 
 def read_web_page(url: str, max_characters: int = 12_000,
                   show_in_browser: bool = False) -> str:
-    """Read page text; show_in_browser also opens it in Arlo's browser workspace.
+    """Read page text; show_in_browser also opens it in the assistant's browser workspace.
     Choose show_in_browser when inspecting a page together with the user.
     """
     parsed = urlparse(url)
@@ -1603,10 +1604,10 @@ def resolve_entry_path(path: str) -> Path:
     return Path(os.path.abspath(Path(path).expanduser()))
 
 def _is_arlo_source_path(path: Path) -> bool:
-    from src.init.paths import ARLO_ROOT
+    from src.init.paths import PROJECT_ROOT
 
     try:
-        path.resolve().relative_to(ARLO_ROOT.resolve())
+        path.resolve().relative_to(PROJECT_ROOT.resolve())
         return True
     except ValueError:
         return False

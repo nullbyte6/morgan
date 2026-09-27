@@ -400,18 +400,18 @@ class Assistant:
 
     def wd_instructions(self) -> str:
         from src.init.brain import get_working_directory
-        from src.init.paths import ARLO_ROOT
+        from src.init.paths import PROJECT_ROOT
 
         return (
-            f"Arlo project root: {ARLO_ROOT}\n"
+            f"{self.name} project root: {PROJECT_ROOT}\n"
             f"Current user working directory: {get_working_directory()}\n"
             "These are separate locations. "
-            "When the user refers to your code, Arlo's code, your source, "
+            f"When the user refers to your code, {self.name}'s code, your source, "
             "your project, or asks you to inspect or modify yourself, use the "
-            "self-code tools and resolve source paths relative to the Arlo project root. "
+            "self-code tools and resolve source paths relative to the project root. "
             "For ordinary user file and project operations, use the current working "
             "directory unless the user provides an explicit path. "
-            "Never assume the current working directory is the Arlo project root."
+            "Never assume the current working directory is the project root."
         )
 
     def current_datetime_instructions(self) -> str:
@@ -600,7 +600,7 @@ class Assistant:
                         return
                     if isinstance(event, FunctionToolCallEvent):
                         tool_arguments[event.part.tool_call_id] = event.part.args
-                        logging.getLogger("arlo.tools").info(
+                        logging.getLogger("assistant.tools").info(
                             "Executing %s (%s)", event.part.tool_name, event.part.tool_call_id)
                     elif isinstance(event, FunctionToolResultEvent):
                         part = event.part
@@ -610,7 +610,7 @@ class Assistant:
                                 default=str).encode("utf-8"))
                         except (TypeError, ValueError):
                             result_bytes = len(str(event.part.content).encode("utf-8"))
-                        logging.getLogger("arlo.tools").info(
+                        logging.getLogger("assistant.tools").info(
                             "Tool result: %s (%s); context_bytes=%d",
                             event.part.tool_name, event.part.tool_call_id,
                             result_bytes)
@@ -670,7 +670,7 @@ class Assistant:
                 ]
 
                 for request_index, response in enumerate(model_responses, 1):
-                    logging.getLogger("arlo.model").info(
+                    logging.getLogger("assistant.model").info(
                         "Model response request=%d/%d input_tokens=%d "
                         "output_tokens=%d finish_reason=%s",
                         request_index, len(model_responses),
@@ -703,7 +703,7 @@ class Assistant:
                 else:
                     new_messages.append(ModelResponse(parts=[call_part]))
 
-                logging.getLogger("arlo.tools").info(
+                logging.getLogger("assistant.tools").info(
                     "Executing %s (%s)", name, call_part.tool_call_id)
                 tool_output = await controller.invoke(name, arguments, call_part.tool_call_id)
                 receipt = controller.receipts.get(call_part.tool_call_id, {})
@@ -716,7 +716,7 @@ class Assistant:
                     outcome=outcome)])
                 if raw_return is not None and raw_return.content is not None:
                     tool_return.parts.append(UserPromptPart(raw_return.content))
-                logging.getLogger("arlo.tools").info(
+                logging.getLogger("assistant.tools").info(
                     "Tool result: %s (%s)", name, call_part.tool_call_id)
                 emit_step(name, call_part.tool_call_id, tool_output, outcome == "failed")
                 new_messages.append(tool_return)

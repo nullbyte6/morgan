@@ -97,7 +97,7 @@ class TaskControl(AbstractCapability):
         try:
             self.journal.record(event, **details)
         except OSError:
-            logging.getLogger("arlo.task_control").exception("Cannot write task trace %s", self.trace_path)
+            logging.getLogger("assistant.task_control").exception("Cannot write task trace %s", self.trace_path)
 
     def get_toolset(self):
         return self.toolset

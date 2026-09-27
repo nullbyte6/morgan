@@ -31,8 +31,6 @@ from copy import deepcopy
 from pathlib import Path
 from src.init.attachments import DEFAULT_LIMITS
 
-HOME_PATH = Path.home() / ".arlo"
-CONFIG_FILE = HOME_PATH / "json" / "config.json"
 DEV_FILE = Path(__file__).resolve().parents[2] / "dev" / "core.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
 
@@ -103,6 +101,8 @@ DEFAULTS = {
         "response_workspace": "Respond normally in Markdown. The application manages the output surface automatically. Do not emit JSON objects, action envelopes, tool-call representations, or escaped Markdown to control where your response appears. Do not call tools merely to display a response. Include code examples directly in fenced Markdown blocks; create files only when explicitly requested."
     },
 }
+HOME_PATH = Path.home() / ("." + DEFAULTS["assistant"]["name"].casefold())
+CONFIG_FILE = HOME_PATH / "json" / "config.json"
 _last_valid = deepcopy(DEFAULTS)
 _last_error = None
 
@@ -292,7 +292,7 @@ def load_dev_file() -> dict:
 
 def _migrate_storage() -> Path:
     """Migrate named storage at startup while retaining a single config locator."""
-    anchor = Path.home() / ".arlo"
+    anchor = Path.home() / ("." + DEFAULTS["assistant"]["name"].casefold())
     if not CONFIG_FILE.exists():
         return HOME_PATH
     try:
@@ -361,7 +361,7 @@ def _migrate_storage() -> Path:
 
 def initialize_storage() -> Path:
     """Serialize storage relocation across desktop and service startups."""
-    lock_path = Path(tempfile.gettempdir()) / "arlo-storage-migration.lock"
+    lock_path = Path(tempfile.gettempdir()) / "assistant-storage-migration.lock"
     with lock_path.open("a+b") as lock:
         lock.seek(0, os.SEEK_END)
         if not lock.tell():

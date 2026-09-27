@@ -112,7 +112,7 @@ def response_metrics(response, parameters):
 
 
 def measurement_error(trace, event, error, **identity):
-    logging.getLogger("arlo.task_control").warning("Model trace measurement unavailable: %s", type(error).__name__)
+    logging.getLogger("assistant.task_control").warning("Model trace measurement unavailable: %s", type(error).__name__)
     trace(event, **identity, error_type=type(error).__name__)
 
 

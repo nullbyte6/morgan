@@ -67,7 +67,7 @@ class VoiceInputWorker(QThread):
             try:
                 self.transcript, _ = transcribe_voice(*recording)
             except Exception as error:
-                logging.getLogger("arlo.voice").warning(
+                logging.getLogger("assistant.voice").warning(
                     "Voice transcript unavailable; continuing with native audio: %s",
                     error)
         except Exception as error:
@@ -139,7 +139,7 @@ class AssistantWorker(QObject):
                         voice.enqueue(self.startup_greeting)
                         voice.wait_until_done()
                 except Exception:
-                    logging.getLogger("arlo.voice").exception(
+                    logging.getLogger("assistant.voice").exception(
                         "Unable to play startup greeting")
                 finally:
                     voice.audio_callback = None
@@ -227,11 +227,11 @@ class AssistantWorker(QObject):
                 try:
                     from src.init.visuals.response import request_response_workspace
                     result = request_response_workspace(title or "Response")
-                    logging.getLogger("arlo.response").info(
+                    logging.getLogger("assistant.response").info(
                         "Response workspace result: %s", result)
                     return False
                 except Exception:
-                    logging.getLogger("arlo.response").exception(
+                    logging.getLogger("assistant.response").exception(
                         "Unable to open response workspace; falling back to chat")
                     return True
 
@@ -300,7 +300,7 @@ class AssistantWorker(QObject):
             try:
                 voice.stop()
             except Exception:
-                logging.getLogger("arlo.voice").exception(
+                logging.getLogger("assistant.voice").exception(
                     "Unable to stop speech immediately")
 
     @Slot()

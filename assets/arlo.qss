@@ -172,7 +172,7 @@ ToggleSwitch {
     qproperty-thumbColor: #cad3f5;
 }
 
-QMainWindow#arloWindow,
+QMainWindow#assistantWindow,
 QGraphicsView#globalZoomView,
 QWidget#globalZoomViewport,
 QWidget#windowContainer {
@@ -475,7 +475,7 @@ QMessageBox QLabel {
     background: transparent;
 }
 
-#arloWorkspace {
+#assistantWorkspace {
     background-color: transparent;
 }
 

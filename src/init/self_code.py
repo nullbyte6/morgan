@@ -29,7 +29,7 @@ import json
 import logging
 import subprocess
 from src.init.visuals.browser_bridge import open_embedded_url
-from src.init.paths import ARLO_ROOT
+from src.init.paths import PROJECT_ROOT
 from .task_outcomes import ActionResult, Outcome, normalize_result
 
 READ_CODE_MAX_CHARACTERS = 3000
@@ -63,8 +63,8 @@ def _source_index(path: str, content: str) -> str:
 
 
 def _path(path):
-    target = (ARLO_ROOT / path).resolve()
-    relative = target.relative_to(ARLO_ROOT)
+    target = (PROJECT_ROOT / path).resolve()
+    relative = target.relative_to(PROJECT_ROOT)
     if any(part.casefold() in (".git", ".venv", "__pycache__") for part in relative.parts):
         raise ValueError(
             tr('self_code.choose_a_source_file_not_git_metadata_or_the_runtime'))
@@ -72,7 +72,7 @@ def _path(path):
 
 
 def get_repo_lnk() -> str:
-    """Open the assistant's public repository in Arlo's integrated browser.
+    """Open the assistant's public repository in the assistant's integrated browser.
     Use when asked to open the assistant's online repository, not to inspect local code.
     """
     url = "https://github.com/xddigs/arlo"
@@ -89,10 +89,10 @@ def get_repo() -> str:
     from .config import CONFIG_FILE
     return json.dumps(
         {
-            "repository": str(ARLO_ROOT),
-            "entrypoint": str(ARLO_ROOT / "entry" / "desktop.py"),
+            "repository": str(PROJECT_ROOT),
+            "entrypoint": str(PROJECT_ROOT / "entry" / "desktop.py"),
             "user_config": str(CONFIG_FILE),
-            "git_status": git_status(str(ARLO_ROOT)),
+            "git_status": git_status(str(PROJECT_ROOT)),
         },
         ensure_ascii=False)
 
@@ -138,7 +138,7 @@ def list_code(directory: str = ".", recursive: bool = False,
                        f"{directory!r}, recursive={recursive!r}, suffix={suffix!r}, "
                        f"offset={end}, limit={bounded_limit}).")
         output = header + "\n\n" + "\n".join(selected)
-        logging.getLogger("arlo.context").info(
+        logging.getLogger("assistant.context").info(
             "Bounded list_code source=%s entries=%d returned=%d offset=%d bytes=%d",
             directory, len(entries), len(selected), offset,
             len(output.encode("utf-8")))
@@ -150,7 +150,7 @@ def list_code(directory: str = ".", recursive: bool = False,
 def search_code(query: str, directory: str = ".",
                 suffix: str = ".py",
                 limit: int = SEARCH_CODE_MAX_RESULTS) -> dict:
-    """Search Arlo's local source checkout for text or symbols.
+    """Search the assistant's local source checkout for text or symbols.
     Plain-text search only; regular expressions are not supported.
     An exact phrase match is preferred. If the complete query does not occur
     literally, multiple whitespace-separated terms are matched when all of
@@ -196,7 +196,7 @@ def search_code(query: str, directory: str = ".",
             except (OSError, UnicodeError):
                 continue
 
-            relative = path.relative_to(ARLO_ROOT)
+            relative = path.relative_to(PROJECT_ROOT)
             for line_number, line in enumerate(content.splitlines(), start=1):
                 folded = line.casefold()
 
@@ -211,7 +211,7 @@ def search_code(query: str, directory: str = ".",
 
         matches = (exact_matches + term_matches)[:limit]
         if not matches:
-            logging.getLogger("arlo.context").info(
+            logging.getLogger("assistant.context").info(
                 "search_code query=%r directory=%s "
                 "exact_matches=0 term_matches=0 returned_bytes=0",
                 query,
@@ -227,7 +227,7 @@ def search_code(query: str, directory: str = ".",
                 "\nResults truncated by the per-call inspection limit. "
                 "Use the returned matches selectively.")
 
-        logging.getLogger("arlo.context").info(
+        logging.getLogger("assistant.context").info(
             "search_code query=%r directory=%s "
             "exact_matches=%d term_matches=%d returned_matches=%d "
             "returned_bytes=%d",
@@ -321,7 +321,7 @@ def read_code(path: str = "", start_line: int = 1, end_line: int = 0,
 
 
 def edit_code(path: str, old_text: str, new_text: str) -> dict:
-    """Replace exactly one existing fragment in Arlo source, validating Python before atomic writes."""
+    """Replace exactly one existing fragment in assistant source, validating Python before atomic writes."""
     from .brain import atomic_write_bytes, decode_text
     try:
         target = _path(path)
@@ -345,7 +345,7 @@ def edit_code(path: str, old_text: str, new_text: str) -> dict:
 
 
 def create_code(path: str, content: str) -> dict:
-    """Create a new Arlo source file without overwriting, under a supervised mutation contract.
+    """Create a new assistant source file without overwriting, under a supervised mutation contract.
     Parent directory must exist. Python syntax is validated before an atomic exclusive publication.
     """
     import os
@@ -388,16 +388,16 @@ def verify_code(path: str) -> dict:
 
 
 def update_repo() -> dict:
-    """Fast-forward Arlo's upstream only when explicitly requested, refusing local changes."""
+    """Fast-forward the assistant's upstream only when explicitly requested, refusing local changes."""
     from .brain import run_git
     try:
         status = subprocess.run(
-            ["git", "-C", str(ARLO_ROOT), "status", "--porcelain", "--untracked-files=all"],
+            ["git", "-C", str(PROJECT_ROOT), "status", "--porcelain", "--untracked-files=all"],
             capture_output=True, text=True, errors="replace", timeout=15)
         if status.returncode:
             return ActionResult(Outcome.FAILED, status.stderr, "git_status_failed").payload()
         if status.stdout.strip():
             return ActionResult(Outcome.REJECTED, status.stdout, "clean_repository_required").payload()
-        return run_git(str(ARLO_ROOT), ["pull", "--ff-only"])
+        return run_git(str(PROJECT_ROOT), ["pull", "--ff-only"])
     except (OSError, subprocess.TimeoutExpired) as error:
         return ActionResult(Outcome.UNCERTAIN, str(error), "update_state_unknown").payload()

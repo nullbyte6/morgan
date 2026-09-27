@@ -86,7 +86,7 @@ class Orb(QWidget):
                 | Qt.WindowType.FramelessWindowHint
                 | Qt.WindowType.WindowStaysOnTopHint)
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setObjectName("arloOrb")
+        self.setObjectName("assistantOrb")
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         self.set_line_width(line_width)
         self.set_fill_ratio(fill_ratio)

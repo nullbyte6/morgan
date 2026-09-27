@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
+from src.init.identity import get_assistant_name, get_assistant_environment
 
 import asyncio
 import os
@@ -30,7 +31,7 @@ from pydantic_ai.providers.ollama import OllamaProvider
 from src.init.config import load_dev_file
 from src.init.desktop.capture import request_screen_image
 
-VISION_MODEL = os.getenv("ARLO_VISION_MODEL", load_dev_file()["base_model_name"])
+VISION_MODEL = get_assistant_environment("VISION_MODEL", load_dev_file()["base_model_name"])
 IMAGE_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -44,8 +45,8 @@ vision_agent = Agent(
         VISION_MODEL,
         provider=OllamaProvider(
             base_url="http://localhost:11434/v1")),
-    instructions=(
-        "You are Arlo's image analysis module. "
+    instructions=lambda: (
+        f"You are {get_assistant_name()}'s image analysis module. "
         "Analyze the supplied image and answer the user's question. "
         "Respond in Spanish unless another language is requested. "
         "Describe only what is supported by the image. "
@@ -58,7 +59,7 @@ vision_agent = Agent(
 async def analyze_image_async(
     image_path: str,
     question: str = "What's in the picture?") -> str:
-    """Analyze a local image using Arlo's separate vision model."""
+    """Analyze a local image using the assistant's separate vision model."""
     path = Path(image_path).expanduser().resolve(strict=True)
     if not path.is_file():
         raise ValueError("Path is no file")
@@ -82,7 +83,7 @@ async def analyze_image_async(
 
 async def analyze_screen(
     question: str = "What's on screen?") -> str:
-    """Analyze the primary monitor using Arlo's local vision model."""
+    """Analyze the primary monitor using the assistant's local vision model."""
 
     image_data = await asyncio.to_thread(request_screen_image)
     result = await vision_agent.run(
@@ -96,7 +97,7 @@ def analyze_image(image_path: str,
     """Analyze an image with the local VL model.
     Args:
         image_path: Absolute or relative path to an existing image.
-        question: What Arlo should determine from the image.
+        question: What the assistant should determine from the image.
     Returns:
         A textual description of the image.
     """

@@ -53,3 +53,11 @@ def get_assistant_identifier() -> str:
     """Return the name namespace shared by the running storage and services."""
     from .config import HOME_PATH
     return HOME_PATH.name.removeprefix(".")
+
+
+def get_assistant_environment(key: str, default=None):
+    """Read generic environment options while accepting legacy launcher options."""
+    import os
+    from .config import DEFAULTS
+    legacy_prefix = DEFAULTS["assistant"]["name"].upper()
+    return os.environ.get("ASSISTANT_" + key, os.environ.get(legacy_prefix + "_" + key, default))
