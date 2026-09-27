@@ -186,6 +186,7 @@ class Assistant:
         self.MODEL_NAME = MODEL_NAME
         self.model_settings = {
             "thinking": False,
+            "openai_reasoning_effort": "none",
             "temperature": 0.2,
             "max_tokens": 32768,
         }
@@ -483,7 +484,7 @@ class Assistant:
                 self.audio_model = OllamaModel(
                     self.audio_model_name, provider=self.provider,
                     profile={"openai_chat_supports_multiple_system_messages": False},
-                    settings={"thinking": False})
+                    settings={"thinking": False, "openai_reasoning_effort": "none"})
             turn_model = self.audio_model
             turn_model_settings["thinking"] = False
         attachment_tools = [attachments.toolset()] if attachments else []
