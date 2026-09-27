@@ -152,7 +152,7 @@ class ArloWindow(DesktopWindow):
         self.muted = self.settings.value("muted", False, type=bool)
         subtitles_enabled = self.settings.value("subtitles", True, type=bool)
         orb_speech_pulse = self.settings.value("orb_speech_pulse", True, type=bool)
-        self.setWindowTitle(f"ARLO {load_dev_file()["version"]}")
+        self.setWindowTitle(f"{load_config()["assistant"]["name"]} {load_dev_file()["version"]}")
         icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "arlo.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -487,7 +487,7 @@ class ArloWindow(DesktopWindow):
         main_layout.addWidget(root, 1)
         main_content.minimum_changed.connect(self._update_main_workspace_minimum)
         self.main_workspace_panel_id = self.workspace.open_panel(
-            title=f"Arlo {load_dev_file()["version"]}",
+            title=f"{load_config()["assistant"]["name"]} {load_dev_file()["version"]}",
             content=main_content,
             panel_id="main",
         )
