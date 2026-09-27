@@ -290,17 +290,24 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.state.observe("request_user_input", {"question": question}, result, call_id, {})
         return self.state.defer("waiting", obligation, "user_input", [call_id], question)
 
-    def task_read_evidence(self, call_id: str, offset: int = 0, limit: int = 2000, digest: str = "") -> dict:
-        """Read a bounded character page of preserved result JSON, with provenance and next_offset."""
+    def task_read_evidence(self, call_id: str, offset: int = 0, limit: int = 2000, digest: str = "",
+                           field: Literal["result", "content"] = "result") -> dict:
+        """Read preserved JSON or content characters. Follow next_action with its field and digest;
+        content offsets address decoded text, while result offsets address the original JSON.
+        """
         item = self.state.evidence.get(call_id)
         if item is None:
             return {"accepted": True, "outcome": Outcome.NEGATIVE, "found": False}
-        page = self.page(encoded(item.result), offset, limit, digest)
-        self.retrieved_pages.add(("evidence", call_id, page["digest"], offset, len(page["content"])))
+        page = self.evidence_page(item, field, offset, limit, digest)
+        delivery = self.record_delivery(item, page)
         self.trace("evidence_page_read", evidence_id=call_id, offset=offset,
-                   characters=len(page["content"]), digest=page["digest"])
-        return {"accepted": True, "outcome": Outcome.SUCCESS, "found": True,
-                "evidence": self.evidence_reference(item), "data": page}
+                   characters=len(page["content"]), digest=page["digest"], field=field)
+        payload = {"accepted": True, "outcome": Outcome.SUCCESS, "found": True,
+                   "evidence": self.evidence_reference(item), "data": page, "delivery": delivery}
+        action = self.evidence_next_action(item, delivery, page)
+        if action:
+            payload["next_action"] = action
+        return payload
 
     def task_read_state(self, field: str, offset: int = 0, limit: int = 2000, digest: str = "", query: str = "") -> dict:
         """Read bounded JSON pages; query filters tool names/descriptions or collection keys."""
@@ -331,7 +338,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             return control_rejection("Select at most twelve names from task_read_state(field='tools').",
                                      "names", "Known tool names")
         self.selected_tools = set(names)
-        return {"accepted": True, "outcome": Outcome.SUCCESS, "active_tools": sorted(self.selected_tools)}
+        return {"accepted": True, "outcome": Outcome.SUCCESS,
+                "active_tools": sorted(self.selected_tools | self.control_tools.keys())}
 
     @staticmethod
     def page(raw, offset, limit, digest=""):
@@ -345,6 +353,62 @@ and retain its consent checks. cd requests use change_directory and Git requests
                 "next_offset": end if end < len(raw) else None,
                 "total_characters": len(raw), "exhausted": end == len(raw),
                 "digest": current_digest, "format": "json_character_page"}
+
+    def evidence_page(self, item, field, offset, limit, digest=""):
+        data = item.result.get("data") if isinstance(item.result, dict) else None
+        content = data.get("content") if isinstance(data, dict) else data
+        if field == "content" and not isinstance(content, str):
+            raise ValueError("This evidence has no text content; use field='result'")
+        if field not in {"result", "content"}:
+            raise ValueError("Use field='result' or field='content'")
+        raw = content if field == "content" else encoded(item.result)
+        page = self.page(raw, offset, limit, digest)
+        page["field"] = field
+        if field == "content":
+            page["format"] = "text_character_page"
+        return page
+
+    def record_delivery(self, item, page):
+        fields = self.state.evidence_delivery.setdefault(item.id, {})
+        previous = fields.get(page["field"], {})
+        ranges = previous.get("delivered_ranges", [])
+        merged = []
+        for start, end in sorted([*ranges, [page["offset"], page["offset"] + len(page["content"])]]):
+            if start == end:
+                continue
+            if merged and start <= merged[-1][1]:
+                merged[-1][1] = max(end, merged[-1][1])
+            else:
+                merged.append([start, end])
+        delivered = sum(end - start for start, end in merged)
+        next_offset = 0
+        for start, end in merged:
+            if start > next_offset:
+                break
+            next_offset = end
+        delivery = {"content_preserved": True, "field": page["field"], "digest": page["digest"],
+                    "total_characters": page["total_characters"], "delivered_ranges": merged,
+                    "delivered_characters": delivered,
+                    "remaining_characters": page["total_characters"] - delivered,
+                    "next_offset": next_offset if next_offset < page["total_characters"] else None}
+        fields[page["field"]] = delivery
+        if delivered > previous.get("delivered_characters", 0):
+            self.retrieved_pages.add(("evidence", item.id, page["digest"], page["offset"], len(page["content"])))
+        return copy.deepcopy(delivery)
+
+    def evidence_next_action(self, item, delivery, page=None):
+        offset = delivery["next_offset"]
+        if offset is None and page is not None:
+            offset = page.get("next_offset")
+        if offset is not None:
+            return {"tool": "task_read_evidence", "arguments": {
+                "call_id": item.id, "offset": offset, "limit": 2000,
+                "field": delivery["field"], "digest": delivery["digest"]}}
+        data = item.result.get("data") if isinstance(item.result, dict) else None
+        if item.tool == "read_code" and isinstance(data, dict) and data.get("next_cursor"):
+            return {"tool": "read_code", "arguments": {"cursor": data["next_cursor"]},
+                    "reason": "The preserved page was delivered. Continue source coverage with this cursor."}
+        return None
 
     def evidence_reference(self, item):
         data = item.result.get("data") if isinstance(item.result, dict) else None
@@ -409,34 +473,52 @@ and retain its consent checks. cd requests use change_directory and Git requests
         payload.setdefault("outcome", outcome)
         if evidence_id:
             payload["evidence_id"] = evidence_id
-            if len(encoded(payload)) > 4096:
-                item = self.state.evidence.get(evidence_id)
-                if item is not None:
+            item = self.state.evidence.get(evidence_id)
+            if item is not None:
+                data = item.result.get("data") if isinstance(item.result, dict) else None
+                content = data.get("content") if isinstance(data, dict) else data
+                field = "content" if isinstance(content, str) else "result"
+                externalized = len(encoded(payload)) > 4096
+                if externalized:
+                    delivery = self.state.evidence_delivery.get(item.id, {}).get(field, {})
+                    offset = (delivery.get("next_offset") or 0) if reused else 0
+                    page = self.evidence_page(item, field, offset, 2000)
                     reference = self.evidence_reference(item)
-                    payload["data"] = {**reference["metadata"], "evidence_reference": reference,
+                    payload["data"] = {"content": page["content"],
+                                       "page": {key: value for key, value in page.items() if key != "content"},
+                                       "evidence_reference": reference,
                                        "content_available_via": "task_read_evidence",
-                                       "content_in_active_context": False}
+                                       "content_in_active_context": True}
                     if len(encoded(payload.get("resources", {}))) > 1000:
                         payload["resources"] = {"provenance": reference["provenance"]}
+                else:
+                    raw = content if field == "content" else encoded(item.result)
+                    page = {"content": raw, "offset": 0, "total_characters": len(raw),
+                            "digest": hashlib.sha256(raw.encode("utf-8")).hexdigest(), "field": field}
+                if not item.failed:
+                    payload["delivery"] = self.record_delivery(item, page)
+                    action = self.evidence_next_action(item, payload["delivery"], page)
+                    if action:
+                        payload["next_action"] = action
+                if externalized:
                     self.trace("evidence_externalized", evidence_id=evidence_id, call_id=call_id,
                                original_characters=reference["result_characters"],
                                active_characters=len(encoded(payload)), reused=reused,
                                artifact=reference["artifact"])
         if reused:
             payload["reused_evidence"] = True
-            data = payload.get("data")
-            if name == "read_code" and isinstance(data, dict) and data.get("next_cursor"):
-                payload["next_action"] = {"tool": "read_code", "arguments": {"cursor": data["next_cursor"]},
-                                          "reason": "This unchanged page was already read. Continue its actual coverage with this cursor."}
-            elif name == "search_code" and payload.get("code") == "no_matches":
+            if name == "search_code" and payload.get("code") == "no_matches":
                 payload["next_action"] = {"tool": "list_code", "arguments": {
                     "directory": arguments.get("directory", "."), "recursive": True,
                     "suffix": arguments.get("suffix", ".py")},
                     "reason": "This unchanged query already returned no matches. Discover source paths or search a different single symbol."}
-            elif name == "read_code":
-                payload["inspection_notice"] = "This unchanged range is exhausted. Preserve findings with its evidence ID and inspect other relevant source."
+            elif name == "read_code" and "next_action" not in payload:
+                payload["inspection_notice"] = "This preserved range was fully delivered. Preserve findings with its evidence ID and inspect other relevant source."
+        receipt_evidence = evidence_id
+        if name == "task_read_evidence":
+            receipt_evidence = payload.get("evidence", {}).get("evidence_id", "")
         self.receipts[call_id] = {"tool": name, "validated": validated, "executed": executed,
-                                 "control": control, "outcome": outcome, "evidence_id": evidence_id,
+                                 "control": control, "outcome": outcome, "evidence_id": receipt_evidence,
                                  "reused": reused}
         if control and outcome == Outcome.REJECTED:
             payload.setdefault("status", "rejected")
@@ -671,7 +753,9 @@ and retain its consent checks. cd requests use change_directory and Git requests
             else:
                 view[key] = value
         view["available_tool_catalog"] = {"tool": "task_read_state", "field": "tools"}
-        view["active_tool_names"] = sorted(self.selected_tools) if self.selected_tools is not None else "all"
+        active = self.available_tools.keys() if self.selected_tools is None else (
+            self.selected_tools & self.available_tools.keys())
+        view["active_tool_names"] = sorted(active | self.control_tools.keys())
         view["recovery_attempts"] = self.recovery_attempts
         return view
 
@@ -704,10 +788,27 @@ and retain its consent checks. cd requests use change_directory and Git requests
         externalized = []
         for message in result[:latest_response]:
             for part in message.parts:
-                if part.part_kind == "tool-return" and len(encoded(part.content)) > 2000:
+                if part.part_kind == "tool-return" and len(encoded(part.content)) > 2000 and not (
+                        isinstance(part.content, dict) and "artifact" in part.content and "data" not in part.content):
                     item = self.state.evidence.get(self.receipts.get(part.tool_call_id, {}).get("evidence_id", part.tool_call_id))
                     if item is not None:
-                        part.content = self.evidence_reference(item)
+                        payload = part.content if isinstance(part.content, dict) else {}
+                        reference = self.evidence_reference(item)
+                        delivery = payload.get("delivery")
+                        if delivery:
+                            delivery = copy.deepcopy(self.state.evidence_delivery.get(item.id, {}).get(
+                                delivery["field"], delivery))
+                            reference["delivery"] = delivery
+                            action = self.evidence_next_action(item, delivery)
+                            reference["next_action"] = action or {"tool": "task_read_evidence", "arguments": {
+                                "call_id": item.id, "offset": 0, "limit": 2000,
+                                "field": delivery["field"], "digest": delivery["digest"]}}
+                        elif payload.get("next_action"):
+                            reference["next_action"] = copy.deepcopy(payload["next_action"])
+                        reference["content_in_active_context"] = False
+                        if payload.get("reused_evidence"):
+                            reference["reused_evidence"] = True
+                        part.content = reference
                     else:
                         raw = encoded(part.content)
                         part.content = {"artifact": self.archive(raw, f"Tool return {part.tool_call_id}"),

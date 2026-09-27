@@ -126,6 +126,7 @@ class TaskState:
     role_resources: list[str] = field(default_factory=list)
     criteria: dict[str, Criterion] = field(default_factory=dict)
     evidence: dict[str, Evidence] = field(default_factory=dict)
+    evidence_delivery: dict = field(default_factory=dict)
     obligations: dict[str, Obligation] = field(default_factory=dict)
     dependencies: list[Dependency] = field(default_factory=list)
     revisions: dict = field(default_factory=dict)
@@ -456,4 +457,5 @@ class TaskState:
                 "output_recovery": copy.deepcopy(self.output_recovery), "final_output": self.final_output}
         if include_evidence:
             snapshot["evidence"] = evidence
+        snapshot["evidence_delivery"] = copy.deepcopy(self.evidence_delivery)
         return snapshot
