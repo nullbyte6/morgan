@@ -22,6 +22,7 @@ from src.init.lang import tr
 import base64
 import codecs
 import ctypes
+import hashlib
 import json
 import os
 import re
@@ -360,8 +361,8 @@ def delete_directory(path: str, recursive: bool = False) -> dict:
         return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
 
-def read_file(path: str) -> dict:
-    """Read a text file while detecting UTF-8, UTF-16 or Windows-1252."""
+def read_file(path: str, offset: int = 0, limit: int = 2000) -> dict:
+    """Read a bounded text page; continue with next_offset until exhausted."""
     try:
         file_path = resolve_safe_path(path)
         if _is_arlo_source_path(file_path):
@@ -372,16 +373,29 @@ def read_file(path: str) -> dict:
         
         from .attachments import active_attachments
         attachments = active_attachments.get()
+        if offset < 0 or limit < 1:
+            return ActionResult(Outcome.REJECTED, "Use a nonnegative offset and a positive limit", "file_precondition").payload()
         if attachments is not None:
-            result = attachments.read_path(str(file_path))
-            if result is not None:
-                return ActionResult(Outcome.SUCCESS, result, "observed").payload()
+            from .attachments import normalized_path
+            item = next((item for item in attachments.items.values()
+                         if normalized_path(item.path) == normalized_path(str(file_path))), None)
+            if item is not None:
+                return ActionResult(Outcome.REJECTED, {"attachment_id": item.id,
+                                    "next_action": "Use read_attachment; its offsets and limits follow the attachment format."},
+                                    "attachment_tool_required").payload()
         if not file_path.exists():
             return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
         if not file_path.is_file():
             return ActionResult(Outcome.REJECTED, tr('brain.not_a_file', file_path=file_path), "file_precondition").payload()
-        content, _ = decode_text(file_path.read_bytes())
-        return ActionResult(Outcome.SUCCESS, content, "observed").payload()
+        raw = file_path.read_bytes()
+        content, _ = decode_text(raw)
+        if offset > len(content):
+            return ActionResult(Outcome.REJECTED, "Offset exceeds file contents", "file_precondition").payload()
+        end = min(len(content), offset + min(limit, 2000))
+        return ActionResult(Outcome.SUCCESS, {"content": content[offset:end], "offset": offset,
+                            "next_offset": end if end < len(content) else None,
+                            "total_characters": len(content), "exhausted": end == len(content),
+                            "revision": hashlib.sha256(raw).hexdigest()}, "observed").payload()
     except Exception as error:
         return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 

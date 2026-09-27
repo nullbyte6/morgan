@@ -195,7 +195,6 @@ class Assistant:
             "thinking": False,
             "openai_reasoning_effort": "none",
             "temperature": 0.2,
-            "max_tokens": 32768,
         }
 
         http_client = httpx2.AsyncClient(
@@ -205,7 +204,9 @@ class Assistant:
         self.model = OllamaModel(
             self.MODEL_NAME,
             provider=self.provider,
-            profile={"openai_chat_supports_multiple_system_messages": False},
+            profile={"openai_chat_supports_multiple_system_messages": False,
+                     "openai_chat_supports_max_completion_tokens": False,
+                     "openai_supports_tool_choice_required": False},
             settings=self.model_settings)
 
         self.agent = Agent(
@@ -241,7 +242,9 @@ class Assistant:
 
                 self.model = OllamaModel(
                     self.MODEL_NAME, provider=self.provider,
-                    profile={"openai_chat_supports_multiple_system_messages": False},
+                    profile={"openai_chat_supports_multiple_system_messages": False,
+                             "openai_chat_supports_max_completion_tokens": False,
+                             "openai_supports_tool_choice_required": False},
                     settings=self.model_settings)
                 self.agent = Agent(
                     model=self.model,
@@ -494,12 +497,14 @@ class Assistant:
                 self.audio_model_name = audio_model_name
                 self.audio_model = OllamaModel(
                     self.audio_model_name, provider=self.provider,
-                    profile={"openai_chat_supports_multiple_system_messages": False},
+                    profile={"openai_chat_supports_multiple_system_messages": False,
+                             "openai_chat_supports_max_completion_tokens": False,
+                             "openai_supports_tool_choice_required": False},
                     settings={"thinking": False, "openai_reasoning_effort": "none"})
             turn_model = self.audio_model
             turn_model_settings["thinking"] = False
         attachment_tools = [attachments.toolset()] if attachments else []
-        from src.init.task_control import TaskControl, TaskOutputReady, TaskStopped
+        from src.init.task_control import TaskControl, TaskModelRetry, TaskOutputReady, TaskStopped
         from src.init.session_log import SessionContext
         from src.init.config import HOME_PATH
         import uuid
@@ -521,10 +526,14 @@ class Assistant:
         self._active_task_controller = controller
         from src.init.config import load_dev_file
         request_config = load_dev_file()
+        from src.init.attachments import ollama_capabilities
+        _, provider_context = ollama_capabilities((turn_model or self.model).model_name)
         controller.request_configuration = {
             "operational_context_tokens": request_config["context_length"],
+            "provider_context_tokens": provider_context,
+            "effective_context_tokens": min(request_config["context_length"], provider_context),
             "configured_model": request_config["model_name"],
-            "source": "dev/core.json; configured_only_not_runner_verified"}
+            "source": "minimum_of_dev_configuration_and_ollama_show_or_ps; provider_fallback_4096"}
         if not controller.state.title:
             from src.init.task_state import normalize_task_title
             controller.state.title = normalize_task_title(task_title)
@@ -634,6 +643,12 @@ class Assistant:
                         usage_limits=UsageLimits(request_limit=None),
                         capabilities=[controller],
                         event_stream_handler=stream_events)
+                except TaskModelRetry as retry:
+                    conversation_messages = controller.active_history(controller.messages)
+                    conversation_messages.append(ModelRequest(parts=[UserPromptPart(str(retry))]))
+                    stream_messages = conversation_messages
+                    current_prompt = None
+                    continue
                 except TaskOutputReady as ready:
                     stream_messages = list(controller.messages)
                     if controller.accept_output():
@@ -679,7 +694,7 @@ class Assistant:
                 conversation_messages = list(result.all_messages())
                 stream_messages = conversation_messages
                 if text_call is None:
-                    if controller.accept_output(truncated=result.response.finish_reason == "length"):
+                    if controller.accept_output(truncated=result.response.finish_reason == "length", output=visible_output):
                         deliver_output(visible_output)
                         break
                     current_prompt = None
