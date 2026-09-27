@@ -75,15 +75,18 @@ class AttachmentTray(QWidget):
         paths, _ = QFileDialog.getOpenFileNames(self, tr("ui.attach_files"))
         self.add_files(paths)
 
-    def add_files(self, paths):
+    def add_files(self, paths, *, interactive=True):
+        rejected = False
         known = {normalized_path(a.path) for a in self.items.values()}
         for path in paths:
             if normalized_path(path) in known:
                 continue
             if len(self.items) >= self.limits["max_files"]:
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.warning(self, tr("ui.attach_files"),
-                                    tr("ui.attachment_count", count=self.limits["max_files"]))
+                rejected = True
+                if interactive:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.warning(self, tr("ui.attach_files"),
+                                        tr("ui.attachment_count", count=self.limits["max_files"]))
                 break
             known.add(normalized_path(path))
             item = Attachment.pending(path)
@@ -93,6 +96,7 @@ class AttachmentTray(QWidget):
             self.jobs[item.id] = job
             QThreadPool.globalInstance().start(job)
         self.refresh()
+        return not rejected
 
     def validated(self, item):
         self.jobs.pop(item.id, None)

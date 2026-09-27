@@ -78,7 +78,10 @@ class WorkspacePanel(QFrame):
 
         self.title_label = QLabel(title, self.header)
         self.title_label.setObjectName("workspacePanelTitle")
+        self.title_label.setMinimumWidth(0)
+        self.title_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self.title_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.title_label.installEventFilter(self)
 
         self.title_edit = QLineEdit(title, self.header)
         self.title_edit.setObjectName("workspacePanelTitleEdit")
@@ -131,6 +134,7 @@ class WorkspacePanel(QFrame):
         """Create an empty surface for the standalone demonstration."""
         placeholder = QWidget()
         placeholder.setObjectName("workspacePlaceholder")
+        placeholder.setProperty("workspaceEmpty", True)
 
         layout = QVBoxLayout(placeholder)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -160,6 +164,7 @@ class WorkspacePanel(QFrame):
 
         self.content = content
         self.content_layout.addWidget(content)
+        self._empty = bool(content.property("workspaceEmpty"))
         self.setProperty("workspaceViewKey", content.property("workspaceViewKey"))
         self.style().unpolish(self)
         self.style().polish(self)
@@ -169,6 +174,10 @@ class WorkspacePanel(QFrame):
             self.set_renamable(False)
         else:
             self.set_renamable(self.closable)
+
+    @property
+    def is_empty(self) -> bool:
+        return self._empty
 
     def dispose_content(self) -> None:
         """Release content-owned resources before deferred widget deletion."""
@@ -181,7 +190,8 @@ class WorkspacePanel(QFrame):
 
         title = title.strip() or self.title
         self.title = title
-        self.title_label.setText(title)
+        self.title_label.setText(self.title_label.fontMetrics().elidedText(
+            title, Qt.ElideMiddle, max(1, self.title_label.width())))
         self.title_edit.setText(title)
 
     def set_renamable(self, enabled: bool) -> None:
@@ -209,6 +219,9 @@ class WorkspacePanel(QFrame):
         self.title_changed.emit(previous, self.title)
 
     def eventFilter(self, watched, event):
+        if watched is getattr(self, "title_label", None) and event.type() == QEvent.Resize:
+            self.title_label.setText(self.title_label.fontMetrics().elidedText(
+                self.title, Qt.ElideMiddle, max(1, self.title_label.width())))
         if watched is self.header:
             if event.type() == event.Type.MouseButtonPress:
                 if event.button() == Qt.LeftButton:
@@ -546,6 +559,13 @@ class Workspace(QWidget):
         """Return a registered panel by its stable identifier."""
 
         return self._panels.get(panel_id)
+
+    def can_open_file(self, panel: WorkspacePanel) -> bool:
+        return (self._panels.get(panel.panel_id) is panel
+                and panel.panel_id != getattr(self, "_primary_panel_id", None)
+                and panel.panel_id not in self._closing_panels
+                and panel.panel_id not in self._pending_closes
+                and panel.is_empty)
 
     def open_panel(self,
         title: str = "Workspace",

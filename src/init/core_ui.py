@@ -115,6 +115,7 @@ from src.init.desktop.task_progress import TaskProgressPill
 from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
+from src.init.desktop.file_drop import FileDropRouter
 from src.init.visuals.bridge import FlowchartBridge
 from src.init.visuals.browser_bridge import BrowserBridge
 from src.init.terminal import TerminalBridge
@@ -477,6 +478,8 @@ class ArloWindow(DesktopWindow):
             panel_id="main",
         )
         self.workspace.set_primary_panel(self.main_workspace_panel_id)
+        self.file_drop_router = FileDropRouter(
+            self.workspace, self.composer_widget, self.attachment_tray, self)
 
         self.workspace.panel_opened.connect(self.on_workspace_opened)
         self.workspace.panel_closed.connect(self.on_workspace_closed)
@@ -498,6 +501,7 @@ class ArloWindow(DesktopWindow):
         """Create navigation controls for a manually opened workspace."""
         content = QWidget()
         content.setObjectName("manualWorkspaceContent")
+        content.setProperty("workspaceEmpty", True)
 
         layout = QVBoxLayout(content)
         layout.setContentsMargins(12, 12, 12, 12)

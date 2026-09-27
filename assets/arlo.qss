@@ -458,6 +458,53 @@ QMessageBox QLabel {
     border: none;
 }
 
+#desktopFileDropIndicator {
+    background-color: rgba(36, 39, 58, 210);
+    border: 2px solid #8aadf4;
+    border-radius: 10px;
+}
+
+#desktopFileDropIndicator[valid="false"] {
+    border-color: #8087a2;
+}
+
+#desktopFileDropIndicator QLabel {
+    color: #cad3f5;
+    background: transparent;
+    border: none;
+    font-size: 13px;
+}
+
+#workspaceFileViewer,
+#fileViewerSource,
+#fileViewerSource QAbstractScrollArea:viewport {
+    color: #cad3f5;
+    background-color: #24273a;
+    border: none;
+    selection-background-color: #494d64;
+}
+
+#fileViewerStatus {
+    color: #a5adcb;
+    border: none;
+    font-size: 12px;
+}
+
+#workspaceFileViewer QPushButton,
+#workspaceFileViewer QSpinBox,
+#workspaceFileViewer QLineEdit {
+    color: #cad3f5;
+    background-color: #363a4f;
+    border: 1px solid #494d64;
+    border-radius: 6px;
+    padding: 3px 6px;
+    min-width: 0;
+}
+
+#workspaceFileViewer QPushButton:hover {
+    border-color: #8aadf4;
+}
+
 #responseView,
 #responseDocument,
 #responseDocument QAbstractScrollArea:viewport {
