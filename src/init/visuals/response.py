@@ -19,7 +19,6 @@
 """Streaming Markdown responses displayed inside workspace panels."""
 
 from src.init.identity import get_assistant_name
-from src.init.sessions import execution_identity
 
 import threading
 from dataclasses import dataclass, field
@@ -38,7 +37,6 @@ from PySide6.QtWidgets import (QApplication, QFrame, QSizePolicy,
 @dataclass(eq=False)
 class ResponseRequest:
     title: str
-    identity: object = field(default_factory=execution_identity)
     completed: threading.Event = field(default_factory=threading.Event)
     result: str | None = None
     error: str | None = None
@@ -103,12 +101,7 @@ class ResponseBridge(QObject):
             try:
                 window = self.parent()
                 workspace = window.workspace
-                identity = request.identity
-                session = window.session_manager.get(identity.session_id)
-                if session is None or not session.accepts(identity.session_id, identity.turn_id):
-                    raise RuntimeError("The response session is unavailable")
-                chat = session.workspace
-                current = chat.current_response_view
+                current = window.current_response_view
                 panel = next(
                     (workspace.get_panel(panel_id)
                      for panel_id in workspace.panel_ids
@@ -118,23 +111,27 @@ class ResponseBridge(QObject):
                      and panel_id not in workspace._pending_closes),
                     None)
                 if panel is not None:
+                    workspace.focus_panel(panel.panel_id)
+                    window.restore_from_mascot()
                     self._complete(request, result="Response workspace is already open.")
                     return
 
                 view = ResponseView()
-                panel_id = window.open_owned_panel(identity.session_id, identity.turn_id,
-                                                   request.title, view, "response")
-                chat.current_response_view = view
-                view.destroyed.connect(lambda: chat._forget_response_view(view))
+                panel_id = workspace.open_panel(
+                    title=request.title,
+                    content=view,
+                    target_id=window.main_workspace_panel_id,
+                    direction=Qt.Key_Right,
+                )
+
+                window.current_response_view = view
+                view.destroyed.connect(
+                    lambda: window._forget_response_view(view))
+                workspace.focus_panel(panel_id)
+                window.restore_from_mascot()
                 self._complete(request, result="Response workspace opened.")
             except Exception as error:
                 self._complete(request, error=str(error))
-
-    def cancel_session(self, session_id):
-        with self._lock:
-            for request in tuple(self._pending):
-                if request.identity.session_id == session_id:
-                    self._complete(request, error="Response session closed")
 
     @Slot()
     def shutdown(self):

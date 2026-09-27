@@ -33,7 +33,6 @@ from src.init.config import load_config
 from src.init.core import Assistant
 from src.init.lang import tr
 from src.init.session_log import SessionLog
-from src.init.sessions import session_scope
 from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
 
@@ -125,23 +124,33 @@ class VoiceInputWorker(QThread):
 
 # noinspection PyBroadException
 class AssistantWorker(QObject):
-    event = Signal(str, int, str, object)
-    stopped = Signal(str)
+    chunk = Signal(int, str)
+    audio = Signal(int, object)
+    directory = Signal(str)
+    speaking = Signal(int, bool)
+    subtitle = Signal(int, str)
+    phase = Signal(int, str)
+    activity = Signal(int, object)
+    task_title = Signal(int, str)
+    permission_denied = Signal(int)
+    finished = Signal(str)
+    git_diff_ready = Signal(str, str)
+    failed = Signal(str)
+    ready = Signal()
+    confirmation_requested = Signal(int, str)
+    accepted = Signal(int)
+    rejected = Signal(int, str)
+    screenshot_requested = Signal(object)
+    clipboard_requested = Signal(object)
+    exit_requested = Signal()
 
-    def emit_event(self, name, turn_id, *values):
-        self.event.emit(self.arlo_session.session_id, turn_id, name, values)
-
-    def __init__(self, arlo_session, startup_greeting="", *, muted=False):
+    def __init__(self, startup_greeting="", *, muted=False):
         super().__init__()
-        self.arlo_session = arlo_session
-        self.assistant = Assistant(arlo_session)
-        arlo_session.assistant = self.assistant
-        arlo_session.worker = self
+        self.assistant = Assistant()
         self.startup_greeting = startup_greeting
         self.muted = bool(muted)
         self._voice_settings_lock = threading.Lock()
-        self.session = SessionLog(session_id=arlo_session.session_id)
-        arlo_session.log = self.session
+        self.session = SessionLog()
         self.history = self.session.context.messages
         self.confirmation_event = threading.Event()
         self.confirmation_answer = False
@@ -157,17 +166,17 @@ class AssistantWorker(QObject):
     def initialize(self):
         try:
             self.event_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.event_loop)
-            self.assistant.event_loop = self.event_loop
             self.assistant._initialize_runtime()
             with self._voice_settings_lock:
                 self.assistant.voice.set_muted(self.muted)
-            if self.startup_greeting and self.assistant.voice.owns_audio:
+            if self.startup_greeting:
                 voice = self.assistant.voice
                 voice.audio_callback = lambda samples, rate: self.report_audio(
                     0, samples, rate)
-                voice.speaking_callback = lambda speaking: self.emit_event("speaking", 0, speaking)
-                voice.subtitle_callback = lambda text: self.emit_event("subtitle", 0, text)
+                voice.speaking_callback = lambda speaking: self.speaking.emit(
+                    0, speaking)
+                voice.subtitle_callback = lambda text: self.subtitle.emit(0,
+                                                                          text)
                 try:
                     with desktop_audio():
                         voice.begin_turn()
@@ -180,12 +189,11 @@ class AssistantWorker(QObject):
                     voice.audio_callback = None
                     voice.speaking_callback = None
                     voice.subtitle_callback = None
-                    self.emit_event("speaking", 0, False)
-            self.arlo_session.manager.audio.release(self.arlo_session)
-            self.emit_event("directory", 0, str(self.arlo_session.working_directory))
-            self.emit_event("ready", 0)
+                    self.speaking.emit(0, False)
+            self.directory.emit(str(Path.cwd()))
+            self.ready.emit()
         except Exception as error:
-            self.emit_event("failed", self.arlo_session.turn_id, str(error))
+            self.failed.emit(str(error))
 
     def set_muted(self, muted: bool):
         """Apply immediately even while the worker is generating a response."""
@@ -197,18 +205,13 @@ class AssistantWorker(QObject):
     @Slot(int, object)
     def ask(self, turn_id, message):
         try:
-            with self.arlo_session.manager.execution(self.arlo_session, turn_id):
-                live = (isinstance(message, DesktopVoiceMessage) and message.live
-                        and self.live_capture is not None)
-                lease = (desktop_audio(stop_event=self.cancel_event)
-                         if self.assistant.voice.owns_audio and not live else nullcontext())
-                with lease as audio_lease:
-                    self._ask(turn_id, message, audio_lease)
+            live = (isinstance(message, DesktopVoiceMessage) and message.live
+                    and self.live_capture is not None)
+            lease = nullcontext() if live else desktop_audio(stop_event=self.cancel_event)
+            with lease as audio_lease:
+                self._ask(turn_id, message, audio_lease)
         except Exception as error:
-            self.emit_event("rejected", turn_id, str(error))
-        finally:
-            if self.arlo_session.closing:
-                self.shutdown()
+            self.rejected.emit(turn_id, str(error))
 
     def _ask(self, turn_id, message, audio_lease):
         message = DesktopMessage(message) if isinstance(message,
@@ -222,9 +225,9 @@ class AssistantWorker(QObject):
                     message, load_config()["attachments"], vision=vision,
                     context_tokens=context)
         except Exception as error:
-            self.emit_event("rejected", turn_id, str(error))
+            self.rejected.emit(turn_id, str(error))
             return
-        self.emit_event("accepted", turn_id)
+        self.accepted.emit(turn_id)
         prompt = "" if voice_input else message.text
         try:
             cancel_event = self.cancel_event
@@ -234,13 +237,13 @@ class AssistantWorker(QObject):
             self.command_reply = (not voice_input and not message.attachments
                                   and prompt.casefold().startswith("pwsh:"))
             if cancel_event.is_set():
-                self.emit_event("finished", turn_id, "")
+                self.finished.emit("")
                 return
             privacy_result = (self.session.handle_command(prompt)
                               if not voice_input and not message.attachments
                               else None)
             if privacy_result is not None:
-                self.emit_event("finished", turn_id, str(privacy_result))
+                self.finished.emit(str(privacy_result))
                 return
 
             self.session.write(self.assistant.username, message.log_text())
@@ -251,7 +254,7 @@ class AssistantWorker(QObject):
                 reply = self.assistant.reload_source()
                 self.session.context.add_exchange(prompt, reply)
                 self.session.write(self.assistant.name, reply)
-                self.emit_event("finished", turn_id, reply)
+                self.finished.emit(reply)
                 return
             previous = getattr(self.assistant, "_active_task_controller", None)
             task_title = previous.state.title if previous is not None else ""
@@ -260,10 +263,10 @@ class AssistantWorker(QObject):
                 nonlocal task_title
                 if not task_title:
                     task_title = title
-                self.emit_event("task_title", turn_id, task_title)
+                self.task_title.emit(turn_id, task_title)
 
             if task_title:
-                self.emit_event("task_title", turn_id, task_title)
+                self.task_title.emit(turn_id, task_title)
 
             def receive_surface(surface, title):
                 if surface != "response_view":
@@ -282,18 +285,18 @@ class AssistantWorker(QObject):
             def speaking_changed(speaking):
                 if speaking and audio_lease is not None:
                     audio_lease.yield_to_wake_listener()
-                self.emit_event("speaking", turn_id, speaking)
+                self.speaking.emit(turn_id, speaking)
 
             reply, history = self.assistant.run(
                 prompt,
                 self.history,
-                on_chunk=lambda chunk: self.emit_event("chunk", turn_id, chunk),
+                on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),
                 on_audio=lambda samples, rate: self.report_audio(
                     turn_id, samples, rate),
                 on_speaking=speaking_changed,
-                on_subtitle=lambda text: self.emit_event("subtitle", turn_id, text),
-                on_phase=lambda phase: self.emit_event("phase", turn_id, phase),
-                on_activity=lambda activity: self.emit_event("activity", turn_id, activity),
+                on_subtitle=lambda text: self.subtitle.emit(turn_id, text),
+                on_phase=lambda phase: self.phase.emit(turn_id, phase),
+                on_activity=lambda activity: self.activity.emit(turn_id, activity),
                 cancel_event=cancel_event,
                 event_loop=self.event_loop,
                 attachments=attachment_session,
@@ -319,12 +322,12 @@ class AssistantWorker(QObject):
             if (not cancel_event.is_set() and not self.assistant.shutdown_requested.is_set()
                     and (task_state is None or task_state.status == "complete")):
                 from src.init.visuals.git_diff_connector import get_git_patch
-                directory = str(self.arlo_session.working_directory)
+                directory = str(Path.cwd())
                 patch = get_git_patch(directory)
                 if patch:
-                    self.emit_event("git_diff_ready", turn_id, directory, patch)
+                    self.git_diff_ready.emit(directory, patch)
 
-            self.emit_event("finished", turn_id, reply)
+            self.finished.emit(reply)
 
         except Exception as error:
             cause = error.__cause__
@@ -332,12 +335,12 @@ class AssistantWorker(QObject):
                          cause=cause) if cause is not None else str(
                 error)
             self.session.write("System", message, status="error")
-            self.emit_event("failed", turn_id, message)
+            self.failed.emit(message)
 
         finally:
-            self.emit_event("directory", turn_id, str(self.arlo_session.working_directory))
+            self.directory.emit(str(Path.cwd()))
             if self.assistant.shutdown_requested.is_set():
-                self.emit_event("exit_requested", turn_id)
+                self.exit_requested.emit()
 
     def report_audio(self, turn_id, samples, sample_rate):
         if not self.cancel_event.is_set():
@@ -348,7 +351,7 @@ class AssistantWorker(QObject):
             if now - self._last_audio_update < 0.10:
                 return
             self._last_audio_update = now
-            self.emit_event("audio", turn_id, spectrum_levels(samples,
+            self.audio.emit(turn_id, spectrum_levels(samples,
                                                      sample_rate).tolist())
 
     def interrupt(self):
@@ -365,18 +368,11 @@ class AssistantWorker(QObject):
 
     @Slot()
     def shutdown(self):
-        if getattr(self, "_closed", False):
-            return
-        self._closed = True
         self.session.close()
-        self.assistant.voice.close()
+        if self.assistant.voice is not None:
+            self.assistant.voice.close()
         if self.event_loop is not None:
-            self.event_loop.run_until_complete(self.assistant.backend.close_transport(self.event_loop))
-            self.event_loop.run_until_complete(self.event_loop.shutdown_asyncgens())
-            self.event_loop.run_until_complete(self.event_loop.shutdown_default_executor())
             self.event_loop.close()
-        self.stopped.emit(self.arlo_session.session_id)
-        QThread.currentThread().quit()
 
     def confirm_command(self, message: str, cancel_event=None,
                         turn_id=0, context=None) -> bool:
@@ -385,8 +381,7 @@ class AssistantWorker(QObject):
             return False
         self.confirmation_answer = False
         self.confirmation_event.clear()
-        import uuid
-        pending = {"request_id": uuid.uuid4().hex, "turn_id": turn_id, "message": message,
+        pending = {"turn_id": turn_id, "message": message,
                    **(context or {})}
         with self._confirmation_lock:
             self._pending_confirmation = pending
@@ -395,7 +390,7 @@ class AssistantWorker(QObject):
                 if self._pending_confirmation is pending:
                     self._pending_confirmation = None
             return False
-        self.emit_event("confirmation_requested", turn_id, pending["request_id"], message)
+        self.confirmation_requested.emit(turn_id, message)
         try:
             while not self.confirmation_event.wait(0.05):
                 if cancel_event.is_set():
@@ -406,13 +401,12 @@ class AssistantWorker(QObject):
                 if self._pending_confirmation is pending:
                     self._pending_confirmation = None
         if not accepted:
-            self.emit_event("permission_denied", turn_id)
+            self.permission_denied.emit(turn_id)
         return accepted
 
-    def resolve_confirmation(self, accepted: bool, request_id=None):
+    def resolve_confirmation(self, accepted: bool):
         with self._confirmation_lock:
-            if (self._pending_confirmation is None or
-                    request_id is not None and self._pending_confirmation["request_id"] != request_id):
+            if self._pending_confirmation is None:
                 return False
             self.confirmation_answer = accepted
             self.confirmation_event.set()

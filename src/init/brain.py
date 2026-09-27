@@ -80,6 +80,7 @@ NOTES_FILE = HOME_PATH / "note" / f"{datetime.now():%Y-%m-%d_%H-%M-%S_%f}.txt"
 APPLICATION_SUFFIXES = (".exe", ".com", ".bat", ".cmd", ".lnk", ".appref-ms")
 _APPLICATION_SEARCH_CACHE: dict[str, list[dict[str, str]]] = {}
 
+_SHOW_WORKING_DIRECTORY = False
 _LAST_GEOCODE_REQUEST_AT = 0.0
 
 
@@ -141,8 +142,7 @@ def refresh_model_keep_alive() -> None:
 
 def get_working_directory() -> str:
     """Return the current directory used by relative file and Git operations."""
-    from .paths import session_directory
-    return str(session_directory())
+    return str(Path.cwd())
 
 
 def change_directory(path: str = "") -> str:
@@ -150,22 +150,19 @@ def change_directory(path: str = "") -> str:
     Accepts relative or absolute paths, Windows drive paths, quotes, ~ and
     environment variables. Subsequent tools resolve relative paths here.
     """
-    from .sessions import execution_identity
-    session = execution_identity().session
+    global _SHOW_WORKING_DIRECTORY
     try:
         path = path.strip()
         if not path:
-            session.show_working_directory = True
+            _SHOW_WORKING_DIRECTORY = True
             return get_working_directory()
         if len(path) >= 2 and path[0] == path[-1] and path[0] in "\"'":
             path = path[1:-1]
         if not path:
             return tr('brain.error_directory_path_is_empty')
         destination = resolve_safe_path(os.path.expandvars(path))
-        if not destination.is_dir():
-            raise NotADirectoryError(str(destination))
-        session.working_directory = destination
-        session.show_working_directory = True
+        os.chdir(destination)
+        _SHOW_WORKING_DIRECTORY = True
         return tr('brain.current_directory', value0=get_working_directory())
     except (OSError, ValueError) as error:
         return f"Error: {error}"
@@ -1614,15 +1611,11 @@ def list_media_sessions() -> str:
 
 
 def resolve_safe_path(path: str) -> Path:
-    from .paths import resolve_session_path
-    return resolve_session_path(path)
+    return Path(path).expanduser().resolve()
 
 def resolve_entry_path(path: str) -> Path:
     """Resolve a directory entry without following its final symbolic link."""
-    from .paths import session_directory
-    target = Path(path).expanduser()
-    target = target if target.is_absolute() else session_directory() / target
-    return target.parent.resolve() / target.name
+    return Path(os.path.abspath(Path(path).expanduser()))
 
 def _is_arlo_source_path(path: Path) -> bool:
     from src.init.paths import PROJECT_ROOT
@@ -1682,9 +1675,7 @@ def learn_pronunciation(word: str, pronunciation: str) -> str:
 
 def should_show_working_directory() -> bool:
     """Whether a successful cd has enabled the location in the prompt."""
-    from .sessions import active_execution
-    identity = active_execution.get()
-    return identity is not None and identity.session.show_working_directory
+    return _SHOW_WORKING_DIRECTORY
 
 
 def take_screenshot() -> str:

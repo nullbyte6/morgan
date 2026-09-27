@@ -34,7 +34,7 @@ from PySide6.QtWidgets import *
 ENTRY_HEADER = re.compile(
     r"^\[(?:\d{4}-\d{2}-\d{2}[ T])?"
     r"(?P<time>\d{2}:\d{2}:\d{2})"
-    r"(?:\s+(?:Z|[+-]\d{2}:?\d{2}))?]\s*(?:\[session:(?P<session_id>[0-9a-f]+)\])?\s*$")
+    r"(?:\s+(?:Z|[+-]\d{2}:?\d{2}))?]\s*$")
 
 AUTHOR_LINE = re.compile(
     r"^(?P<author>[^\n:]{1,100}):[ \t]?(?P<content>.*)$")
@@ -47,7 +47,6 @@ class LogMessage:
     author: str
     content: str
     role: str = ""
-    session_id: str = ""
 
 
 def parse_log(content: str) -> list[LogMessage]:
@@ -63,7 +62,6 @@ def parse_log(content: str) -> list[LogMessage]:
         assistant_names.add(header.group(1).casefold())
     current_time: str | None = None
     current_author: str | None = None
-    current_session = ""
     current_content: list[str] = []
 
     fence_char: str | None = None
@@ -80,8 +78,7 @@ def parse_log(content: str) -> list[LogMessage]:
                 author=current_author,
                 content=body,
                 role="assistant" if current_author.casefold() in assistant_names
-                else "system" if current_author.casefold() == "system" else "user",
-                session_id=current_session))
+                else "system" if current_author.casefold() == "system" else "user"))
 
     index = 0
 
@@ -106,7 +103,6 @@ def parse_log(content: str) -> list[LogMessage]:
                     flush()
 
                     current_time = header.group("time")
-                    current_session = header.group("session_id") or ""
                     current_author = author_match.group("author").strip()
                     current_content = [author_match.group("content")]
 
@@ -148,13 +144,12 @@ class LogMessageCard(QFrame):
         message: LogMessage,
         log_path: Path,
         code_font_family: str,
-        parent=None, *, session_id=None):
+        parent=None):
 
         super().__init__(parent)
         self.message = message
         self.log_path = log_path
         self.code_font_family = code_font_family
-        self.session_id = session_id
 
         self.setObjectName("logMessageCard")
         self.setProperty(
@@ -309,7 +304,7 @@ class LogMessageCard(QFrame):
         if url.scheme() in ("https", "http"):
             from src.init.visuals.browser_bridge import open_embedded_url
             try:
-                open_embedded_url(url.toString(), session_id=self.session_id)
+                open_embedded_url(url.toString())
             except (RuntimeError, ValueError) as error:
                 self.body.setToolTip(str(error))
 
@@ -317,10 +312,9 @@ class LogMessageCard(QFrame):
 class LogView(QWidget):
     """Arlo's daily conversation logs."""
 
-    def __init__(self, log_dir: Path, parent=None, *, session_id=None):
+    def __init__(self, log_dir: Path, parent=None):
         super().__init__(parent)
         self.log_dir = Path(log_dir)
-        self.session_id = session_id
         self.current_date = datetime.date.today()
 
         self.last_content: str | None = None
@@ -402,8 +396,7 @@ class LogView(QWidget):
             message,
             log_path,
             self.code_font_family,
-            self.container,
-            session_id=self.session_id)
+            self.container)
         self.message_layout.insertWidget(
             self.message_layout.count() - 1,
             card)
@@ -432,8 +425,6 @@ class LogView(QWidget):
             return
 
         parsed = parse_log(content)
-        if self.session_id is not None:
-            parsed = [message for message in parsed if message.session_id == self.session_id]
         scrollbar = self.scroll.verticalScrollBar()
         at_bottom = (scrollbar.value() >= scrollbar.maximum() - 20)
         old_position = scrollbar.value()

@@ -23,10 +23,7 @@ from dataclasses import dataclass, field
 
 
 
-from src.init.sessions import active_execution
-
-
-@dataclass(eq=False)
+@dataclass
 class CaptureRequest:
     """One screenshot request and its completion state."""
     completed: threading.Event = field(default_factory=threading.Event)
@@ -34,7 +31,6 @@ class CaptureRequest:
     error: str = ""
     return_image: bool = False
     image_data: bytes | None = None
-    identity: object = field(default_factory=lambda: active_execution.get())
 
 _bridge_lock = threading.Lock()
 _bridge_handler = None

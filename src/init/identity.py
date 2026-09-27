@@ -36,10 +36,6 @@ def register_assistant(factory: Callable[[], AssistantIdentity]) -> None:
 
 def get_assistant() -> AssistantIdentity:
     """Return the registered singleton; the application owns its name and state."""
-    from .sessions import active_execution
-    identity = active_execution.get()
-    if identity is not None:
-        return identity.session.assistant
     if _assistant_factory is None:
         raise RuntimeError(tr('identity.the_application_has_not_registered_its_assistant'))
     return _assistant_factory()

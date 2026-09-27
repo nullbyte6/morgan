@@ -20,16 +20,3 @@
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-
-def session_directory():
-    from .sessions import active_execution
-    identity = active_execution.get()
-    return identity.session.working_directory if identity is not None else Path.home()
-
-
-def resolve_session_path(path, *, strict=False):
-    target = Path(path).expanduser()
-    if not target.is_absolute():
-        target = session_directory() / target
-    return target.resolve(strict=strict)

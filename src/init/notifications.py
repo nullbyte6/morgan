@@ -57,11 +57,6 @@ _lock = threading.Lock()
 _timers = {}
 
 
-def _owner():
-    from .sessions import execution_identity
-    return execution_identity().session_id
-
-
 def _validate(title, message):
     for name, value, limit in (("title", title, 63), ("message", message, 255)):
         if not isinstance(value, str) or not value.strip() or len(value) > limit:
@@ -97,8 +92,8 @@ def send_notification(message: str, title: str | None = None) -> str:
 
 def _fire(timer_id):
     with _lock:
-        entry = _timers.get(timer_id)
-        if entry is None or entry["status"] != "pending":
+        entry = _timers[timer_id]
+        if entry["status"] != "pending":
             return
         entry["status"] = "sending"
     try:
@@ -130,7 +125,7 @@ def schedule_notification(delay_seconds: int, message: str, title: str | None = 
         timer.daemon = True
         with _lock:
             _timers[timer_id] = {
-                "id": timer_id, "session_id": _owner(), "title": title, "message": message,
+                "id": timer_id, "title": title, "message": message,
                 "status": "pending",
                 "due_at": (datetime.now().astimezone() + timedelta(seconds=delay_seconds)).isoformat(),
                 "deadline": time.monotonic() + delay_seconds, "timer": timer,
@@ -160,7 +155,7 @@ def list_timers() -> str:
             {**{key: value for key, value in entry.items() if key not in ("timer", "deadline")},
              "remaining_seconds": max(0, round(entry["deadline"] - time.monotonic(), 1))
              if entry["status"] == "pending" else 0}
-            for entry in _timers.values() if entry["session_id"] == _owner()
+            for entry in _timers.values()
         ], ensure_ascii=False)
 
 
@@ -168,19 +163,10 @@ def cancel_timer(timer_id: str) -> str:
     """Cancel a pending timer or scheduled notification by its exact ID."""
     with _lock:
         entry = _timers.get(timer_id)
-        if entry is None or entry["session_id"] != _owner():
+        if entry is None:
             return tr('notifications.error_timer_id_not_found')
         if entry["status"] != "pending":
             return tr('notifications.timer_is_already_cannot_cancel', value0=entry['status'])
         entry["status"] = "cancelled"
         entry["timer"].cancel()
     return tr('notifications.timer_cancelled', timer_id=timer_id)
-
-
-def close_session_timers(session_id):
-    with _lock:
-        for timer_id, entry in tuple(_timers.items()):
-            if entry["session_id"] == session_id:
-                if entry["status"] == "pending":
-                    entry["timer"].cancel()
-                _timers.pop(timer_id, None)

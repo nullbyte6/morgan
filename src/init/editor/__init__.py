@@ -44,7 +44,7 @@ def open_in_editor(path: str) -> str:
 
     try:
         with get_assistant().suspend_terminal():
-            subprocess.run(["nvim", str(requested)], cwd=get_working_directory())
+            subprocess.run(["nvim", str(path)])
         return tr('editor.editor_closed', path=path)
 
     except OSError as error:

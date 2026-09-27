@@ -31,11 +31,10 @@ from src.init.visuals.browser_bridge import open_embedded_url
 from collections import OrderedDict
 from typing import Literal
 
-def _recent(name):
-    from .sessions import execution_identity
-    return execution_identity().session.tools("media_" + name, OrderedDict)
-
-
+_videos = OrderedDict()
+_spotify_tracks = OrderedDict()
+_spotify_playlists = OrderedDict()
+_spotify_albums = OrderedDict()
 _VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 _SPOTIFY_SCOPES = (
     "user-read-playback-state user-read-currently-playing "
@@ -312,10 +311,10 @@ def search_spotify_songs(query: str, max_results: int = 5) -> str:
                 "duration_seconds": round((item.get("duration_ms") or 0) / 1000),
             }
             candidates.append(candidate)
-            _recent("spotify_tracks")[uri] = candidate
-            _recent("spotify_tracks").move_to_end(uri)
-        while len(_recent("spotify_tracks")) > 100:
-            _recent("spotify_tracks").popitem(last=False)
+            _spotify_tracks[uri] = candidate
+            _spotify_tracks.move_to_end(uri)
+        while len(_spotify_tracks) > 100:
+            _spotify_tracks.popitem(last=False)
         return json.dumps({"query": query, "service": "spotify",
                            "candidates": candidates,
                            "instruction": tr('media.for_ambiguous_requests_ask_the_user_to_choose_do_not_play_the_fi')},
@@ -329,7 +328,7 @@ def play_spotify_song(uri: str) -> str:
     The first playback request opens Spotify OAuth if needed. Spotify Premium
     and an active Spotify Connect device are required by Spotify's Player API.
     """
-    if uri not in _recent("spotify_tracks"):
+    if uri not in _spotify_tracks:
         return tr('media.error_uri_must_come_from_a_recent_search_spotify_songs_result_se')
     return _spotify_control("play", uri)
 
@@ -362,8 +361,8 @@ def search_spotify_playlists(query: str, max_results: int = 10) -> str:
                 "tracks_total": (playlist.get("tracks") or {}).get("total"),
             }
             candidates.append(candidate)
-            _recent("spotify_playlists")[uri] = candidate
-            _recent("spotify_playlists").move_to_end(uri)
+            _spotify_playlists[uri] = candidate
+            _spotify_playlists.move_to_end(uri)
         return json.dumps({"service": "spotify", "query": query,
                            "playlists": candidates,
                            "instruction": tr('media.choose_a_numbered_result_when_ambiguous_then_use_its_exact_uri_w')},
@@ -396,8 +395,8 @@ def search_spotify_albums(query: str, max_results: int = 10) -> str:
                 "total_tracks": album.get("total_tracks"),
             }
             candidates.append(candidate)
-            _recent("spotify_albums")[uri] = candidate
-            _recent("spotify_albums").move_to_end(uri)
+            _spotify_albums[uri] = candidate
+            _spotify_albums.move_to_end(uri)
         return json.dumps({"service": "spotify", "query": query,
                            "albums": candidates,
                            "instruction": tr('media.choose_a_numbered_result_when_ambiguous_then_use_its_exact_uri_w_88125e')},
@@ -408,7 +407,7 @@ def search_spotify_albums(query: str, max_results: int = 10) -> str:
 
 def play_spotify_album(uri: str) -> str:
     """Start an album returned by search_spotify_albums."""
-    if uri not in _recent("spotify_albums"):
+    if uri not in _spotify_albums:
         return tr('media.error_uri_must_come_from_a_recent_search_spotify_albums_result_s')
     return _spotify_control("play", uri, context=True)
 
@@ -440,15 +439,15 @@ def list_spotify_playlists(max_results: int = 50) -> str:
                     "tracks_total": (playlist.get("tracks") or {}).get("total"),
                 }
                 candidates.append(candidate)
-                _recent("spotify_playlists")[uri] = candidate
-                _recent("spotify_playlists").move_to_end(uri)
+                _spotify_playlists[uri] = candidate
+                _spotify_playlists.move_to_end(uri)
                 if len(candidates) >= max_results:
                     break
             if len(candidates) >= max_results or not page.get("next"):
                 break
             page = client.next(page)
-        while len(_recent("spotify_playlists")) > 500:
-            _recent("spotify_playlists").popitem(last=False)
+        while len(_spotify_playlists) > 500:
+            _spotify_playlists.popitem(last=False)
         return json.dumps({
             "service": "spotify",
             "playlists": candidates,
@@ -460,7 +459,7 @@ def list_spotify_playlists(max_results: int = 50) -> str:
 
 def get_spotify_playlist_tracks(uri: str, max_results: int = 100) -> str:
     """Read tracks from a playlist returned by list_spotify_playlists."""
-    if uri not in _recent("spotify_playlists"):
+    if uri not in _spotify_playlists:
         return tr('media.error_uri_must_come_from_a_recent_list_spotify_playlists_result')
     if type(max_results) is not int or not 1 <= max_results <= 500:
         return tr('media.error_max_results_must_be_between_1_and_500')
@@ -486,7 +485,7 @@ def get_spotify_playlist_tracks(uri: str, max_results: int = 100) -> str:
             if len(tracks) >= max_results or not page.get("next"):
                 break
             page = client.next(page)
-        return json.dumps({"playlist_uri": uri, "playlist": _recent("spotify_playlists")[uri].get("name"),
+        return json.dumps({"playlist_uri": uri, "playlist": _spotify_playlists[uri].get("name"),
                            "tracks": tracks}, ensure_ascii=False)
     except Exception as error:
         return _spotify_error(tr('media.reading_playlist_tracks'), error)
@@ -494,7 +493,7 @@ def get_spotify_playlist_tracks(uri: str, max_results: int = 100) -> str:
 
 def play_spotify_playlist(uri: str) -> str:
     """Start a playlist returned by list_spotify_playlists on Spotify."""
-    if uri not in _recent("spotify_playlists"):
+    if uri not in _spotify_playlists:
         return tr('media.error_uri_must_come_from_a_recent_list_spotify_playlists_result')
     return _spotify_control("play", uri, context=True)
 
@@ -532,10 +531,10 @@ def search_youtube_songs(query: str, max_results: int = 5) -> str:
                          "duration_seconds": entry.get("duration"),
                          "url": f"https://www.youtube.com/watch?v={entry['id']}"}
             candidates.append(candidate)
-            _recent("videos")[entry["id"]] = candidate
-            _recent("videos").move_to_end(entry["id"])
-        while len(_recent("videos")) > 100:
-            _recent("videos").popitem(last=False)
+            _videos[entry["id"]] = candidate
+            _videos.move_to_end(entry["id"])
+        while len(_videos) > 100:
+            _videos.popitem(last=False)
         return json.dumps({"query": query, "candidates": candidates,
                            "instruction": tr('media.for_ambiguous_requests_ask_the_user_to_choose_do_not_play_the_fi')},
                           ensure_ascii=False)
@@ -550,7 +549,7 @@ def play_youtube_song(video_id: str) -> str:
     Use the user's selection when the original request was ambiguous. Browser
     autoplay may be blocked; opening a video does not confirm playback.
     """
-    candidate = _recent("videos").get(video_id)
+    candidate = _videos.get(video_id)
     if candidate is None:
         return tr('media.error_video_id_must_come_from_a_recent_search_youtube_songs_resu')
     url = candidate["url"] + "&autoplay=1"

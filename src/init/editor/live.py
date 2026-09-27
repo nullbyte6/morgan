@@ -208,10 +208,8 @@ class EditorView(QWidget):
     Does not instantiate an Assistant or an AssistantWorker.
     """
 
-    def __init__(self, parent=None, *, directory=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        from ..paths import session_directory
-        self.directory = Path(directory or session_directory())
 
         self.setObjectName("editorPage")
         self.editor = CodeEditor(self)
@@ -272,7 +270,7 @@ class EditorView(QWidget):
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Open file",
-            str(self.directory),
+            str(Path.cwd()),
             "All files (*)")
 
         if not path:
@@ -296,7 +294,7 @@ class EditorView(QWidget):
             filename, _ = QFileDialog.getSaveFileName(
                 self,
                 "Save file",
-                str(self.directory),
+                str(Path.cwd()),
                 "All files (*)")
 
             if not filename:

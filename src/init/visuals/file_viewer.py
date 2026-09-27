@@ -163,8 +163,7 @@ class FileViewer(QWidget):
 
     def __init__(self, path):
         super().__init__()
-        from ..paths import resolve_session_path
-        self.path = str(resolve_session_path(path))
+        self.path = os.path.abspath(path)
         self._task = None
         self._snapshot = None
         self._load_notice = ""

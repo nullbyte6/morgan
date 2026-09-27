@@ -574,8 +574,7 @@ class Workspace(QWidget):
         panel_id: str | None = None,
         target_id: str | None = None,
         orientation: Qt.Orientation | None = None,
-        direction: Qt.Key | None = None,
-        focus: bool = True) -> str:
+        direction: Qt.Key | None = None) -> str:
         """Insert a new panel by splitting an existing workspace leaf."""
 
         if direction is not None:
@@ -626,8 +625,7 @@ class Workspace(QWidget):
             )
 
         self._panels[panel_id] = panel
-        if focus:
-            self.focus_panel(panel_id)
+        self.focus_panel(panel_id)
         self.panel_opened.emit(panel_id)
         self.layout_changed.emit()
         return panel_id
