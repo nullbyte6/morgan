@@ -157,7 +157,7 @@ maps effect obligation IDs to {'finding': 'observed reconciliation', 'evidence':
 For read_only, current successful inspection IDs can satisfy completed; you do not need to
 repeat unchanged reads in phase verify. task_finish(completed={exact_criterion: [evidence IDs]})
 can certify remaining criteria and finish. Mutations still need independent verification.
-For read_only, one explicit verification contract can be shared by all new criteria.
+One explicit verification contract can be shared by new criteria with the same check and resources.
 Prefer resources=[] until actual source paths have been discovered; never invent dependencies.
 verification keys otherwise match criteria exactly, without a nested 'criteria' wrapper. resolutions
 may name only real effect obligations; an audit criterion is completed, not resolved as an effect.
@@ -217,7 +217,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
                         task_title: str = "") -> dict:
         """Apply an atomic task contract. Verification entries contain method/resources;
         resolutions contain finding/evidence. phase is the next action's role, not lifecycle.
-        For read_only, a single verification contract is shared across new criteria.
+        A single verification contract is shared across new criteria with the same check/resources.
         Criteria are additive; omitted criteria and evidence remain required. Keep exact keys
         across languages. Use criteria=[] for phase-only updates.
         """
@@ -225,7 +225,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         values = lambda entries: {key: value.model_dump() if isinstance(value, BaseModel) else value
                                   for key, value in (entries or {}).items()}
         contracts = copy.deepcopy(values(verification))
-        if criteria and (kind or self.state.kind) == "read_only" and len(contracts) == 1:
+        if criteria and (kind or self.state.kind) in {"read_only", "mutation"} and len(contracts) == 1:
             shared_key, shared = next(iter(contracts.items()))
             for criterion in criteria:
                 if criterion not in self.state.criteria:
