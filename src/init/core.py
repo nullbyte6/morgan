@@ -30,6 +30,7 @@ from getpass import getuser
 
 from pydantic_ai import Agent, Tool
 
+from src.init.config import load_config
 from src.init.console import DebugConsole
 from src.init.identity import get_assistant_name
 from src.init.voice_client import VoiceClient
@@ -180,11 +181,12 @@ class Assistant:
 
         if services_ready():
             return
-        candidates = [PROJECT_ROOT / "scripts" / "arlo-services.ps1"]
-        home = os.environ.get("ARLO_HOME")
+        name: str = load_config()["assistant"]["name"]
+        candidates = [PROJECT_ROOT / "scripts" / f"{name}-services.ps1"]
+        home = os.environ.get(f"{name.upper()}_HOME")
         if home:
-            candidates[:0] = [Path(home) / "arlo-services.ps1",
-                              Path(home) / "scripts" / "arlo-services.ps1"]
+            candidates[:0] = [Path(home) / f"{name}-services.ps1",
+                              Path(home) / "scripts" / f"{name}-services.ps1"]
         services = next((path for path in candidates if path.is_file()), None)
         if services is None:
             raise RuntimeError(tr("startup.services_missing"))
