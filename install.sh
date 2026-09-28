@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 readonly INNO_SETUP INSTALL_DIR ASSISTANT_NAME
-[[ "$ASSISTANT_NAME" =~ ^[a-zA-Z_][a-zA-Z0-9_]{0,79}$ ]] || fail "The assistant name must be a valid environment variable name (up to 80 characters)."
+[[ "$ASSISTANT_NAME" =~ ^[a-zA-Z_][a-zA-Z0-9_]{0,79}$ && "$ASSISTANT_NAME" =~ [a-zA-Z0-9] ]] || fail "The assistant name must be a valid environment variable name with at least one letter or digit (up to 80 characters)."
 [[ "$INNO_SETUP" == 1 || "$ASSISTANT_NAME" == "Arlo" ]] || fail "--assistant-name requires --inno-setup."
 
 to_unix_path() {
