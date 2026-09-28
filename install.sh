@@ -141,77 +141,72 @@ ensure_ollama_server() {
 }
 
 
+install_ffmpeg() {
+    [[ -n "$WINGET_BIN" ]] || fail "WinGet is required to install Gyan.FFmpeg.Shared."
+    info "Checking for Gyan.FFmpeg.Shared..."
+    if ! "$WINGET_BIN" list --id "Gyan.FFmpeg.Shared" --exact --accept-source-agreements --disable-interactivity >/dev/null 2>&1; then
+        winget_install "Gyan.FFmpeg.Shared" || fail "Could not install Gyan.FFmpeg.Shared."
+    fi
+    local windows_path directory
+    windows_path="$("$POWERSHELL_BIN" -NoProfile -NonInteractive -Command '
+        $ErrorActionPreference = "Stop"
+        $path = @(
+            [Environment]::GetEnvironmentVariable("Path", "Machine")
+            [Environment]::GetEnvironmentVariable("Path", "User")
+        ) -join ";"
+        [Environment]::ExpandEnvironmentVariables($path) -split ";"
+    ' | tr -d '\r')" || fail "Could not refresh PATH after installing FFmpeg."
+    while IFS= read -r directory; do
+        [[ -n "$directory" ]] && PATH="$(to_unix_path "$directory"):$PATH"
+    done <<< "$windows_path"
+    export PATH
+    command -v ffmpeg.exe >/dev/null 2>&1 || fail "FFmpeg was installed, but ffmpeg.exe could not be located."
+}
+
+ensure_arlo_executable() {
+    if [[ -f "${ARLO_DIR_UNIX}/Arlo.exe" ]]; then return 0; fi
+    [[ -f "${SCRIPT_DIR}/scripts/build-exe.sh" ]] || fail "${SCRIPT_DIR}/scripts/build-exe.sh was not found."
+    info "Building Arlo.exe in ${ARLO_DIR_WINDOWS}..."
+    ARLO="$ARLO_DIR_WINDOWS" ARLO_BUILD_PYTHON="$VENV_PYTHON" \
+        bash "${SCRIPT_DIR}/scripts/build-exe.sh" || fail "Could not build Arlo.exe."
+    [[ -f "${ARLO_DIR_UNIX}/Arlo.exe" ]] || fail "Arlo.exe was not created in ${ARLO_DIR_WINDOWS}."
+}
+
 configure_arlo_environment() {
-    local repo_windows
-    repo_windows="$(to_windows_path "$SCRIPT_DIR")"
-
-    info "Configuring ARLO_HOME and user PATH..."
-
-    ARLO_INSTALL_ROOT="$repo_windows" \
+    local scripts_windows
+    scripts_windows="$(to_windows_path "${SCRIPT_DIR}/scripts")"
+    info "Configuring ARLO, ARLO_HOME and user PATH..."
+    ARLO_INSTALL_HOME="$scripts_windows" ARLO_INSTALL_DIR="$ARLO_DIR_WINDOWS" \
         "$POWERSHELL_BIN" -NoProfile -NonInteractive -Command '
         $ErrorActionPreference = "Stop"
-
-        $root = [System.IO.Path]::GetFullPath(
-            $env:ARLO_INSTALL_ROOT
-        ).TrimEnd([char]92)
-
-        # Persist the repository location for this Windows user.
-        [Environment]::SetEnvironmentVariable(
-            "ARLO_HOME",
-            $root,
-            "User"
-        )
-
-        # Read the persisted user PATH, not the merged process PATH.
-        $userPath = [Environment]::GetEnvironmentVariable(
-            "Path",
-            "User"
-        )
-
-        $entries = @(
-            $userPath -split ";" |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-        )
-
-        # Avoid adding the same repository more than once.
-        $alreadyPresent = $false
-
-        foreach ($entry in $entries) {
-            $expanded = [Environment]::ExpandEnvironmentVariables(
-                $entry.Trim().TrimEnd([char]92)
-            )
-
-            if ($expanded -ieq $root) {
-                $alreadyPresent = $true
-                break
+        $paths = [ordered]@{
+            ARLO_HOME = [IO.Path]::GetFullPath($env:ARLO_INSTALL_HOME).TrimEnd([char]92)
+            ARLO = [IO.Path]::GetFullPath($env:ARLO_INSTALL_DIR).TrimEnd([char]92)
+        }
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        $entries = @($userPath -split ";" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        foreach ($name in $paths.Keys) {
+            [Environment]::SetEnvironmentVariable($name, $paths[$name], "User")
+            [Environment]::SetEnvironmentVariable($name, $paths[$name], "Process")
+        }
+        foreach ($name in $paths.Keys) {
+            $alreadyPresent = $false
+            foreach ($entry in $entries) {
+                $expanded = [Environment]::ExpandEnvironmentVariables($entry.Trim()).TrimEnd([char]92)
+                if ($expanded -ieq $paths[$name]) {
+                    $alreadyPresent = $true
+                    break
+                }
             }
+            if (-not $alreadyPresent) { $entries += "%$name%" }
+            Write-Host "$name = $($paths[$name])"
         }
-
-        if (-not $alreadyPresent) {
-            $entries += "%ARLO_HOME%"
-
-            [Environment]::SetEnvironmentVariable(
-                "Path",
-                ($entries -join ";"),
-                "User"
-            )
-        }
-
-        # Make the values available to child processes of this installer.
-        $env:ARLO_HOME = $root
-
-        if (
-            -not (
-                ($env:Path -split ";") |
-                Where-Object { $_.TrimEnd([char]92) -ieq $root }
-            )
-        ) {
-            $env:Path += ";$root"
-        }
-
-        Write-Host "ARLO_HOME = $root"
+        [Environment]::SetEnvironmentVariable("Path", ($entries -join ";"), "User")
         Write-Host "User PATH configured."
-        ' || fail "Could not configure ARLO_HOME or user PATH."
+        ' || fail "Could not configure ARLO, ARLO_HOME or user PATH."
+    export ARLO="$ARLO_DIR_WINDOWS"
+    export ARLO_HOME="$scripts_windows"
+    export PATH="${ARLO_DIR_UNIX}:${SCRIPT_DIR}/scripts:$PATH"
 }
 
 download_cosyvoice_model() {
@@ -238,6 +233,8 @@ snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2])
 }
 
 find_powershell
+readonly ARLO_DIR_UNIX="$(to_unix_path "${ARLO:-${ARLO_BUILD_OUTPUT:-C:}/Arlo}")"
+readonly ARLO_DIR_WINDOWS="$(to_windows_path "$ARLO_DIR_UNIX")"
 [[ -f "${SCRIPT_DIR}/requirements.txt" ]] || fail "Run this installer inside the Arlo repository: git clone https://github.com/xddigs/arlo.git; cd arlo; bash install.sh."
 [[ -f "${SCRIPT_DIR}/scripts/arlo-run.ps1" ]] || fail "${SCRIPT_DIR}/scripts/arlo-run.ps1 was not found."
 [[ -d "${SCRIPT_DIR}/src" ]] || fail "${SCRIPT_DIR}/src was not found."
@@ -286,6 +283,7 @@ info "Updating pip, setuptools and wheel..."
 "$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
 
 info "Installing dependencies from requirements.txt..."
+install_ffmpeg
 "$VENV_PYTHON" -m pip install --requirement "$REQUIREMENTS_WINDOWS"
 
 info "Ensuring Hugging Face Hub is available..."
@@ -338,6 +336,7 @@ info "Downloading/verifying ${ARLO_MODEL} (approximately 6.6 GB)..."
 info "Downloading/verifying ${ARLO_AUDIO_MODEL} (approximately 7.2 GB)..."
 "$OLLAMA_BIN" pull "$ARLO_AUDIO_MODEL"
 
+ensure_arlo_executable
 configure_arlo_environment
 cleanup_installers
 trap - EXIT
