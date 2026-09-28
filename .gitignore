@@ -15,5 +15,6 @@ __pycache__/
 /src/models/*
 !/src/models/.gitkeep
 Arlo.spec
+ArloSetup.iss
 
 AGENTS.md
