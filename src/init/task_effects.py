@@ -24,8 +24,10 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from .paths import PROJECT_ROOT
+from .task_outcomes import ActionResult, Outcome
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,13 @@ class ToolSpec:
     text_observation: bool = False
     ancillary: bool = False
     verification_capable: bool = False
+    requires_followup: bool = False
+    followup_policy: Callable[[ActionResult], bool] | None = None
+
+    def needs_followup(self, result: ActionResult) -> bool:
+        if self.followup_policy is not None:
+            return self.followup_policy(result)
+        return self.requires_followup and result.successful
 
 
 TOOL_SPECS = {}
@@ -47,6 +56,13 @@ def register(names, spec):
         if name in TOOL_SPECS:
             raise ValueError(f"Duplicate tool effect declaration: {name}")
         TOOL_SPECS[name] = spec
+
+
+def app_operation_followup(result: ActionResult) -> bool:
+    data = result.data
+    return (result.outcome in {Outcome.SUCCESS, Outcome.UNCERTAIN}
+            and isinstance(data, dict) and data.get("status") == "running"
+            and isinstance(data.get("job_id"), str) and bool(data["job_id"].strip()))
 
 
 register("get_version get_current_time calculate get_city_distance get_weather "
@@ -60,10 +76,12 @@ register("remember forget", ToolSpec(True, "memory"))
 register("list_media_sessions identify_playing_song get_current_media", ToolSpec(False, "media"))
 register("control_media play_youtube_song play_spotify_song play_spotify_album play_spotify_playlist",
          ToolSpec(True, "media"))
-register("list_steam_games find_steam_game list_applications list_open_applications search_apps "
-         "get_app_operation scan_app_residues", ToolSpec(False, "applications"))
-register("open_application launch_steam_game close_application install_app uninstall_app clean_app_residue",
+register("list_steam_games find_steam_game list_applications list_open_applications scan_app_residues",
+         ToolSpec(False, "applications"))
+register("search_apps get_app_operation", ToolSpec(False, "applications", followup_policy=app_operation_followup))
+register("open_application launch_steam_game close_application clean_app_residue",
          ToolSpec(True, "applications"))
+register("install_app uninstall_app", ToolSpec(True, "applications", followup_policy=app_operation_followup))
 register("check_system_health check_disk_health check_security_health", ToolSpec(False, "system"))
 register("kill_self refresh empty_recycle_bin kill_process shutdown_computer cancel_shutdown "
          "run_quick_command", ToolSpec(True, "system"))
