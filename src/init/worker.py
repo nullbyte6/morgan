@@ -260,8 +260,15 @@ class AssistantWorker(QObject):
                     prompt = prompt.strip()
                 except Exception:
                     logging.getLogger("assistant.voice").exception(
-                        "Final voice transcript unavailable; continuing with native audio")
+                        "Local voice transcript unavailable; attempting native transcription")
+                    prompt = self.assistant.transcribe_audio(
+                        message.audio_wav, event_loop=self.event_loop)
             if voice_input:
+                if cancel_event.is_set():
+                    self.finished.emit("")
+                    return
+                if not prompt:
+                    raise RuntimeError(tr("voice.not_transcribed"))
                 message = replace(message, transcript=prompt)
             self.session.write(self.assistant.username, message.log_text())
 
@@ -318,8 +325,6 @@ class AssistantWorker(QObject):
                 event_loop=self.event_loop,
                 attachments=attachment_session,
                 session=self.session,
-                audio_input=(message.audio_wav
-                             if voice_input and not prompt else None),
                 task_title=task_title,
                 on_surface=receive_surface,
                 on_task_title=receive_task_title)
