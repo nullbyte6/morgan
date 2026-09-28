@@ -17,10 +17,13 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import asyncio
+import io
 import logging
 import threading
 import time
+import wave
 from contextlib import nullcontext
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import *
@@ -229,7 +232,7 @@ class AssistantWorker(QObject):
             self.rejected.emit(turn_id, str(error))
             return
         self.accepted.emit(turn_id)
-        prompt = "" if voice_input else message.text
+        prompt = message.transcript.strip() if voice_input else message.text
         try:
             cancel_event = self.cancel_event
             set_confirmation_handler(
@@ -247,6 +250,19 @@ class AssistantWorker(QObject):
                 self.finished.emit(str(privacy_result))
                 return
 
+            if voice_input and not prompt:
+                try:
+                    from src.init.voice import transcribe_voice
+
+                    with wave.open(io.BytesIO(message.audio_wav), "rb") as wav:
+                        prompt, _ = transcribe_voice(
+                            wav.readframes(wav.getnframes()), wav.getframerate())
+                    prompt = prompt.strip()
+                except Exception:
+                    logging.getLogger("assistant.voice").exception(
+                        "Final voice transcript unavailable; continuing with native audio")
+            if voice_input:
+                message = replace(message, transcript=prompt)
             self.session.write(self.assistant.username, message.log_text())
 
             from src.init.hot_reload import is_reload_command
@@ -302,7 +318,8 @@ class AssistantWorker(QObject):
                 event_loop=self.event_loop,
                 attachments=attachment_session,
                 session=self.session,
-                audio_input=message.audio_wav if voice_input else None,
+                audio_input=(message.audio_wav
+                             if voice_input and not prompt else None),
                 task_title=task_title,
                 on_surface=receive_surface,
                 on_task_title=receive_task_title)

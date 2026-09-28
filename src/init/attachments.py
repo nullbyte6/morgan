@@ -111,7 +111,7 @@ class DesktopVoiceMessage:
         return ()
 
     def log_text(self):
-        return self.transcript.strip() or "[Voice input]"
+        return self.transcript.strip()
 
 
 def _encoding(sample: bytes) -> str:
