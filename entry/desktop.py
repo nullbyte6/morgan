@@ -17,7 +17,8 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-from src.init.core_ui import main
-
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
+    from src.init.core_ui import main
     main()

@@ -27,7 +27,6 @@ import sys
 import threading
 import tempfile
 from getpass import getuser
-from tkinter import font
 
 from src.init.identity import get_assistant_name, get_assistant_identifier, register_assistant
 from src.init.utils import *

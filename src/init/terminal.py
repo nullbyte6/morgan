@@ -230,12 +230,16 @@ class TerminalSession(QThread):
                     if shell is None:
                         raise FileNotFoundError("PowerShell is unavailable")
                     argv = [shell, "-NoLogo", "-NoProfile"]
-                python = Path(sys.executable)
-                if python.name.lower() == "pythonw.exe":
-                    python = python.with_name("python.exe")
-                bootstrap = Path(__file__).with_name("desktop") / "terminal_shell.py"
-                process.spawn(str(python),
-                              cmdline=" " + subprocess.list2cmdline([str(bootstrap), *argv]),
+                if getattr(sys, "frozen", False):
+                    executable, arguments = argv[0], argv[1:]
+                else:
+                    python = Path(sys.executable)
+                    if python.name.lower() == "pythonw.exe":
+                        python = python.with_name("python.exe")
+                    bootstrap = Path(__file__).with_name("desktop") / "terminal_shell.py"
+                    executable, arguments = str(python), [str(bootstrap), *argv]
+                process.spawn(executable,
+                              cmdline=" " + subprocess.list2cmdline(arguments),
                               cwd=str(self.directory),
                               env="\0".join(f"{k}={v}" for k, v in environment.items()) + "\0")
             else:

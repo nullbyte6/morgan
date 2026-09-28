@@ -36,11 +36,17 @@ if (-not $?) {
 Write-Host "Starting $env:ASSISTANT_NAME`: $Mode"
 
 if ($Mode -eq "Desktop") {
-    Start-Process `
-        -FilePath $python `
-        -ArgumentList "-m", $module `
-        -WorkingDirectory $root `
-        -WindowStyle Hidden
+    $desktopExe = Join-Path $root "dist\Arlo\Arlo.exe"
+    if (Test-Path -LiteralPath $desktopExe -PathType Leaf) {
+        Start-Process -FilePath $desktopExe -WorkingDirectory $root -WindowStyle Hidden
+    }
+    else {
+        Start-Process `
+            -FilePath $python `
+            -ArgumentList "-m", $module `
+            -WorkingDirectory $root `
+            -WindowStyle Hidden
+    }
 
     Write-Host "$env:ASSISTANT_NAME started independently in the background."
     exit 0
