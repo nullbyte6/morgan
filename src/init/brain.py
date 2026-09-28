@@ -236,8 +236,14 @@ def read_notes() -> str:
 
 
 def list_files(path: str = ".", recursive: bool = False,
-               suffix: str = "") -> dict:
-    """List directory entries, optionally recursively and filtered by file suffix."""
+               suffix: str = "", include_sizes: bool = False) -> dict:
+    """List directory entries, optionally recursively and filtered by file suffix.
+
+    For file sizes or the largest file, use include_sizes=True; suffix='.py'
+    selects Python files. Returns byte sizes and the largest file using metadata,
+    without reading file contents or running commands. path defaults to the current
+    working directory. Without sizes, preserves the plain directory listing.
+    """
     try:
         folder = resolve_safe_path(path)
         if not folder.exists():
@@ -248,6 +254,16 @@ def list_files(path: str = ".", recursive: bool = False,
         if normalized_suffix and not normalized_suffix.startswith("."):
             normalized_suffix = "." + normalized_suffix
         items = []
+        file_sizes = []
+
+        def file_entry(item):
+            name = str(item.relative_to(folder))
+            if include_sizes:
+                size = item.stat().st_size
+                file_sizes.append({"path": name, "size_bytes": size})
+                return f"[FILE] {name} ({size} bytes)"
+            return f"[FILE] {name}"
+
         if recursive:
             for current, directories, files in os.walk(folder, followlinks=False):
                 directories[:] = sorted(
@@ -260,7 +276,7 @@ def list_files(path: str = ".", recursive: bool = False,
                         f"[DIR] {(current_path / name).relative_to(folder)}"
                         for name in directories)
                 items.extend(
-                    f"[FILE] {(current_path / name).relative_to(folder)}"
+                    file_entry(current_path / name)
                     for name in sorted(files)
                     if not normalized_suffix
                     or Path(name).suffix.casefold() == normalized_suffix)
@@ -271,12 +287,15 @@ def list_files(path: str = ".", recursive: bool = False,
                              or item.suffix.casefold() != normalized_suffix)):
                     continue
                 kind = "DIR" if item.is_dir() else "FILE"
-                items.append(f"[{kind}] {item.name}")
+                items.append(file_entry(item) if kind == "FILE" else f"[DIR] {item.name}")
         items.sort(key=str.casefold)
         if normalized_suffix and not items:
             scope = "recursively" if recursive else "in the directory root"
             return ActionResult(Outcome.NEGATIVE, f"No files ending in {normalized_suffix} were found {scope}.", "observed").payload()
-        return ActionResult(Outcome.SUCCESS, "\n".join(items) if items else tr('brain.directory_is_empty'), "observed").payload()
+        listing = "\n".join(items) if items else tr('brain.directory_is_empty')
+        data = {"directory": str(folder), "listing": listing,
+                "largest_file": max(file_sizes, key=lambda item: item["size_bytes"], default=None)} if include_sizes else listing
+        return ActionResult(Outcome.SUCCESS, data, "observed").payload()
     except Exception as error:
         return ActionResult(Outcome.FAILED, f"Error: {error}", "file_operation_failed").payload()
 
