@@ -1436,7 +1436,10 @@ class AssistantWindow(DesktopWindow):
             self.input.setFocus()
 
     def can_resume_task(self):
-        return (self.ready and self.paused_prompt is not None and not self.busy
+        controller = getattr(self.worker.session.context, "task_controller", None)
+        suspended = controller is not None and controller.state.status in {
+            "interrupted", "waiting", "blocked", "limit_reached"}
+        return (self.ready and (self.paused_prompt is not None or suspended) and not self.busy
                 and not self.stopping and not self.recording and self.voice_thread is None
                 and self.submitting is None and self.pending_prompt is None and not self.quitting)
 
@@ -1474,11 +1477,11 @@ class AssistantWindow(DesktopWindow):
         if not self.can_resume_task():
             return
         prompt = self.paused_prompt
-        controller = getattr(self.worker.assistant, "_active_task_controller", None)
-        if (controller is not None and controller.state is getattr(self.worker.assistant, "task_state", None)
-                and controller.state.requests
+        controller = getattr(self.worker.session.context, "task_controller", None)
+        if (controller is not None and (prompt is None
+                or controller.state is getattr(self.worker.assistant, "task_state", None))
                 and controller.state.status in {"interrupted", "waiting", "blocked", "limit_reached"}):
-            prompt = DesktopMessage(tr("palette.resume_prompt"), prompt.attachments,
+            prompt = DesktopMessage(tr("palette.resume_prompt"), prompt.attachments if prompt is not None else (),
                                     resume_task_id=controller.state.id)
         self.start_prompt(prompt)
 
