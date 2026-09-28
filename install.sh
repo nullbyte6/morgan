@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-readonly ASSISTANT_NAME="Arlo"
+export PATH="/usr/bin:/bin:$PATH"
 readonly ARLO_MODEL="${ARLO_MODEL:-qwen3.5:9b}"
 readonly ARLO_AUDIO_MODEL="${ARLO_AUDIO_MODEL:-gemma4:e2b}"
 readonly ARLO_VOICE_MODEL="${ARLO_VOICE_MODEL:-FunAudioLLM/Fun-CosyVoice3-0.5B-2512}"
@@ -9,6 +9,25 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$PWD/install.sh}")
 
 info() { printf '\n[%s] %s\n' "$ASSISTANT_NAME" "$1"; }
 fail() { printf '\n[%s] ERROR: %s\n' "$ASSISTANT_NAME" "$1" >&2; exit 1; }
+
+INNO_SETUP=0
+INSTALL_DIR="${ARLO:-${ARLO_BUILD_OUTPUT:-C:}/Arlo}"
+ASSISTANT_NAME="Arlo"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --inno-setup) INNO_SETUP=1; shift ;;
+        --install-dir|--assistant-name)
+            [[ $# -ge 2 && -n "$2" ]] || fail "Missing value for $1."
+            if [[ "$1" == "--install-dir" ]]; then INSTALL_DIR="$2"
+            else ASSISTANT_NAME="$2"; fi
+            shift 2
+            ;;
+        *) fail "Unknown option: $1." ;;
+    esac
+done
+readonly INNO_SETUP INSTALL_DIR ASSISTANT_NAME
+[[ "$ASSISTANT_NAME" =~ ^[a-zA-Z_][a-zA-Z0-9_]{0,79}$ ]] || fail "The assistant name must be a valid environment variable name (up to 80 characters)."
+[[ "$INNO_SETUP" == 1 || "$ASSISTANT_NAME" == "Arlo" ]] || fail "--assistant-name requires --inno-setup."
 
 to_unix_path() {
     if command -v cygpath >/dev/null 2>&1; then cygpath -u "$1"
@@ -209,6 +228,30 @@ configure_arlo_environment() {
     export PATH="${ARLO_DIR_UNIX}:${SCRIPT_DIR}/scripts:$PATH"
 }
 
+configure_assistant_name() {
+    info "Configuring the assistant name: ${ASSISTANT_NAME}..."
+    "$VENV_PYTHON" -X utf8 -B -c '
+import json
+import sys
+from pathlib import Path
+
+path = Path.home() / ".arlo" / "json" / "config.json"
+legacy = Path.home() / ".arlo" / "config.json"
+source = path if path.exists() else legacy
+config = json.loads(source.read_text(encoding="utf-8-sig")) if source.exists() else {}
+if not isinstance(config, dict):
+    raise ValueError("Assistant configuration must be a JSON object")
+assistant = config.get("assistant", {})
+if not isinstance(assistant, dict):
+    raise ValueError("Assistant configuration must contain an assistant object")
+config["assistant"] = {**assistant, "name": sys.argv[1]}
+path.parent.mkdir(parents=True, exist_ok=True)
+with path.open("w", encoding="utf-8") as file:
+    json.dump(config, file, ensure_ascii=False, indent=2)
+    file.write("\n")
+' "$ASSISTANT_NAME" || fail "Could not update the assistant name."
+}
+
 download_cosyvoice_model() {
     local model_dir="$1"
     local model_dir_windows
@@ -233,11 +276,15 @@ snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2])
 }
 
 find_powershell
-readonly ARLO_DIR_UNIX="$(to_unix_path "${ARLO:-${ARLO_BUILD_OUTPUT:-C:}/Arlo}")"
+readonly ARLO_DIR_UNIX="$(to_unix_path "$INSTALL_DIR")"
 readonly ARLO_DIR_WINDOWS="$(to_windows_path "$ARLO_DIR_UNIX")"
 [[ -f "${SCRIPT_DIR}/requirements.txt" ]] || fail "Run this installer inside the Arlo repository: git clone https://github.com/xddigs/arlo.git; cd arlo; bash install.sh."
 [[ -f "${SCRIPT_DIR}/scripts/arlo-run.ps1" ]] || fail "${SCRIPT_DIR}/scripts/arlo-run.ps1 was not found."
 [[ -d "${SCRIPT_DIR}/src" ]] || fail "${SCRIPT_DIR}/src was not found."
+if [[ "$INNO_SETUP" == 1 ]]; then
+    [[ -f "${ARLO_DIR_UNIX}/Arlo.exe" && -d "${ARLO_DIR_UNIX}/_internal" ]] || fail "Inno Setup must install Arlo.exe and its _internal directory before running this script."
+    [[ -f "${SCRIPT_DIR}/scripts/${ASSISTANT_NAME}-services.ps1" ]] || fail "The packaged assistant services launcher was not found."
+fi
 
 readonly LOCAL_APP_DATA_WINDOWS="${LOCALAPPDATA:-$(get_windows_folder LocalApplicationData)}"
 readonly USER_PROFILE_WINDOWS="${USERPROFILE:-$(get_windows_folder UserProfile)}"
@@ -305,15 +352,17 @@ info "Checking the vendored CosyVoice runtime..."
 
 download_cosyvoice_model "$VOICE_MODEL_DIR"
 
-info "Checking for Git..."
-GIT_BIN=""
-if ! find_git; then
-    [[ -n "$WINGET_BIN" ]] || fail "Git is required, but WinGet is unavailable."
-    info "Git was not found; installing it..."
-    winget_install "Git.Git"
-    find_git || fail "Git was installed, but git.exe could not be located."
+if [[ "$INNO_SETUP" == 0 ]]; then
+    info "Checking for Git..."
+    GIT_BIN=""
+    if ! find_git; then
+        [[ -n "$WINGET_BIN" ]] || fail "Git is required, but WinGet is unavailable."
+        info "Git was not found; installing it..."
+        winget_install "Git.Git"
+        find_git || fail "Git was installed, but git.exe could not be located."
+    fi
+    "$GIT_BIN" --version
 fi
-"$GIT_BIN" --version
 
 info "Checking for Ollama..."
 OLLAMA_BIN=""
@@ -336,7 +385,11 @@ info "Downloading/verifying ${ARLO_MODEL} (approximately 6.6 GB)..."
 info "Downloading/verifying ${ARLO_AUDIO_MODEL} (approximately 7.2 GB)..."
 "$OLLAMA_BIN" pull "$ARLO_AUDIO_MODEL"
 
-ensure_arlo_executable
-configure_arlo_environment
+if [[ "$INNO_SETUP" == 1 ]]; then
+    configure_assistant_name
+else
+    ensure_arlo_executable
+    configure_arlo_environment
+fi
 cleanup_installers
 trap - EXIT
