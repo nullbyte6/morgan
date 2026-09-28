@@ -1450,10 +1450,12 @@ class AssistantWindow(DesktopWindow):
         from src.init.task_state import Lifecycle
 
         controller = getattr(self.worker.assistant, "_active_task_controller", None)
-        if controller is not None and controller.state.status in {
-                Lifecycle.INTERRUPTED, Lifecycle.WAITING, Lifecycle.BLOCKED, Lifecycle.LIMIT_REACHED}:
+        if (controller is not None and controller.state is getattr(self.worker.assistant, "task_state", None)
+                and controller.state.status in {
+                Lifecycle.INTERRUPTED, Lifecycle.WAITING, Lifecycle.BLOCKED, Lifecycle.LIMIT_REACHED}):
             controller.state.suspend(Lifecycle.CANCELLED, "Stopped by the user.")
-            self.worker.assistant._active_task_controller = None
+            controller.context.task_controller = controller.pending_task
+            self.worker.assistant._active_task_controller = controller.pending_task
         self.task_stop_requested = False
 
     def stop_current_task(self):
@@ -1473,9 +1475,11 @@ class AssistantWindow(DesktopWindow):
             return
         prompt = self.paused_prompt
         controller = getattr(self.worker.assistant, "_active_task_controller", None)
-        if (controller is not None and controller.state.requests
+        if (controller is not None and controller.state is getattr(self.worker.assistant, "task_state", None)
+                and controller.state.requests
                 and controller.state.status in {"interrupted", "waiting", "blocked", "limit_reached"}):
-            prompt = DesktopMessage(tr("palette.resume_prompt"), prompt.attachments)
+            prompt = DesktopMessage(tr("palette.resume_prompt"), prompt.attachments,
+                                    resume_task_id=controller.state.id)
         self.start_prompt(prompt)
 
     def stop_response(self):

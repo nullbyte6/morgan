@@ -79,6 +79,7 @@ class Attachment:
 class DesktopMessage:
     text: str
     attachments: tuple[Attachment, ...] = ()
+    resume_task_id: str = ""
 
     @property
     def display_text(self):

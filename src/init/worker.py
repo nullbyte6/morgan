@@ -327,7 +327,8 @@ class AssistantWorker(QObject):
                 session=self.session,
                 task_title=task_title,
                 on_surface=receive_surface,
-                on_task_title=receive_task_title)
+                on_task_title=receive_task_title,
+                resume_task_id=getattr(message, "resume_task_id", ""))
 
             self.history[:] = history
             if not self.cancel_event.is_set() and audio_lease is not None:
