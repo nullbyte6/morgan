@@ -88,6 +88,7 @@
   "voice.transcription_failed": "A voice transcription was impossible to obtain.",
   "voice.closed": "TTS connection is closed",
   "voice.disconnected": "Connection to TTS service lost",
+  "voice.unavailable": "The voice service is unavailable at {host}:{port} after waiting for startup. Check the TTS log.",
   "voice.error": "Speech synthesis error",
   "voice.failed": "TTS service failed: {error}",
   "voice.restart": "Restart {assistant_name}'s TTS service to enable speech interruption.",

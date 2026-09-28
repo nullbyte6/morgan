@@ -47,8 +47,7 @@ class VoiceClient:
         self.supports_voice_selection = False
         self.supports_playback_reference = False
         self._hello = threading.Event()
-        self._socket = socket.create_connection(
-            (host, port), timeout=10)
+        self._socket = self._connect(host, port)
         self._socket.settimeout(None)
         self._reader = self._socket.makefile(
             "r", encoding="utf-8")
@@ -71,6 +70,19 @@ class VoiceClient:
         if not self._hello.wait(10) or not self.supports_voice_selection:
             self.close()
             raise RuntimeError(tr("voice.selection_restart"))
+
+    @staticmethod
+    def _connect(host: str, port: int):
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                return socket.create_connection(
+                    (host, port), timeout=max(0.1, min(10, deadline - time.monotonic())))
+            except (ConnectionRefusedError, TimeoutError) as error:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(tr("voice.unavailable", host=host, port=port)) from error
+                time.sleep(min(0.25, remaining))
 
     def _send(self, message: dict) -> None:
         data = (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")

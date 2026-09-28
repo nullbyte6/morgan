@@ -88,6 +88,7 @@
   "voice.transcription_failed": "No se pudo obtener una transcripción de voz.",
   "voice.closed": "La conexión con el servicio de voz está cerrada",
   "voice.disconnected": "Se perdió la conexión con el servicio de voz",
+  "voice.unavailable": "El servicio de voz no está disponible en {host}:{port} tras esperar al arranque. Revisa el registro de TTS.",
   "voice.error": "Error de síntesis de voz",
   "voice.failed": "El servicio de voz falló: {error}",
   "voice.restart": "Reinicia el servicio de voz de {assistant_name} para habilitar la interrupción.",
