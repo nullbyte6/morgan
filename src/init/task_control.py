@@ -19,15 +19,11 @@
 """Deterministic supervision of Arlo's single model agent."""
 
 import asyncio
-import base64
 import copy
 import hashlib
 import inspect
-import io
 import logging
-import math
 import uuid
-import wave
 from dataclasses import replace
 from pathlib import Path
 from typing import Literal
@@ -40,6 +36,7 @@ from pydantic_ai.messages import ModelRequest, ModelMessagesTypeAdapter, UserPro
 from pydantic_ai.toolsets import FunctionToolset
 
 from .lang import tr
+from .session_log import ContextBudget
 from .task_effects import TOOL_SPECS, content_revision, resources_for
 from .task_outcomes import ActionResult, Outcome, normalize_result
 from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint, normalize_task_title
@@ -82,7 +79,8 @@ class TaskControl(AbstractCapability):
         self.state.trace = self.trace
         self.cancel_event = cancel_event
         self.messages = []
-        self.artifacts = {}
+        self.context_budget = ContextBudget(context, trace=self.trace)
+        self.artifacts = self.context_budget.artifacts
         self.tool_lock = asyncio.Lock()
         self.token_scale = 1.0
         self.last_budget = {}
@@ -765,10 +763,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         raise ToolFailed(encoded(returned))
 
     def archive(self, raw, label):
-        key = fingerprint(raw)
-        if key not in self.artifacts:
-            self.artifacts[key] = self.context._store(raw, ".json", label)
-        return self.artifacts[key]
+        return self.context_budget.archive(raw, label)
 
     def is_snapshot(self, part):
         if part.part_kind != "user-prompt" or not isinstance(part.content, str):
@@ -818,137 +813,42 @@ and retain its consent checks. cd requests use change_directory and Git requests
         return view
 
     async def measure_request(self, request_context, messages):
-        from pydantic_ai._agent_graph import _clean_message_history
-        model = request_context.model
-        settings = {**(model.settings or {}), **(request_context.model_settings or {})}
-        parameters = request_context.model_request_parameters
-        settings, parameters = model.prepare_request(settings, parameters)
-        normalized = _clean_message_history(messages, repair_last_response=True)
-        prepared = model.prepare_messages(normalized, parameters)
-        normalized = _clean_message_history(prepared, repair_last_response=True)
-        mapped = await model._map_messages(normalized, parameters, model_settings=settings)
-        tools, _ = model._get_tool_choice(settings or {}, parameters)
-        components = {"messages": len(encoded(mapped).encode("utf-8")),
-                      "tool_schemas": len(encoded(tools).encode("utf-8"))}
-        if parameters.output_object is not None:
-            components["output_schema"] = len(encoded(model._map_json_schema(parameters.output_object)).encode("utf-8"))
-        audio_bytes = audio_tokens = 0
-        for message in mapped:
-            content = message.get("content")
-            for part in content if isinstance(content, list) else []:
-                if not isinstance(part, dict) or part.get("type") != "input_audio":
-                    continue
-                audio = part.get("input_audio", {})
-                if audio.get("format") != "wav" or not isinstance(audio.get("data"), str):
-                    continue
-                try:
-                    with wave.open(io.BytesIO(base64.b64decode(audio["data"], validate=True)), "rb") as wav:
-                        duration = wav.getnframes() / wav.getframerate()
-                    if duration > 0:
-                        audio_bytes += len(audio["data"])
-                        audio_tokens += math.ceil(duration * 50) + 128
-                except (ValueError, EOFError, wave.Error):
-                    continue
-        proxy = math.ceil((sum(components.values()) - audio_bytes) / 4) + 32 * len(mapped) + 256 + audio_tokens
-        return {"estimated_input_tokens": math.ceil(proxy * self.token_scale),
-                "estimator": ("provider_json_utf8_div4_with_wav_duration_and_usage_calibration"
-                              if audio_bytes else "provider_json_utf8_div4_with_framing_and_usage_calibration"),
-                "estimator_scale": self.token_scale, "unscaled_input_tokens": proxy,
-                "component_bytes": components, "audio_tokens": audio_tokens}
+        return await self.context_budget.measure_request(request_context, messages, token_scale=self.token_scale)
+
+    def compact_tool_result(self, part):
+        item = self.state.evidence.get(self.receipts.get(part.tool_call_id, {}).get("evidence_id", part.tool_call_id))
+        payload = part.content if isinstance(part.content, dict) else {}
+        if item is not None:
+            reference = self.evidence_reference(item)
+            delivery = payload.get("delivery")
+            if delivery:
+                delivery = copy.deepcopy(self.state.evidence_delivery.get(item.id, {}).get(
+                    delivery["field"], delivery))
+                reference["delivery"] = delivery
+                action = self.evidence_next_action(item, delivery)
+                reference["next_action"] = action or {"tool": "task_read_evidence", "arguments": {
+                    "call_id": item.id, "offset": 0, "limit": 2000,
+                    "field": delivery["field"], "digest": delivery["digest"]}}
+            elif payload.get("next_action"):
+                reference["next_action"] = copy.deepcopy(payload["next_action"])
+            reference["content_in_active_context"] = False
+            if payload.get("reused_evidence"):
+                reference["reused_evidence"] = True
+            return reference
+        if part.tool_name == "task_read_state" and isinstance(payload.get("data"), dict):
+            reference = self.context_budget.tool_result_reference(part)
+            page = payload["data"]
+            action = {"tool": "task_read_state", "arguments": {
+                "field": payload["field"], "query": payload.get("query", ""),
+                "offset": page["offset"], "limit": 2000, "digest": page["digest"]}}
+            reference.update(content_kind="supervisor_state", read=action,
+                             next_action=payload.get("next_action", action))
+            return reference
+        return None
 
     async def compact(self, messages, measure, input_limit, *, force=False):
-        result = copy.deepcopy(messages)
-        before = (await measure(result))["estimated_input_tokens"]
-        if before <= input_limit and not force:
-            return result
-        latest_response = next((index for index in range(len(result) - 1, -1, -1)
-                                if result[index].kind == "response"), len(result))
-        externalized = []
-        for message in result[:latest_response]:
-            if externalized and not force and (await measure(result))["estimated_input_tokens"] <= input_limit:
-                break
-            for part in message.parts:
-                if part.part_kind == "tool-return" and len(encoded(part.content)) > 2000 and not (
-                        isinstance(part.content, dict) and "artifact" in part.content and "data" not in part.content):
-                    item = self.state.evidence.get(self.receipts.get(part.tool_call_id, {}).get("evidence_id", part.tool_call_id))
-                    if item is not None:
-                        payload = part.content if isinstance(part.content, dict) else {}
-                        reference = self.evidence_reference(item)
-                        delivery = payload.get("delivery")
-                        if delivery:
-                            delivery = copy.deepcopy(self.state.evidence_delivery.get(item.id, {}).get(
-                                delivery["field"], delivery))
-                            reference["delivery"] = delivery
-                            action = self.evidence_next_action(item, delivery)
-                            reference["next_action"] = action or {"tool": "task_read_evidence", "arguments": {
-                                "call_id": item.id, "offset": 0, "limit": 2000,
-                                "field": delivery["field"], "digest": delivery["digest"]}}
-                        elif payload.get("next_action"):
-                            reference["next_action"] = copy.deepcopy(payload["next_action"])
-                        reference["content_in_active_context"] = False
-                        if payload.get("reused_evidence"):
-                            reference["reused_evidence"] = True
-                        part.content = reference
-                    else:
-                        payload = part.content if isinstance(part.content, dict) else {}
-                        raw = encoded(part.content)
-                        part.content = {"artifact": self.archive(raw, f"Tool return {part.tool_call_id}"),
-                                        "digest": hashlib.sha256(raw.encode("utf-8")).hexdigest(), "tool": part.tool_name,
-                                        "call_id": part.tool_call_id, "characters": len(raw),
-                                        "read": {"tool": "read_file", "offset": 0, "limit": 2000}}
-                        if part.tool_name == "task_read_state" and isinstance(payload.get("data"), dict):
-                            page = payload["data"]
-                            action = {"tool": "task_read_state", "arguments": {
-                                "field": payload["field"], "query": payload.get("query", ""),
-                                "offset": page["offset"], "limit": 2000, "digest": page["digest"]}}
-                            part.content.update(content_kind="supervisor_state", read=action,
-                                                next_action=payload.get("next_action", action))
-                    externalized.append(part.tool_call_id)
-        after = (await measure(result))["estimated_input_tokens"]
-        archive = None
-        boundary = 0
-        if after > input_limit or force:
-            pending = set()
-            boundaries = []
-            for index, message in enumerate(result):
-                for part in message.parts:
-                    if part.part_kind == "tool-call":
-                        pending.add(part.tool_call_id)
-                    elif part.part_kind in ("tool-return", "retry-prompt"):
-                        pending.discard(getattr(part, "tool_call_id", None))
-                if not pending:
-                    boundaries.append(index + 1)
-            if not force and latest_response < len(result) and any(
-                    part.part_kind == "tool-call" for part in result[latest_response].parts):
-                boundaries = [boundary for boundary in boundaries if boundary <= latest_response]
-            user_index = next((index for index in range(len(result) - 1, -1, -1)
-                               if result[index].kind == "request" and any(
-                                   part.part_kind == "user-prompt" and not (
-                                       isinstance(part.content, str) and part.content.startswith("Earlier context archived"))
-                                   for part in result[index].parts)), None)
-            user = replace(result[user_index], parts=[part for part in result[user_index].parts
-                           if part.part_kind == "user-prompt"]) if user_index is not None else None
-            archive = self.archive(ModelMessagesTypeAdapter.dump_json(messages).decode(), "Earlier conversation and tool evidence")
-            pointer = ModelRequest(parts=[UserPromptPart("Earlier context archived without discarding evidence: " + archive)])
-            for candidate in boundaries:
-                suffix = result[candidate:]
-                if user_index is not None and user_index < candidate:
-                    suffix = [user, *suffix]
-                retained = [pointer, *suffix]
-                estimate = (await measure(retained))["estimated_input_tokens"]
-                if estimate < after:
-                    chosen, chosen_size, boundary = retained, estimate, candidate
-                    if estimate <= input_limit and (not force or estimate < before):
-                        break
-            if boundary:
-                result, after = chosen, chosen_size
-        if after < before:
-            self.trace("context_compacted", reason="recovery" if force else "preventive_budget",
-                       estimated_input_before=before, estimated_input_after=after,
-                       input_limit=input_limit, budget_satisfied=after <= input_limit,
-                       archived_messages=boundary, retained_messages=len(result),
-                       externalized_tool_calls=externalized, archive=archive)
-        return result
+        return await self.context_budget.compact(messages, measure, input_limit, force=force,
+                                                 externalize_tool_result=self.compact_tool_result)
 
     def context_impossible(self, measurements):
         self.trace("context_budget_impossible", **measurements)
@@ -963,9 +863,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         completion = {"inspect": 3072, "execute": 4096, "verify": 6144}.get(self.state.role, 4096)
         if self.state.output_recovery or self.state.kind is None or self.state.complete():
             completion = 8192 + self.recovery_attempts * 2048
-        completion = min(completion, max(512, context // 3))
-        margin = max(1024, math.ceil(context * 0.20))
-        input_limit = context - completion - margin - min(self.recovery_attempts * 1024, context // 8)
+        completion, margin, input_limit = self.context_budget.reserve(context, completion, self.recovery_attempts)
         snapshot = self.state.snapshot(include_evidence=False)
         parameters = request_context.model_request_parameters
         self.available_tools = {tool.name: tool for tool in parameters.function_tools}
@@ -1198,6 +1096,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
 
     def resume(self, context, cancel_event, prompt=""):
         self.context = context
+        self.context_budget.context = context
         self.cancel_event = cancel_event
         self._recovery_progress = None
         self._recovery_stalls = 0

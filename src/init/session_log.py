@@ -16,14 +16,20 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Daily Markdown conversation logs shared by all sessions."""
+"""Conversation context, artifacts, budgets and daily Markdown logs."""
 
+import base64
 import copy
+import hashlib
+import io
 import json
 import logging
+import math
 import re
 import uuid
+import wave
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -97,6 +103,143 @@ class SessionContext:
                         extension = ".json" if raw.lstrip().startswith(("{", "[")) else ".txt"
                         part.content = self._store(
                             raw, extension, f"Tool result: {part.tool_name}")
+        return result
+
+
+def _context_json(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+class ContextBudget:
+    """Measure and compact agent context without requiring task state."""
+
+    def __init__(self, context, trace=None):
+        self.context = context
+        self.artifacts = {}
+        self.trace = trace if trace is not None else lambda event, **details: None
+
+    def archive(self, raw, label):
+        key = hashlib.sha256(_context_json(raw).encode("utf-8")).hexdigest()
+        if key not in self.artifacts:
+            self.artifacts[key] = self.context._store(raw, ".json", label)
+        return self.artifacts[key]
+
+    def tool_result_reference(self, part):
+        raw = _context_json(part.content)
+        return {"artifact": self.archive(raw, f"Tool return {part.tool_call_id}"),
+                "digest": hashlib.sha256(raw.encode("utf-8")).hexdigest(), "tool": part.tool_name,
+                "call_id": part.tool_call_id, "characters": len(raw),
+                "read": {"tool": "read_file", "offset": 0, "limit": 2000}}
+
+    @staticmethod
+    def reserve(context, completion, recovery_attempts=0):
+        completion = min(completion, max(512, context // 3))
+        margin = max(1024, math.ceil(context * 0.20))
+        input_limit = context - completion - margin - min(recovery_attempts * 1024, context // 8)
+        return completion, margin, input_limit
+
+    async def measure_request(self, request_context, messages, *, token_scale=1.0):
+        from pydantic_ai._agent_graph import _clean_message_history
+        model = request_context.model
+        settings = {**(model.settings or {}), **(request_context.model_settings or {})}
+        parameters = request_context.model_request_parameters
+        settings, parameters = model.prepare_request(settings, parameters)
+        normalized = _clean_message_history(messages, repair_last_response=True)
+        prepared = model.prepare_messages(normalized, parameters)
+        normalized = _clean_message_history(prepared, repair_last_response=True)
+        mapped = await model._map_messages(normalized, parameters, model_settings=settings)
+        tools, _ = model._get_tool_choice(settings or {}, parameters)
+        components = {"messages": len(_context_json(mapped).encode("utf-8")),
+                      "tool_schemas": len(_context_json(tools).encode("utf-8"))}
+        if parameters.output_object is not None:
+            components["output_schema"] = len(_context_json(model._map_json_schema(parameters.output_object)).encode("utf-8"))
+        audio_bytes = audio_tokens = 0
+        for message in mapped:
+            content = message.get("content")
+            for part in content if isinstance(content, list) else []:
+                if not isinstance(part, dict) or part.get("type") != "input_audio":
+                    continue
+                audio = part.get("input_audio", {})
+                if audio.get("format") != "wav" or not isinstance(audio.get("data"), str):
+                    continue
+                try:
+                    with wave.open(io.BytesIO(base64.b64decode(audio["data"], validate=True)), "rb") as wav:
+                        duration = wav.getnframes() / wav.getframerate()
+                    if duration > 0:
+                        audio_bytes += len(audio["data"])
+                        audio_tokens += math.ceil(duration * 50) + 128
+                except (ValueError, EOFError, wave.Error):
+                    continue
+        proxy = math.ceil((sum(components.values()) - audio_bytes) / 4) + 32 * len(mapped) + 256 + audio_tokens
+        return {"estimated_input_tokens": math.ceil(proxy * token_scale),
+                "estimator": ("provider_json_utf8_div4_with_wav_duration_and_usage_calibration"
+                              if audio_bytes else "provider_json_utf8_div4_with_framing_and_usage_calibration"),
+                "estimator_scale": token_scale, "unscaled_input_tokens": proxy,
+                "component_bytes": components, "audio_tokens": audio_tokens}
+
+    async def compact(self, messages, measure, input_limit, *, force=False, externalize_tool_result=None):
+        from pydantic_ai.messages import ModelRequest, ModelMessagesTypeAdapter, UserPromptPart
+
+        result = copy.deepcopy(messages)
+        before = (await measure(result))["estimated_input_tokens"]
+        if before <= input_limit and not force:
+            return result
+        latest_response = next((index for index in range(len(result) - 1, -1, -1)
+                                if result[index].kind == "response"), len(result))
+        externalized = []
+        for message in result[:latest_response]:
+            if externalized and not force and (await measure(result))["estimated_input_tokens"] <= input_limit:
+                break
+            for part in message.parts:
+                if part.part_kind == "tool-return" and len(_context_json(part.content)) > 2000 and not (
+                        isinstance(part.content, dict) and "artifact" in part.content and "data" not in part.content):
+                    content = externalize_tool_result(part) if externalize_tool_result is not None else None
+                    part.content = self.tool_result_reference(part) if content is None else content
+                    externalized.append(part.tool_call_id)
+        after = (await measure(result))["estimated_input_tokens"]
+        archive = None
+        boundary = 0
+        if after > input_limit or force:
+            pending = set()
+            boundaries = []
+            for index, message in enumerate(result):
+                for part in message.parts:
+                    if part.part_kind == "tool-call":
+                        pending.add(part.tool_call_id)
+                    elif part.part_kind in ("tool-return", "retry-prompt"):
+                        pending.discard(getattr(part, "tool_call_id", None))
+                if not pending:
+                    boundaries.append(index + 1)
+            if not force and latest_response < len(result) and any(
+                    part.part_kind == "tool-call" for part in result[latest_response].parts):
+                boundaries = [boundary for boundary in boundaries if boundary <= latest_response]
+            user_index = next((index for index in range(len(result) - 1, -1, -1)
+                               if result[index].kind == "request" and any(
+                                   part.part_kind == "user-prompt" and not (
+                                       isinstance(part.content, str) and part.content.startswith("Earlier context archived"))
+                                   for part in result[index].parts)), None)
+            user = replace(result[user_index], parts=[part for part in result[user_index].parts
+                           if part.part_kind == "user-prompt"]) if user_index is not None else None
+            archive = self.archive(ModelMessagesTypeAdapter.dump_json(messages).decode(), "Earlier conversation and tool evidence")
+            pointer = ModelRequest(parts=[UserPromptPart("Earlier context archived without discarding evidence: " + archive)])
+            for candidate in boundaries:
+                suffix = result[candidate:]
+                if user_index is not None and user_index < candidate:
+                    suffix = [user, *suffix]
+                retained = [pointer, *suffix]
+                estimate = (await measure(retained))["estimated_input_tokens"]
+                if estimate < after:
+                    chosen, chosen_size, boundary = retained, estimate, candidate
+                    if estimate <= input_limit and (not force or estimate < before):
+                        break
+            if boundary:
+                result, after = chosen, chosen_size
+        if after < before:
+            self.trace("context_compacted", reason="recovery" if force else "preventive_budget",
+                       estimated_input_before=before, estimated_input_after=after,
+                       input_limit=input_limit, budget_satisfied=after <= input_limit,
+                       archived_messages=boundary, retained_messages=len(result),
+                       externalized_tool_calls=externalized, archive=archive)
         return result
 
 
