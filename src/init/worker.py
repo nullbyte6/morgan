@@ -234,6 +234,7 @@ class AssistantWorker(QObject):
         self.accepted.emit(turn_id)
         prompt = message.transcript.strip() if voice_input else message.text
         try:
+            self.assistant.task_state = None
             cancel_event = self.cancel_event
             set_confirmation_handler(
                 lambda message: self.confirm_command(message, cancel_event,

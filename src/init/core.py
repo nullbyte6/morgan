@@ -567,10 +567,12 @@ class Assistant:
         from src.init import brain
         from src.init.streaming import ResponseDelivery
         from pydantic_ai import CancellationToken
+        from pydantic_ai.exceptions import RunCancelled
         from pydantic_ai.messages import (BinaryContent, ModelRequest,
                                           ModelResponse, TextPart,
                                           UserPromptPart)
 
+        self.task_state = None
         directory_command = re.fullmatch(r"cd(?:\s+(.*))?", prompt.strip(), re.IGNORECASE)
         if directory_command is not None and attachments is None and audio_input is None:
             if cancel_event is not None and cancel_event.is_set():
@@ -579,7 +581,6 @@ class Assistant:
             if path.casefold().startswith("/d "):
                 path = path[3:].strip()
             output = brain.change_directory(path)
-            self.task_state = None
             if on_chunk is not None:
                 on_chunk(output)
             return output, [*history, ModelRequest(parts=[UserPromptPart(prompt)]),
@@ -672,7 +673,6 @@ class Assistant:
             "configured_model": request_config["model_name"],
             "source": "minimum_of_dev_configuration_and_ollama_show_or_ps; provider_fallback_4096"}
         controller.task_title = task_title
-        self.task_state = None
         controller.on_action = on_phase
 
         def promoted(supervised):
@@ -917,6 +917,7 @@ class Assistant:
                     await asyncio.sleep(0.02)
 
         async def run():
+            nonlocal stream_messages
             task = asyncio.create_task(generate())
             try:
                 while not task.done():
@@ -927,9 +928,13 @@ class Assistant:
                     await asyncio.sleep(0.02)
                 try:
                     await task
-                except asyncio.CancelledError:
+                except (asyncio.CancelledError, RunCancelled) as interrupted:
                     if not cancel_event.is_set():
                         raise
+                    snapshot = (interrupted if isinstance(interrupted, RunCancelled)
+                                else RunCancelled.from_cancellation(interrupted))
+                    if snapshot is not None:
+                        stream_messages = snapshot.all_messages()
                 if cancel_event.is_set():
                     self.voice.stop()
             except BaseException:
@@ -969,6 +974,11 @@ class Assistant:
         text = "".join(reply)
         if cancel_event.is_set():
             from src.init.task_state import Lifecycle
+            if controller.state is None:
+                from src.init.task_effects import TOOL_SPECS
+                if any(item["operational"] and TOOL_SPECS[item["tool"]].effectful
+                       for item in controller.executions):
+                    controller.promote("interrupted_after_effects")
             if controller.state is not None:
                 controller.state.suspend(Lifecycle.INTERRUPTED, "Interrupted by the user.")
             controller.publish_activity()
