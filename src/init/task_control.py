@@ -799,6 +799,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
                     view[key]["recent"] = recent
             else:
                 view[key] = value
+        if self.state.kind is None and self.state.can_finish_direct():
+            view["pending_verification"] = []
         view["available_tool_catalog"] = {"tool": "task_read_state", "field": "tools"}
         active = self.available_tools.keys() if self.selected_tools is None else (
             self.selected_tools & self.available_tools.keys())
@@ -1195,7 +1197,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.recovery_attempts = 0
         self.force_compaction = True
         self.state.resume()
-        if prompt:
+        if prompt and not self.state.can_finish_direct():
             result = ActionResult(Outcome.SUCCESS, prompt, "user_input")
             self.state.observe("user_input", {}, result, "input_" + uuid.uuid4().hex,
                                {"domain:user_input": str(self.state.sequence + 1)})

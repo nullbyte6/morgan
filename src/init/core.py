@@ -596,7 +596,8 @@ class Assistant:
                         SessionContext(uuid.uuid4().hex, HOME_PATH / ".log"))
         previous = self._active_task_controller
         if (previous is not None
-            and previous.state.status in {"interrupted", "waiting", "blocked", "limit_reached"}):
+            and previous.state.status in {"interrupted", "waiting", "blocked", "limit_reached"}
+            and not previous.state.can_finish_direct()):
             controller = previous.resume(
                 context=task_context,
                 cancel_event=cancel_event,
