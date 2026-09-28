@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Callable
 
 from .paths import PROJECT_ROOT
-from .task_outcomes import ActionResult, Outcome
+from .task_outcomes import ActionResult, Outcome, normalize_result
 
 
 @dataclass(frozen=True)
@@ -41,11 +41,17 @@ class ToolSpec:
     verification_capable: bool = False
     requires_followup: bool = False
     followup_policy: Callable[[ActionResult], bool] | None = None
+    actions_policy: Callable[[dict], list[dict]] | None = None
 
     def needs_followup(self, result: ActionResult) -> bool:
         if self.followup_policy is not None:
             return self.followup_policy(result)
         return self.requires_followup and result.successful
+
+    def actions_for(self, arguments: dict) -> list[dict] | None:
+        if self.actions_policy is not None:
+            return self.actions_policy(arguments)
+        return None
 
 
 TOOL_SPECS = {}
@@ -65,6 +71,34 @@ def app_operation_followup(result: ActionResult) -> bool:
             and isinstance(data.get("job_id"), str) and bool(data["job_id"].strip()))
 
 
+def quick_command_actions(arguments: dict) -> list[dict]:
+    from .quick_commands import _prepare_actions, load_quick_commands
+    from .tools import TOOLS
+
+    commands = load_quick_commands()
+    matches = [definition for name, definition in commands.items()
+               if name.casefold() == arguments.get("name", "").strip().casefold()]
+    if len(matches) != 1:
+        raise ValueError("Choose one existing quick-command group.")
+    prepared = _prepare_actions(matches[0]["actions"], {tool.__name__: tool for tool in TOOLS})
+    return [{"tool": name, "arguments": dict(bound.arguments)}
+            for _, _, name, _, bound in prepared]
+
+
+def quick_command_followup(result: ActionResult) -> bool:
+    data = result.data
+    if not isinstance(data, dict) or not isinstance(data.get("results"), list):
+        return False
+    for item in data["results"]:
+        if not isinstance(item, dict) or "output" not in item:
+            continue
+        spec = TOOL_SPECS.get(item.get("tool"))
+        if spec is not None and spec.needs_followup(normalize_result(
+                item["output"], text_observation=spec.text_observation)):
+            return True
+    return False
+
+
 register("get_version get_current_time calculate get_city_distance get_weather "
          "search_youtube_songs search_spotify_songs search_spotify_playlists search_spotify_albums "
          "list_spotify_playlists get_spotify_playlist_tracks read_clipboard analyze_image analyze_screen "
@@ -76,15 +110,18 @@ register("remember forget", ToolSpec(True, "memory"))
 register("list_media_sessions identify_playing_song get_current_media", ToolSpec(False, "media"))
 register("control_media play_youtube_song play_spotify_song play_spotify_album play_spotify_playlist",
          ToolSpec(True, "media"))
-register("list_steam_games find_steam_game list_applications list_open_applications scan_app_residues",
+register("list_steam_games find_steam_game list_applications list_open_applications",
          ToolSpec(False, "applications"))
 register("search_apps get_app_operation", ToolSpec(False, "applications", followup_policy=app_operation_followup))
-register("open_application launch_steam_game close_application clean_app_residue",
+register("scan_app_residues", ToolSpec(False, "applications"))
+register("open_application launch_steam_game close_application",
          ToolSpec(True, "applications"))
 register("install_app uninstall_app", ToolSpec(True, "applications", followup_policy=app_operation_followup))
+register("clean_app_residue", ToolSpec(True, "applications"))
 register("check_system_health check_disk_health check_security_health", ToolSpec(False, "system"))
-register("kill_self refresh empty_recycle_bin kill_process shutdown_computer cancel_shutdown "
-         "run_quick_command", ToolSpec(True, "system"))
+register("kill_self refresh empty_recycle_bin kill_process shutdown_computer cancel_shutdown", ToolSpec(True, "system"))
+register("run_quick_command", ToolSpec(True, "system", followup_policy=quick_command_followup,
+                                      actions_policy=quick_command_actions))
 register("execute_command", ToolSpec(True, "system", verification_capable=True))
 register("get_email_draft read_emails", ToolSpec(False, "email"))
 register("draft_email edit_email_draft send_email_draft send_email delete_email", ToolSpec(True, "email"))
