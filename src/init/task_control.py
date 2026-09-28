@@ -882,9 +882,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
             request_context.model_request_parameters = replace(parameters, function_tools=[
                 tool for tool in parameters.function_tools if tool.name in self.control_tools or tool.name in self.selected_tools])
         before = await measure(history)
-        history = await self.compact(history, measure, input_limit, force=self.force_compaction)
-        measured = await measure(history)
-        if measured["estimated_input_tokens"] > input_limit and self.selected_tools is None:
+        if before["estimated_input_tokens"] > input_limit and self.selected_tools is None:
             recent = [part.tool_name for message in history[-6:] for part in message.parts if part.part_kind == "tool-call"]
             essentials = ["read_code", "search_code", "list_code", "read_file", "list_files", "git_status", "git_diff"]
             if self.state.kind == "mutation":
@@ -894,8 +892,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             request_context.model_request_parameters = replace(parameters, function_tools=[
                 tool for tool in parameters.function_tools if tool.name in self.control_tools or tool.name in self.selected_tools])
             self.trace("tool_schemas_selected", active_tools=sorted(self.selected_tools), reason="context_budget")
-            history = await self.compact(history, measure, input_limit, force=self.force_compaction)
-            measured = await measure(history)
+        history = await self.compact(history, measure, input_limit, force=self.force_compaction)
+        measured = await measure(history)
         budget = {**measured, "effective_context_tokens": context, "reserved_completion_tokens": completion,
                   "safety_margin_tokens": margin, "input_limit": input_limit,
                   "estimated_input_before": before["estimated_input_tokens"],
