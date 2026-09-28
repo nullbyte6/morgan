@@ -165,14 +165,15 @@ class TaskState:
         return changed
 
     def observe(self, name, arguments, result, call_id, revisions, *, effectful=False,
-                effects=(), uncertain=False, effect_scope=None, ancillary=False, verification_capable=None):
+                effects=(), uncertain=False, effect_scope=None, ancillary=False, verification_capable=None,
+                role=None, observed_at=""):
         if call_id in self.evidence:
             return self.evidence[call_id]
         self.sequence += 1
         self.refresh(revisions)
         affected = list(effect_scope if effect_scope is not None else revisions if uncertain else effects) if effectful else []
-        item = Evidence(call_id, name, arguments, result.outcome, self.role, self.sequence,
-                        datetime.now(timezone.utc).isoformat(), dict(revisions), effectful,
+        item = Evidence(call_id, name, arguments, result.outcome, role or self.role, self.sequence,
+                        observed_at or datetime.now(timezone.utc).isoformat(), dict(revisions), effectful,
                         fingerprint(result.payload()), result.payload(), affected,
                         not effectful if verification_capable is None else verification_capable)
         self.evidence[call_id] = item

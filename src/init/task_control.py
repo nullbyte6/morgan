@@ -25,6 +25,7 @@ import inspect
 import logging
 import uuid
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -648,6 +649,52 @@ and retain its consent checks. cd requests use change_directory and Git requests
                                               if resource.startswith(("file:", "entry:"))), values[spec.path_argument])
         return fingerprint({"tool": name, "arguments": values, "revisions": revisions})
 
+    def import_execution(self, execution):
+        name, arguments, call_id = execution["tool"], execution["arguments"], execution["call_id"]
+        if call_id in self.state.evidence:
+            return self.state.evidence[call_id]
+        spec, result = TOOL_SPECS[name], execution["result"]
+        before, after = execution["before"], execution["after"]
+        changed = [resource for resource in after if before.get(resource) is not None
+                   and after[resource] is not None and before[resource] != after[resource]]
+        no_execution = result.outcome in {Outcome.REJECTED, Outcome.WAITING, Outcome.EXTERNAL_BLOCKER}
+        presentation = spec.domain == "presentation" and spec.ancillary and spec.verification_capable and result.successful
+        effectful = spec.effectful and not presentation
+        effects = changed if effectful and not spec.ancillary and not no_execution else []
+        uncertain = effectful and not no_execution
+        if spec.path_argument and not spec.domain and result.successful and all(value is not None for value in after.values()):
+            uncertain = False
+        effect_scope = list(dict.fromkeys([*after, *effects])) if uncertain else effects
+        if spec.ancillary or result.successful and spec.verification_capable:
+            effect_scope = list(dict.fromkeys([*effects, *[resource for resource in after if after[resource] is None]]))
+        item = self.state.observe(name, copy.deepcopy(arguments), result, call_id, after,
+                                  effectful=effectful, effects=effects, uncertain=uncertain,
+                                  effect_scope=effect_scope,
+                                  ancillary=spec.ancillary,
+                                  verification_capable=not spec.effectful or spec.verification_capable or presentation,
+                                  role="execute" if effectful else "inspect", observed_at=execution["observed_at"])
+        for resource, revision in after.items():
+            if revision is None and not resource.startswith(("file:", "entry:", "domain:git:")):
+                self.state.revisions.pop(resource, None)
+        self.receipts[call_id] = {"tool": name, "validated": True, "executed": True,
+                                 "control": False, "outcome": result.outcome, "evidence_id": call_id,
+                                 "reused": False}
+        if not spec.effectful and result.successful:
+            data = result.data if isinstance(result.data, dict) else {}
+            key = self._inspection_key(name, arguments, list(after), after)
+            if key:
+                self.read_cache[key] = call_id
+            self.state.inspections[key or fingerprint({"tool": name, "arguments": arguments, "revisions": after})] = {
+                "tool": name, "arguments": copy.deepcopy(arguments), "resources": dict(after),
+                "evidence_id": call_id, "kind": data.get("kind", "observation"), "current": True,
+                "coverage": data.get("coverage"), "range": data.get("range"),
+                "next_cursor": data.get("next_cursor"), "exhausted": data.get("exhausted"),
+                "summary": str(data.get("content", result.data))[:400]}
+        self.trace("direct_execution_imported", call_id=call_id, started_at=execution["started_at"],
+                   observed_at=execution["observed_at"], ordinal=execution["ordinal"],
+                   before=before, after=after, raw=execution["raw"])
+        return item
+
     async def execute(self, name, arguments, call_id, handler, validator=None):
         async with self.tool_lock:
             self.check_cancelled()
@@ -1164,3 +1211,469 @@ and retain its consent checks. cd requests use change_directory and Git requests
                                {"domain:user_input": str(self.state.sequence + 1)})
         self.refresh_resources()
         return self
+
+
+class ExecutionControl(AbstractCapability):
+    """Route one agent execution, creating task supervision only when needed."""
+
+    def __init__(self, objective, context, cancel_event, pending_task=None):
+        super().__init__()
+        self.objective = objective
+        self.context = context
+        self.cancel_event = cancel_event
+        self.controller = None
+        self._pending_task = pending_task
+        self.context_budget = ContextBudget(context, trace=self.trace)
+        self.messages = []
+        self.executions = []
+        self._receipts = {}
+        self.tool_lock = asyncio.Lock()
+        self.request_configuration = {}
+        self.selected_tools = None
+        self.available_tools = {}
+        self.token_scale = 1.0
+        self.last_budget = {}
+        self.recovery_attempts = 0
+        self.force_compaction = False
+        self.notice = ""
+        self.final_output = None
+        self._output_surface = "chat"
+        self._output_title = ""
+        self.task_title = ""
+        self.on_action = None
+        self.on_activity = None
+        self.on_task_title = None
+        self.on_promote = None
+        self.toolset = FunctionToolset()
+        self.control_tools = {}
+        for name in ("task_checkpoint", "task_finish", "task_defer", "task_request_input",
+                     "task_resolve_dependency", "task_read_evidence", "task_read_state",
+                     "task_select_tools", "task_resume"):
+            method = getattr(TaskControl, name)
+            def make_proxy(function):
+                def proxy(**values):
+                    return self.call_control(function.__name__, values)
+                proxy.__name__ = function.__name__
+                proxy.__doc__ = function.__doc__
+                proxy.__annotations__ = function.__annotations__
+                signature = inspect.signature(function)
+                proxy.__signature__ = signature.replace(parameters=list(signature.parameters.values())[1:])
+                return proxy
+            proxy = make_proxy(method)
+            self.control_tools[name] = proxy
+            self.toolset.add_function(proxy, sequential=True)
+        self.control_tools["response_finish"] = self.response_finish
+        self.toolset.add_function(self.response_finish, sequential=True)
+        self.direct_controls = {"task_checkpoint", "task_read_state", "task_select_tools",
+                                "task_resume", "response_finish"}
+
+    @property
+    def state(self):
+        return self.controller.state if self.controller is not None else None
+
+    @property
+    def receipts(self):
+        return self.controller.receipts if self.controller is not None else self._receipts
+
+    @property
+    def pending_task(self):
+        return self.controller.pending_task if self.controller is not None else self._pending_task
+
+    @property
+    def output_surface(self):
+        return self.controller.output_surface if self.controller is not None else self._output_surface
+
+    @property
+    def output_title(self):
+        return self.controller.output_title if self.controller is not None else self._output_title
+
+    def trace(self, event, **details):
+        if self.controller is not None:
+            self.controller.trace(event, **details)
+        else:
+            logging.getLogger("assistant.execution").debug("%s %s", event, encoded(details))
+
+    def get_toolset(self):
+        return self.toolset
+
+    def get_instructions(self):
+        return self.instructions
+
+    def instructions(self):
+        if self.controller is not None:
+            return self.controller.get_instructions()
+        text = """This execution starts DIRECT, without a task contract or supervisor.
+Answer conversation and questions normally. A single self-contained tool operation can finish
+with a normal answer, including a terminal failure. Do not call task_checkpoint just to use one tool.
+When your objective requires dependent actions or verification, call task_checkpoint with its
+contract before work. A second operational action, a composite operation, or a pending result
+promotes this execution to supervision; then establish the contract and use task_finish.
+Never replay the first operation after promotion; its original result is preserved as prior evidence.
+For final delivery, plain text defaults to chat. Use response_finish(output=..., surface='response_view',
+title='Short panel title') for substantial explanations, tutorials or an explicitly requested response
+workspace; surface='chat' respects an explicit main-chat request. Choose the surface before writing
+the answer. Response delivery and schema preparation do not count as operational actions.
+task_read_state(field='tools', query=...) discovers all registered tools even when schemas were
+reduced for context budget. task_select_tools(names=[...]) activates up to twelve schemas.
+A preserved pending task belongs to an earlier request. Only call task_resume(task_id=...) when
+the current user request resumes, steers or supplies requested information for that objective.
+Handle unrelated requests independently. task_read_state(field='pending_task') retrieves its context."""
+        if self._pending_task is not None:
+            pending = self._pending_task.state
+            text += "\nPreserved task: " + encoded({"id": pending.id, "title": pending.title,
+                                                    "status": pending.status})
+        return text
+
+    def check_cancelled(self):
+        if self.cancel_event.is_set():
+            raise asyncio.CancelledError()
+
+    def publish_activity(self):
+        if self.controller is not None:
+            self.controller.publish_activity()
+
+    def configure_controller(self):
+        controller = self.controller
+        controller.request_configuration = dict(self.request_configuration)
+        controller.on_action = self.on_action
+        controller.on_activity = self.on_activity
+        controller.on_task_title = self.on_task_title
+        controller.messages = self.messages
+        controller.available_tools = {name: tool for name, tool in self.available_tools.items()
+                                      if name != "response_finish"}
+        if self.on_promote is not None:
+            self.on_promote(controller)
+        controller.publish_activity()
+
+    def promote(self, reason):
+        if self.controller is not None:
+            return self.controller
+        self.controller = TaskControl(self.objective, self.context, self.cancel_event,
+                                      pending_task=self._pending_task)
+        self.controller.context_budget.artifacts.update(self.context_budget.artifacts)
+        self.controller.token_scale = self.token_scale
+        self.controller.selected_tools = self.selected_tools
+        self.controller.recovery_attempts = self.recovery_attempts
+        self.controller.force_compaction = self.force_compaction
+        self.controller.last_budget = dict(self.last_budget)
+        self.controller.output_surface = self._output_surface
+        self.controller.output_title = self._output_title
+        self.controller.set_task_title(self.task_title)
+        self.configure_controller()
+        for execution in self.executions:
+            if execution["operational"]:
+                self.controller.import_execution(execution)
+        self.controller.trace("execution_promoted", reason=reason)
+        return self.controller
+
+    def call_control(self, name, values):
+        if name == "response_finish":
+            return self.response_finish(**values)
+        if self.controller is not None:
+            return self.controller.control_tools[name](**values)
+        if name == "task_checkpoint":
+            return self.promote("checkpoint").task_checkpoint(**values)
+        if name == "task_resume":
+            previous = self._pending_task
+            if any(item["operational"] for item in self.executions) or previous is None or previous.state.id != values["task_id"] or previous.state.status not in {
+                    Lifecycle.INTERRUPTED, Lifecycle.WAITING, Lifecycle.BLOCKED, Lifecycle.LIMIT_REACHED}:
+                return control_rejection("Resume an unused execution's preserved task by its ID.",
+                                         "task_id", previous.state.id if previous is not None else None)
+            self.controller = previous
+            previous.resume(self.context, self.cancel_event, prompt=self.objective)
+            previous.context_budget.artifacts.update(self.context_budget.artifacts)
+            self.configure_controller()
+            previous.publish_activity("resumed")
+            if previous.state.title and self.on_task_title is not None:
+                self.on_task_title(previous.state.title)
+            return {"accepted": True, "outcome": Outcome.SUCCESS, "task_id": previous.state.id,
+                    "requirements": previous.state.requirements()}
+        if name == "task_select_tools":
+            names = values["names"]
+            if len(names) > 12 or any(name not in self.available_tools for name in names):
+                return control_rejection("Select at most twelve registered tool names.", "names", "Known tools")
+            self.selected_tools = set(names)
+            return {"accepted": True, "outcome": Outcome.SUCCESS,
+                    "active_tools": sorted(self.selected_tools | self.direct_controls)}
+        if name == "task_read_state":
+            field, query = values["field"], values.get("query", "")
+            if field == "tools":
+                value = {name: {"description": tool.description,
+                                "effectful": TOOL_SPECS[name].effectful if name in TOOL_SPECS else False}
+                         for name, tool in self.available_tools.items()
+                         if not query or query.casefold() in (name + " " + (tool.description or "")).casefold()}
+            elif field == "pending_task":
+                value = self._pending_task.state.snapshot(include_evidence=False) if self._pending_task is not None else {}
+            else:
+                return control_rejection("No supervised task exists for this execution.", "field",
+                                         ["tools", "pending_task"])
+            try:
+                page = TaskControl.page(encoded(value), values.get("offset", 0),
+                                        values.get("limit", 2000), values.get("digest", ""))
+            except ValueError as error:
+                return control_rejection(str(error), "offset/digest/limit", "A valid current page")
+            return {"accepted": True, "outcome": Outcome.SUCCESS, "field": field, "data": page}
+        return control_rejection("Declare a supervised contract with task_checkpoint first.",
+                                 "tool", "task_checkpoint", code="contract_required")
+
+    def response_finish(self, output: str, surface: Literal["chat", "response_view"] = "chat",
+                        title: str = "") -> dict:
+        """Deliver a complete DIRECT answer to chat or a response workspace."""
+        if self.controller is not None:
+            return control_rejection("Use task_finish for supervised completion.", "tool", "task_finish")
+        if not output.strip():
+            return control_rejection("Provide the complete answer.", "output", "Nonempty text")
+        self.final_output = output
+        self._output_surface, self._output_title = surface, title
+        return {"accepted": True, "outcome": Outcome.SUCCESS}
+
+    def active_history(self, messages):
+        result = []
+        for message in copy.deepcopy(messages):
+            message.parts = [part for part in message.parts if not (
+                part.part_kind == "user-prompt" and isinstance(part.content, str) and part.content != self.objective and part.content.startswith((
+                    "Arlo supervisor snapshot task=", "Supervisor task state: ", "Interrupted task state (")))]
+            if message.parts:
+                result.append(message)
+        return result
+
+    async def measure_request(self, request_context, messages):
+        return await self.context_budget.measure_request(request_context, messages, token_scale=self.token_scale)
+
+    async def before_model_request(self, ctx, request_context):
+        self.check_cancelled()
+        self.messages = ctx.messages
+        if self.controller is not None:
+            request_context.model_request_parameters = replace(request_context.model_request_parameters,
+                function_tools=[tool for tool in request_context.model_request_parameters.function_tools
+                                if tool.name != "response_finish"])
+            return await self.controller.before_model_request(ctx, request_context)
+        if self.final_output is not None:
+            raise TaskOutputReady(self.final_output)
+        parameters = request_context.model_request_parameters
+        self.available_tools = {tool.name: tool for tool in parameters.function_tools}
+        context = self.request_configuration.get("effective_context_tokens", 4096)
+        completion, margin, input_limit = self.context_budget.reserve(context, 8192, self.recovery_attempts)
+        history = self.active_history(request_context.messages)
+
+        def select():
+            request_context.model_request_parameters = replace(parameters, function_tools=[
+                tool for tool in parameters.function_tools if tool.name in self.direct_controls or (
+                    tool.name not in self.control_tools and (self.selected_tools is None or tool.name in self.selected_tools))])
+        select()
+        async def measure(messages):
+            return await self.measure_request(request_context, messages)
+        before = await measure(history)
+        if before["estimated_input_tokens"] > input_limit and self.selected_tools is None:
+            recent = [part.tool_name for message in history[-6:] for part in message.parts if part.part_kind == "tool-call"]
+            self.selected_tools = set(name for name in list(dict.fromkeys(reversed(recent)))[:12]
+                                      if name in self.available_tools and name not in self.control_tools)
+            select()
+        history = await self.context_budget.compact(history, measure, input_limit, force=self.force_compaction)
+        measured = await measure(history)
+        self.last_budget = {**measured, "effective_context_tokens": context,
+                            "reserved_completion_tokens": completion, "safety_margin_tokens": margin,
+                            "input_limit": input_limit, "estimated_input_before": before["estimated_input_tokens"]}
+        if measured["estimated_input_tokens"] > input_limit:
+            self.notice = "The request context cannot fit with a safe completion reserve."
+            raise TaskStopped(self.notice)
+        request_context.messages = history
+        request_context.model_settings = {**(request_context.model_settings or {}), "max_tokens": completion}
+        self.force_compaction = False
+        return request_context
+
+    async def wrap_run(self, ctx, *, handler):
+        token = active_model_request.set({"trace": self.trace})
+        try:
+            return await handler()
+        finally:
+            active_model_request.reset(token)
+
+    async def wrap_model_request(self, ctx, *, request_context, handler):
+        if self.controller is not None:
+            return await self.controller.wrap_model_request(ctx, request_context=request_context, handler=handler)
+        measured = await self.measure_request(request_context, request_context.messages)
+        if measured["estimated_input_tokens"] > self.last_budget["input_limit"]:
+            self.notice = "The request context exceeds its completion reserve."
+            raise TaskStopped(self.notice)
+        return await handler(request_context)
+
+    async def after_model_request(self, ctx, *, request_context, response):
+        if self.controller is not None:
+            try:
+                return await self.controller.after_model_request(ctx, request_context=request_context, response=response)
+            finally:
+                self.messages = self.controller.messages
+        estimated = self.last_budget.get("unscaled_input_tokens", 0)
+        if estimated and response.usage.input_tokens:
+            self.token_scale = max(self.token_scale, response.usage.input_tokens / estimated * 1.10)
+        if response.finish_reason == "length":
+            self.context_budget.archive(ModelMessagesTypeAdapter.dump_json([response]).decode(), "Incomplete model output")
+            self.messages = [message for message in ctx.messages if message is not response]
+            self.recovery_attempts += 1
+            self.force_compaction = True
+            if self.recovery_attempts > 3:
+                self.notice = tr("task_control.output_recovery_exhausted")
+                raise TaskStopped(self.notice)
+            raise TaskModelRetry("The partial response was not executed. Submit a complete answer or valid tool call.")
+        return response
+
+    def accept_output(self, *, truncated=False, output=None):
+        self.check_cancelled()
+        if self.controller is not None:
+            return self.controller.accept_output(truncated=truncated, output=output)
+        return not truncated
+
+    def revision(self, resource):
+        if resource.startswith(("file:", "entry:", "domain:git:")):
+            return content_revision(resource)
+        if resource == "domain:working_directory":
+            return str(Path.cwd())
+        return "0"
+
+    def partial_result(self, spec, result, changed=False):
+        data = result.data if isinstance(result.data, dict) else {}
+        if spec.actions_policy is not None:
+            return any(self.partial_result(TOOL_SPECS[item["tool"]], normalize_result(item["output"]), changed)
+                       for item in data.get("results", []) if isinstance(item, dict)
+                       and item.get("tool") in TOOL_SPECS and "output" in item)
+        return spec.effectful and (data.get("status") == "partial" or data.get("partial") is True
+                                  or result.outcome == Outcome.FAILED and changed)
+
+    def context_read(self, spec, arguments):
+        if spec.effectful or spec.source or not spec.path_argument:
+            return False
+        try:
+            path = str(Path(arguments.get(spec.path_argument, ".")).expanduser().resolve())
+        except (OSError, TypeError, ValueError):
+            return False
+        return path in getattr(self.context, "artifact_paths", set())
+
+    async def execute(self, name, arguments, call_id, handler, validator=None):
+        async with self.tool_lock:
+            self.check_cancelled()
+            previous = next((item for item in self.executions if item["call_id"] == call_id), None)
+            if previous is not None:
+                if previous["tool"] != name or previous["arguments"] != arguments:
+                    return control_rejection("A tool call ID cannot identify a different operation.", "call_id",
+                                             previous["call_id"], code="call_id_conflict")
+                return previous["raw"] if previous["returned"] else previous["result"].payload()
+            if self.controller is None and self.final_output is not None:
+                return control_rejection("The response has already been delivered.", "lifecycle", "A new execution",
+                                         code="execution_complete")
+            if name == "task_checkpoint" and self.controller is None:
+                self.promote("checkpoint")
+            if self.controller is not None:
+                if name == "response_finish":
+                    return self.call_control(name, arguments)
+                return await self.controller.execute(name, arguments, call_id, handler, validator)
+            if validator is not None:
+                try:
+                    arguments = validator(arguments)
+                except (ValidationError, ValueError, TypeError) as error:
+                    return control_rejection(str(error), "arguments", "Arguments matching the tool schema",
+                                             code="invalid_arguments")
+            if name in self.control_tools:
+                output = await handler(arguments)
+                self._receipts[call_id] = {"tool": name, "control": True, "executed": False,
+                                          "outcome": normalize_result(output).outcome}
+                return output
+            spec = TOOL_SPECS[name]
+            context_read = self.context_read(spec, arguments)
+            try:
+                actions = spec.actions_for(arguments)
+            except (OSError, TypeError, ValueError, UnicodeError):
+                actions = None
+            previous_action = any(item["operational"] for item in self.executions)
+            if not context_read and (previous_action or actions is not None and len(actions) > 1):
+                self.promote("second_action" if previous_action else "composite_action")
+                return await self.controller.execute(name, arguments, call_id, handler)
+            try:
+                _, resources = resources_for(name, arguments)
+            except (OSError, TypeError, ValueError):
+                resources = []
+            before = {resource: self.revision(resource) for resource in resources}
+            started_at = datetime.now(timezone.utc).isoformat()
+            raw = None
+            returned = False
+            interrupted = False
+            if self.on_action is not None:
+                self.on_action("executing")
+            try:
+                raw = await handler(arguments)
+                returned = True
+                result = normalize_result(raw, text_observation=spec.text_observation)
+            except asyncio.CancelledError:
+                interrupted = True
+                result = ActionResult(Outcome.CANCELLED, "Action interrupted; effects may be partial.", "interrupted")
+            except (ValidationError, ModelRetry) as error:
+                result = ActionResult(Outcome.REJECTED, str(error), "invalid_arguments")
+            except Exception as error:
+                result = ActionResult(Outcome.FAILED, str(error), "execution_exception")
+            after = {resource: self.revision(resource) for resource in resources}
+            changed = any(before[resource] is not None and after[resource] is not None
+                          and before[resource] != after[resource] for resource in resources)
+            drift = not context_read and (not spec.effectful or spec.ancillary) and changed
+            if drift and result.successful:
+                result = ActionResult(Outcome.UNCERTAIN, result.data, "resource_changed_during_observation")
+            if spec.effectful and result.outcome not in {Outcome.REJECTED, Outcome.WAITING, Outcome.EXTERNAL_BLOCKER}:
+                for resource in resources:
+                    if not resource.startswith(("file:", "entry:", "domain:git:")) and resource != "domain:working_directory" and (
+                            not spec.ancillary or resource == "domain:presentation"):
+                        after[resource] = "1"
+            execution = {"tool": name, "arguments": copy.deepcopy(arguments), "call_id": call_id,
+                         "ordinal": len(self.executions) + 1, "operational": not context_read,
+                         "raw": raw, "returned": returned, "result": result, "before": before, "after": after,
+                         "started_at": started_at, "observed_at": datetime.now(timezone.utc).isoformat()}
+            self.executions.append(execution)
+            self._receipts[call_id] = {"tool": name, "control": False, "executed": True,
+                                      "outcome": result.outcome}
+            data = result.data if isinstance(result.data, dict) else {}
+            partial = spec.effectful and (interrupted or self.cancel_event.is_set()
+                                          or self.partial_result(spec, result, changed))
+            composite = spec.actions_policy is not None and isinstance(data.get("results"), list) and len(data["results"]) > 1
+            followup = spec.needs_followup(result)
+            if followup or partial or composite or drift:
+                self.promote("followup" if followup else "partial_execution" if partial or drift else "composite_result")
+            if self.on_action is not None:
+                self.on_action("processing")
+            if interrupted:
+                if self.controller is not None:
+                    self.controller.state.suspend(Lifecycle.INTERRUPTED, "Inspect possible partial effects before retrying.")
+                raise asyncio.CancelledError()
+            self.check_cancelled()
+            return raw if returned else result.payload()
+
+    async def invoke(self, name, arguments, call_id):
+        if name in self.control_tools:
+            function = self.control_tools[name]
+        else:
+            from .tools import TOOLS
+            function = next(tool for tool in TOOLS if tool.__name__ == name)
+        signature = inspect.signature(function)
+        def capture(*args, **kwargs):
+            return dict(signature.bind(*args, **kwargs).arguments)
+        capture.__signature__ = signature
+        capture.__annotations__ = function.__annotations__
+        validator = validate_call(capture)
+        async def handler(values):
+            result = function(**values)
+            return await result if inspect.isawaitable(result) else result
+        return await self.execute(name, arguments, call_id, handler, validator=lambda values: validator(**values))
+
+    async def wrap_tool_execute(self, ctx, *, call, tool_def, args, handler):
+        self.messages = ctx.messages
+        return await self.execute(call.tool_name, args, call.tool_call_id, handler)
+
+    async def on_tool_execute_error(self, ctx, *, call, tool_def, args, error):
+        if self.controller is not None:
+            return await self.controller.on_tool_execute_error(ctx, call=call, tool_def=tool_def, args=args, error=error)
+        raise error
+
+    async def on_tool_validate_error(self, ctx, *, call, tool_def, args, error):
+        if call.tool_name == "task_checkpoint" and self.controller is None:
+            self.messages = ctx.messages
+            self.promote("checkpoint")
+        if self.controller is not None:
+            return await self.controller.on_tool_validate_error(ctx, call=call, tool_def=tool_def, args=args, error=error)
+        return await super().on_tool_validate_error(ctx, call=call, tool_def=tool_def, args=args, error=error)

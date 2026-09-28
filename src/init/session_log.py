@@ -74,6 +74,8 @@ class SessionContext:
     def __init__(self, session_id: str, directory: Path):
         self.session_id = session_id
         self.messages = []
+        self.task_controller = None
+        self.artifact_paths = set()
         self.directory = Path(directory).resolve() / "artifacts" / session_id
 
     def add_exchange(self, prompt: str, reply: str):
@@ -86,6 +88,7 @@ class SessionContext:
         path = self.directory / f"{uuid.uuid4().hex}{extension}"
         with path.open("x", encoding="utf-8", newline="\n") as stream:
             stream.write(content)
+        self.artifact_paths.add(str(path.resolve()))
         return f"[{label}]({path.as_posix()})"
 
     def externalize_messages(self, messages):
