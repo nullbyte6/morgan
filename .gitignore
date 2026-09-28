@@ -14,6 +14,7 @@ __pycache__/
 
 /src/models/*
 !/src/models/.gitkeep
+scripts/rebuild.bat
 Arlo.spec
 ArloSetup.iss
 
