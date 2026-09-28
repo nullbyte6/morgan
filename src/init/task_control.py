@@ -247,7 +247,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.set_task_title(task_title)
             if self.state.kind == "mutation" and self.tools_selected_for_budget:
                 self.selected_tools = set([*dict.fromkeys([
-                    "edit_code", "create_code", "verify_code", "execute_command", *sorted(self.selected_tools)])][:12])
+                    "render_flowchart", "edit_code", "create_code", "verify_code", "execute_command",
+                    *sorted(self.selected_tools)])][:12])
         return result
 
     def set_task_title(self, title):
@@ -982,7 +983,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
             essentials = ["read_code", "search_code", "list_code", "read_file", "list_files", "git_status", "git_diff"]
             if self.state.kind == "mutation":
                 essentials += ["edit_code", "create_code", "execute_command", "verify_code"]
-            self.selected_tools = set([*dict.fromkeys([*recent, *essentials])][:12])
+            self.selected_tools = set([*dict.fromkeys(["render_flowchart", *recent, *essentials])][:12])
             self.tools_selected_for_budget = True
             request_context.model_request_parameters = replace(parameters, function_tools=[
                 tool for tool in parameters.function_tools if tool.name in self.control_tools or tool.name in self.selected_tools])
