@@ -36,7 +36,8 @@ if (-not $?) {
 Write-Host "Starting $env:ASSISTANT_NAME`: $Mode"
 
 if ($Mode -eq "Desktop") {
-    $desktopDir = if ([string]::IsNullOrWhiteSpace($env:ARLO)) { "C:\Arlo" } else { $env:ARLO }
+    $desktopDir = [Environment]::GetEnvironmentVariable($env:ASSISTANT_NAME.ToUpperInvariant())
+    if ([string]::IsNullOrWhiteSpace($desktopDir)) { $desktopDir = "C:\Arlo" }
     $desktopExe = Join-Path $desktopDir "Arlo.exe"
     if (Test-Path -LiteralPath $desktopExe -PathType Leaf) {
         Start-Process -FilePath $desktopExe -WorkingDirectory $root -WindowStyle Hidden
