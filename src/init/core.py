@@ -578,13 +578,29 @@ class Assistant:
 
             audio_model_name = load_dev_file()["audio_model"]
             if self.audio_model is None or self.audio_model_name != audio_model_name:
-                self.audio_model_name = audio_model_name
+                import urllib.request
+
+                managed_audio_model = f"arlo-voice-{audio_model_name}"
+                request = urllib.request.Request(
+                    "http://localhost:11434/api/create",
+                    data=json.dumps({
+                        "model": managed_audio_model,
+                        "from": audio_model_name,
+                        "parameters": {"num_ctx": load_dev_file()["context_length"]},
+                        "stream": False,
+                    }).encode("utf-8"),
+                    headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(request, timeout=300) as response:
+                    result = json.load(response)
+                if result.get("error") or result.get("status") != "success":
+                    raise RuntimeError(result.get("error") or str(result))
                 self.audio_model = OllamaModel(
-                    self.audio_model_name, provider=self.provider,
+                    managed_audio_model, provider=self.provider,
                     profile={"openai_chat_supports_multiple_system_messages": False,
                              "openai_chat_supports_max_completion_tokens": False,
                              "openai_supports_tool_choice_required": False},
                     settings={"thinking": False, "openai_reasoning_effort": "none"})
+                self.audio_model_name = audio_model_name
             turn_model = self.audio_model
             turn_model_settings["thinking"] = False
         attachment_tools = [attachments.toolset()] if attachments else []
