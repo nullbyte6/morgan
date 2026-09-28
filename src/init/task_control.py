@@ -85,7 +85,6 @@ class TaskControl(AbstractCapability):
         self.token_scale = 1.0
         self.last_budget = {}
         self.selected_tools = None
-        self.tools_selected_for_budget = False
         self.available_tools = {}
         self.recovery_attempts = 0
         self.force_compaction = False
@@ -201,6 +200,10 @@ pages before drawing new conclusions, and preserve findings with supporting evid
 task_read_state(field, offset=0, limit=2000) retrieves paged supervisor collections.
 Its field='tools', query='keyword' catalog finds tool names and descriptions. If a needed tool schema
 is not active, call task_select_tools(names=[...]); control tools always remain available.
+When schemas are reduced for context budget, the snapshot's tool_catalog lists all registered names.
+Select the tools needed for the current request to obtain their actual argument schemas before calling
+them. A tool missing from the active selection is not unavailable. The catalog's effect declarations
+identify tools requiring a mutation contract even when your intended use is inspection.
 If output_recovery is present, repair its exact requirements using control tools and existing
 current evidence. Text can be delivered only after current criteria and effects are verified,
 or for a direct answer requiring no external work. Submit the complete concise answer with
@@ -247,10 +250,6 @@ and retain its consent checks. cd requests use change_directory and Git requests
                                                             for value in findings or []])
         if result["accepted"]:
             self.set_task_title(task_title)
-            if self.state.kind == "mutation" and self.tools_selected_for_budget:
-                self.selected_tools = set([*dict.fromkeys([
-                    "render_flowchart", "edit_code", "create_code", "verify_code", "execute_command",
-                    *sorted(self.selected_tools)])][:12])
         return result
 
     def set_task_title(self, title):
@@ -338,7 +337,10 @@ and retain its consent checks. cd requests use change_directory and Git requests
         """
         snapshot = self.state.snapshot(include_evidence=False)
         if field == "tools":
-            value = {name: tool.description for name, tool in self.available_tools.items()
+            value = {name: {"description": tool.description,
+                            "effectful": TOOL_SPECS[name].effectful if name in TOOL_SPECS else False,
+                            "ancillary": TOOL_SPECS[name].ancillary if name in TOOL_SPECS else False}
+                     for name, tool in self.available_tools.items()
                      if not query or query.casefold() in (name + " " + (tool.description or "")).casefold()}
         elif field == "evidence":
             value = {key: self.evidence_reference(item) for key, item in self.state.evidence.items()
@@ -383,7 +385,6 @@ and retain its consent checks. cd requests use change_directory and Git requests
             return control_rejection("Select at most twelve names from task_read_state(field='tools').",
                                      "names", "Known tool names")
         self.selected_tools = set(names)
-        self.tools_selected_for_budget = False
         return {"accepted": True, "outcome": Outcome.SUCCESS,
                 "active_tools": sorted(self.selected_tools | self.control_tools.keys())}
 
@@ -809,6 +810,10 @@ and retain its consent checks. cd requests use change_directory and Git requests
         active = self.available_tools.keys() if self.selected_tools is None else (
             self.selected_tools & self.available_tools.keys())
         view["active_tool_names"] = sorted(active | self.control_tools.keys())
+        if self.selected_tools is not None:
+            view["tool_catalog"] = {"names": sorted(self.available_tools),
+                                    "read": {"tool": "task_read_state", "arguments": {"field": "tools"}},
+                                    "select": {"tool": "task_select_tools", "argument": "names"}}
         view["recovery_attempts"] = self.recovery_attempts
         return view
 
@@ -884,11 +889,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         before = await measure(history)
         if before["estimated_input_tokens"] > input_limit and self.selected_tools is None:
             recent = [part.tool_name for message in history[-6:] for part in message.parts if part.part_kind == "tool-call"]
-            essentials = ["read_code", "search_code", "list_code", "read_file", "list_files", "git_status", "git_diff"]
-            if self.state.kind == "mutation":
-                essentials += ["edit_code", "create_code", "execute_command", "verify_code"]
-            self.selected_tools = set([*dict.fromkeys(["render_flowchart", *recent, *essentials])][:12])
-            self.tools_selected_for_budget = True
+            self.selected_tools = set([name for name in dict.fromkeys(reversed(recent))
+                                       if name in self.available_tools and name not in self.control_tools][:12])
             request_context.model_request_parameters = replace(parameters, function_tools=[
                 tool for tool in parameters.function_tools if tool.name in self.control_tools or tool.name in self.selected_tools])
             self.trace("tool_schemas_selected", active_tools=sorted(self.selected_tools), reason="context_budget")
