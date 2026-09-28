@@ -225,3 +225,39 @@ class SpeechBuffer:
         remaining = self.buffer.strip()
         self.buffer = ""
         return [remaining] if remaining else []
+
+
+class ResponseDelivery:
+    """Deliver visible text and speech to the selected response surface."""
+
+    def __init__(self, emit_chunk, enqueue_speech, *, speech_enabled=True, on_surface=None):
+        self.emit_chunk = emit_chunk
+        self.enqueue_speech = enqueue_speech
+        self.speech_enabled = speech_enabled
+        self.on_surface = on_surface
+        self.buffer = SpeechBuffer()
+        self.delivered_output = None
+
+    def emit(self, chunk):
+        if not chunk:
+            return
+        self.emit_chunk(chunk)
+        if self.speech_enabled:
+            for phrase in self.buffer.feed(chunk):
+                self.enqueue_speech(phrase)
+
+    def flush_speech(self, cancel_event=None):
+        if self.speech_enabled:
+            for phrase in self.buffer.finish():
+                if cancel_event is None or not cancel_event.is_set():
+                    self.enqueue_speech(phrase)
+
+    def deliver(self, output, *, streamed="", surface="chat", title=""):
+        if self.delivered_output == output:
+            return
+        if self.on_surface is not None:
+            allow_speech = self.on_surface(surface, title)
+            self.speech_enabled = self.speech_enabled and allow_speech
+        self.emit(output[len(streamed):] if output.startswith(streamed) else output)
+        self.flush_speech()
+        self.delivered_output = output

@@ -563,7 +563,7 @@ class Assistant:
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
-        from src.init.streaming import SpeechBuffer
+        from src.init.streaming import ResponseDelivery
         from pydantic_ai import CancellationToken
         from pydantic_ai.messages import (BinaryContent, ModelRequest,
                                           ModelResponse, TextPart,
@@ -689,7 +689,6 @@ class Assistant:
                                               PartStartEvent, PartDeltaEvent, TextPartDelta,
                                               ToolCallPart, ToolReturnPart)
             from src.init.tools import TOOLS
-            buffer = SpeechBuffer()
             tool_names = {tool.__name__ for tool in TOOLS} | controller.control_tools.keys()
             conversation_messages = list(history)
             current_prompt = model_prompt
@@ -697,7 +696,6 @@ class Assistant:
             direct_stream = None
             direct_allowed = True
             streamed_output = ""
-            delivered_output = None
 
             def emit_visible(chunk):
                 if not chunk:
@@ -707,27 +705,21 @@ class Assistant:
                 if on_chunk is not None:
                     on_chunk(chunk)
 
-                if speech_enabled:
-                    for phrase in buffer.feed(chunk):
-                        self.voice.enqueue(phrase)
+            delivery = ResponseDelivery(emit_visible, self.voice.enqueue,
+                                        speech_enabled=speech_enabled, on_surface=on_surface)
 
             def deliver_output(output, *, streamed=""):
-                nonlocal speech_enabled, delivered_output
-                if delivered_output == output:
-                    return
-                if on_surface is not None:
-                    allow_speech = on_surface(controller.output_surface, controller.output_title)
-                    speech_enabled = speech_enabled and allow_speech
-                emit_visible(output[len(streamed):] if output.startswith(streamed) else output)
-                if speech_enabled:
-                    for phrase in buffer.finish():
-                        self.voice.enqueue(phrase)
-                delivered_output = output
+                nonlocal speech_enabled
+                try:
+                    delivery.deliver(output, streamed=streamed,
+                                     surface=controller.output_surface, title=controller.output_title)
+                finally:
+                    speech_enabled = delivery.speech_enabled
 
             def emit_direct(chunk):
                 nonlocal streamed_output
                 streamed_output += chunk
-                emit_visible(chunk)
+                delivery.emit(chunk)
 
             def emit_step(name, call_id, result, failed=False):
                 if on_phase is None:
@@ -842,7 +834,7 @@ class Assistant:
                     notice = controller.state.notice
                     if on_phase is not None:
                         on_phase(controller.state.status)
-                    emit_visible(notice)
+                    delivery.emit(notice)
                     conversation_messages = [*stream_messages,
                                              ModelResponse(parts=[TextPart(notice)])]
                     break
@@ -927,9 +919,7 @@ class Assistant:
                 completed_history = session.context.externalize_messages(completed_history)
 
             if speech_enabled:
-                for phrase in buffer.finish():
-                    if not cancel_event.is_set():
-                        self.voice.enqueue(phrase)
+                delivery.flush_speech(cancel_event)
 
                 self.voice.request_done()
 
