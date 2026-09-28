@@ -6,12 +6,15 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     root="$(cygpath -m "$root")"
 fi
-python="${ARLO_BUILD_PYTHON:-$root/.venv/Scripts/python.exe}"
+python="${ARLO_BUILD_PYTHON:-$root/.venv/Scripts/pythonw.exe}"
+if [[ "${python##*/}" == "python.exe" ]]; then
+    python="${python%/*}/pythonw.exe"
+fi
 output="${ARLO_BUILD_OUTPUT:-$root/dist}"
 build="$root/build/packaging"
 
 if [[ ! -x "$python" ]]; then
-    printf 'Windows Python environment not found: %s\n' "$python" >&2
+    printf 'Windowless Windows Python environment not found: %s\n' "$python" >&2
     exit 1
 fi
 
@@ -21,7 +24,11 @@ export PYTHONDONTWRITEBYTECODE=1
 export MSYS_NO_PATHCONV=1
 mkdir -p -- "$build"
 
-"$python" -B - "$build/version-info" <<'PY'
+run_python() {
+    "$python" "$@" 2>&1 | cat
+}
+
+run_python -B - "$build/version-info" <<'PY'
 import json
 import re
 import sys
@@ -45,7 +52,7 @@ hidden=()
 while IFS= read -r module; do
     module="${module%$'\r'}"
     hidden+=(--hidden-import "$module")
-done < <("$python" -B - <<'PY'
+done < <(run_python -B - <<'PY'
 from pathlib import Path
 for path in sorted(Path('src/init').rglob('*.py')):
     if path.stem in {'tts_server', 'voice_service'} or '__pycache__' in path.parts:
@@ -79,8 +86,8 @@ command=("$python" -B -m PyInstaller.utils.cliutils.makespec
 printf 'Executing:'
 printf ' %q' "${command[@]}"
 printf '\n'
-"${command[@]}"
-"$python" -B - "$build/Arlo.spec" <<'PY'
+run_python "${command[@]:1}"
+run_python -B - "$build/Arlo.spec" <<'PY'
 import sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -95,5 +102,5 @@ text = text.replace('pyz = PYZ(a.pure)',
     "pyz = PYZ(a.pure)")
 path.write_text(text, encoding='utf-8')
 PY
-"$python" -B -m PyInstaller --noconfirm --distpath "$output" --workpath "$build/work" "$build/Arlo.spec" "$@"
+run_python -B -m PyInstaller --noconfirm --distpath "$output" --workpath "$build/work" "$build/Arlo.spec" "$@"
 printf '\nExecutable: %s/Arlo/Arlo.exe\n' "$output"
