@@ -1350,7 +1350,14 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
                                       pending_task=self._pending_task)
         self.controller.context_budget.artifacts.update(self.context_budget.artifacts)
         self.controller.token_scale = self.token_scale
-        self.controller.selected_tools = self.selected_tools
+        if self.selected_tools is not None:
+            recent = [part.tool_name for message in self.messages[-6:] for part in message.parts
+                      if part.part_kind == "tool-call"]
+            candidates = [*reversed(recent), *[item["tool"] for item in reversed(self.executions)
+                                             if item["operational"]], *sorted(self.selected_tools)]
+            self.controller.selected_tools = set([name for name in dict.fromkeys(candidates)
+                                                  if name in self.available_tools
+                                                  and name not in self.control_tools][:12]) or None
         self.controller.recovery_attempts = self.recovery_attempts
         self.controller.force_compaction = self.force_compaction
         self.controller.last_budget = dict(self.last_budget)
