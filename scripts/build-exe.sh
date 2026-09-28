@@ -10,7 +10,16 @@ python="${ARLO_BUILD_PYTHON:-$root/.venv/Scripts/pythonw.exe}"
 if [[ "${python##*/}" == "python.exe" ]]; then
     python="${python%/*}/pythonw.exe"
 fi
-output="${ARLO_BUILD_OUTPUT:-$root/dist}"
+output="${ARLO_BUILD_OUTPUT:-C:/}"
+arlo="${ARLO:-${output%/}/Arlo}"
+if command -v cygpath >/dev/null 2>&1; then
+    arlo="$(cygpath -am "$arlo")"
+else
+    arlo="${arlo//\\//}"
+fi
+arlo="${arlo%/}"
+output="${arlo%/*}/"
+package="${arlo##*/}"
 build="$root/build/packaging"
 
 if [[ ! -x "$python" ]]; then
@@ -87,7 +96,7 @@ printf 'Executing:'
 printf ' %q' "${command[@]}"
 printf '\n'
 run_python "${command[@]:1}"
-run_python -B - "$build/Arlo.spec" <<'PY'
+run_python -B - "$build/Arlo.spec" "$package" <<'PY'
 import sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -100,7 +109,10 @@ text = text.replace('pyz = PYZ(a.pure)',
     "    directory = importlib.util.find_spec(package).submodule_search_locations[0]\n"
     "    a.datas += Tree(directory, prefix=package, excludes=['__pycache__', '*.pyc'])\n"
     "pyz = PYZ(a.pure)")
+head, separator, collection = text.rpartition('coll = COLLECT(')
+collection = collection.replace("name='Arlo',", f'name={sys.argv[2]!r},', 1)
+text = head + separator + collection
 path.write_text(text, encoding='utf-8')
 PY
 run_python -B -m PyInstaller --noconfirm --distpath "$output" --workpath "$build/work" "$build/Arlo.spec" "$@"
-printf '\nExecutable: %s/Arlo/Arlo.exe\n' "$output"
+printf '\nExecutable: %s/Arlo.exe\n' "$arlo"
