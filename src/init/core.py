@@ -159,9 +159,77 @@ class Assistant:
         from pyfiglet import figlet_format
         return figlet_format(self.name, font="4max", width=128)
 
+    def _ensure_services(self):
+        if os.name != "nt":
+            return
+        import shutil
+        import socket
+        import sys
+        from pathlib import Path
+        from src.init.lang import tr
+        from src.init.paths import PROJECT_ROOT
+
+        def services_ready():
+            for port in (11434, 18765):
+                try:
+                    with socket.create_connection(("127.0.0.1", port), timeout=1):
+                        pass
+                except OSError:
+                    return False
+            return True
+
+        if services_ready():
+            return
+        candidates = [PROJECT_ROOT / "scripts" / "arlo-services.ps1"]
+        home = os.environ.get("ARLO_HOME")
+        if home:
+            candidates[:0] = [Path(home) / "arlo-services.ps1",
+                              Path(home) / "scripts" / "arlo-services.ps1"]
+        services = next((path for path in candidates if path.is_file()), None)
+        if services is None:
+            raise RuntimeError(tr("startup.services_missing"))
+        powershell = shutil.which("pwsh.exe") or shutil.which("powershell.exe")
+        if powershell is None:
+            raise RuntimeError(tr("startup.powershell_missing"))
+        environment = os.environ.copy()
+        frozen = getattr(sys, "frozen", False)
+        if frozen:
+            import ctypes
+            bundle = Path(sys._MEIPASS).resolve()
+            environment["PATH"] = os.pathsep.join(
+                entry for entry in environment.get("PATH", "").split(os.pathsep)
+                if not Path(os.path.expandvars(entry)).resolve().is_relative_to(bundle))
+            environment.pop("PYTHONHOME", None)
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
+        try:
+            try:
+                process = subprocess.Popen(
+                    [powershell, "-NoLogo", "-NoProfile", "-NonInteractive",
+                     "-ExecutionPolicy", "Bypass", "-File", str(services), "-NoConsole"],
+                    cwd=str(services.parent.parent), env=environment,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)
+            finally:
+                if frozen:
+                    ctypes.windll.kernel32.SetDllDirectoryW(str(bundle))
+            try:
+                output, _ = process.communicate(timeout=900)
+            except subprocess.TimeoutExpired as error:
+                process.kill()
+                process.communicate()
+                raise RuntimeError(tr("startup.services_timeout")) from error
+        except OSError as error:
+            raise RuntimeError(tr("startup.services_failed", error=str(error))) from error
+        if process.returncode:
+            raise RuntimeError(tr("startup.services_failed", error=output.strip()[-2000:]))
+        if not services_ready():
+            raise RuntimeError(tr("startup.services_not_ready"))
+        logging.getLogger("assistant.services").info(output.rstrip())
+
     def _initialize_runtime(self):
         if self.agent is not None:
             return
+        self._ensure_services()
         os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
         os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
         from pydantic_ai import Agent, Tool
