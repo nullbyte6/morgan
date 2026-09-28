@@ -176,7 +176,7 @@ def ollama_capabilities(model: str) -> tuple[bool, int]:
     """Only query the existing local Ollama service; never infer vision by name."""
     vision, context = False, 4096
     try:
-        request = urllib.request.Request("http://localhost:11434/api/show",
+        request = urllib.request.Request("http://127.0.0.1:11434/api/show",
             data=json.dumps({"model": model}).encode(),
             headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=2) as response:
@@ -185,7 +185,7 @@ def ollama_capabilities(model: str) -> tuple[bool, int]:
         match = re.search(r"(?m)^num_ctx\s+(\d+)", data.get("parameters", ""))
         if match:
             context = int(match[1])
-        with urllib.request.urlopen("http://localhost:11434/api/ps", timeout=2) as response:
+        with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=2) as response:
             running = json.load(response)
         for entry in running.get("models", []):
             if entry.get("name") in (model, model + ":latest") and entry.get("context_length"):

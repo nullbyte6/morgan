@@ -256,7 +256,8 @@ class AssistantWorker(QObject):
 
                     with wave.open(io.BytesIO(message.audio_wav), "rb") as wav:
                         prompt, _ = transcribe_voice(
-                            wav.readframes(wav.getnframes()), wav.getframerate())
+                            wav.readframes(wav.getnframes()), wav.getframerate(),
+                            beam_size=1, vad_filter=False)
                     prompt = prompt.strip()
                 except Exception:
                     logging.getLogger("assistant.voice").exception(

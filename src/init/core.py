@@ -268,7 +268,7 @@ class Assistant:
         http_client = httpx2.AsyncClient(
             timeout=httpx2.Timeout(timeout=DEFAULT_HTTP_TIMEOUT, connect=5),
             headers={"User-Agent": get_user_agent()}, event_hooks={"request": [trace_provider_request]})
-        self.provider = OllamaProvider(base_url="http://localhost:11434/v1", http_client=http_client)
+        self.provider = OllamaProvider(base_url="http://127.0.0.1:11434/v1", http_client=http_client)
         self.model = OllamaModel(
             self.MODEL_NAME,
             provider=self.provider,
@@ -621,7 +621,7 @@ class Assistant:
 
                 managed_audio_model = f"arlo-voice-{audio_model_name}"
                 request = urllib.request.Request(
-                    "http://localhost:11434/api/create",
+                    "http://127.0.0.1:11434/api/create",
                     data=json.dumps({
                         "model": managed_audio_model,
                         "from": audio_model_name,
