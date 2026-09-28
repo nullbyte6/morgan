@@ -492,7 +492,7 @@
   "task_progress.reviewing": "Reviewing results…",
   "task_progress.summary": "{detail} · {count}",
   "task_progress.step_inspect": "Inspection completed: {tool}",
-  "task_progress.step_detail": "Step {step}: {detail}",
+  "task_progress.step_detail": "{detail}",
   "task_progress.step_execute": "Action completed: {tool}",
   "task_progress.step_verify": "Check performed: {tool}",
   "task_progress.step_checkpoint": "Task state updated",
