@@ -213,19 +213,28 @@ class ContextBudget:
             if not force and latest_response < len(result) and any(
                     part.part_kind == "tool-call" for part in result[latest_response].parts):
                 boundaries = [boundary for boundary in boundaries if boundary <= latest_response]
-            user_index = next((index for index in range(len(result) - 1, -1, -1)
-                               if result[index].kind == "request" and any(
-                                   part.part_kind == "user-prompt" and not (
-                                       isinstance(part.content, str) and part.content.startswith("Earlier context archived"))
-                                   for part in result[index].parts)), None)
-            user = replace(result[user_index], parts=[part for part in result[user_index].parts
-                           if part.part_kind == "user-prompt"]) if user_index is not None else None
+            user_indices = [index for index, message in enumerate(result)
+                            if message.kind == "request" and any(
+                                part.part_kind == "user-prompt" and not (
+                                    isinstance(part.content, str) and part.content.startswith("Earlier context archived"))
+                                for part in message.parts)]
+            preserved = {}
+            for index in user_indices[-2:]:
+                preserved[index] = replace(result[index], parts=[part for part in result[index].parts
+                                           if part.part_kind == "user-prompt" and not (
+                                               isinstance(part.content, str) and part.content.startswith("Earlier context archived"))])
+            if len(user_indices) > 1:
+                previous_response = next((index for index in range(user_indices[-1] - 1, user_indices[-2], -1)
+                                          if result[index].kind == "response" and any(
+                                              part.part_kind == "text" for part in result[index].parts)
+                                          and not any(part.part_kind == "tool-call" for part in result[index].parts)), None)
+                if previous_response is not None:
+                    preserved[previous_response] = result[previous_response]
             archive = self.archive(ModelMessagesTypeAdapter.dump_json(messages).decode(), "Earlier conversation and tool evidence")
             pointer = ModelRequest(parts=[UserPromptPart("Earlier context archived without discarding evidence: " + archive)])
             for candidate in boundaries:
-                suffix = result[candidate:]
-                if user_index is not None and user_index < candidate:
-                    suffix = [user, *suffix]
+                suffix = [preserved[index] for index in sorted(preserved) if index < candidate]
+                suffix.extend(result[candidate:])
                 retained = [pointer, *suffix]
                 estimate = (await measure(retained))["estimated_input_tokens"]
                 if estimate < after:
