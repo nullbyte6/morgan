@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import gc
 import queue
 import re
 import sys
@@ -140,14 +141,16 @@ class VoiceService:
         self.reference_text = reference_text
         self.speed = speed
 
-        self.voice = AutoModel(model_dir=str(self.model_path), fp16=True)
+        self.voice = AutoModel(model_dir=str(self.model_path), fp16=True, text_frontend=False)
         self.sample_rate = self.voice.sample_rate
         self._reference_key = None
         self._instruction_key = None
         self._select_reference(self.voice_reference)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         self._text_queue = queue.Queue()
-        self._audio_queue = queue.Queue()
+        self._audio_queue = queue.Queue(maxsize=4)
 
         self.speaking = False
         self.audio_callback = audio_callback
@@ -198,7 +201,11 @@ class VoiceService:
                 if transcript.is_file() else self.reference_text)
         if "<|endofprompt|>" not in text:
             text = "You are a helpful assistant.<|endofprompt|>" + text
-        self.voice.add_zero_shot_spk(text, str(reference), get_assistant_identifier())
+        try:
+            self.voice.add_zero_shot_spk(text, str(reference), get_assistant_identifier())
+        finally:
+            self.voice.frontend.release_reference_sessions()
+            gc.collect()
         self._reference_prompt = text
         self.voice_reference = reference
         self._reference_key = key
@@ -273,8 +280,18 @@ class VoiceService:
                 stream=True, speed=self.speed, text_frontend=False)
 
     def _tts_loop(self) -> None:
+        idle_trimmed = False
         while True:
-            batch, text, subtitle, reference = self._text_queue.get()
+            try:
+                batch, text, subtitle, reference = self._text_queue.get(timeout=15)
+            except queue.Empty:
+                with self._state_lock:
+                    if (not idle_trimmed and self._batch.pending == 0
+                            and self._text_queue.empty() and self._audio_queue.empty()):
+                        self._release_idle_memory()
+                        idle_trimmed = True
+                continue
+            idle_trimmed = False
             generator = None
             timeline = StreamingWordTimeline(subtitle, self.sample_rate)
             sample_offset = 0
@@ -292,12 +309,20 @@ class VoiceService:
                     samples = np.asarray(audio, dtype=np.float32).reshape(-1)
                     if not samples.size:
                         continue
-                    with self._state_lock:
-                        if not batch.cancelled.is_set():
-                            batch.pending += 1
-                            self._audio_queue.put(
-                                (batch, samples, timeline, sample_offset))
-                            sample_offset += len(samples)
+                    while not batch.cancelled.is_set():
+                        with self._state_lock:
+                            if batch.cancelled.is_set():
+                                break
+                            try:
+                                self._audio_queue.put_nowait(
+                                    (batch, samples, timeline, sample_offset))
+                            except queue.Full:
+                                pass
+                            else:
+                                batch.pending += 1
+                                sample_offset += len(samples)
+                                break
+                        batch.cancelled.wait(0.05)
             except Exception as error:
                 batch.error = error
                 logger.exception(tr('voice_service.tts_inference_failed'))
@@ -306,12 +331,33 @@ class VoiceService:
                 try:
                     if generator is not None:
                         generator.close()
+                    generator = chunk = audio = samples = timeline = None
                 except Exception as error:
                     batch.error = error
                     logger.exception(tr('voice_service.tts_generator_cleanup_failed'))
                 finally:
                     self._text_queue.task_done()
                     self._complete(batch)
+                    generator = chunk = audio = samples = timeline = None
+
+    def _release_idle_memory(self):
+        try:
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            if sys.platform == "win32":
+                import ctypes
+
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+                psapi = ctypes.WinDLL("psapi", use_last_error=True)
+                psapi.EmptyWorkingSet.argtypes = [ctypes.c_void_p]
+                psapi.EmptyWorkingSet.restype = ctypes.c_int
+                if not psapi.EmptyWorkingSet(kernel32.GetCurrentProcess()):
+                    raise ctypes.WinError(ctypes.get_last_error())
+            logger.info("Voice service released idle memory")
+        except Exception:
+            logger.exception("Unable to release idle voice memory")
 
     def _play_loop(self) -> None:
         frame_size = max(1, int(self.sample_rate * 0.04))
@@ -353,6 +399,7 @@ class VoiceService:
             finally:
                 self._audio_queue.task_done()
                 self._complete(batch)
+                samples = frame = timeline = None
 
     def wait_until_done(self, batch=None) -> None:
         batch = batch if batch is not None else self.current_batch()

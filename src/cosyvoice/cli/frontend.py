@@ -35,21 +35,23 @@ class CosyVoiceFrontEnd:
                  campplus_model: str,
                  speech_tokenizer_model: str,
                  spk2info: str = '',
-                 allowed_special: str = 'all'):
+                 allowed_special: str = 'all',
+                 text_frontend: bool = True):
         self.tokenizer = get_tokenizer()
         self.feat_extractor = feat_extractor
         self.device = torch.device('cpu')
-        option = onnxruntime.SessionOptions()
-        option.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
-        option.intra_op_num_threads = 1
-        self.campplus_session = onnxruntime.InferenceSession(campplus_model, sess_options=option, providers=["CPUExecutionProvider"])
-        self.speech_tokenizer_session = onnxruntime.InferenceSession(speech_tokenizer_model, sess_options=option,
-                                                                     providers=['DmlExecutionProvider', 'CPUExecutionProvider'])
+        self.campplus_model = campplus_model
+        self.speech_tokenizer_model = speech_tokenizer_model
+        self.campplus_session = None
+        self.speech_tokenizer_session = None
         if os.path.exists(spk2info):
             self.spk2info = torch.load(spk2info, map_location=self.device, weights_only=True)
         else:
             self.spk2info = {}
         self.allowed_special = allowed_special
+        self.text_frontend = ''
+        if not text_frontend:
+            return
         self.inflect_parser = inflect.engine()
         # NOTE compatible when no text frontend tool is avaliable
         try:
@@ -73,6 +75,18 @@ class CosyVoiceFrontEnd:
                 self.text_frontend = ''
                 logging.info('no frontend is avaliable')
 
+    def _reference_session(self, model, providers):
+        option = onnxruntime.SessionOptions()
+        option.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
+        option.intra_op_num_threads = 1
+        option.enable_cpu_mem_arena = False
+        option.enable_mem_pattern = False
+        return onnxruntime.InferenceSession(model, sess_options=option, providers=providers)
+
+    def release_reference_sessions(self):
+        self.campplus_session = None
+        self.speech_tokenizer_session = None
+
 
     def _extract_text_token(self, text):
         if isinstance(text, Generator):
@@ -92,6 +106,9 @@ class CosyVoiceFrontEnd:
                 yield text_token[:, i: i + 1]
 
     def _extract_speech_token(self, prompt_wav):
+        if self.speech_tokenizer_session is None:
+            self.speech_tokenizer_session = self._reference_session(
+                self.speech_tokenizer_model, ['DmlExecutionProvider', 'CPUExecutionProvider'])
         speech = load_wav(prompt_wav, 16000)
         assert speech.shape[1] / 16000 <= 30, 'do not support extract speech token for audio longer than 30s'
         feat = whisper.log_mel_spectrogram(speech, n_mels=128)
@@ -105,6 +122,8 @@ class CosyVoiceFrontEnd:
         return speech_token, speech_token_len
 
     def _extract_spk_embedding(self, prompt_wav):
+        if self.campplus_session is None:
+            self.campplus_session = self._reference_session(self.campplus_model, ['CPUExecutionProvider'])
         speech = load_wav(prompt_wav, 16000)
         feat = kaldi.fbank(speech,
                            num_mel_bins=80,

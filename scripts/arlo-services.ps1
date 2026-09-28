@@ -219,7 +219,9 @@ Write-Host "[2/3] Checking CosyVoice..."
 
 $voiceSources = @(
     "src\init\tts_server.py", "src\init\voice_service.py",
-    "src\init\voice_profiles.py", "src\init\voice_client.py"
+    "src\init\voice_profiles.py", "src\init\voice_client.py",
+    "src\cosyvoice\cli\cosyvoice.py", "src\cosyvoice\cli\frontend.py",
+    "src\cosyvoice\cli\model.py"
 )
 $latestVoiceChange = ($voiceSources | ForEach-Object {
     (Get-Item -LiteralPath (Join-Path $root $_)).LastWriteTime

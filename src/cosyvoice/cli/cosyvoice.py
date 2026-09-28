@@ -189,7 +189,7 @@ class CosyVoice2(CosyVoice):
 
 class CosyVoice3(CosyVoice2):
 
-    def __init__(self, model_dir, load_trt=False, load_vllm=False, fp16=False, trt_concurrent=1):
+    def __init__(self, model_dir, load_trt=False, load_vllm=False, fp16=False, trt_concurrent=1, text_frontend=True):
         self.model_dir = model_dir
         self.fp16 = fp16
         if not os.path.exists(model_dir):
@@ -205,7 +205,7 @@ class CosyVoice3(CosyVoice2):
                                           '{}/campplus.onnx'.format(model_dir),
                                           '{}/speech_tokenizer_v3.onnx'.format(model_dir),
                                           '{}/spk2info.pt'.format(model_dir),
-                                          configs['allowed_special'])
+                                          configs['allowed_special'], text_frontend=text_frontend)
         self.sample_rate = configs['sample_rate']
         if torch.cuda.is_available() is False and (load_trt is True or fp16 is True):
             load_trt, fp16 = False, False
