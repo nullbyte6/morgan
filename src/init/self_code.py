@@ -27,6 +27,7 @@ import hashlib
 from typing import Annotated, Literal
 import json
 import logging
+import os
 import subprocess
 from pydantic import Field
 from src.init.visuals.browser_bridge import open_embedded_url
@@ -415,7 +416,8 @@ def update_repo() -> dict:
     try:
         status = subprocess.run(
             ["git", "-C", str(PROJECT_ROOT), "status", "--porcelain", "--untracked-files=all"],
-            capture_output=True, text=True, errors="replace", timeout=15)
+            capture_output=True, text=True, errors="replace", timeout=15,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         if status.returncode:
             return ActionResult(Outcome.FAILED, status.stderr, "git_status_failed").payload()
         if status.stdout.strip():

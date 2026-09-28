@@ -34,7 +34,8 @@ def _run_git(repo_path: str, arguments: list[str]) -> subprocess.CompletedProces
         encoding='utf-8',
         errors='surrogateescape',
         check=False,
-        timeout=10
+        timeout=10,
+        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
     )
 
 

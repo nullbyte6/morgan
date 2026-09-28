@@ -16,6 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -65,6 +66,7 @@ class GitBranchIndicator(QToolButton):
             result = subprocess.run(
                 ["git", "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD"],
                 capture_output=True, text=True, errors="replace", timeout=1,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
             if result.returncode == 0:
                 branch = result.stdout.strip()
@@ -72,6 +74,7 @@ class GitBranchIndicator(QToolButton):
                 result = subprocess.run(
                     ["git", "-C", path, "rev-parse", "--short", "HEAD"],
                     capture_output=True, text=True, errors="replace", timeout=1,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                 )
                 if result.returncode == 0:
                     branch = f"detached:{result.stdout.strip()}"

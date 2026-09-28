@@ -520,6 +520,7 @@ def run_git(repository: str, arguments: list[str]) -> dict:
         result = subprocess.run(
             ["git", "-C", str(repository_path), "--no-pager", *arguments],
             capture_output=True, text=True, errors="replace", timeout=GIT_TIMEOUT_SECONDS,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             env=environment)
         return ActionResult(Outcome.SUCCESS if result.returncode == 0 else Outcome.FAILED,
                             {"stdout": result.stdout, "stderr": result.stderr,
@@ -1033,7 +1034,8 @@ def kill_process(process: str, force: bool = False,
 
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True, errors="replace")
+            command, capture_output=True, text=True, errors="replace",
+            creationflags=subprocess.CREATE_NO_WINDOW)
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
             return tr('brain.error_terminating', description=description, value1=detail or tr('brain.taskkill_failed'))
@@ -1088,6 +1090,7 @@ def cancel_shutdown() -> str:
             capture_output=True,
             text=True,
             errors="replace",
+            creationflags=subprocess.CREATE_NO_WINDOW,
         )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip()
@@ -1169,7 +1172,8 @@ def get_applications() -> list[dict[str, str]]:
             ["powershell.exe", "-NoProfile", "-Command", "Get-StartApps | "
                                                          "Select-Object Name,AppID | "
                                                          "ConvertTo-Json -Compress"],
-            capture_output=True, text=True, encoding="utf-8")
+            capture_output=True, text=True, encoding="utf-8",
+            creationflags=subprocess.CREATE_NO_WINDOW)
         if result.returncode == 0:
             data = json.loads(result.stdout or "[]")
             start_apps = data if isinstance(data, list) else [data]

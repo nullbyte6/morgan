@@ -88,7 +88,7 @@ class DebugConsole:
     def start(self):
         self.log_path.touch(exist_ok=True)
 
-        if get_assistant_environment("EXTERNAL_CONSOLE") == "1":
+        if getattr(sys, "frozen", False) or get_assistant_environment("EXTERNAL_CONSOLE") == "1":
             return
 
         log_path = str(self.log_path).replace("'", "''")

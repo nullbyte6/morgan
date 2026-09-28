@@ -351,6 +351,7 @@ class Assistant:
                 ["git", "-C", directory, "symbolic-ref", "--quiet", "--short",
                  "HEAD"],
                 capture_output=True, text=True, errors="replace", timeout=2,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
             if result.returncode == 0:
                 branch = result.stdout.strip()
@@ -358,6 +359,7 @@ class Assistant:
                 result = subprocess.run(
                     ["git", "-C", directory, "rev-parse", "--short", "HEAD"],
                     capture_output=True, text=True, errors="replace", timeout=2,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                 )
                 if result.returncode == 0:
                     branch = f"detached:{result.stdout.strip()}"
