@@ -652,18 +652,9 @@ class Assistant:
         task_context = (session.context if session is not None else
                         SessionContext(uuid.uuid4().hex, HOME_PATH / ".log"))
         previous = self._active_task_controller
-        if (previous is not None
-            and previous.state.status in {"interrupted", "waiting", "blocked", "limit_reached"}
-            and not previous.state.can_finish_direct()):
-            controller = previous.resume(
-                context=task_context,
-                cancel_event=cancel_event,
-                prompt=prompt)
-        else:
-            controller = TaskControl(
-                prompt,
-                task_context,
-                cancel_event)
+        pending_task = previous if (previous is not None and previous.state.status in {
+            "interrupted", "waiting", "blocked", "limit_reached"}) else None
+        controller = TaskControl(prompt, task_context, cancel_event, pending_task=pending_task)
 
         self._active_task_controller = controller
         from src.init.config import load_dev_file
@@ -681,7 +672,13 @@ class Assistant:
             controller.state.title = normalize_task_title(task_title)
         self.task_state = controller.state
         controller.on_action = on_phase
-        controller.on_activity = on_activity
+
+        def publish_task_activity(activity):
+            self.task_state = controller.state
+            if on_activity is not None:
+                on_activity(activity)
+
+        controller.on_activity = publish_task_activity
         controller.on_task_title = on_task_title
         controller.publish_activity()
 
@@ -1013,7 +1010,7 @@ class Assistant:
             return text, safe
 
         if controller.state.status == "complete":
-            self._active_task_controller = None
+            self._active_task_controller = controller.pending_task
             self.task_state = None
 
         return (

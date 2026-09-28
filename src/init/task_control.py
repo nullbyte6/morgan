@@ -70,7 +70,7 @@ class TaskModelRetry(Exception):
 
 
 class TaskControl(AbstractCapability):
-    def __init__(self, objective, context, cancel_event):
+    def __init__(self, objective, context, cancel_event, pending_task=None):
         super().__init__()
         self.state = TaskState(objective)
         self.context = context
@@ -78,6 +78,7 @@ class TaskControl(AbstractCapability):
         self.journal = TaskJournal(self.trace_path, self.state)
         self.state.trace = self.trace
         self.cancel_event = cancel_event
+        self.pending_task = pending_task
         self.messages = []
         self.context_budget = ContextBudget(context, trace=self.trace)
         self.artifacts = self.context_budget.artifacts
@@ -105,7 +106,7 @@ class TaskControl(AbstractCapability):
         self.toolset = FunctionToolset()
         self.control_tools = {function.__name__: function for function in (
             self.task_checkpoint, self.task_finish, self.task_defer, self.task_request_input, self.task_resolve_dependency,
-            self.task_read_evidence, self.task_read_state, self.task_select_tools)}
+            self.task_read_evidence, self.task_read_state, self.task_select_tools, self.task_resume)}
         for function in self.control_tools.values():
             self.toolset.add_function(function, sequential=True)
         self.trace("start")
@@ -139,6 +140,12 @@ class TaskControl(AbstractCapability):
 TaskControl validates execution and evidence, never strategy or textual progress.
 For greetings, conversation or short explanations needing no external work, answer directly in plain text.
 Do not create a task contract or call supervisor tools for those answers.
+A pending_task in the snapshot belongs to an earlier request, not the current task contract.
+Read task_read_state(field='pending_task') when its preserved objective needs more context.
+Resume it with task_resume(task_id=...) only when the current user request continues that task,
+explicitly asks to resume it, or supplies the information it requested. Otherwise handle the current
+request as a new task; do not complete an earlier task's criteria to answer an unrelated request.
+Decide whether to resume before establishing a contract or doing external work.
 Before any tool work, establish the single task contract through task_checkpoint.
 For implementation tasks, declare kind='mutation' even when the first phase is inspect.
 For example task_checkpoint(kind='read_only', phase='inspect', criteria=['Review tool contracts'],
@@ -252,6 +259,40 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.set_task_title(task_title)
         return result
 
+    def task_resume(self, task_id: str) -> dict:
+        """Resume the preserved task only when the current request continues its objective."""
+        previous = self.pending_task
+        if previous is None or previous.state.id != task_id:
+            return control_rejection("Choose the pending task shown in the snapshot.", "task_id",
+                                     previous.state.id if previous is not None else None)
+        if self.state.kind is not None or not self.state.can_finish_direct():
+            return control_rejection("Choose whether to resume before beginning a new task.",
+                                     "task_id", "An unused current task")
+        if previous.state.status not in {Lifecycle.INTERRUPTED, Lifecycle.WAITING,
+                                         Lifecycle.BLOCKED, Lifecycle.LIMIT_REACHED}:
+            return control_rejection("The pending task is no longer resumable.", "task_id",
+                                     "A suspended task")
+        prompt = self.state.objective
+        self.trace("task_routed", decision="resume", resumed_task_id=task_id)
+        self.state = previous.state
+        self.trace_path = previous.trace_path
+        self.journal = previous.journal
+        self.state.trace = self.trace
+        self.pending_task = previous.pending_task
+        self.read_cache = previous.read_cache
+        self.receipts.update(previous.receipts)
+        self.retrieved_pages = previous.retrieved_pages
+        self.state_page_delivery = previous.state_page_delivery
+        self.artifacts.update(previous.artifacts)
+        self.output_surface = previous.output_surface
+        self.output_title = previous.output_title
+        self.resume(self.context, self.cancel_event, prompt=prompt)
+        self.publish_activity("resumed")
+        if self.state.title and self.on_task_title is not None:
+            self.on_task_title(self.state.title)
+        return {"accepted": True, "outcome": Outcome.SUCCESS, "task_id": self.state.id,
+                "requirements": self.state.requirements()}
+
     def set_task_title(self, title):
         title = normalize_task_title(title)
         if title and not self.state.title:
@@ -342,6 +383,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
                             "ancillary": TOOL_SPECS[name].ancillary if name in TOOL_SPECS else False}
                      for name, tool in self.available_tools.items()
                      if not query or query.casefold() in (name + " " + (tool.description or "")).casefold()}
+        elif field == "pending_task":
+            value = self.pending_task.state.snapshot(include_evidence=False) if self.pending_task is not None else {}
         elif field == "evidence":
             value = {key: self.evidence_reference(item) for key, item in self.state.evidence.items()
                      if not query or query.casefold() in key.casefold()}
@@ -352,7 +395,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
                     return control_rejection("Queries require a dictionary field", "query", "Collection keys")
                 value = {key: item for key, item in value.items() if query.casefold() in key.casefold()}
         else:
-            return control_rejection("Unknown state field", "field", [*snapshot, "tools", "evidence"])
+            return control_rejection("Unknown state field", "field", [*snapshot, "tools", "pending_task", "evidence"])
         try:
             page = self.page(encoded(value), offset, limit, digest)
         except ValueError as error:
@@ -810,6 +853,16 @@ and retain its consent checks. cd requests use change_directory and Git requests
         active = self.available_tools.keys() if self.selected_tools is None else (
             self.selected_tools & self.available_tools.keys())
         view["active_tool_names"] = sorted(active | self.control_tools.keys())
+        if self.pending_task is not None:
+            pending = self.pending_task.state
+            view["pending_task"] = {"id": pending.id, "objective": pending.objective,
+                                    "title": pending.title, "status": pending.status,
+                                    "notice": pending.notice}
+            for field in ("objective", "notice"):
+                raw = encoded(view["pending_task"][field])
+                if len(raw) > 1200:
+                    view["pending_task"][field] = {"characters": len(raw), "read": {
+                        "tool": "task_read_state", "arguments": {"field": "pending_task"}}}
         if self.selected_tools is not None:
             view["tool_catalog"] = {"names": sorted(self.available_tools),
                                     "read": {"tool": "task_read_state", "arguments": {"field": "tools"}},

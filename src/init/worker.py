@@ -281,8 +281,7 @@ class AssistantWorker(QObject):
                 self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
-            previous = getattr(self.assistant, "_active_task_controller", None)
-            task_title = previous.state.title if previous is not None else ""
+            task_title = ""
 
             def receive_task_title(title):
                 nonlocal task_title

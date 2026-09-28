@@ -106,7 +106,8 @@ class TaskPresentation(QObject):
     def on_activity(self, turn_id, activity):
         if (turn_id != self.view.turn_id or not self.view.active
                 or not isinstance(activity, TaskActivity)
-                or self.view.task_id and activity.task_id != self.view.task_id):
+                or (self.view.task_id and activity.task_id != self.view.task_id
+                    and activity.event != "resumed")):
             return
         started = self.view.started + (activity.event == "started")
         completed = self.view.completed + (activity.event == "finished")
