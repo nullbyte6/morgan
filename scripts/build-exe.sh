@@ -101,6 +101,9 @@ import sys
 from pathlib import Path
 path = Path(sys.argv[1])
 text = path.read_text(encoding='utf-8')
+text = text.replace('    noarchive=False,',
+    "    module_collection_mode={'scipy.stats._distn_infrastructure': 'py'},\n"
+    "    noarchive=False,")
 text = text.replace('pyz = PYZ(a.pure)',
     "a.binaries = [entry for entry in a.binaries if entry[0].lower() not in "
     "{'icuuc.dll', 'icuin.dll', 'icu.dll'}]\n"

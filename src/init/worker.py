@@ -75,6 +75,7 @@ class VoiceInputWorker(QThread):
             self.audio_wav = recording_to_wav(*recording)
         except Exception as error:
             self.error = str(error)
+            logging.getLogger("assistant.voice").exception("Voice input failed")
 
     def run_live(self):
         import sounddevice as sound
