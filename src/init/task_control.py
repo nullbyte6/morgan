@@ -488,7 +488,9 @@ and retain its consent checks. cd requests use change_directory and Git requests
         delivery = {"content_preserved": True, **self.page_delivery(page, previous)}
         fields[page["field"]] = delivery
         if delivery["delivered_characters"] > previous.get("delivered_characters", 0):
-            self.retrieved_pages.add(("evidence", item.id, page["digest"], page["offset"], len(page["content"])))
+            operation = fingerprint({"tool": item.tool, "arguments": item.arguments, "revisions": item.revisions})
+            self.retrieved_pages.add(("evidence", operation, page["field"], page["digest"],
+                                      page["offset"], len(page["content"])))
         return copy.deepcopy(delivery)
 
     def evidence_next_action(self, item, delivery, page=None):
@@ -736,7 +738,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.state.refresh(before)
             key = self._inspection_key(name, arguments, resources, before) if not spec.effectful else None
             cached = self.state.evidence.get(self.read_cache.get(key)) if key else None
-            if cached is not None and not (self.state.kind == "mutation" and self.state.role == "verify") and self.state.valid_evidence(
+            if cached is not None and (self.state.kind != "mutation" or self.state.role != "verify"
+                                       or cached.role == "verify") and self.state.valid_evidence(
                     [cached.id], resources, inspection=True):
                 self.trace("observation_reused", call_id=call_id, evidence_id=cached.id, inspection_key=key)
                 return self._return(name, arguments, call_id, {**cached.result, "resources": cached.revisions},
@@ -1053,13 +1056,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.trace("task_stall_warning", consecutive_requests=self._task_stalls)
         if self.state.output_recovery:
             self.state.output_recovery["requirements"] = self.state.requirements()
-            progress = fingerprint({
-                "kind": self.state.kind, "criteria": self.state.criteria,
-                "evidence": self.state.evidence, "obligations": self.state.obligations,
-                "dependencies": self.state.dependencies, "inspections": self.state.inspections,
-                "findings": self.state.findings, "revisions": self.state.revisions,
-                "changed_at": self.state.changed_at, "restrictions": self.state.restrictions,
-                "retrieved_pages": len(self.retrieved_pages)})
+            progress = fingerprint({"task": progress, "obligations": self.state.obligations,
+                                    "dependencies": self.state.dependencies})
             self._recovery_stalls = self._recovery_stalls + 1 if progress == self._recovery_progress else 0
             if self._recovery_progress is not None and progress != self._recovery_progress:
                 self.recovery_attempts = 0
