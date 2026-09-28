@@ -91,7 +91,8 @@ register("create_file edit_file append_file replace_in_file write_binary_file de
 register("git_status git_diff git_log git_list_branches", ToolSpec(False, "git", path_argument="repository"))
 register("git_add git_commit git_fetch git_pull git_push git_switch", ToolSpec(True, "git", path_argument="repository"))
 register("open_file open_directory open_browser get_repo_lnk open_current_session_log open_in_editor "
-         "render_flowchart minimize_all_windows take_screenshot", ToolSpec(True, "presentation"))
+         "minimize_all_windows take_screenshot", ToolSpec(True, "presentation"))
+register("render_flowchart", ToolSpec(True, "presentation", ancillary=True, verification_capable=True))
 
 
 def file_resource(path):

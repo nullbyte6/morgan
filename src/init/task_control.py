@@ -160,6 +160,10 @@ maps effect obligation IDs to {'finding': 'observed reconciliation', 'evidence':
 For read_only, current successful inspection IDs can satisfy completed; you do not need to
 repeat unchanged reads in phase verify. task_finish(completed={exact_criterion: [evidence IDs]})
 can certify remaining criteria and finish. Mutations still need independent verification.
+For a diagram that only visualizes supplied information, use kind='read_only' and render_flowchart.
+Its successful result confirms the diagram opened and can satisfy the diagram criterion with its
+evidence ID, using resources=[] or ['domain:presentation']. Do not substitute Mermaid, ASCII or
+prose for a requested interactive diagram. If a mutation criterion needs a diagram, render it in phase='verify'.
 One explicit verification contract can be shared by new criteria with the same check and resources.
 Prefer resources=[] until actual source paths have been discovered; never invent dependencies.
 verification keys otherwise match criteria exactly, without a nested 'criteria' wrapper. resolutions
@@ -673,19 +677,23 @@ and retain its consent checks. cd requests use change_directory and Git requests
                     result = ActionResult(Outcome.UNCERTAIN, result.data, "resource_changed_during_observation")
             effects = changed if spec.effectful and not spec.ancillary else []
             no_execution = result.outcome in {Outcome.REJECTED, Outcome.WAITING, Outcome.EXTERNAL_BLOCKER}
-            uncertain = spec.effectful and not no_execution
+            confirmed_presentation = (spec.domain == "presentation" and spec.ancillary
+                                      and spec.verification_capable and result.successful)
+            uncertain = spec.effectful and not no_execution and not confirmed_presentation
             for resource in declared_resources:
                 if not resource.startswith(("file:", "entry:", "domain:git:")) and spec.effectful and not no_execution and (
                         not spec.ancillary or resource == "domain:presentation"):
                     after[resource] = str(self.state.sequence + 1)
-                    effects.append(resource)
+                    if not confirmed_presentation:
+                        effects.append(resource)
             if spec.path_argument and not spec.domain and result.successful and all(value is not None for value in after.values()):
                 uncertain = False
             effect_scope = list(dict.fromkeys([*declared_resources, *effects])) if uncertain else effects
             if spec.ancillary or result.successful and spec.verification_capable:
                 effect_scope = list(dict.fromkeys([*effects, *[resource for resource in declared_resources if after[resource] is None]]))
             item = self.state.observe(name, arguments, result, call_id, after,
-                                      effectful=spec.effectful, effects=effects, uncertain=uncertain,
+                                      effectful=spec.effectful and not confirmed_presentation,
+                                      effects=effects, uncertain=uncertain,
                                       effect_scope=effect_scope, ancillary=spec.ancillary,
                                       verification_capable=not spec.effectful or spec.verification_capable)
             if not spec.effectful and result.successful:
