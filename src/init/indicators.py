@@ -25,6 +25,7 @@ from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
+from src.init.config import PermissionMode
 from src.init.lang import tr
 
 
@@ -162,3 +163,66 @@ class PrivacyIndicator(QPushButton):
     def private_toggle(self, worker):
         worker.session.private = False
         self.hide()
+
+
+class PermissionSelector(QToolButton):
+    mode_changed = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("permissionSelector")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAutoRaise(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.mode = PermissionMode.ASK
+        self.options = QFrame(self, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
+                              | Qt.WindowType.NoDropShadowWindowHint)
+        self.options.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        options_layout = QHBoxLayout(self.options)
+        options_layout.setContentsMargins(0, 0, 0, 0)
+        track = QFrame(self.options)
+        track.setObjectName("permissionOptions")
+        track_layout = QHBoxLayout(track)
+        track_layout.setContentsMargins(3, 3, 3, 3)
+        track_layout.setSpacing(2)
+        options_layout.addWidget(track)
+        self.group = QButtonGroup(self)
+        for mode in PermissionMode:
+            button = QPushButton(mode.name, track)
+            button.setObjectName("permissionOption")
+            button.setCheckable(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setProperty("mode", mode.value)
+            self.group.addButton(button)
+            track_layout.addWidget(button)
+        self.group.buttonClicked.connect(self._select)
+        self.clicked.connect(self.show_options)
+        self.set_mode(self.mode)
+
+    def set_mode(self, mode):
+        self.mode = PermissionMode(mode)
+        for button in self.group.buttons():
+            button.setChecked(button.property("mode") == self.mode.value)
+        self.refresh_language()
+
+    def refresh_language(self):
+        self.setText(f" {tr('ui.permissions')} · {self.mode.name}  ")
+        self.setToolTip(tr("ui.permissions_hint"))
+        self.setAccessibleName(tr("ui.permissions"))
+        self.updateGeometry()
+
+    def show_options(self):
+        self.options.adjustSize()
+        size = self.options.size()
+        self.options.move(self.mapToGlobal(QPoint((self.width() - size.width()) // 2,
+                                                  -size.height() - 4)))
+        self.options.show()
+
+    def _select(self, button):
+        self.options.hide()
+        mode = PermissionMode(button.property("mode"))
+        if mode is not self.mode:
+            self.set_mode(mode)
+            self.mode_changed.emit(mode.value)

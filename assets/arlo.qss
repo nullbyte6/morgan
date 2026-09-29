@@ -269,6 +269,43 @@ QComboBox#modelSelector:on {
     border: 2px solid #8aadf4;
 }
 
+QToolButton#permissionSelector {
+    background-color: transparent;
+    border: 2px solid #494d64;
+    border-radius: 16px;
+    color: #cad3f5;
+    padding: 4px 10px;
+}
+
+QToolButton#permissionSelector:hover,
+QToolButton#permissionSelector:pressed {
+    border: 2px solid #8aadf4;
+}
+
+QFrame#permissionOptions {
+    background-color: #24273a;
+    border: 2px solid #494d64;
+    border-radius: 16px;
+}
+
+QPushButton#permissionOption {
+    background-color: transparent;
+    border: none;
+    border-radius: 12px;
+    color: #a5adcb;
+    padding: 4px 12px;
+}
+
+QPushButton#permissionOption:hover {
+    background-color: #363a4f;
+    color: #cad3f5;
+}
+
+QPushButton#permissionOption:checked {
+    background-color: #494d64;
+    color: #cad3f5;
+}
+
 QLabel#logTitle {
     color: #cad3f5;
     font-size: 24px;

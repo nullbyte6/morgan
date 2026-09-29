@@ -35,6 +35,8 @@
   "ui.model": "Model",
   "ui.model_hint": "Main Ollama model. Applies from the next message.",
   "ui.model_locked": "The main model is set by the MODEL environment variable.",
+  "ui.permissions": "Permissions",
+  "ui.permissions_hint": "ASK: confirm each command; no answer within 30 s rejects it. AUTO: approve confirmations automatically; all other safeguards still apply.",
   "ui.model_unavailable": "The model {model} is not installed or cannot be used as the main model.",
   "ui.input": "Write a message...",
   "ui.steering_input": "Write a correction and press Enter to interrupt...",

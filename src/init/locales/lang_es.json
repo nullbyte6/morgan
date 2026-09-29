@@ -35,6 +35,8 @@
   "ui.model": "Modelo",
   "ui.model_hint": "Modelo principal de Ollama. Se aplica desde el siguiente mensaje.",
   "ui.model_locked": "El modelo principal está fijado por la variable de entorno MODEL.",
+  "ui.permissions": "Permisos",
+  "ui.permissions_hint": "ASK: confirma cada comando; sin respuesta en 30 s se rechaza. AUTO: aprueba las confirmaciones automáticamente; las demás protecciones siguen activas.",
   "ui.model_unavailable": "El modelo {model} no está instalado o no puede usarse como modelo principal.",
   "ui.input": "Escribe un mensaje...",
   "ui.steering_input": "Escribe una corrección y pulsa Enter para interrumpir...",

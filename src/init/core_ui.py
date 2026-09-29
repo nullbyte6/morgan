@@ -48,7 +48,7 @@ from src.init.orb_subtitles import MascotSubtitleBubble
 from src.init.audio_visualizer import AudioVisualizer
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
-from src.init.indicators import (GitBranchIndicator, ModelSelector,
+from src.init.indicators import (GitBranchIndicator, ModelSelector, PermissionSelector,
                                  PrivacyIndicator, WorkingDirectory)
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
@@ -85,7 +85,7 @@ WORKSPACE_VIEW_CONFIG = {
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
 from src.init.brain import MODEL_OVERRIDE, kill_self
-from src.init.config import DEFAULTS, HOME_PATH, load_dev_file, load_config
+from src.init.config import DEFAULTS, HOME_PATH, load_dev_file, load_config, save_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
 from src.init.logs import LogView
@@ -192,6 +192,10 @@ class AssistantWindow(DesktopWindow):
         self.model_selector = ModelSelector(self)
         self.model_switching = False
         self.model_selector.model_selected.connect(self.request_model)
+        self.permission_selector = PermissionSelector(self)
+        self.permission_selector.set_mode(load_config()["permission_mode"])
+        self.worker.set_permission_mode(self.permission_selector.mode)
+        self.permission_selector.mode_changed.connect(self.set_permission_mode)
 
         self.privacy_indicator.clicked.connect(
             lambda: self.privacy_indicator.private_toggle(self.worker)
@@ -422,6 +426,7 @@ class AssistantWindow(DesktopWindow):
         indicator_row.addWidget(self.branch_indicator)
         indicator_row.addWidget(self.privacy_indicator)
         indicator_row.addStretch()
+        indicator_row.addWidget(self.permission_selector)
         indicator_row.addWidget(self.model_selector)
         self.indicator_row = QWidget()
         self.indicator_row.setSizePolicy(
@@ -1028,6 +1033,7 @@ class AssistantWindow(DesktopWindow):
             self.command_palette.refresh_language()
         self.task_progress.refresh_language(language)
         self.activity_trail.refresh_language(language)
+        self.permission_selector.refresh_language()
         self.refresh_settings_workspaces()
         self.attachment_tray.refresh()
         self.set_status(self.status_key)
@@ -1154,6 +1160,17 @@ class AssistantWindow(DesktopWindow):
             orb.set_speech_pulse_enabled(enabled)
         self.settings.setValue("orb_speech_pulse", enabled)
         self.refresh_settings_workspaces()
+
+    @Slot(str)
+    def set_permission_mode(self, mode):
+        self.worker.set_permission_mode(mode)
+        try:
+            config = load_config()
+            config["permission_mode"] = mode
+            save_config(config)
+        except (OSError, ValueError):
+            logging.getLogger("assistant.permissions").exception(
+                "Unable to persist permission mode")
 
     @Slot(bool)
     def toggle_ephemeral_steps(self, enabled: bool):
