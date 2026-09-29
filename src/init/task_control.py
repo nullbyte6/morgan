@@ -22,14 +22,15 @@ import asyncio
 import copy
 import hashlib
 import inspect
+import json
 import logging
 import uuid
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, validate_call
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError, validate_call
 from pydantic_ai import ToolReturn
 from pydantic_ai.capabilities import AbstractCapability
 from pydantic_ai.exceptions import ModelRetry
@@ -46,11 +47,23 @@ from .task_trace import (TaskJournal, active_model_request, measurement_error, r
 from .task_activity import TaskActivity, tool_activity
 
 
+def decoded_list(value):
+    if isinstance(value, str) and value.strip().startswith("["):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return value
+    return value
+
+
+TextList = Annotated[list[str], BeforeValidator(decoded_list)]
+
+
 def select_schemas(names, available, control):
     selected = [name for name in dict.fromkeys(names) if name in available and name not in control]
     for name in tuple(selected):
         spec = TOOL_SPECS.get(name)
-        if spec is None or spec.effectful or not spec.path_argument:
+        if spec is None or not spec.path_argument:
             continue
         selected.extend(other for other, other_spec in TOOL_SPECS.items()
                         if other in available and other not in selected and other not in control
@@ -120,7 +133,7 @@ class TaskControl(AbstractCapability):
         self.toolset = FunctionToolset()
         self.control_tools = {function.__name__: function for function in (
             self.task_checkpoint, self.task_finish, self.task_defer, self.task_request_input, self.task_resolve_dependency,
-            self.task_read_evidence, self.task_read_state, self.task_select_tools, self.task_resume)}
+            self.task_read_evidence, self.task_read_state, self.task_select_tools, self.task_resume, self.task_cancel)}
         for function in self.control_tools.values():
             self.toolset.add_function(function, sequential=True)
         self.trace("start")
@@ -154,6 +167,7 @@ class TaskControl(AbstractCapability):
 TaskControl validates execution and evidence, never strategy or textual progress.
 For greetings, conversation or short explanations needing no external work, answer directly in plain text.
 Do not create a task contract or call supervisor tools for those answers.
+When the user asks to cancel or stop the current task, call task_cancel(reason=...) instead of answering in text.
 A pending_task in the snapshot belongs to an earlier request, not the current task contract.
 Read task_read_state(field='pending_task') when its preserved objective needs more context.
 Resume it with task_resume(task_id=...) only when the current user request continues that task,
@@ -237,12 +251,12 @@ An explicit pwsh: request supplies an exact shell command; use execute_command w
 and retain its consent checks. cd requests use change_directory and Git requests use Git tools."""
 
     def task_checkpoint(self, phase: Literal["inspect", "execute", "verify"],
-                        criteria: list[str], verification: dict[str, VerificationContract] | None = None,
+                        criteria: TextList, verification: dict[str, VerificationContract] | None = None,
                         completed: dict[str, list[str]] | None = None,
-                        decisions: list[str] | None = None, strategy: str = "",
-                        resolutions: dict[str, EvidenceFinding] | None = None, reopen: list[str] | None = None,
+                        decisions: TextList | None = None, strategy: str = "",
+                        resolutions: dict[str, EvidenceFinding] | None = None, reopen: TextList | None = None,
                         kind: Literal["read_only", "mutation"] | None = None,
-                        resources: list[str] | None = None, findings: list[EvidenceFinding] | None = None,
+                        resources: TextList | None = None, findings: list[EvidenceFinding] | None = None,
                         task_title: str = "") -> dict:
         """Apply an atomic task contract. Verification entries contain method/resources;
         resolutions contain finding/evidence. phase is the next action's role, not lifecycle.
@@ -345,6 +359,16 @@ and retain its consent checks. cd requests use change_directory and Git requests
         """Propose a supported external dependency affecting an outstanding obligation."""
         self.refresh_resources()
         return self.state.defer(status, obligation, dependency, evidence, required_change)
+
+    def task_cancel(self, reason: str) -> dict:
+        """Cancel this task only when the user explicitly asks to cancel or stop it.
+        reason is the short confirmation shown to the user, in the user's language."""
+        if self.state.status != Lifecycle.ACTIVE or not reason.strip():
+            return control_rejection("Only an active task can be cancelled, with a confirmation for the user.",
+                                     "reason", "A short confirmation in the user's language")
+        self.state.suspend(Lifecycle.CANCELLED, reason.strip())
+        self.publish_activity()
+        return {"accepted": True, "outcome": Outcome.SUCCESS, "status": self.state.status}
 
     def task_resolve_dependency(self, evidence: list[str], finding: str) -> dict:
         """Clear a resumed dependency using new observations or actual new user input."""
@@ -640,6 +664,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
                     "reason": "This unchanged query already returned no matches. Discover source paths or search a different single symbol."}
             elif name == "read_code" and "next_action" not in payload:
                 payload["inspection_notice"] = "This preserved range was fully delivered. Preserve findings with its evidence ID and inspect other relevant source."
+            elif "next_action" not in payload:
+                payload["inspection_notice"] = "This unchanged observation was already delivered with the same content. Do not repeat it; use it and inspect other resources."
         receipt_evidence = evidence_id
         if name == "task_read_evidence":
             receipt_evidence = payload.get("evidence", {}).get("evidence_id", "")
@@ -937,14 +963,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         view["active_tool_names"] = sorted(active | self.control_tools.keys())
         if self.pending_task is not None:
             pending = self.pending_task.state
-            view["pending_task"] = {"id": pending.id, "objective": pending.objective,
-                                    "title": pending.title, "status": pending.status,
-                                    "notice": pending.notice}
-            for field in ("objective", "notice"):
-                raw = encoded(view["pending_task"][field])
-                if len(raw) > 1200:
-                    view["pending_task"][field] = {"characters": len(raw), "read": {
-                        "tool": "task_read_state", "arguments": {"field": "pending_task"}}}
+            view["pending_task"] = {"id": pending.id, "title": pending.title, "status": pending.status,
+                                    "read": {"tool": "task_read_state", "arguments": {"field": "pending_task"}}}
         if self.selected_tools is not None:
             view["tool_catalog"] = {"names": sorted(self.available_tools),
                                     "read": {"tool": "task_read_state", "arguments": {"field": "tools"}},
@@ -1064,7 +1084,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
     async def before_model_request(self, ctx, request_context):
         self.check_cancelled()
         self.messages = ctx.messages
-        if self.state.status in {Lifecycle.WAITING, Lifecycle.BLOCKED, Lifecycle.LIMIT_REACHED}:
+        if self.state.status in {Lifecycle.WAITING, Lifecycle.BLOCKED, Lifecycle.LIMIT_REACHED, Lifecycle.CANCELLED}:
             raise TaskStopped(self.state.notice)
         self.state.requests += 1
         self.refresh_resources()
@@ -1197,6 +1217,16 @@ and retain its consent checks. cd requests use change_directory and Git requests
     def accept_output(self, *, truncated=False, output=None):
         self.check_cancelled()
         self.refresh_resources()
+        if self.state.status == Lifecycle.CANCELLED:
+            self.trace("output_assessment", accepted=True, requirements=[])
+            return True
+        if (not truncated and self.state.status == Lifecycle.ACTIVE and self.state.kind in {"read_only", "mutation"}
+                and not self.state.complete()):
+            latest = max(self.state.evidence.values(), key=lambda item: item.sequence, default=None)
+            completed = self.state.available_evidence() if latest is None or latest.tool != "user_input" else {}
+            if completed and self.state.checkpoint(self.state.role, [], {}, completed, [], "", {}, [], self.state.kind,
+                                                   self.state.role_resources)["accepted"]:
+                self.trace("evidence_auto_certified", completed=completed)
         if not truncated and not self.state.output_recovery and self.state.status == Lifecycle.ACTIVE:
             if self.state.kind in {None, "direct"} and self.state.can_finish_direct():
                 self.state.finish(direct=True)
@@ -1277,7 +1307,7 @@ class ExecutionControl(AbstractCapability):
         self.control_tools = {}
         for name in ("task_checkpoint", "task_finish", "task_defer", "task_request_input",
                      "task_resolve_dependency", "task_read_evidence", "task_read_state",
-                     "task_select_tools", "task_resume"):
+                     "task_select_tools", "task_resume", "task_cancel"):
             method = getattr(TaskControl, name)
             def make_proxy(function):
                 def proxy(**values):

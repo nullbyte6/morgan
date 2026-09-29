@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 
-from .task_effects import contains
+from .task_effects import TOOL_SPECS, contains
 from .task_outcomes import ActionResult, Outcome
 
 
@@ -50,6 +50,9 @@ def encoded(value):
 
 def fingerprint(value):
     return hashlib.sha256(encoded(value).encode("utf-8")).hexdigest()
+
+
+GATED_REJECTIONS = {"contract_required", "mutation_contract_required"}
 
 
 def control_rejection(reason, field, expected, *, requirements=None, code="invalid_checkpoint"):
@@ -171,12 +174,22 @@ class TaskState:
             return self.evidence[call_id]
         self.sequence += 1
         self.refresh(revisions)
+        if (role is None and not effectful and self.kind == "mutation" and verification_capable is not False
+                and result.outcome in {Outcome.SUCCESS, Outcome.NEGATIVE} and any(
+                    obligation.kind == "verify" and obligation.action != call_id and any(
+                        contains(scope, resource) or contains(resource, scope)
+                        for scope in obligation.resources for resource in revisions)
+                    for obligation in self.obligations.values())):
+            role = "verify"
         affected = list(effect_scope if effect_scope is not None else revisions if uncertain else effects) if effectful else []
         item = Evidence(call_id, name, arguments, result.outcome, role or self.role, self.sequence,
                         observed_at or datetime.now(timezone.utc).isoformat(), dict(revisions), effectful,
                         fingerprint(result.payload()), result.payload(), affected,
                         not effectful if verification_capable is None else verification_capable)
         self.evidence[call_id] = item
+        if result.code not in GATED_REJECTIONS:
+            self.restrictions = {key: value for key, value in self.restrictions.items()
+                                 if value["tool"] != name or value["code"] not in GATED_REJECTIONS}
         if effectful and (effects or uncertain):
             for resource in affected:
                 self.changed_at[resource] = self.sequence
@@ -352,19 +365,45 @@ class TaskState:
                            if resource.startswith(("file:", "entry:")) and self.revisions.get(resource) == "missing"
                            and not any(contains(scope, resource) or contains(resource, scope)
                                        for scope in self.changed_at)]
+                evidence_ids = self.criterion_evidence(criterion)
                 result.append({"code": "criterion_evidence_required", "criterion": name,
                                "method": criterion.verification, "resources": criterion.resources,
-                               "evidence_ids": [ref for ref, item in self.evidence.items()
-                                                if self.valid_evidence([ref], [], inspection=self.kind == "read_only")
-                                                and (not criterion.resources or any(
-                                                    contains(resource, target) or contains(target, resource)
-                                                    for resource in item.revisions for target in criterion.resources))],
+                               "evidence_ids": evidence_ids,
                                "repair": ("If these paths were declared incorrectly, use task_checkpoint with reopen=[criterion] and verification keyed by the exact criterion to replace missing resources with discovered paths."
-                                          if missing else "Cite current evidence IDs in completed; read_only accepts inspection evidence."),
+                                          if missing else "Valid evidence exists: cite evidence_ids for this criterion in completed through task_finish(completed=..., output=...)."
+                                          if evidence_ids else "Phase is already verify; do not send another checkpoint. Reobserve the resources now with an inspection tool, then cite the new evidence IDs through task_finish(completed=..., output=...)."
+                                          if self.kind == "mutation" and self.role == "verify" else "Mutation criteria accept only evidence observed in phase verify: send a phase-only verify task_checkpoint, reobserve the resources, then cite the new evidence IDs in completed."
+                                          if self.kind == "mutation" else "Cite current evidence IDs in completed; read_only accepts inspection evidence."),
                                **({"missing_resources": missing} if missing else {})})
+        result.extend({"code": "gated_action_pending", "tool": value["tool"], "arguments": value["arguments"],
+                       "evidence": value["evidence"],
+                       "repair": "The mutation contract now permits this requested action, which was rejected only because the contract was missing. Execute it once, then verify its effect."}
+                      for value in self.restrictions.values() if self.gated_pending(value))
         result.extend({"code": "effect_verification_required", **asdict(value)} for value in self.obligations.values())
         result.extend({"code": "dependency_resolution_required", **asdict(value)} for value in self.dependencies)
         return result
+
+    def criterion_evidence(self, criterion):
+        return [ref for ref, item in self.evidence.items()
+                if item.tool != "user_input" and self.valid_evidence([ref], [], inspection=self.kind == "read_only")
+                and (not criterion.resources or any(
+                    contains(resource, target) or contains(target, resource)
+                    for resource in item.revisions for target in criterion.resources))]
+
+    def available_evidence(self):
+        completed = {}
+        for name, criterion in self.criteria.items():
+            if self.valid_evidence(criterion.evidence, criterion.resources, inspection=self.kind == "read_only"):
+                continue
+            refs = self.criterion_evidence(criterion)
+            if refs and self.valid_evidence(refs, criterion.resources, inspection=self.kind == "read_only"):
+                completed[name] = refs
+        return completed
+
+    def gated_pending(self, restriction):
+        spec = TOOL_SPECS.get(restriction["tool"])
+        return (self.kind == "mutation" and restriction["code"] in GATED_REJECTIONS
+                and spec is not None and spec.effectful and not spec.ancillary)
 
     def recover_output(self, code, requirements):
         if self.status not in {Lifecycle.ACTIVE, Lifecycle.COMPLETE}:
