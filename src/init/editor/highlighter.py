@@ -41,7 +41,7 @@ from PySide6.QtGui import (
     QTextCharFormat,
 )
 
-from ..theme import Theme, current_theme
+from ..theme import Theme, current_theme, on_theme_changed
 
 _LEXER_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="arlo-lexer")
 
@@ -57,7 +57,21 @@ TOKEN_ROLES = (
 )
 
 
-@lru_cache(maxsize=4)
+def _rehighlight_preserving_state(highlighter) -> None:
+    document = highlighter.document()
+    if document is None:
+        return
+    applying = getattr(highlighter, "_applying", False)
+    highlighter._applying = True
+    try:
+        modified = document.isModified()
+        highlighter.rehighlight()
+        document.setModified(modified)
+    finally:
+        highlighter._applying = applying
+
+
+@lru_cache(maxsize=16)
 def pygments_style(theme: Theme) -> type[Style]:
     """Build a Pygments style whose token colors come from the theme."""
     styles = {}
@@ -180,6 +194,11 @@ class PygmentsHighlighter(QSyntaxHighlighter):
         self.destroyed.connect(self._cancelled.set)
         self.setParent(document)
         self.setDocument(document)
+        on_theme_changed(self.apply_theme)
+
+    def apply_theme(self, theme):
+        self._formats.clear()
+        _rehighlight_preserving_state(self)
 
     def setDocument(self, document):
         old = self.document()
@@ -268,6 +287,7 @@ class PythonHighlighter(QSyntaxHighlighter):
     def __init__(self, document):
         super().__init__(document)
         self.rules = []
+        on_theme_changed(self.apply_theme)
         self._add_rule(
             r"\b(?:" + "|".join(
                 re.escape(word) for word in keyword.kwlist
@@ -337,12 +357,20 @@ class PythonHighlighter(QSyntaxHighlighter):
             QRegularExpression(pattern),
             self._format(color, bold),
             group,
+            color,
+            bold,
         ))
+
+    def apply_theme(self, theme):
+        self.rules = [(regex, self._format(color, bold), group, color, bold)
+                      for regex, _, group, color, bold in self.rules]
+        self.string_format = self._format("string")
+        _rehighlight_preserving_state(self)
 
     def highlightBlock(self, text: str):
         self.setCurrentBlockState(0)
 
-        for regex, fmt, group in self.rules:
+        for regex, fmt, group, _, _ in self.rules:
             iterator = regex.globalMatch(text)
 
             while iterator.hasNext():

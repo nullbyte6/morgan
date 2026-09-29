@@ -90,6 +90,7 @@ from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
 from src.init.logs import LogView
 from src.init.settings import SettingsView
+from src.init.theme import on_theme_changed
 
 from src.init.voice_ipc import (
     WAKE_RECORD_REQUEST,
@@ -523,6 +524,7 @@ class AssistantWindow(DesktopWindow):
 
         self.set_enabled(False)
         self.load_stylesheet()
+        on_theme_changed(self.apply_theme)
         self.refresh_language()
         self.set_status("")
 
@@ -715,6 +717,9 @@ class AssistantWindow(DesktopWindow):
 
     def load_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet())
+
+    def apply_theme(self, theme):
+        self.load_stylesheet()
 
     @property
     def startup_greeting(self) -> str:

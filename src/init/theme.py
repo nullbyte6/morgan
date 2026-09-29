@@ -20,9 +20,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import shutil
 from pathlib import Path
 
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor
 
 THEMES_DIR = Path(__file__).resolve().parents[2] / "assets" / "themes"
@@ -60,17 +63,24 @@ ROLES = frozenset((
 ))
 
 _HEX_COLOR = re.compile(r"#[0-9a-fA-F]{6}")
+_THEME_ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
+_log = logging.getLogger("assistant.theme")
 _TOKEN = re.compile(r"@([a-z][a-z0-9_]*)(?:/(\d{1,3}))?")
 
 
 class Theme:
     """An immutable set of semantic color roles."""
 
-    def __init__(self, theme_id: str, name: str, version: int, colors: dict[str, str]):
-        if version != THEME_FORMAT_VERSION:
-            raise ValueError(f"Unsupported theme format version: {version}")
-        if not theme_id or not name:
-            raise ValueError("Theme requires an id and a name")
+    def __init__(self, theme_id: str, name: str, version: int, colors: dict[str, str],
+                 path: Path | None = None):
+        if isinstance(version, bool) or version != THEME_FORMAT_VERSION:
+            raise ValueError(f"Unsupported theme format version: {version!r}")
+        if not isinstance(theme_id, str) or not _THEME_ID.fullmatch(theme_id):
+            raise ValueError(f"Invalid theme id: {theme_id!r}")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"Theme {theme_id!r} requires a display name")
+        if not isinstance(colors, dict):
+            raise ValueError(f"Theme {theme_id!r} colors must be an object")
         missing = ROLES.difference(colors)
         unknown = set(colors).difference(ROLES)
         if missing or unknown:
@@ -81,15 +91,18 @@ class Theme:
             if not isinstance(value, str) or not _HEX_COLOR.fullmatch(value):
                 raise ValueError(f"Theme {theme_id!r} role {role!r} is not #rrggbb: {value!r}")
         self.id = theme_id
-        self.name = name
+        self.name = name.strip()
         self.version = version
+        self.path = path
         self._colors = {role: value.lower() for role, value in colors.items()}
         self._qcolors = {role: QColor(value) for role, value in self._colors.items()}
 
     @classmethod
     def from_file(cls, path: Path) -> Theme:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return cls(data.get("id"), data.get("name"), data.get("version"), data.get("colors") or {})
+        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+        if not isinstance(data, dict):
+            raise ValueError(f"{path}: theme file must contain a JSON object")
+        return cls(data.get("id"), data.get("name"), data.get("version"), data.get("colors"), Path(path))
 
     def hex(self, role: str) -> str:
         return self._colors[role]
@@ -115,16 +128,124 @@ class Theme:
             template)
 
 
+class ThemeNotifier(QObject):
+    """Broadcast the new theme after the current theme is replaced."""
+    theme_changed = Signal(object)
+
+
 def load_builtin_theme(theme_id: str = DEFAULT_THEME_ID) -> Theme:
     return Theme.from_file(THEMES_DIR / f"{theme_id}.json")
 
 
+def user_themes_dir() -> Path:
+    from .config import HOME_PATH
+    return HOME_PATH / "themes"
+
+
+def seed_user_themes() -> Path:
+    """Create the user theme folder with the built-in themes on first use."""
+    directory = user_themes_dir()
+    if directory.exists():
+        return directory
+    try:
+        directory.mkdir(parents=True)
+        for source in sorted(THEMES_DIR.glob("*.json")):
+            shutil.copyfile(source, directory / source.name)
+    except OSError as error:
+        _log.warning("Unable to seed themes in %s: %s", directory, error)
+    return directory
+
+
+def discover_themes() -> list[Theme]:
+    """Return valid themes by display name; invalid or duplicate files are skipped."""
+    themes: dict[str, Theme] = {}
+    directory = seed_user_themes()
+    try:
+        paths = sorted((path for path in directory.glob("*.json") if path.is_file()),
+                       key=lambda path: path.name.casefold())
+    except OSError as error:
+        _log.warning("Unable to list themes in %s: %s", directory, error)
+        paths = []
+    for path in paths:
+        try:
+            theme = Theme.from_file(path)
+        except (OSError, UnicodeError, ValueError) as error:
+            _log.warning("Ignoring theme %s: %s", path, error)
+            continue
+        if theme.id in themes:
+            _log.warning("Ignoring theme %s: duplicate id %r already defined by %s",
+                         path, theme.id, themes[theme.id].path)
+            continue
+        themes[theme.id] = theme
+    if DEFAULT_THEME_ID not in themes:
+        themes[DEFAULT_THEME_ID] = load_builtin_theme()
+    return sorted(themes.values(), key=lambda theme: (theme.name.casefold(), theme.id))
+
+
+def resolve_theme(theme_id: str | None) -> Theme:
+    """Find an installed theme, falling back to the default when unavailable."""
+    try:
+        for theme in discover_themes():
+            if theme.id == theme_id:
+                return theme
+    except Exception:
+        _log.exception("Theme discovery failed")
+    if theme_id != DEFAULT_THEME_ID:
+        _log.warning("Theme %r is unavailable; using %r", theme_id, DEFAULT_THEME_ID)
+    return load_builtin_theme()
+
+
+def configured_theme_id() -> str:
+    try:
+        from .config import load_config
+        theme_id = load_config().get("theme")
+    except Exception:
+        _log.exception("Unable to read the configured theme")
+        return DEFAULT_THEME_ID
+    return theme_id if isinstance(theme_id, str) else DEFAULT_THEME_ID
+
+
 _current: Theme | None = None
+_notifier: ThemeNotifier | None = None
+
+
+def theme_notifier() -> ThemeNotifier:
+    global _notifier
+    if _notifier is None:
+        _notifier = ThemeNotifier()
+    return _notifier
+
+
+def on_theme_changed(slot) -> None:
+    """Call slot(theme) whenever the current theme is replaced."""
+    theme_notifier().theme_changed.connect(slot)
 
 
 def current_theme() -> Theme:
     """Return the active theme; consumers should resolve colors through it."""
     global _current
     if _current is None:
-        _current = load_builtin_theme()
+        _current = resolve_theme(configured_theme_id())
     return _current
+
+
+def set_current_theme(theme: Theme) -> None:
+    """Replace the active theme and notify every subscribed consumer."""
+    global _current
+    _current = theme
+    theme_notifier().theme_changed.emit(theme)
+
+
+def select_theme(theme_id: str) -> Theme:
+    """Persist a user theme choice by id and apply it immediately."""
+    theme = resolve_theme(theme_id)
+    try:
+        from .config import load_config, save_config
+        config = load_config()
+        if config.get("theme") != theme.id:
+            config["theme"] = theme.id
+            save_config(config)
+    except (OSError, ValueError):
+        _log.exception("Unable to persist the selected theme")
+    set_current_theme(theme)
+    return theme

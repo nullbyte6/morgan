@@ -39,7 +39,7 @@ from shiboken6 import isValid
 from ..attachments import TEXT_EXTENSIONS, _encoding
 from ..editor.highlighter import PygmentsHighlighter, lexer_for_path
 from ..editor.live import LineNumberArea
-from ..theme import current_theme
+from ..theme import current_theme, on_theme_changed
 
 TEXT_BYTE_LIMIT = 1024 * 1024
 TEXT_LINE_LIMIT = 20000
@@ -272,6 +272,10 @@ class SourceSurface(QPlainTextEdit):
         self.blockCountChanged.connect(self.update_line_area_width)
         self.updateRequest.connect(self.update_line_area)
         self.update_line_area_width()
+        on_theme_changed(self.apply_theme)
+
+    def apply_theme(self, theme):
+        self.line_area.update()
 
     def line_area_width(self):
         return 16 + self.fontMetrics().horizontalAdvance("9") * len(str(self.blockCount()))

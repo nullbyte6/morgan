@@ -22,7 +22,8 @@ from html import escape
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
-from PySide6.QtWidgets import QGraphicsItem, QGraphicsPathItem, QGraphicsScene, QGraphicsSimpleTextItem
+from PySide6.QtWidgets import (QGraphicsItem, QGraphicsPathItem, QGraphicsPolygonItem, QGraphicsScene,
+                               QGraphicsSimpleTextItem)
 
 from ..theme import current_theme
 from .layout import NODE_HEIGHT, NODE_WIDTH, NodeGeometry, hierarchical_layout
@@ -123,6 +124,26 @@ def _boundary_point(point, node, geometry, *, entering):
         corner_offset = max(0, offset - (geometry.width / 2 - radius))
         inset = radius - (max(0, radius * radius - corner_offset * corner_offset)) ** 0.5
     return QPointF(x, y + inset if entering else y - inset)
+
+
+def apply_flowchart_theme(scene: QGraphicsScene, theme) -> None:
+    """Recolor an already rendered flowchart without rebuilding its items."""
+    edge_color = theme.color("flowchart_edge")
+    scene.setBackgroundBrush(theme.color("flowchart_background"))
+    for item in scene.items():
+        if isinstance(item, NodeItem):
+            item.setPen(QPen(theme.color("flowchart_node_border"), 2))
+            item.setBrush(theme.color("flowchart_node"))
+        elif isinstance(item, QGraphicsPathItem):
+            pen = item.pen()
+            pen.setColor(edge_color)
+            item.setPen(pen)
+        elif isinstance(item, QGraphicsPolygonItem):
+            item.setPen(QPen(edge_color))
+            item.setBrush(edge_color)
+        elif isinstance(item, EdgeLabelItem):
+            item.setBrush(theme.color("flowchart_text"))
+        item.update()
 
 
 def render_flowchart(scene: QGraphicsScene, chart: Flowchart) -> dict[str, NodeItem]:

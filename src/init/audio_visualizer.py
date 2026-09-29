@@ -22,13 +22,14 @@ from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
-from .theme import current_theme
+from .theme import current_theme, on_theme_changed
 
 class AudioVisualizer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedHeight(100)
         self.setMinimumWidth(300)
+        on_theme_changed(self.apply_theme)
 
         self.levels = [0.0] * 15
         self.smoothed = [0.0] * 15
@@ -61,6 +62,9 @@ class AudioVisualizer(QWidget):
             self.amplitude = 0.0
 
         self.phase += 0.055 + self.amplitude * 0.045
+        self.update()
+
+    def apply_theme(self, theme):
         self.update()
 
     def paintEvent(self, event):

@@ -25,7 +25,7 @@ from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
-from src.init.theme import current_theme
+from src.init.theme import current_theme, on_theme_changed
 from src.init.editor.highlighter import (
     PythonHighlighter, PygmentsHighlighter, lexer_for_path)
 
@@ -55,6 +55,11 @@ class CodeEditor(QPlainTextEdit):
 
         self.update_line_area_width()
         self.highlight_current_line()
+        on_theme_changed(self.apply_theme)
+
+    def apply_theme(self, theme):
+        self.highlight_current_line()
+        self.line_area.update()
 
     def configure_highlighter(self):
         """Configure syntax highlighting for the current file."""

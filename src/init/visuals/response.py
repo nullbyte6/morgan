@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (QApplication, QFrame, QSizePolicy,
                                QTextBrowser, QVBoxLayout, QWidget)
 
 from ..editor.highlighter import pygments_style
-from ..theme import current_theme
+from ..theme import current_theme, on_theme_changed
 
 
 @dataclass(eq=False)
@@ -158,26 +158,7 @@ def request_response_workspace(title: str = "Response") -> str:
 class ResponseView(QWidget):
     """An independent, progressively rendered response surface."""
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("responseView")
-        self.setProperty("workspaceViewKey", "response")
-        self.setMinimumSize(0, 0)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 10, 14, 14)
-        layout.setSpacing(0)
-
-        self.document_view = QTextBrowser(self)
-        self.document_view.setObjectName("responseDocument")
-        self.document_view.setFrameShape(QFrame.NoFrame)
-        self.document_view.setReadOnly(True)
-        self.document_view.setOpenExternalLinks(True)
-        self.document_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.document_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.document_view.document().setDocumentMargin(8)
-        self.document_view.document().setDefaultStyleSheet(current_theme().render("""
+    DOCUMENT_CSS = """
             code {
                 font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
                 font-size: 16px;
@@ -208,7 +189,29 @@ class ResponseView(QWidget):
 
             tr:nth-child(even) {
                 background-color: @table_row_alternate;
-            }"""))
+            }"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("responseView")
+        self.setProperty("workspaceViewKey", "response")
+        self.setMinimumSize(0, 0)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 10, 14, 14)
+        layout.setSpacing(0)
+
+        self.document_view = QTextBrowser(self)
+        self.document_view.setObjectName("responseDocument")
+        self.document_view.setFrameShape(QFrame.NoFrame)
+        self.document_view.setReadOnly(True)
+        self.document_view.setOpenExternalLinks(True)
+        self.document_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.document_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.document_view.document().setDocumentMargin(8)
+        self.document_view.document().setDefaultStyleSheet(
+            current_theme().render(self.DOCUMENT_CSS))
         layout.addWidget(self.document_view)
 
         self._source = ""
@@ -216,6 +219,11 @@ class ResponseView(QWidget):
         self._renderer = MarkdownIt(
             "commonmark", {"html": False, "highlight": self._highlight})
         self._renderer.enable("table")
+        on_theme_changed(self.apply_theme)
+
+    def apply_theme(self, theme):
+        self.document_view.document().setDefaultStyleSheet(theme.render(self.DOCUMENT_CSS))
+        self._render()
 
     def _highlight(self, code: str, language: str, attrs: str = "") -> str:
         try:

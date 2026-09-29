@@ -24,7 +24,7 @@ from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
-from .theme import current_theme
+from .theme import current_theme, on_theme_changed
 
 FILE_TAG_PATTERN = re.compile(r'(?<!\S)@(?:"([^"\r\n]+)"|([^\s"]+))')
 FILE_TAG_QUERY = re.compile(r'(?<!\S)@(?:"([^"\r\n]*)|([^\s"]*))$')
@@ -74,6 +74,13 @@ def expand_file_tags(text, directory=None):
 
 
 class FileTagHighlighter(QSyntaxHighlighter):
+    def __init__(self, document):
+        super().__init__(document)
+        on_theme_changed(self.apply_theme)
+
+    def apply_theme(self, theme):
+        self.rehighlight()
+
     def highlightBlock(self, text):
         tag_format = QTextCharFormat()
         tag_format.setForeground(current_theme().color("file_tag"))

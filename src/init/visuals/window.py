@@ -36,8 +36,8 @@ from PySide6.QtWidgets import (
 
 from src.init.utils import get_stylesheet, resource_path
 
-from src.init.theme import current_theme
-from src.init.visuals.renderer import render_flowchart
+from src.init.theme import current_theme, on_theme_changed
+from src.init.visuals.renderer import apply_flowchart_theme, render_flowchart
 from src.init.visuals.schema import Flowchart
 
 
@@ -113,6 +113,11 @@ class FlowchartWidget(QWidget):
             self.setToolTip(
                 "<qt>" + escape(self.chart.description).replace("\n", "<br/>") + "</qt>")
         self._initial_view_pending = True
+        on_theme_changed(self.apply_theme)
+
+    def apply_theme(self, theme):
+        apply_flowchart_theme(self.scene, theme)
+        self.view.setBackgroundBrush(theme.color("flowchart_background"))
 
     def showEvent(self, event):
         super().showEvent(event)

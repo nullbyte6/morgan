@@ -41,7 +41,7 @@ from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QKeySequence, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import *
 
-from .theme import current_theme
+from .theme import current_theme, on_theme_changed
 
 
 @dataclass(eq=False)
@@ -455,6 +455,7 @@ class TerminalView(QWidget):
         self.render_timer.setSingleShot(True)
         self.render_timer.setInterval(33)
         self.render_timer.timeout.connect(self.render_screen)
+        on_theme_changed(self.apply_theme)
         self.setFocusProxy(self.display)
         if command is not None:
             self.receive_output(command.replace("\r\n", "\n").replace("\n", "\r\n") + "\r\n")
@@ -572,6 +573,9 @@ class TerminalView(QWidget):
         result.setFontStrikeOut(char.strikethrough)
 
         return result
+
+    def apply_theme(self, theme):
+        self.render_screen()
 
     def render_screen(self):
         scrollbar = self.display.verticalScrollBar()

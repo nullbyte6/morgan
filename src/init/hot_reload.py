@@ -36,6 +36,7 @@ _stylesheet_bridge = None
 _PRESERVED = {
     "src.init.hot_reload",
     "src.init.identity",
+    "src.init.theme",
     "src.init.voice_ipc",
     "src.init.commands",
     "src.init.notifications",

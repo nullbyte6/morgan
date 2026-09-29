@@ -19,7 +19,7 @@
 import math
 from enum import Enum
 from src.init.identity import get_assistant_name
-from src.init.theme import current_theme
+from src.init.theme import current_theme, on_theme_changed
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
@@ -109,6 +109,7 @@ class Orb(QWidget):
         self._state_rotation = 0.0
         self._state_color = current_theme().color("orb_idle")
         self._target_color = QColor(self._state_color)
+        on_theme_changed(self.apply_theme)
 
         self.click_pulse = 0.0
         self.double_pulse = 0.0
@@ -194,6 +195,13 @@ class Orb(QWidget):
         self.visual_state = state
         self._state_mix = 0.0
         self._state_fade = max(1.0, float(fade_in + fade_out) / 2.0)
+        self.update()
+
+    def apply_theme(self, theme):
+        role_name = self.STATE_PROFILES[self.visual_state][3]
+        self._target_color = theme.color(role_name)
+        self._state_color = QColor(self._target_color)
+        self._state_mix = 1.0
         self.update()
 
     def sizeHint(self):

@@ -58,6 +58,7 @@ DEFAULTS = {
     "temperature": 0.2,
     "voice_reference": "arlo-01.wav",
     "permission_mode": "ask",
+    "theme": "catppuccin-macchiato",
     "weather_location": "",
     "message_service": "whatsapp",
     "whatsapp_phone_number_id": "",
@@ -166,6 +167,8 @@ def validate_config(config):
         raise ValueError("voice_reference must be a WAV filename")
     if result["permission_mode"] not in ("ask", "auto"):
         result["permission_mode"] = "ask"
+    if not isinstance(result["theme"], str) or not result["theme"].strip():
+        result["theme"] = DEFAULTS["theme"]
     if result["lang"] not in ("english", "spanish"):
         raise ValueError(tr('config.lang_must_be_english_or_spanish'))
     for key in ("model", "message_service", "whatsapp_phone_number_id",
@@ -279,7 +282,7 @@ def update_config(updates: dict) -> str:
         for key, value in updates.items():
             if key not in DEFAULTS:
                 return tr('config.error_updating_configuration_unknown_setting', key=key)
-            if key == "permission_mode":
+            if key in ("permission_mode", "theme"):
                 return tr('config.error_updating_configuration_user_only_setting', key=key)
             if isinstance(current.get(key), dict) and isinstance(value, dict):
                 current[key] = {**current[key], **value}
