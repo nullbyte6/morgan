@@ -33,6 +33,9 @@ from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal, Slot
 from PySide6.QtWidgets import (QApplication, QFrame, QSizePolicy,
                                QTextBrowser, QVBoxLayout, QWidget)
 
+from ..editor.highlighter import pygments_style
+from ..theme import current_theme
+
 
 @dataclass(eq=False)
 class ResponseRequest:
@@ -174,12 +177,12 @@ class ResponseView(QWidget):
         self.document_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.document_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.document_view.document().setDocumentMargin(8)
-        self.document_view.document().setDefaultStyleSheet("""
+        self.document_view.document().setDefaultStyleSheet(current_theme().render("""
             code {
                 font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
                 font-size: 16px;
-                color: #f5c2e7;
-                background-color: #303244;
+                color: @code_inline_text;
+                background-color: @code_inline_background;
             }
 
             pre {
@@ -193,19 +196,19 @@ class ResponseView(QWidget):
             }
 
             th, td {
-                border: 1px solid #585b70;
+                border: 1px solid @table_border;
                 padding: 6px 10px;
                 vertical-align: top;
             }
 
             th {
-                background-color: #303244;
-                color: #f5c2e7;
+                background-color: @table_header_background;
+                color: @table_header_text;
             }
 
             tr:nth-child(even) {
-                background-color: #242638;
-            }""")
+                background-color: @table_row_alternate;
+            }"""))
         layout.addWidget(self.document_view)
 
         self._source = ""
@@ -221,12 +224,14 @@ class ResponseView(QWidget):
         except ClassNotFound:
             lexer = TextLexer(stripall=False)
 
-        formatter = HtmlFormatter(noclasses=True, nowrap=True, style="monokai")
+        theme = current_theme()
+        formatter = HtmlFormatter(noclasses=True, nowrap=True, style=pygments_style(theme))
         highlighted = highlight(code, lexer, formatter)
 
         return (
-            '<pre style="background-color:#1e2030; color:#cad3f5; '
-            'border:2px solid #494d64; padding:12px 14px; margin:10px 0; '
+            theme.render('<pre style="background-color:@code_block_background; '
+                         'color:@code_block_text; border:2px solid @code_block_border; ')
+            + 'padding:12px 14px; margin:10px 0; '
             "font-family:'JetBrains Mono NL', 'JetBrains Mono', monospace; "
             'font-size:16px; white-space:pre-wrap;">'
             + highlighted
@@ -258,6 +263,7 @@ class ResponseView(QWidget):
         position = scrollbar.value()
         rendered = self._renderer.render(self._source)
         self.document_view.setHtml(
-            '<div style="color:#cad3f5; font-size:14px; line-height:1.45;">' + rendered + "</div>")
+            f'<div style="color:{current_theme().hex("text")}; font-size:14px; line-height:1.45;">'
+            + rendered + "</div>")
         scrollbar = self.document_view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum() if follow_tail else position)

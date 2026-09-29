@@ -19,6 +19,7 @@
 import math
 from enum import Enum
 from src.init.identity import get_assistant_name
+from src.init.theme import current_theme
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
@@ -50,23 +51,14 @@ class Orb(QWidget):
         SUCCESS = "success"
 
     STATE_PROFILES = {
-        State.IDLE: (0.018, 0.10, 0.0, "lavender"),
-        State.PROCESSING: (0.040, 0.52, 0.0, "sapphire"),
-        State.READING: (0.025, 0.42, 0.0, "blue"),
-        State.WRITING: (0.055, 0.62, 0.0, "lavender"),
-        State.EXECUTING: (0.075, 0.70, 0.085, "peach"),
-        State.AWAITING_PERMISSION: (0.030, 0.48, 0.0, "yellow"),
-        State.DENIED_ERROR: (0.090, 0.78, 0.0, "red"),
-        State.SUCCESS: (0.035, 0.54, 0.0, "green"),
-    }
-    MACCHIATO = {
-        "lavender": QColor("#b7bdf8"),
-        "sapphire": QColor("#7dc4e4"),
-        "blue": QColor("#8aadf4"),
-        "peach": QColor("#f5a97f"),
-        "yellow": QColor("#eed49f"),
-        "red": QColor("#ed8796"),
-        "green": QColor("#a6da95"),
+        State.IDLE: (0.018, 0.10, 0.0, "orb_idle"),
+        State.PROCESSING: (0.040, 0.52, 0.0, "orb_processing"),
+        State.READING: (0.025, 0.42, 0.0, "orb_reading"),
+        State.WRITING: (0.055, 0.62, 0.0, "orb_writing"),
+        State.EXECUTING: (0.075, 0.70, 0.085, "orb_executing"),
+        State.AWAITING_PERMISSION: (0.030, 0.48, 0.0, "orb_awaiting_permission"),
+        State.DENIED_ERROR: (0.090, 0.78, 0.0, "orb_error"),
+        State.SUCCESS: (0.035, 0.54, 0.0, "orb_success"),
     }
 
     def __init__(self, parent=None, *,
@@ -115,7 +107,7 @@ class Orb(QWidget):
         self._state_fade = 0.18
         self._state_phase = 0.0
         self._state_rotation = 0.0
-        self._state_color = QColor(self.MACCHIATO["lavender"])
+        self._state_color = current_theme().color("orb_idle")
         self._target_color = QColor(self._state_color)
 
         self.click_pulse = 0.0
@@ -198,7 +190,7 @@ class Orb(QWidget):
             return
         _, _, _, role_name = self.STATE_PROFILES[state]
         self._state_color = QColor(self._target_color)
-        self._target_color = QColor(self.MACCHIATO[role_name])
+        self._target_color = current_theme().color(role_name)
         self.visual_state = state
         self._state_mix = 0.0
         self._state_fade = max(1.0, float(fade_in + fade_out) / 2.0)
@@ -364,7 +356,7 @@ class Orb(QWidget):
         for index, alpha in enumerate((240, 165)):
             accent = QColor(self._state_color)
             if not accent.isValid():
-                accent = QColor(self.MACCHIATO["lavender"])
+                accent = current_theme().color("orb_idle")
             color = QColor(accent)
             color.setAlpha(round(alpha * (0.72 + 0.28 * self._state_mix)))
             colors.append(color)
@@ -372,7 +364,7 @@ class Orb(QWidget):
         inner_fill = QColor(self._state_color)
 
         if not inner_fill.isValid():
-            inner_fill = QColor(self.MACCHIATO["lavender"])
+            inner_fill = current_theme().color("orb_idle")
 
         inner_fill.setAlpha(colors[0].alpha())
 

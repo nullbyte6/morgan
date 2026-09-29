@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QAbstractButton, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QVBoxLayout, QWidget)
 
 from .lang import get_language, tr
+from .theme import current_theme
 from .voice_profiles import available_voices, selected_voice, select_voice, VOICE_NAMES
 
 
@@ -42,9 +43,10 @@ class ToggleSwitch(QAbstractButton):
 
         self.toggled.connect(self._animate)
 
-        self._track_off = QColor("#555965")
-        self._track_on = QColor("#7486F5")
-        self._thumb_color = QColor("#FFFFFF")
+        theme = current_theme()
+        self._track_off = theme.color("toggle_track_off")
+        self._track_on = theme.color("toggle_track_on")
+        self._thumb_color = theme.color("toggle_thumb")
 
     def get_offset(self) -> float:
         return self._offset

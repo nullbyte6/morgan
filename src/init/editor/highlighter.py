@@ -24,23 +24,51 @@ import keyword
 import re
 from bisect import bisect_right
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 from threading import Event
 
 from pygments.lexer import RegexLexer
 from pygments.lexers import get_lexer_by_name, get_lexer_for_filename
+from pygments.style import Style
 from pygments.token import Comment, Generic, Keyword, Name, Number, Operator, String, Text
 from pygments.util import ClassNotFound
 
 from PySide6.QtCore import QRegularExpression, QTimer
 from PySide6.QtGui import (
-    QColor,
     QFont,
     QSyntaxHighlighter,
     QTextCharFormat,
 )
 
+from ..theme import Theme, current_theme
+
 _LEXER_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="arlo-lexer")
+
+TOKEN_ROLES = (
+    (Comment, "syntax_comment"), (Keyword, "syntax_keyword"),
+    (Name.Function, "syntax_function"), (Name.Class, "syntax_class"),
+    (Name.Builtin, "syntax_builtin"), (Name.Decorator, "syntax_decorator"),
+    (Name.Tag, "syntax_keyword"), (Name.Attribute, "syntax_function"),
+    (String, "syntax_string"), (Number, "syntax_number"),
+    (Operator, "syntax_decorator"), (Generic.Heading, "syntax_class"),
+    (Generic.Subheading, "syntax_class"), (Generic.Inserted, "syntax_string"),
+    (Generic.Deleted, "syntax_decorator"),
+)
+
+
+@lru_cache(maxsize=4)
+def pygments_style(theme: Theme) -> type[Style]:
+    """Build a Pygments style whose token colors come from the theme."""
+    styles = {}
+    for token, role in TOKEN_ROLES:
+        styles[token] = ("bold " if token in Keyword or token in Generic.Heading else "") + theme.hex(role)
+    styles[Generic.Strong] = "bold"
+    styles[Generic.Emph] = "italic"
+    return type("ArloThemeStyle", (Style,), {
+        "background_color": theme.hex("code_block_background"),
+        "styles": styles,
+    })
 
 class _IgnoreLexer(RegexLexer):
     """Pygments has no built-in lexer for Git/Docker ignore patterns."""
@@ -213,19 +241,9 @@ class PygmentsHighlighter(QSyntaxHighlighter):
         if token in self._formats:
             return self._formats[token]
         fmt = QTextCharFormat()
-        styles = (
-            (Comment, "comment"), (Keyword, "keyword"),
-            (Name.Function, "function"), (Name.Class, "class"),
-            (Name.Builtin, "builtin"), (Name.Decorator, "decorator"),
-            (Name.Tag, "keyword"), (Name.Attribute, "function"),
-            (String, "string"), (Number, "number"),
-            (Operator, "decorator"), (Generic.Heading, "class"),
-            (Generic.Subheading, "class"), (Generic.Inserted, "string"),
-            (Generic.Deleted, "decorator"),
-        )
-        for parent, color in styles:
+        for parent, role in TOKEN_ROLES:
             if token in parent:
-                fmt.setForeground(QColor(PythonHighlighter.COLORS[color]))
+                fmt.setForeground(current_theme().color(role))
                 break
         if token in Keyword or token in Generic.Strong or token in Generic.Heading:
             fmt.setFontWeight(QFont.Bold)
@@ -246,16 +264,6 @@ class PygmentsHighlighter(QSyntaxHighlighter):
 
 class PythonHighlighter(QSyntaxHighlighter):
     """Python syntax highlighting for Arlo."""
-    COLORS = {
-        "keyword": "#c6a0f6",
-        "builtin": "#f5a97f",
-        "function": "#8bd5ca",
-        "class": "#eed49f",
-        "string": "#a6da95",
-        "number": "#f5a97f",
-        "comment": "#6e738d",
-        "decorator": "#f5bde6",
-    }
 
     def __init__(self, document):
         super().__init__(document)
@@ -312,7 +320,7 @@ class PythonHighlighter(QSyntaxHighlighter):
 
     def _format(self, color, bold=False):
         fmt = QTextCharFormat()
-        fmt.setForeground(QColor(self.COLORS[color]))
+        fmt.setForeground(current_theme().color("syntax_" + color))
 
         if bold:
             fmt.setFontWeight(QFont.Bold)

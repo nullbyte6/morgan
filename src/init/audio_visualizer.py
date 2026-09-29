@@ -22,6 +22,8 @@ from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
+from .theme import current_theme
+
 class AudioVisualizer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -69,11 +71,12 @@ class AudioVisualizer(QWidget):
         height = self.height()
         center = height / 2
 
+        theme = current_theme()
         colors = (
-            QColor(245, 247, 255, 240),
-            QColor(165, 181, 255, 150),
-            QColor(116, 133, 240, 95),
-            QColor(96, 113, 205, 55))
+            theme.color("audio_wave_layer_1", 240),
+            theme.color("audio_wave_layer_2", 150),
+            theme.color("audio_wave_layer_3", 95),
+            theme.color("audio_wave_layer_4", 55))
 
         for layer, color in enumerate(colors):
             path = QPainterPath()

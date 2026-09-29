@@ -25,6 +25,7 @@ from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
+from src.init.theme import current_theme
 from src.init.editor.highlighter import (
     PythonHighlighter, PygmentsHighlighter, lexer_for_path)
 
@@ -104,7 +105,8 @@ class CodeEditor(QPlainTextEdit):
 
     def paint_line_numbers(self, event):
         painter = QPainter(self.line_area)
-        painter.fillRect(event.rect(), QColor("#171920"))
+        theme = current_theme()
+        painter.fillRect(event.rect(), theme.color("editor_gutter"))
 
         block = self.firstVisibleBlock()
         number = block.blockNumber()
@@ -117,7 +119,7 @@ class CodeEditor(QPlainTextEdit):
             height = round(self.blockBoundingRect(block).height())
 
             if block.isVisible() and top + height >= event.rect().top():
-                painter.setPen(QColor("#737B8D"))
+                painter.setPen(theme.color("line_number"))
 
                 painter.drawText(
                     0, top,
@@ -133,7 +135,7 @@ class CodeEditor(QPlainTextEdit):
 
     def highlight_current_line(self):
         selection = QTextEdit.ExtraSelection()
-        selection.format.setBackground(QColor("#242836"))
+        selection.format.setBackground(current_theme().color("editor_current_line"))
         selection.format.setProperty(
             QTextFormat.FullWidthSelection, True)
 

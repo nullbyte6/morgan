@@ -16,23 +16,17 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Render selectable flowchart nodes and arrows in Arlo's Macchiato colors."""
+"""Render selectable flowchart nodes and arrows in the current theme's colors."""
 
 from html import escape
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtGui import QFont, QFontMetricsF, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsPathItem, QGraphicsScene, QGraphicsSimpleTextItem
 
+from ..theme import current_theme
 from .layout import NODE_HEIGHT, NODE_WIDTH, NodeGeometry, hierarchical_layout
 from .schema import Flowchart, FlowchartNode
-
-BACKGROUND = QColor("#24273a")
-SURFACE = QColor("#363a4f")
-TEXT = QColor("#cad3f5")
-BORDER = QColor("#494d64")
-ACCENT = QColor("#8aadf4")
-SELECTION = QColor("#b7bdf8")
 
 
 class NodeItem(QGraphicsPathItem):
@@ -55,8 +49,9 @@ class NodeItem(QGraphicsPathItem):
             radius = self.height / 2 if node.kind == "terminal" else 16
             path.addRoundedRect(bounds, radius, radius)
         self.setPath(path)
-        self.setPen(QPen(BORDER, 2))
-        self.setBrush(SURFACE)
+        theme = current_theme()
+        self.setPen(QPen(theme.color("flowchart_node_border"), 2))
+        self.setBrush(theme.color("flowchart_node"))
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         tooltip = node.label + ("\n" + node.description if node.description else "")
         self.setToolTip("<qt>" + escape(tooltip).replace("\n", "<br/>") + "</qt>")
@@ -67,14 +62,16 @@ class NodeItem(QGraphicsPathItem):
     def paint(self, painter, option, widget=None):
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(SURFACE)
-        painter.setPen(QPen(SELECTION if self.isSelected() else BORDER, 2))
+        theme = current_theme()
+        painter.setBrush(theme.color("flowchart_node"))
+        painter.setPen(QPen(theme.color(
+            "flowchart_node_selected" if self.isSelected() else "flowchart_node_border"), 2))
         painter.drawPath(self.path())
         text_rect = QRectF(20, 12, self.width - 40, self.height - 24)
         if self.node.kind == "decision":
             text_rect = QRectF(self.width / 4, 26, self.width / 2, self.height - 52)
         painter.setClipRect(text_rect)
-        painter.setPen(TEXT)
+        painter.setPen(theme.color("flowchart_text"))
         font = QFont(painter.font())
         font.setPointSize(11)
         painter.setFont(font)
@@ -89,7 +86,7 @@ class EdgeLabelItem(QGraphicsSimpleTextItem):
         return super().boundingRect().adjusted(-4, -2, 4, 2)
 
     def paint(self, painter, option, widget=None):
-        painter.fillRect(self.boundingRect(), BACKGROUND)
+        painter.fillRect(self.boundingRect(), current_theme().color("flowchart_background"))
         super().paint(painter, option, widget)
 
 
@@ -132,8 +129,10 @@ def render_flowchart(scene: QGraphicsScene, chart: Flowchart) -> dict[str, NodeI
     """Replace a scene with nodes and directed, orthogonal connections."""
     layout = hierarchical_layout([node.id for node in chart.nodes],
                                  [(edge.source, edge.target) for edge in chart.edges])
+    theme = current_theme()
+    edge_color = theme.color("flowchart_edge")
     scene.clear()
-    scene.setBackgroundBrush(BACKGROUND)
+    scene.setBackgroundBrush(theme.color("flowchart_background"))
     items = {}
     for node in chart.nodes:
         geometry = layout.nodes[node.id]
@@ -156,7 +155,7 @@ def render_flowchart(scene: QGraphicsScene, chart: Flowchart) -> dict[str, NodeI
         path = QPainterPath(points[0])
         for point in points[1:]:
             path.lineTo(point)
-        line = scene.addPath(path, QPen(ACCENT, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        line = scene.addPath(path, QPen(edge_color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         line.setAcceptedMouseButtons(Qt.NoButton)
         tooltip = "\n".join(text for text in (edge.label, edge.description) if text)
         tooltip = "<qt>" + escape(tooltip).replace("\n", "<br/>") + "</qt>" if tooltip else ""
@@ -168,13 +167,13 @@ def render_flowchart(scene: QGraphicsScene, chart: Flowchart) -> dict[str, NodeI
         normal = QPointF(-direction.y(), direction.x())
         arrow = scene.addPolygon(QPolygonF([
             tip, tip - direction * 11 + normal * 6, tip - direction * 11 - normal * 6,
-        ]), QPen(ACCENT), ACCENT)
+        ]), QPen(edge_color), edge_color)
         arrow.setAcceptedMouseButtons(Qt.NoButton)
         arrow.setToolTip(tooltip)
         if edge.label is not None:
             label = EdgeLabelItem(label_metrics.elidedText(edge.label, Qt.ElideRight, 160))
             label.setFont(label_font)
-            label.setBrush(TEXT)
+            label.setBrush(theme.color("flowchart_text"))
             label.setToolTip(tooltip)
             label.setAcceptedMouseButtons(Qt.NoButton)
             label.setZValue(2)

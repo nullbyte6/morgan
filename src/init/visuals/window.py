@@ -36,7 +36,8 @@ from PySide6.QtWidgets import (
 
 from src.init.utils import get_stylesheet, resource_path
 
-from src.init.visuals.renderer import BACKGROUND, render_flowchart
+from src.init.theme import current_theme
+from src.init.visuals.renderer import render_flowchart
 from src.init.visuals.schema import Flowchart
 
 
@@ -71,7 +72,7 @@ class FlowchartView(QGraphicsView):
     def __init__(self, scene, parent=None):
         super().__init__(scene, parent)
         self.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
-        self.setBackgroundBrush(BACKGROUND)
+        self.setBackgroundBrush(current_theme().color("flowchart_background"))
         self.setFrameShape(QGraphicsView.NoFrame)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)

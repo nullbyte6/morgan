@@ -41,6 +41,8 @@ from PySide6.QtCore import QObject, Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QFont, QKeySequence, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import *
 
+from .theme import current_theme
+
 
 @dataclass(eq=False)
 class TerminalRequest:
@@ -416,13 +418,15 @@ class TerminalDisplay(QPlainTextEdit):
 class TerminalView(QWidget):
     """A terminal emulator, rather than a new process for each command."""
 
-    COLORS = dict(zip(
+    ANSI_ROLES = dict(zip(
         ("black", "red", "green", "brown", "blue", "magenta", "cyan", "white",
          "brightblack", "brightred", "brightgreen", "brightbrown", "brightblue",
          "brightmagenta", "brightcyan", "brightwhite"),
-        ("#181926", "#ed8796", "#a6da95", "#eed49f", "#8aadf4", "#c6a0f6",
-         "#8bd5ca", "#cad3f5", "#6e738d", "#f5a9b8", "#bce6af", "#f5e0b5",
-         "#b7bdf8", "#d5b8ff", "#a6e3db", "#ffffff")))
+        ("terminal_black", "terminal_red", "terminal_green", "terminal_yellow",
+         "terminal_blue", "terminal_magenta", "terminal_cyan", "terminal_white",
+         "terminal_bright_black", "terminal_bright_red", "terminal_bright_green",
+         "terminal_bright_yellow", "terminal_bright_blue", "terminal_bright_magenta",
+         "terminal_bright_cyan", "terminal_bright_white")))
 
     def __init__(self, parent=None, *, directory=None, argv=None, timeout=None, autostart=True,
                  command=None, preserve_output=False):
@@ -536,19 +540,22 @@ class TerminalView(QWidget):
         self.render_timer.start()
 
     def _format(self, char):
-        def color(name, default):
-            return QColor(
-                default if name == "default"
-                else self.COLORS.get(name, f"#{name}"))
+        theme = current_theme()
 
-        foreground = color(char.fg, "#cad3f5")
+        def color(name, default_role):
+            if name == "default":
+                return theme.color(default_role)
+            role = self.ANSI_ROLES.get(name)
+            return theme.color(role) if role else QColor(f"#{name}")
+
+        foreground = color(char.fg, "terminal_foreground")
         result = QTextCharFormat()
 
         if char.bg != "default":
-            background = color(char.bg, "#181926")
+            background = color(char.bg, "terminal_background")
             result.setBackground(background)
         else:
-            background = QColor("#24273a")
+            background = theme.color("terminal_background")
             result.clearBackground()
 
         if char.reverse:
@@ -611,8 +618,9 @@ class TerminalView(QWidget):
             caret.cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor,
                                       len(prefix.encode("utf-16-le")) // 2)
             caret.cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor)
-            caret.format.setBackground(QColor("#cad3f5"))
-            caret.format.setForeground(QColor("#181926"))
+            theme = current_theme()
+            caret.format.setBackground(theme.color("terminal_cursor"))
+            caret.format.setForeground(theme.color("terminal_cursor_text"))
             extras.append(caret)
         self.display.setExtraSelections(extras)
         scrollbar.setValue(scrollbar.maximum() if follow else position)

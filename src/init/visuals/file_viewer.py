@@ -30,7 +30,7 @@ from threading import Event
 from PySide6.QtCore import (
     QFileSystemWatcher, QObject, QRect, QSize, Qt, QRunnable, QThreadPool,
     Signal, Slot)
-from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QShortcut, QTextCursor
+from PySide6.QtGui import QFont, QKeySequence, QPainter, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
     QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
@@ -39,6 +39,7 @@ from shiboken6 import isValid
 from ..attachments import TEXT_EXTENSIONS, _encoding
 from ..editor.highlighter import PygmentsHighlighter, lexer_for_path
 from ..editor.live import LineNumberArea
+from ..theme import current_theme
 
 TEXT_BYTE_LIMIT = 1024 * 1024
 TEXT_LINE_LIMIT = 20000
@@ -292,13 +293,14 @@ class SourceSurface(QPlainTextEdit):
 
     def paint_line_numbers(self, event):
         painter = QPainter(self.line_area)
-        painter.fillRect(event.rect(), QColor("#24273a"))
+        theme = current_theme()
+        painter.fillRect(event.rect(), theme.color("surface"))
         block = self.firstVisibleBlock()
         top = round(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
         while block.isValid() and top <= event.rect().bottom():
             height = round(self.blockBoundingRect(block).height())
             if block.isVisible() and top + height >= event.rect().top():
-                painter.setPen(QColor("#8087a2"))
+                painter.setPen(theme.color("line_number"))
                 painter.drawText(0, top, self.line_area.width() - 7, height,
                                  Qt.AlignRight | Qt.AlignVCenter, str(block.blockNumber() + 1))
             top += height
