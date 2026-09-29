@@ -324,8 +324,14 @@ and retain its consent checks. cd requests use change_directory and Git requests
                        if name not in self.state.criteria or not self.state.valid_evidence(
                            self.state.criteria[name].evidence, self.state.criteria[name].resources,
                            inspection=self.state.kind == "read_only")}
-            if pending:
-                result = self.state.checkpoint(self.state.role, [], {}, pending, [], "", {}, [],
+            cited = list(dict.fromkeys(ref for refs in completed.values() for ref in refs))
+            resolutions = {}
+            for obligation in self.state.obligations.values():
+                refs = [ref for ref in cited if self.state.valid_evidence([ref], [], after=obligation.sequence)]
+                if self.state.valid_evidence(refs, obligation.resources, after=obligation.sequence):
+                    resolutions[obligation.id] = {"finding": "Verified for " + ", ".join(completed), "evidence": refs}
+            if pending or resolutions:
+                result = self.state.checkpoint(self.state.role, [], {}, pending, [], "", resolutions, [],
                                                self.state.kind, self.state.role_resources)
                 if not result["accepted"]:
                     result["requirements"] = self.state.requirements()
