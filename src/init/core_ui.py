@@ -47,6 +47,7 @@ from PySide6.QtWidgets import *
 from src.init.orb import Orb
 from src.init.orb_subtitles import MascotSubtitleBubble
 from src.init.audio_visualizer import AudioVisualizer
+from src.init.core import Assistant
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
 from src.init.indicators import (GitBranchIndicator, ModelSelector, PermissionSelector,
@@ -179,11 +180,11 @@ class AssistantWindow(DesktopWindow):
         self.send = QPushButton("")
         self.greeting_key = f"greeting.{random.randrange(6)}"
 
+        self.assistant = Assistant()
+        register_assistant(lambda: self.assistant)
         self.sessions = []
         self._turn_ids = itertools.count(1)
         self.session = self.create_session(self.startup_greeting)
-        self.assistant = self.session.worker.assistant
-        register_assistant(lambda: self.assistant)
 
         self.attach = QPushButton("")
         self.directory_indicator = WorkingDirectory(self)
