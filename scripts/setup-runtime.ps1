@@ -11,7 +11,33 @@ $ProgressPreference = "SilentlyContinue"
 
 $MainModel = "qwen3.5:9b"
 
-$DataDir = Join-Path $env:USERPROFILE ".arlo"
+function Get-AssistantIdentifier {
+    param([string]$Name)
+
+    $Identifier = ($Name.Normalize([Text.NormalizationForm]::FormKC).ToLowerInvariant() -replace "[^\w-]+", "-").Trim("-", "_")
+    $Reserved = @("con", "prn", "aux", "nul") + (1..9 | ForEach-Object { "com$_"; "lpt$_" })
+
+    if ($Reserved -contains $Identifier) {
+        $Identifier = "_" + $Identifier
+    }
+
+    return $Identifier
+}
+
+$AssistantName = $AssistantName.Trim()
+
+if (-not $AssistantName) {
+    $AssistantName = "Arlo"
+}
+
+$AnchorDir = Join-Path $env:USERPROFILE ".arlo"
+$DataDir = Join-Path $env:USERPROFILE ("." + (Get-AssistantIdentifier $AssistantName))
+
+if (($DataDir -ne $AnchorDir) -and (Test-Path $AnchorDir) -and -not (Test-Path $DataDir)) {
+    $DataDir = $AnchorDir
+}
+
+$ConfigFile = Join-Path $DataDir "json\config.json"
 $ModelsDir = Join-Path $DataDir "models"
 $CosyVoiceDir = Join-Path $ModelsDir "Fun-CosyVoice3-0.5B"
 
@@ -218,12 +244,30 @@ function Ensure-Directories {
                 -Force | Out-Null
         }
     }
+
+    if (-not (Test-Path $AnchorDir)) {
+        New-Item `
+            -ItemType Junction `
+            -Path $AnchorDir `
+            -Target $DataDir | Out-Null
+    }
+
+    if (-not (Test-Path $ConfigFile)) {
+        New-Item `
+            -ItemType Directory `
+            -Path (Split-Path $ConfigFile) `
+            -Force | Out-Null
+
+        $Config = @{ assistant = @{ name = $AssistantName } } | ConvertTo-Json
+        [IO.File]::WriteAllText($ConfigFile, $Config, (New-Object Text.UTF8Encoding $false))
+    }
 }
 
 try {
     Write-Host ""
     Write-Host "$AssistantName runtime setup"
     Write-Host "Installation: $InstallDir"
+    Write-Host "Data: $DataDir"
     Write-Host ""
 
     Ensure-Directories
