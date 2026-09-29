@@ -34,8 +34,11 @@ class DesktopSession(QObject):
         self.worker = worker
         self.worker_thread = QThread(window)
         self.presentation = TaskPresentation(self)
+        self.panel_id = None
+        self.ui = None
         self.ready = False
         self.closing = False
+        self.released = False
         self.busy = False
         self.stopping = False
         self.speaking = False
@@ -89,39 +92,52 @@ class DesktopSession(QObject):
 
     @Slot()
     def on_ready(self):
-        self.window.on_ready(self)
+        if not self.closing:
+            self.window.on_ready(self)
 
     @Slot(int)
     def on_accepted(self, turn_id):
-        self.window.on_request_accepted(self, turn_id)
+        if not self.closing:
+            self.window.on_request_accepted(self, turn_id)
 
     @Slot(int, str)
     def on_rejected(self, turn_id, error):
-        self.window.on_request_rejected(self, turn_id, error)
+        if self.closing:
+            self.window.release_session(self)
+        else:
+            self.window.on_request_rejected(self, turn_id, error)
 
     @Slot(int, str)
     def on_chunk(self, turn_id, chunk):
-        self.window.on_chunk(self, turn_id, chunk)
+        if not self.closing:
+            self.window.on_chunk(self, turn_id, chunk)
 
     @Slot(int, object)
     def on_audio(self, turn_id, levels):
-        self.window.on_audio(self, turn_id, levels)
+        if not self.closing:
+            self.window.on_audio(self, turn_id, levels)
 
     @Slot(int, bool)
     def on_speaking(self, turn_id, speaking):
-        self.window.on_speaking(self, turn_id, speaking)
+        if not self.closing:
+            self.window.on_speaking(self, turn_id, speaking)
 
     @Slot(int, str)
     def on_subtitle(self, turn_id, text):
-        self.window.on_subtitle(self, turn_id, text)
+        if not self.closing:
+            self.window.on_subtitle(self, turn_id, text)
 
     @Slot(int)
     def on_permission_denied(self, turn_id):
-        self.window.on_permission_denied(self, turn_id)
+        if not self.closing:
+            self.window.on_permission_denied(self, turn_id)
 
     @Slot(str)
     def on_finished(self, reply):
-        self.window.on_finished(self, reply)
+        if self.closing:
+            self.window.release_session(self)
+        else:
+            self.window.on_finished(self, reply)
 
     @Slot(str, str)
     def on_git_diff_ready(self, directory, diff):
@@ -129,11 +145,17 @@ class DesktopSession(QObject):
 
     @Slot(str)
     def on_failed(self, error):
-        self.window.on_error(self, error)
+        if self.closing:
+            self.window.release_session(self)
+        else:
+            self.window.on_error(self, error)
 
     @Slot(int, str, int, int)
     def on_confirmation_requested(self, turn_id, message, request_id, timeout):
-        self.window.on_confirmation_requested(self, turn_id, message, request_id, timeout)
+        if self.closing:
+            self.worker.resolve_confirmation(False, request_id)
+        else:
+            self.window.on_confirmation_requested(self, turn_id, message, request_id, timeout)
 
     @Slot(int)
     def on_confirmation_closed(self, request_id):
@@ -143,4 +165,5 @@ class DesktopSession(QObject):
 
     @Slot(object)
     def on_view(self, view):
-        self.window.on_session_view(self, view)
+        if not self.closing:
+            self.window.on_session_view(self, view)

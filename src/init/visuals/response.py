@@ -125,7 +125,7 @@ class ResponseBridge(QObject):
                 panel_id = workspace.open_panel(
                     title=request.title,
                     content=view,
-                    target_id=window.main_workspace_panel_id,
+                    target_id=session.panel_id or window.main_workspace_panel_id,
                     direction=Qt.Key_Right,
                 )
 

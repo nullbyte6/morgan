@@ -52,8 +52,7 @@ class FileDropRouter(QObject):
     def __init__(self, workspace, composer, attachments, parent=None, registry=None):
         super().__init__(parent)
         self.workspace = workspace
-        self.composer = composer
-        self.attachments = attachments
+        self.composers = {composer: attachments}
         self.registry = registry or default_viewer_registry()
         self._indicator = None
         self._indicator_target = None
@@ -66,6 +65,13 @@ class FileDropRouter(QObject):
         workspace.panel_opened.connect(self._panel_opened)
         workspace.panel_closed.connect(self.clear_indicator)
         QApplication.instance().installEventFilter(self)
+
+    def add_composer(self, composer, attachments):
+        self.composers[composer] = attachments
+        self._enable_drops(composer)
+
+    def remove_composer(self, composer):
+        self.composers.pop(composer, None)
 
     def _panel_opened(self, panel_id):
         self._enable_drops(self.workspace.get_panel(panel_id))
@@ -80,8 +86,8 @@ class FileDropRouter(QObject):
     def target_for(self, widget):
         current = widget
         while current is not None:
-            if current is self.composer:
-                return self.composer
+            if current in self.composers:
+                return current
             if isinstance(current, WorkspacePanel):
                 return current
             current = current.parentWidget()
@@ -90,8 +96,8 @@ class FileDropRouter(QObject):
     def decision(self, target, paths):
         if not paths:
             return "", "Only local files can be dropped here"
-        if target is self.composer:
-            if not self.attachments.isEnabled():
+        if target in self.composers:
+            if not self.composers[target].isEnabled():
                 return "", "Attachments are unavailable while a message is being sent"
             return "attachment", "Drop to attach files"
         if not self.workspace.can_open_file(target):
@@ -181,7 +187,7 @@ class FileDropRouter(QObject):
             return True
         try:
             if action == "attachment":
-                if not self.attachments.add_files(paths, interactive=False):
+                if not self.composers[target].add_files(paths, interactive=False):
                     self.show_indicator(target, "Attachment count limit reached", False)
             else:
                 content = self.registry.create(paths[0])
