@@ -712,9 +712,7 @@ class AssistantWindow(DesktopWindow):
             self.open_workspace()
 
     def load_stylesheet(self):
-        stylesheet = get_stylesheet()
-        self.setStyleSheet(stylesheet)
-        self.zoom_view.content.setStyleSheet(stylesheet)
+        QApplication.instance().setStyleSheet(get_stylesheet())
 
     @property
     def startup_greeting(self) -> str:

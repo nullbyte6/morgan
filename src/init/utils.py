@@ -71,5 +71,5 @@ def get_stylesheet():
     from pathlib import Path
     stylesheet_path = resource_path(
         (Path(__file__).resolve().parent.parent.parent / "assets" / "arlo.qss"))
-    stylesheet = stylesheet_path.read_text(encoding="utf-8")
-    return stylesheet
+    from .theme import current_theme
+    return current_theme().render(stylesheet_path.read_text(encoding="utf-8"))

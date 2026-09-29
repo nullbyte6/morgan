@@ -114,10 +114,6 @@ class WorkspacePanel(QFrame):
         self.drop_preview = QFrame(self)
         self.drop_preview.setObjectName("workspaceDropPreview")
         self.drop_preview.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.drop_preview.setStyleSheet(
-            "background-color: rgba(138, 173, 244, 72);"
-            "border: 2px solid rgba(138, 173, 244, 210);"
-            "border-radius: 10px;")
         self.drop_preview.hide()
 
         self.content: QWidget | None = None

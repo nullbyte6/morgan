@@ -112,8 +112,9 @@ def _reload_stylesheet(errors: list[str]) -> bool:
         return False
 
     try:
-        stylesheet = STYLESHEET_PATH.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as error:
+        from .theme import current_theme
+        stylesheet = current_theme().render(STYLESHEET_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, KeyError, ValueError) as error:
         errors.append(f"{STYLESHEET_PATH}: {error}")
         return False
 
