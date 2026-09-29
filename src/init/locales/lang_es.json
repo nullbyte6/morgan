@@ -291,6 +291,7 @@
   "config.personality_must_be_text": "personality.{key} debe ser texto",
   "config.instruction_sections_must_have_text_names_and_values": "Los nombres y valores de las secciones de instrucciones deben ser texto",
   "config.error_updating_configuration_unknown_setting": "Error al actualizar la configuración: ajuste desconocido '{key}'",
+  "config.error_updating_configuration_user_only_setting": "Error al actualizar la configuración: '{key}' solo puede cambiarlo el usuario",
   "config.application_config_keeping_last_valid_settings": "Configuración de la aplicación: {error}; se conservan los últimos ajustes válidos",
   "console.console_title": "Consola de {assistant_name}",
   "email_service.configure_email_address_email_password_or_email_password_and_the": "Configura email_address, email_password (o EMAIL_PASSWORD) y los ajustes del servidor de correo",

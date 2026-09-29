@@ -28,11 +28,18 @@ import unicodedata
 import tempfile
 import warnings
 from copy import deepcopy
+from enum import StrEnum
 from pathlib import Path
 from src.init.attachments import DEFAULT_LIMITS
 
 DEV_FILE = Path(__file__).resolve().parents[2] / "dev" / "core.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
+
+
+class PermissionMode(StrEnum):
+    ASK = "ask"
+    AUTO = "auto"
+
 
 DEFAULTS = {
     "assistant": {"name": "Arlo"},
@@ -50,6 +57,7 @@ DEFAULTS = {
     "keep_alive": "24h",
     "temperature": 0.2,
     "voice_reference": "arlo-01.wav",
+    "permission_mode": PermissionMode.ASK.value,
     "weather_location": "",
     "message_service": "whatsapp",
     "whatsapp_phone_number_id": "",
@@ -156,6 +164,10 @@ def validate_config(config):
             or "/" in reference or "\\" in reference
             or Path(reference).suffix.casefold() != ".wav"):
         raise ValueError("voice_reference must be a WAV filename")
+    try:
+        result["permission_mode"] = PermissionMode(result["permission_mode"]).value
+    except (TypeError, ValueError):
+        result["permission_mode"] = PermissionMode.ASK.value
     if result["lang"] not in ("english", "spanish"):
         raise ValueError(tr('config.lang_must_be_english_or_spanish'))
     for key in ("model", "message_service", "whatsapp_phone_number_id",
@@ -269,6 +281,8 @@ def update_config(updates: dict) -> str:
         for key, value in updates.items():
             if key not in DEFAULTS:
                 return tr('config.error_updating_configuration_unknown_setting', key=key)
+            if key == "permission_mode":
+                return tr('config.error_updating_configuration_user_only_setting', key=key)
             if isinstance(current.get(key), dict) and isinstance(value, dict):
                 current[key] = {**current[key], **value}
             else:

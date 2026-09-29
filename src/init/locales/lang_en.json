@@ -291,6 +291,7 @@
   "config.personality_must_be_text": "personality.{key} must be text",
   "config.instruction_sections_must_have_text_names_and_values": "instruction sections must have text names and values",
   "config.error_updating_configuration_unknown_setting": "Error updating configuration: unknown setting '{key}'",
+  "config.error_updating_configuration_user_only_setting": "Error updating configuration: '{key}' can only be changed by the user",
   "config.application_config_keeping_last_valid_settings": "Application config: {error}; keeping last valid settings",
   "console.console_title": "{assistant_name} Console",
   "email_service.configure_email_address_email_password_or_email_password_and_the": "Configure email_address, email_password (or EMAIL_PASSWORD) and the email server settings",
