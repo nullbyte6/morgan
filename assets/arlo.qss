@@ -633,7 +633,7 @@ QPushButton#privacyIndicator {
     color: #86EFAC;
     background-color: rgba(34, 197, 94, 0.08);
     border: 2px solid #466d62;
-    border-radius: 14px;
+    border-radius: 16px;
     padding: 6px 12px;
 }
 
