@@ -397,7 +397,7 @@ class WorkspaceSplitterHandle(QSplitterHandle):
             position = self.mapTo(self.splitter(), event.position().toPoint() - self._offset)
             value = position.x() if self.orientation() == Qt.Horizontal else position.y()
             splitter = self.splitter()
-            splitter.moveSplitter(splitter.indexOf(self), value)
+            splitter.moveSplitter(value, splitter.indexOf(self))
             event.accept()
             return
         super().mouseMoveEvent(event)
