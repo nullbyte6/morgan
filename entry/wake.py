@@ -47,7 +47,7 @@ from src.init.identity import get_assistant_name, get_assistant_identifier, get_
 from src.init.wake_capture import BLOCK_SECONDS, SAMPLE_RATE, WakeCapture, WakeSettings
 
 ROOT = Path(__file__).resolve().parent.parent
-LAUNCHER = "$env:ARLO\\arlo.exe" if sys.platform == "win32" else ROOT / "scripts" / "arlo-start.bat"
+LAUNCHER = "$env:ARLO" / "arlo.exe" if sys.platform == "win32" else ROOT / "scripts" / "arlo-start.bat"
 
 logging.basicConfig(
     level=logging.INFO,
