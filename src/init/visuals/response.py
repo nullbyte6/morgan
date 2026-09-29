@@ -40,6 +40,7 @@ from ..theme import current_theme, on_theme_changed
 @dataclass(eq=False)
 class ResponseRequest:
     title: str
+    owner: object = None
     completed: threading.Event = field(default_factory=threading.Event)
     result: str | None = None
     error: str | None = None
@@ -66,8 +67,8 @@ class ResponseBridge(QObject):
         with _registry_lock:
             _bridge = self
 
-    def request(self, title: str) -> str:
-        request = ResponseRequest(title.strip() or "Response")
+    def request(self, title: str, owner=None) -> str:
+        request = ResponseRequest(title.strip() or "Response", owner)
         with self._lock:
             if self._closed:
                 raise RuntimeError(f"{get_assistant_name()}'s response workspace is unavailable")
@@ -104,7 +105,8 @@ class ResponseBridge(QObject):
             try:
                 window = self.parent()
                 workspace = window.workspace
-                current = window.current_response_view
+                session = window.session_for(request.owner)
+                current = session.current_response_view
                 panel = next(
                     (workspace.get_panel(panel_id)
                      for panel_id in workspace.panel_ids
@@ -127,7 +129,7 @@ class ResponseBridge(QObject):
                     direction=Qt.Key_Right,
                 )
 
-                window.current_response_view = view
+                session.current_response_view = view
                 view.destroyed.connect(
                     lambda: window._forget_response_view(view))
                 workspace.focus_panel(panel_id)
@@ -148,12 +150,12 @@ class ResponseBridge(QObject):
                 self._complete(request, error=f"{get_assistant_name()}'s response workspace was closed")
 
 
-def request_response_workspace(title: str = "Response") -> str:
+def request_response_workspace(title: str = "Response", owner=None) -> str:
     with _registry_lock:
         bridge = _bridge
     if bridge is None:
         raise RuntimeError(f"The response workspace requires the running {get_assistant_name()} desktop")
-    return bridge.request(title)
+    return bridge.request(title, owner)
 
 class ResponseView(QWidget):
     """An independent, progressively rendered response surface."""

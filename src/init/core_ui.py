@@ -19,6 +19,7 @@
 
 """Arlo desktop interface using PySide6."""
 import html
+import itertools
 import logging
 import os
 import re
@@ -49,7 +50,7 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
 from src.init.indicators import (GitBranchIndicator, ModelSelector, PermissionSelector,
-                                 PrivacyIndicator, WorkingDirectory)
+                                 PrivacyIndicator, SessionSelector, WorkingDirectory)
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
 
@@ -116,6 +117,7 @@ from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
 from src.init.desktop.activity_trail import ActivityTrail
 from src.init.desktop.task_presentation import TaskPresentation
+from src.init.desktop.session import DesktopSession
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
 from src.init.desktop.file_drop import FileDropRouter
@@ -126,7 +128,7 @@ from src.init.terminal import TerminalBridge
 # noinspection PyBroadException
 class AssistantWindow(DesktopWindow):
     """Assistant window class, not its brain, which is somewhere else"""
-    request = Signal(int, object)
+    MAX_SESSIONS = 2
     model_request = Signal(str)
     username = getuser().capitalize()
 
@@ -171,17 +173,17 @@ class AssistantWindow(DesktopWindow):
         self.has_text = False
         self.recording = False
         self.voice_thread = None
-        self.pending_voice_barge = False
-        self.permission_denied_state = False
-        self.confirmation_dialog = None
-        self.pending_wake_barge = False
+        self.voice_session = None
         self.closing_after_voice = False
         self.quitting = False
         self.send = QPushButton("")
         self.greeting_key = f"greeting.{random.randrange(6)}"
 
-        self.worker = AssistantWorker(self.startup_greeting, muted=self.muted)
-        register_assistant(lambda: self.worker.assistant)
+        self.sessions = []
+        self._turn_ids = itertools.count(1)
+        self.session = self.create_session(self.startup_greeting)
+        self.assistant = self.session.worker.assistant
+        register_assistant(lambda: self.assistant)
 
         self.attach = QPushButton("")
         self.directory_indicator = WorkingDirectory(self)
@@ -192,15 +194,16 @@ class AssistantWindow(DesktopWindow):
         self.model_selector.model_selected.connect(self.request_model)
         self.permission_selector = PermissionSelector(self)
         self.permission_selector.set_mode(load_config()["permission_mode"])
-        self.worker.set_permission_mode(self.permission_selector.mode)
+        self.session.worker.set_permission_mode(self.permission_selector.mode)
         self.permission_selector.mode_changed.connect(self.set_permission_mode)
+        self.session_selector = SessionSelector(self)
+        self.session_selector.clicked.connect(lambda: self.switch_session())
 
         self.privacy_indicator.clicked.connect(
-            lambda: self.privacy_indicator.private_toggle(self.worker)
+            lambda: self.privacy_indicator.private_toggle(self.session.worker)
         )
 
         self.attachment_tray = AttachmentTray(load_config()["attachments"])
-        self.submitting = None
         self.input = ChatInput()
         self.composer_widget = QWidget()
         self.input_meter = AudioVisualizer()
@@ -218,44 +221,27 @@ class AssistantWindow(DesktopWindow):
         self.orb = Orb(self, fill_ratio=0.54)
         self.orb.set_speech_pulse_enabled(orb_speech_pulse)
 
-        self.capture_handler = self.worker.screenshot_requested.emit
+        self.capture_handler = self.session.worker.screenshot_requested.emit
         register_capture_handler(self.capture_handler)
-        self.clipboard_handler = self.worker.clipboard_requested.emit
+        self.clipboard_handler = self.session.worker.clipboard_requested.emit
         register_clipboard_handler(self.clipboard_handler)
         self.flowchart_bridge = FlowchartBridge(self)
         self.browser_bridge = BrowserBridge(self)
         self.terminal_bridge = TerminalBridge(self)
         self.response_bridge = ResponseBridge(self)
-        self.thread = QThread(self)
 
         self.log_dir = HOME_PATH / ".log"
 
-        self.busy = False
-        self.ready = False
-        self.speaking = False
-        self.stopping = False
-        self.pending_prompt = None
-        self.active_prompt = None
-        self.paused_prompt = None
-        self.task_stop_requested = False
-        self.turn_id = 0
-        self.status_key = "status.waking"
+        self.session.status_key = "status.waking"
         self.showing_greeting = True
-        self.current_reply = None
-        self.current_response_view = None
-        self._completed_git_diff = None
-        self.response_timer = QElapsedTimer()
-        self.response_timer_running = False
         self.response_timer_display = QLabel()
         self.response_timer_tick = QTimer(self)
         self.response_timer_tick.setInterval(50)
         self.response_timer_tick.timeout.connect(self._update_response_timer)
-        self.subtitle_text = ""
         self._startup_reveal_animations = []
         self._workspace_hiding = False
         self._workspace_exit_ready = False
         self.wake_inbox = None
-        self.wake_command_id = None
 
         self.build_ui()
         self.build_command_palette()
@@ -281,7 +267,15 @@ class AssistantWindow(DesktopWindow):
             self._open_pending_workspace)
         QApplication.instance().installEventFilter(self)
 
-        self.build_worker()
+        self.session_shortcuts = []
+        for sequence, action in (("Ctrl+Shift+N", self.new_session),
+                                 ("Ctrl+Tab", lambda: self.switch_session())):
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(Qt.ApplicationShortcut)
+            shortcut.activated.connect(action)
+            self.session_shortcuts.append(shortcut)
+
+        self.build_worker(self.session)
         self.set_status("status.waking")
         self.language_timer = QTimer(self)
         self.language_timer.setInterval(500)
@@ -299,11 +293,12 @@ class AssistantWindow(DesktopWindow):
 
     def poll_wake_commands(self):
         """Consume only when ready; preserve the composer and compact mode."""
-        barge_candidate = self.busy and not self.stopping
-        if (not self.ready or (self.busy and not barge_candidate) or
-                self.voice_thread is not None or self.submitting is not None or
-                (self.pending_prompt is not None and not barge_candidate) or
-                self.closing_after_voice or self.worker.assistant.shutdown_requested.is_set()):
+        session = self.session
+        barge_candidate = session.busy and not session.stopping
+        if (not session.ready or (session.busy and not barge_candidate) or
+                self.voice_thread is not None or session.submitting is not None or
+                (session.pending_prompt is not None and not barge_candidate) or
+                self.closing_after_voice or self.assistant.shutdown_requested.is_set()):
             return
         try:
             if self.wake_inbox is None:
@@ -317,23 +312,23 @@ class AssistantWindow(DesktopWindow):
             return
         command_id, text = command
         if text == WAKE_RECORD_REQUEST or text.partition("://")[2] == "voice/start-recording":
-            self.wake_command_id = command_id
+            session.wake_command_id = command_id
             if barge_candidate:
-                self.pending_wake_barge = True
-                self.pending_prompt = None
-                self.stop_response()
+                session.pending_wake_barge = True
+                session.pending_prompt = None
+                self.stop_response(session)
                 return
-            self.start_recording(automatic=True)
+            self.start_recording(automatic=True, session=session)
             self.finish_wake_command(
-                "completed" if self.recording else "failed",
+                session, "completed" if self.recording else "failed",
                 "" if self.recording else "Recording was unavailable",
             )
             return
-        self.wake_command_id = command_id
-        self.start_prompt(DesktopMessage(text))
+        session.wake_command_id = command_id
+        self.start_prompt(DesktopMessage(text), session)
 
-    def finish_wake_command(self, state, detail=""):
-        command_id, self.wake_command_id = self.wake_command_id, None
+    def finish_wake_command(self, session, state, detail=""):
+        command_id, session.wake_command_id = session.wake_command_id, None
         if command_id is not None:
             try:
                 self.wake_inbox.finish(command_id, state, detail)
@@ -423,6 +418,7 @@ class AssistantWindow(DesktopWindow):
         indicator_row.addWidget(self.directory_indicator)
         indicator_row.addWidget(self.branch_indicator)
         indicator_row.addWidget(self.privacy_indicator)
+        indicator_row.addWidget(self.session_selector)
         indicator_row.addStretch()
         indicator_row.addWidget(self.permission_selector)
         indicator_row.addWidget(self.model_selector)
@@ -580,12 +576,16 @@ class AssistantWindow(DesktopWindow):
                 panel.setMinimumSize(minimum)
 
     def _update_response_timer(self):
-        if not self.response_timer_running:
-            return
-        self.response_timer_display.setText(self._response_timer_text())
+        session = self.session
+        if session.response_timer_running:
+            session.response_timer_text = self._response_timer_text(session)
+        self.response_timer_display.setText(session.response_timer_text)
+        if not any(item.response_timer_running for item in self.sessions):
+            self.response_timer_tick.stop()
 
-    def _response_timer_text(self):
-        total_seconds = self.response_timer.elapsed() // 1000
+    @staticmethod
+    def _response_timer_text(session):
+        total_seconds = session.response_timer.elapsed() // 1000
         minutes, seconds = divmod(total_seconds, 60)
         hours, minutes = divmod(minutes, 60)
         if hours:
@@ -594,26 +594,27 @@ class AssistantWindow(DesktopWindow):
             return f"{minutes}m {seconds:02d}s"
         return f"{seconds}s"
 
-    def _start_response_timer(self):
-        self.response_timer.start()
-        self.response_timer_running = True
-        self.response_timer_display.setText("0s")
+    def _start_response_timer(self, session):
+        session.response_timer.start()
+        session.response_timer_running = True
+        session.response_timer_text = "0s"
         self.response_timer_tick.start()
+        self._update_response_timer()
 
-    def _stop_response_timer(self):
-        if self.response_timer_running:
-            self._update_response_timer()
-        self.response_timer_running = False
-        self.response_timer_tick.stop()
+    def _stop_response_timer(self, session):
+        if session.response_timer_running:
+            session.response_timer_text = self._response_timer_text(session)
+        session.response_timer_running = False
+        self._update_response_timer()
 
-    def _reset_response_timer(self):
-        self.response_timer_running = False
-        self.response_timer_tick.stop()
-        self.response_timer_display.setText("0s")
+    def _reset_response_timer(self, session):
+        session.response_timer_running = False
+        session.response_timer_text = "0s"
+        self._update_response_timer()
 
     def focus_main_workspace(self):
         self.workspace.focus_panel(self.main_workspace_panel_id)
-        if self.ready:
+        if self.session.ready:
             self.input.setFocus()
 
     def build_command_palette(self):
@@ -623,12 +624,19 @@ class AssistantWindow(DesktopWindow):
             Command("workspace.chat", "palette.chat", self.focus_main_workspace,
                     ("chat", "home", "inicio"),
                     lambda: self.workspace.get_panel(self.main_workspace_panel_id) is not None),
+            Command("session.new", "palette.new_session", self.new_session,
+                    ("new session", "nueva sesion", "nueva sesión"),
+                    lambda: len(self.sessions) < self.MAX_SESSIONS),
+            Command("session.switch", "palette.switch_session", self.switch_session,
+                    ("switch session", "cambiar sesion", "cambiar sesión"),
+                    lambda: len(self.sessions) > 1),
             Command("task.stop", "palette.stop_task", self.stop_current_task,
                     ("stop task", "detener tarea", "cancelar"),
-                    lambda: self.ready and (self.busy and not self.stopping or self.paused_prompt is not None)),
+                    lambda: self.session.ready and (self.session.busy and not self.session.stopping
+                                                    or self.session.paused_prompt is not None)),
             Command("task.pause", "palette.pause_task", self.pause_current_task,
                     ("pause task", "pausar tarea"),
-                    lambda: self.ready and self.busy and not self.stopping),
+                    lambda: self.session.ready and self.session.busy and not self.session.stopping),
             Command("task.resume", "palette.resume_task", self.resume_current_task,
                     ("resume task", "resumir tarea", "reanudar", "continuar"),
                     self.can_resume_task),
@@ -724,43 +732,95 @@ class AssistantWindow(DesktopWindow):
         for orb in (self.orb, self.mascot):
             orb.set_thinking(thinking)
 
-    def build_worker(self):
-        self.worker.moveToThread(self.thread)
+    def create_session(self, greeting=""):
+        index = len(self.sessions)
+        worker = AssistantWorker(greeting, muted=self.muted, session_key=index,
+                                 primary=not index)
+        session = DesktopSession(self, index, worker)
+        self.sessions.append(session)
+        return session
 
-        self.thread.started.connect(self.worker.initialize)
-        self.request.connect(self.worker.ask)
-        self.model_request.connect(self.worker.select_model)
-        self.worker.ready.connect(self.on_ready)
-        self.worker.model_changed.connect(self.on_model_changed)
-        self.worker.model_failed.connect(self.on_model_failed)
-        self.worker.directory.connect(
+    def session_for(self, key):
+        return next((session for session in self.sessions if session.index == key), self.session)
+
+    def build_worker(self, session):
+        worker = session.worker
+        session.bind()
+        if session.index == 0:
+            self.model_request.connect(worker.select_model)
+            worker.screenshot_requested.connect(self.on_screenshot_requested)
+            worker.clipboard_requested.connect(self.on_clipboard_requested)
+        worker.model_changed.connect(self.on_model_changed)
+        worker.model_failed.connect(self.on_model_failed)
+        worker.directory.connect(
             self.directory_indicator.set_directory
         )
+        worker.exit_requested.connect(self.request_quit)
+        session.worker_thread.start()
 
-        self.worker.accepted.connect(self.on_request_accepted)
-        self.worker.rejected.connect(self.on_request_rejected)
-        self.worker.chunk.connect(self.on_chunk)
-        self.worker.audio.connect(self.on_audio)
-        self.worker.speaking.connect(self.on_speaking)
-        self.worker.activity.connect(self.task_presentation.on_activity)
-        self.worker.phase.connect(self.task_presentation.on_phase)
-        self.worker.task_title.connect(self.task_presentation.set_task_title)
-        self.worker.permission_denied.connect(self.on_permission_denied)
-        self.worker.subtitle.connect(self.on_subtitle)
-        self.worker.finished.connect(self.on_finished)
-        self.worker.git_diff_ready.connect(self.on_git_diff_ready)
-        self.worker.failed.connect(self.on_error)
-        self.worker.screenshot_requested.connect(self.on_screenshot_requested)
-        self.worker.clipboard_requested.connect(self.on_clipboard_requested)
-        self.worker.exit_requested.connect(self.request_quit)
+    @Slot()
+    def new_session(self):
+        if self.quitting:
+            return
+        if len(self.sessions) >= self.MAX_SESSIONS:
+            logging.getLogger("assistant.sessions").info(
+                "Rejected a new session; the limit of %d is reached", self.MAX_SESSIONS)
+            self.status.setText(tr("session.limit", count=self.MAX_SESSIONS))
+            self.status.show()
+            return
+        session = self.create_session()
+        session.worker.set_permission_mode(self.permission_selector.mode)
+        self.build_worker(session)
+        logging.getLogger("assistant.sessions").info("Created session %d", session.index + 1)
+        self.switch_session(session.index)
 
-        self.thread.finished.connect(self.worker.shutdown)
-        self.thread.finished.connect(self.worker.deleteLater)
-        self.thread.start()
+    def switch_session(self, index=None):
+        if len(self.sessions) < 2 or self.quitting:
+            return
+        if index is None:
+            index = (self.session.index + 1) % len(self.sessions)
+        target = self.sessions[index]
+        if target is self.session:
+            return
+        self.session.draft = self.input.toPlainText()
+        self.session = target
+        self.input.setPlainText(target.draft)
+        self.render_session()
+        if self.isVisible() and target.ready:
+            self.input.setFocus()
 
-        self.worker.confirmation_requested.connect(
-            self.on_confirmation_requested)
-        self.worker.confirmation_closed.connect(self.on_confirmation_closed)
+    def render_session(self):
+        session = self.session
+        self.task_presentation.present(session.presentation.view)
+        self.set_status(session.status_key, session)
+        self.command_output.setPlainText(session.command_output)
+        self.command_output.setVisible(session.command_output_visible)
+        self.update_subtitles(session.subtitle_text, session)
+        self.orb.clear()
+        self.mascot.clear()
+        self.set_orbs_speaking(session.speaking)
+        self._update_response_timer()
+        self.refresh_privacy_indicator()
+        self.refresh_session_indicator()
+        self.update_send_button()
+
+    def refresh_session_indicator(self):
+        background = any(session.busy for session in self.sessions if session is not self.session)
+        self.session_selector.set_sessions(self.session.index, len(self.sessions), background)
+        title = self._main_title()
+        panel = self.workspace.get_panel(self.main_workspace_panel_id) if hasattr(self, "workspace") else None
+        if panel is not None:
+            panel.set_title(title)
+
+    def _main_title(self):
+        title = f"{get_assistant_name()} {load_dev_file()['version']}"
+        if len(self.sessions) > 1:
+            title += " · " + tr("session.label", index=self.session.index + 1, count=len(self.sessions))
+        return title
+
+    def on_session_view(self, session, view):
+        if session is self.session:
+            self.task_presentation.present(view)
 
     @Slot()
     def open_workspace(self, direction: Qt.Key | None = None) -> None:
@@ -907,16 +967,18 @@ class AssistantWindow(DesktopWindow):
         finally:
             request.completed.set()
 
-    @Slot(int, str, int, int)
-    def on_confirmation_requested(self, turn_id, message, request_id, timeout):
-        if turn_id != self.turn_id:
+    def on_confirmation_requested(self, session, turn_id, message, request_id, timeout):
+        if turn_id != session.turn_id:
             return
-        if self.stopping:
-            self.worker.resolve_confirmation(False, request_id)
+        if session.stopping:
+            session.worker.resolve_confirmation(False, request_id)
             return
-        self.task_presentation.awaiting_permission(turn_id)
+        session.presentation.awaiting_permission(turn_id)
         dialog = QMessageBox(self)
-        dialog.setWindowTitle(tr("command.title"))
+        title = tr("command.title")
+        if len(self.sessions) > 1:
+            title += " · " + tr("session.label", index=session.index + 1, count=len(self.sessions))
+        dialog.setWindowTitle(title)
         dialog.setIcon(QMessageBox.Question)
         dialog.setText(tr("command.request"))
         dialog.setInformativeText(message)
@@ -935,35 +997,37 @@ class AssistantWindow(DesktopWindow):
         countdown.timeout.connect(show_remaining)
         show_remaining()
         countdown.start()
-        self.confirmation_dialog = (request_id, dialog)
-        try:
-            accepted = dialog.exec() == QMessageBox.Yes
-        finally:
+        session.confirmation_dialogs[request_id] = dialog
+
+        def answered(_result):
             countdown.stop()
-            self.confirmation_dialog = None
+            session.confirmation_dialogs.pop(request_id, None)
+            accepted = dialog.clickedButton() is dialog.button(QMessageBox.Yes)
             dialog.deleteLater()
-        self.task_presentation.awaiting_permission(turn_id, waiting=False)
-        self.worker.resolve_confirmation(accepted, request_id)
+            session.presentation.awaiting_permission(turn_id, waiting=False)
+            session.worker.resolve_confirmation(accepted, request_id)
 
-    @Slot(int)
-    def on_confirmation_closed(self, request_id):
-        if self.confirmation_dialog is not None and self.confirmation_dialog[0] == request_id:
-            self.confirmation_dialog[1].done(0)
+        dialog.finished.connect(answered)
+        dialog.open()
 
-    def set_status(self, key):
-        self.status_key = key
+    def set_status(self, key, session=None):
+        session = session or self.session
+        session.status_key = key
+        if session is not self.session:
+            return
         self.status.setText(tr(key) if key else "")
         self.status.setVisible(bool(key))
 
     def set_enabled(self, enabled):
-        self.input.setEnabled(enabled and self.submitting is None)
+        self.input.setEnabled(enabled and self.session.submitting is None)
         self.update_send_button()
 
     def update_send_button(self):
+        session = self.session
         self.has_text = bool(self.input.toPlainText().strip())
         voice_active = self.voice_thread is not None
         live_active = voice_active and self.voice_thread.live
-        stopping_available = self.busy and self.speaking and not self.stopping
+        stopping_available = session.busy and session.speaking and not session.stopping
         self.send.setText("" if stopping_available or self.recording or live_active else
                           "" if self.has_text else "")
         mic = not (stopping_available or self.recording or live_active
@@ -974,13 +1038,14 @@ class AssistantWindow(DesktopWindow):
             self.send.style().polish(self.send)
 
         self.send.setEnabled(
-            self.ready and (live_active or self.recording or stopping_available or (
-                    not voice_active and not self.busy and
-                    self.submitting is None and self.attachment_tray.can_send)))
-        editable = self.ready and self.submitting is None and not voice_active
+            session.ready and (live_active or self.recording or stopping_available or (
+                    not voice_active and not session.busy and
+                    session.submitting is None and self.attachment_tray.can_send)))
+        editable = session.ready and session.submitting is None and not voice_active
         self.attach.setEnabled(editable)
         self.model_selector.setEnabled(
-            editable and not self.busy and not self.model_switching and not MODEL_OVERRIDE)
+            editable and not any(item.busy for item in self.sessions)
+            and not self.model_switching and not MODEL_OVERRIDE)
         self.model_selector.setToolTip(tr("ui.model_locked" if MODEL_OVERRIDE else "ui.model_hint"))
         self.model_selector.setAccessibleName(tr("ui.model"))
         self.attachment_tray.setEnabled(editable)
@@ -994,7 +1059,7 @@ class AssistantWindow(DesktopWindow):
         self.send.setToolTip(
             tr("ui.stop_hint") if stopping_available else label)
         self.input.setPlaceholderText(
-            tr("ui.steering_input" if self.busy else "ui.input"))
+            tr("ui.steering_input" if session.busy else "ui.input"))
 
     @Slot(str)
     def change_language(self, language):
@@ -1014,12 +1079,11 @@ class AssistantWindow(DesktopWindow):
             return
         self.active_language = language
         self.active_assistant_name = name
-        title = f"{name} {load_dev_file()['version']}"
-        self.setWindowTitle(title)
+        self.setWindowTitle(f"{name} {load_dev_file()['version']}")
         if hasattr(self, "workspace"):
             panel = self.workspace.get_panel(getattr(self, "main_workspace_panel_id", "main"))
             if panel is not None:
-                panel.set_title(title)
+                panel.set_title(self._main_title())
         tray = getattr(self, "tray_icon", None)
         if tray is not None:
             tray.setToolTip(tr("tray.running"))
@@ -1038,10 +1102,11 @@ class AssistantWindow(DesktopWindow):
         self.permission_selector.refresh_language()
         self.refresh_settings_workspaces()
         self.attachment_tray.refresh()
-        self.set_status(self.status_key)
+        self.set_status(self.session.status_key)
+        self.refresh_session_indicator()
         self.update_send_button()
         if self.showing_greeting:
-            self.update_subtitles(self.startup_greeting)
+            self.update_subtitles(self.startup_greeting, self.sessions[0])
 
     def refresh_settings_workspaces(self):
         for view in self.workspace.findChildren(SettingsView):
@@ -1058,7 +1123,7 @@ class AssistantWindow(DesktopWindow):
             view.refresh_language()
 
     def refresh_privacy_indicator(self):
-        private = self.worker.session.private
+        private = self.session.worker.session.private
         self.privacy_indicator.setVisible(private)
 
     def refresh_directory_indicators(self):
@@ -1067,23 +1132,24 @@ class AssistantWindow(DesktopWindow):
         self.branch_indicator.set_directory(directory)
         self.input.refresh_file_tags()
 
-    @Slot()
-    def on_ready(self):
-        self.ready = True
-        self.set_status("")
-        self.set_orbs_visual_state(Orb.State.IDLE)
+    def on_ready(self, session):
+        session.ready = True
+        self.set_status("", session)
+        if session is self.session:
+            self.set_orbs_visual_state(Orb.State.IDLE)
         self.set_enabled(True)
-        self.model_selector.refresh(self.worker.assistant.selected_model)
-        self._reveal_startup_controls()
+        if session.index == 0:
+            self.model_selector.refresh(self.assistant.selected_model)
+            self._reveal_startup_controls()
 
-        if self.isVisible():
+        if self.isVisible() and session is self.session:
             self.input.setFocus()
 
     @Slot(str)
     def request_model(self, model):
-        if (not model or model == self.worker.assistant.selected_model
-                or self.busy or self.model_switching):
-            self.model_selector.set_current(self.worker.assistant.selected_model)
+        if (not model or model == self.assistant.selected_model
+                or any(session.busy for session in self.sessions) or self.model_switching):
+            self.model_selector.set_current(self.assistant.selected_model)
             return
         self.model_switching = True
         self.update_send_button()
@@ -1098,7 +1164,7 @@ class AssistantWindow(DesktopWindow):
     @Slot(str)
     def on_model_failed(self, error):
         self.model_switching = False
-        self.model_selector.set_current(self.worker.assistant.selected_model)
+        self.model_selector.set_current(self.assistant.selected_model)
         self.update_send_button()
         QMessageBox.warning(self, tr("ui.model"), error)
 
@@ -1138,7 +1204,7 @@ class AssistantWindow(DesktopWindow):
     @Slot(bool)
     def toggle_subtitles(self, enabled: bool):
         self.subtitles_enabled = enabled
-        self.subtitles.setVisible(enabled and self.ready)
+        self.subtitles.setVisible(enabled and self.sessions[0].ready)
         self.sync_mascot_subtitle()
         self.settings.setValue("subtitles", enabled)
         self.refresh_settings_workspaces()
@@ -1148,11 +1214,13 @@ class AssistantWindow(DesktopWindow):
         self.muted = bool(muted)
         self.settings.setValue("muted", self.muted)
         try:
-            self.worker.set_muted(self.muted)
+            for session in self.sessions:
+                session.worker.set_muted(self.muted)
         except Exception as error:
             QMessageBox.warning(self, tr("ui.mute"), str(error))
         if self.muted:
-            self.on_speaking(self.turn_id, False)
+            for session in self.sessions:
+                self.on_speaking(session, session.turn_id, False)
             self.orb.clear()
             self.mascot.clear()
         self.refresh_settings_workspaces()
@@ -1165,7 +1233,8 @@ class AssistantWindow(DesktopWindow):
 
     @Slot(str)
     def set_permission_mode(self, mode):
-        self.worker.set_permission_mode(mode)
+        for session in self.sessions:
+            session.worker.set_permission_mode(mode)
         try:
             config = load_config()
             config["permission_mode"] = mode
@@ -1195,12 +1264,15 @@ class AssistantWindow(DesktopWindow):
 
     def sync_mascot_subtitle(self):
         self.mascot_subtitles.set_subtitle(
-            self.subtitle_text,
-            self.subtitles_enabled and self.speaking)
+            self.session.subtitle_text,
+            self.subtitles_enabled and self.session.speaking)
 
-    def update_subtitles(self, text):
+    def update_subtitles(self, text, session=None):
         from PySide6.QtGui import QTextLayout
-        self.subtitle_text = text
+        session = session or self.session
+        session.subtitle_text = text
+        if session is not self.session:
+            return
         font = self.subtitles.font()
         metrics = QFontMetrics(font)
         max_width = metrics.horizontalAdvance("M" * 56)
@@ -1240,66 +1312,71 @@ class AssistantWindow(DesktopWindow):
 
     @Slot()
     def send_message(self):
-        if not self.ready or self.voice_thread is not None:
+        session = self.session
+        if not session.ready or self.voice_thread is not None:
             return
 
-        if self.submitting is not None or not self.attachment_tray.can_send:
+        if session.submitting is not None or not self.attachment_tray.can_send:
             return
-        controller = getattr(self.worker.assistant, "_active_task_controller", None) if self.busy else None
+        controller = session.worker.session.context.task_controller if session.busy else None
         message = DesktopMessage(
             self.input.toPlainText().strip(), self.attachment_tray.snapshot(),
             resume_task_id=controller.state.id if controller is not None and controller.state.status == "active" else "")
         if not message.text and not message.attachments:
             return
-        if self.busy and self.stopping:
+        if session.busy and session.stopping:
             return
-        self.submitting = message
+        session.submitting = message
         self.update_send_button()
-        if self.busy:
-            self.pending_prompt = message
-            self.stop_response()
+        if session.busy:
+            session.pending_prompt = message
+            self.stop_response(session)
             return
-        self.start_prompt(message)
+        self.start_prompt(message, session)
 
-    @Slot(int)
-    def on_request_accepted(self, turn_id):
-        if turn_id != self.turn_id or self.submitting is None:
+    def on_request_accepted(self, session, turn_id):
+        if turn_id != session.turn_id or session.submitting is None:
             return
 
-        self.input.clear()
+        if session is self.session:
+            self.input.clear()
+        else:
+            session.draft = ""
         self.attachment_tray.clear()
-        self.submitting = None
+        session.submitting = None
         self.update_send_button()
 
-    @Slot(int, str)
-    def on_request_rejected(self, turn_id, error):
-        if turn_id != self.turn_id:
+    def on_request_rejected(self, session, turn_id, error):
+        if turn_id != session.turn_id:
             return
 
-        self._reset_response_timer()
-        self.task_presentation.finish(turn_id, failed=True)
-        self.finish_wake_command("failed", error)
-        self.submitting = None
-        self.busy = False
-        self.current_reply = None
-        if self.voice_thread is not None and self.voice_thread.live:
+        self._reset_response_timer(session)
+        session.presentation.finish(turn_id, failed=True)
+        self.finish_wake_command(session, "failed", error)
+        session.submitting = None
+        session.busy = False
+        session.current_reply = None
+        if (self.voice_thread is not None and self.voice_thread.live
+                and self.voice_session is session):
             self.voice_thread.stop_event.set()
         self.update_send_button()
+        self.refresh_session_indicator()
         QMessageBox.warning(self, tr("ui.attach_files"), error)
 
     @Slot()
     def on_mascot_record(self):
         """Start or stop microphone recording from compact mode."""
+        session = self.session
         if self.recording or self.voice_thread is not None:
             self.on_send_clicked()
             return
 
-        if self.busy and self.speaking and not self.stopping:
-            self.pending_voice_barge = True
-            self.stop_response()
+        if session.busy and session.speaking and not session.stopping:
+            session.pending_voice_barge = True
+            self.stop_response(session)
             return
 
-        if (not self.ready or self.busy or
+        if (not session.ready or session.busy or
                 self.voice_thread is not None):
             return
 
@@ -1345,45 +1422,56 @@ class AssistantWindow(DesktopWindow):
         kill_self()
         self.close()
 
-    def start_prompt(self, prompt):
-        self.active_prompt = prompt
-        self.paused_prompt = None
-        self.task_stop_requested = False
-        self.set_status("")
-        self.turn_id += 1
-        self.task_presentation.begin(self.turn_id)
-        self.showing_greeting = False
-        self.worker.cancel_event = threading.Event()
-        self.stopping = False
-        self.permission_denied_state = False
-        self.speaking = False
+    def start_prompt(self, prompt, session=None):
+        session = session or self.session
+        session.active_prompt = prompt
+        session.paused_prompt = None
+        session.task_stop_requested = False
+        self.set_status("", session)
+        session.turn_id = next(self._turn_ids)
+        session.presentation.begin(session.turn_id)
+        if session.index == 0:
+            self.showing_greeting = False
+        session.worker.cancel_event = threading.Event()
+        session.stopping = False
+        session.permission_denied_state = False
+        session.speaking = False
 
-        self.command_output.hide()
-        self.command_output.clear()
+        self.set_command_output(session, "", False)
 
-        self.current_reply = ""
-        self.current_response_view = None
-        self._start_response_timer()
-        self.update_subtitles(prompt.display_text)
+        session.current_reply = ""
+        session.current_response_view = None
+        self._start_response_timer(session)
+        self.update_subtitles(prompt.display_text, session)
 
-        self.busy = True
+        session.busy = True
         self.set_enabled(True)
+        self.refresh_session_indicator()
 
         try:
-            if not self.thread.isRunning():
+            if not session.worker_thread.isRunning():
                 raise RuntimeError(tr("ui.worker_unavailable"))
-            self.request.emit(self.turn_id, prompt)
+            session.request.emit(session.turn_id, prompt)
         except Exception as error:
-            self.on_request_rejected(self.turn_id, str(error))
+            self.on_request_rejected(session, session.turn_id, str(error))
+
+    def set_command_output(self, session, text, visible):
+        session.command_output = text
+        session.command_output_visible = visible
+        if session is self.session:
+            self.command_output.setPlainText(text)
+            self.command_output.setVisible(visible)
 
     @Slot()
     def on_send_clicked(self):
+        session = self.session
         if self.voice_thread is not None and self.voice_thread.live:
+            voice_session = self.voice_session or session
             self.voice_thread.stop_event.set()
-            if isinstance(self.pending_prompt, DesktopVoiceMessage):
-                self.pending_prompt = None
-            if self.busy and not self.stopping:
-                self.stop_response()
+            if isinstance(voice_session.pending_prompt, DesktopVoiceMessage):
+                voice_session.pending_prompt = None
+            if voice_session.busy and not voice_session.stopping:
+                self.stop_response(voice_session)
             self.recording = False
             self.set_orbs_listening(False)
             self.update_send_button()
@@ -1393,31 +1481,33 @@ class AssistantWindow(DesktopWindow):
             self.update_send_button()
         elif self.voice_thread is not None:
             return
-        elif self.busy:
-            if self.speaking and not self.stopping:
-                self.pending_voice_barge = True
-                self.stop_response()
+        elif session.busy:
+            if session.speaking and not session.stopping:
+                session.pending_voice_barge = True
+                self.stop_response(session)
         elif self.has_text:
             self.send_message()
         else:
             self.start_recording()
 
-    def start_recording(self, *, automatic=False):
-        if (not self.ready or self.busy or self.submitting is not None or
+    def start_recording(self, *, automatic=False, session=None):
+        session = session or self.session
+        if (not session.ready or session.busy or session.submitting is not None or
                 self.voice_thread is not None):
             return
-        if not self.worker.assistant.voice.supports_playback_reference:
+        if not self.assistant.voice.supports_playback_reference:
             self.status.setText(tr("voice.restart"))
             self.status.show()
             return
         try:
-            self.worker.assistant.voice.set_playback_reference(True)
+            self.assistant.voice.set_playback_reference(True)
         except RuntimeError as error:
             self.status.setText(str(error))
             self.status.show()
             return
         self.voice_thread = VoiceInputWorker(self, automatic=True, live=True)
-        self.worker.live_capture = self.voice_thread
+        self.voice_session = session
+        session.worker.live_capture = self.voice_thread
         self.voice_thread.levels.connect(self.on_voice_levels)
         self.voice_thread.processing.connect(self.on_voice_processing)
         self.voice_thread.speech_started.connect(self.on_voice_started)
@@ -1435,7 +1525,8 @@ class AssistantWindow(DesktopWindow):
 
     @Slot(object)
     def on_voice_levels(self, levels):
-        if not self.busy or self.stopping:
+        session = self.voice_session or self.session
+        if not session.busy or session.stopping:
             self.input_meter.set_levels(levels)
             self.mascot.set_levels(levels)
             self.orb.set_levels(levels)
@@ -1444,8 +1535,9 @@ class AssistantWindow(DesktopWindow):
     def on_voice_started(self):
         if self.voice_thread is None or self.voice_thread.stop_event.is_set():
             return
-        if self.busy and not self.stopping:
-            self.stop_response()
+        session = self.voice_session or self.session
+        if session.busy and not session.stopping:
+            self.stop_response(session)
         self.recording = True
         self.set_orbs_listening(True)
         self.set_orbs_visual_state(Orb.State.WRITING)
@@ -1457,16 +1549,18 @@ class AssistantWindow(DesktopWindow):
         if (self.quitting or self.voice_thread is None or
                 self.voice_thread.stop_event.is_set()):
             return
-        if self.busy:
-            self.pending_prompt = message
-            if not self.stopping:
-                self.stop_response()
+        session = self.voice_session or self.session
+        if session.busy:
+            session.pending_prompt = message
+            if not session.stopping:
+                self.stop_response(session)
         else:
-            self.start_prompt(message)
+            self.start_prompt(message, session)
 
-    def resume_live_listening(self):
+    def resume_live_listening(self, session):
         if (self.voice_thread is None or not self.voice_thread.live or
-                self.voice_thread.stop_event.is_set() or self.busy or self.quitting):
+                self.voice_thread.stop_event.is_set() or self.voice_session is not session
+                or session.busy or self.quitting):
             return
         self.voice_thread.waiting_response.clear()
         self.recording = True
@@ -1491,10 +1585,12 @@ class AssistantWindow(DesktopWindow):
         worker = self.voice_thread
         if worker is None:
             return
+        session = self.voice_session or self.session
         self.voice_thread = None
-        self.worker.live_capture = None
+        self.voice_session = None
+        session.worker.live_capture = None
         try:
-            self.worker.assistant.voice.set_playback_reference(False)
+            self.assistant.voice.set_playback_reference(False)
         except RuntimeError:
             logging.getLogger("assistant.voice").exception("Unable to stop playback reference")
         self.recording = False
@@ -1513,70 +1609,77 @@ class AssistantWindow(DesktopWindow):
             self.status.show()
         elif worker.audio_wav and not worker.live:
             self.start_prompt(DesktopVoiceMessage(worker.audio_wav,
-                                                  worker.transcript))
+                                                  worker.transcript), session)
 
         if self.isVisible():
             self.input.setFocus()
 
     def can_resume_task(self):
-        controller = getattr(self.worker.session.context, "task_controller", None)
+        session = self.session
+        controller = session.worker.session.context.task_controller
         suspended = controller is not None and controller.state.status in {
             "interrupted", "waiting", "blocked", "limit_reached"}
-        return (self.ready and (self.paused_prompt is not None or suspended) and not self.busy
-                and not self.stopping and not self.recording and self.voice_thread is None
-                and self.submitting is None and self.pending_prompt is None and not self.quitting)
+        return (session.ready and (session.paused_prompt is not None or suspended) and not session.busy
+                and not session.stopping and not self.recording and self.voice_thread is None
+                and session.submitting is None and session.pending_prompt is None and not self.quitting)
 
     def pause_current_task(self):
-        if not self.ready or not self.busy or self.stopping:
+        session = self.session
+        if not session.ready or not session.busy or session.stopping:
             return
-        self.paused_prompt = self.active_prompt
-        self.stop_response()
+        session.paused_prompt = session.active_prompt
+        self.stop_response(session)
 
-    def cancel_current_task(self):
+    def cancel_current_task(self, session):
         from src.init.task_state import Lifecycle
 
-        controller = getattr(self.worker.assistant, "_active_task_controller", None)
-        if (controller is not None and controller.state is getattr(self.worker.assistant, "task_state", None)
+        context = session.worker.session.context
+        controller = context.task_controller
+        if (controller is not None and controller.state is context.task_state
                 and controller.state.status in {
                 Lifecycle.INTERRUPTED, Lifecycle.WAITING, Lifecycle.BLOCKED, Lifecycle.LIMIT_REACHED}):
             controller.state.suspend(Lifecycle.CANCELLED, "Stopped by the user.")
             controller.context.task_controller = controller.pending_task
-            self.worker.assistant._active_task_controller = controller.pending_task
-        self.task_stop_requested = False
+        session.task_stop_requested = False
 
     def stop_current_task(self):
-        if not self.ready or not (self.busy or self.paused_prompt is not None):
+        session = self.session
+        if not session.ready or not (session.busy or session.paused_prompt is not None):
             return
-        self.paused_prompt = None
-        self.task_stop_requested = True
-        self.set_status("")
-        if self.busy:
-            if not self.stopping:
-                self.stop_response()
+        session.paused_prompt = None
+        session.task_stop_requested = True
+        self.set_status("", session)
+        if session.busy:
+            if not session.stopping:
+                self.stop_response(session)
         else:
-            self.cancel_current_task()
+            self.cancel_current_task(session)
 
     def resume_current_task(self):
         if not self.can_resume_task():
             return
-        prompt = self.paused_prompt
-        controller = getattr(self.worker.session.context, "task_controller", None)
+        session = self.session
+        prompt = session.paused_prompt
+        context = session.worker.session.context
+        controller = context.task_controller
         if (controller is not None and (prompt is None
-                or controller.state is getattr(self.worker.assistant, "task_state", None))
+                or controller.state is context.task_state)
                 and controller.state.status in {"interrupted", "waiting", "blocked", "limit_reached"}):
             prompt = DesktopMessage(tr("palette.resume_prompt"), prompt.attachments if prompt is not None else (),
                                     resume_task_id=controller.state.id)
-        self.start_prompt(prompt)
+        self.start_prompt(prompt, session)
 
-    def stop_response(self):
-        self._stop_response_timer()
-        self.stopping = True
-        self.task_presentation.finish(self.turn_id, interrupted=True)
-        self.worker.interrupt()
-        self.speaking = False
-        self.orb.clear()
-        self.set_orbs_speaking(False)
-        self.set_orbs_thinking(False)
+    def stop_response(self, session=None):
+        session = session or self.session
+        self._stop_response_timer(session)
+        session.stopping = True
+        session.presentation.finish(session.turn_id, interrupted=True)
+        session.worker.interrupt()
+        session.speaking = False
+        if session is self.session:
+            self.orb.clear()
+            self.set_orbs_speaking(False)
+            self.set_orbs_thinking(False)
         self.update_send_button()
 
     @Slot()
@@ -1596,183 +1699,176 @@ class AssistantWindow(DesktopWindow):
         self.set_orbs_thinking(view.active and view.orb_state == Orb.State.PROCESSING)
         self.set_orbs_visual_state(view.orb_state)
 
-    @Slot(int)
-    def on_permission_denied(self, turn_id):
-        if turn_id == self.turn_id:
-            self.permission_denied_state = True
-            self.task_presentation.permission_denied(turn_id)
+    def on_permission_denied(self, session, turn_id):
+        if turn_id == session.turn_id:
+            session.permission_denied_state = True
+            session.presentation.permission_denied(turn_id)
 
-    @Slot(int, str)
-    def on_chunk(self, turn_id, chunk):
-        if turn_id != self.turn_id or self.current_reply is None:
+    def on_chunk(self, session, turn_id, chunk):
+        if turn_id != session.turn_id or session.current_reply is None:
             return
 
-        self.current_reply += chunk
-        if self.current_response_view is not None:
-            self.current_response_view.append_chunk(chunk)
-        self.task_presentation.writing(turn_id)
+        session.current_reply += chunk
+        if session.current_response_view is not None:
+            session.current_response_view.append_chunk(chunk)
+        session.presentation.writing(turn_id)
 
     def _forget_response_view(self, response_view):
-        if self.current_response_view is response_view:
-            self.current_response_view = None
+        for session in self.sessions:
+            if session.current_response_view is response_view:
+                session.current_response_view = None
 
-    @Slot(int, str)
-    def on_subtitle(self, turn_id, text):
-        if turn_id == self.turn_id and not self.stopping:
-            self.update_subtitles(text)
+    def on_subtitle(self, session, turn_id, text):
+        if turn_id == session.turn_id and not session.stopping:
+            self.update_subtitles(text, session)
 
-    @Slot(int, object)
-    def on_audio(self, turn_id, levels):
-        if self.muted:
+    def on_audio(self, session, turn_id, levels):
+        if self.muted or session is not self.session:
             return
-        if (turn_id == self.turn_id and (self.busy or not self.ready)
-                and not self.stopping):
+        if (turn_id == session.turn_id and (session.busy or not session.ready)
+                and not session.stopping):
             self.mascot.set_levels(levels)
             self.orb.set_levels(levels)
 
-    @Slot(int, bool)
-    def on_speaking(self, turn_id, speaking):
-        if turn_id != self.turn_id:
+    def on_speaking(self, session, turn_id, speaking):
+        if turn_id != session.turn_id:
             return
-        self.speaking = (speaking and not self.muted and (self.busy or not self.ready)
-                         and not self.stopping)
-        if not self.ready:
-            self.set_orbs_visual_state(Orb.State.READING if self.speaking else Orb.State.IDLE)
+        session.speaking = (speaking and not self.muted and (session.busy or not session.ready)
+                            and not session.stopping)
+        if not session.ready:
+            if session is self.session:
+                self.set_orbs_visual_state(Orb.State.READING if session.speaking else Orb.State.IDLE)
         else:
-            self.task_presentation.speaking(turn_id, self.speaking)
+            session.presentation.speaking(turn_id, session.speaking)
 
-        self.set_orbs_speaking(self.speaking)
+        if session is self.session:
+            self.set_orbs_speaking(session.speaking)
 
         self.update_send_button()
 
-    @Slot(str)
-    def on_finished(self, reply):
-        self._stop_response_timer()
-        interrupted = self.stopping
-        if self.current_response_view is not None:
-            self.current_response_view.finish(reply)
-        self.task_presentation.finish(self.turn_id, interrupted=interrupted,
-                                      failed=self.permission_denied_state)
-        task_state = getattr(self.worker.assistant, "task_state", None)
-        if self.paused_prompt is not None and (
+    def on_finished(self, session, reply):
+        self._stop_response_timer(session)
+        interrupted = session.stopping
+        if session.current_response_view is not None:
+            session.current_response_view.finish(reply)
+        session.presentation.finish(session.turn_id, interrupted=interrupted,
+                                    failed=session.permission_denied_state)
+        task_state = session.worker.session.context.task_state
+        if session.paused_prompt is not None and (
                 task_state is not None and task_state.status == "complete" or task_state is None and reply):
-            self.paused_prompt = None
-        if self.task_stop_requested:
-            self.cancel_current_task()
-        task_failed = self.task_presentation.view.state in {"error", "waiting", "stopped"}
-        self.finish_wake_command("failed" if interrupted or task_failed else "completed",
+            session.paused_prompt = None
+        if session.task_stop_requested:
+            self.cancel_current_task(session)
+        task_failed = session.presentation.view.state in {"error", "waiting", "stopped"}
+        self.finish_wake_command(session, "failed" if interrupted or task_failed else "completed",
                                  "Interrupted" if interrupted else
                                  task_state.notice if task_failed and task_state is not None else
                                  tr("task_progress.error") if task_failed else "")
-        if self.worker.command_reply:
-            self.command_output.setPlainText(reply)
-            self.command_output.show()
-            self.update_subtitles(reply.splitlines()[0])
-        elif not self.current_reply:
-            self.update_subtitles(reply or tr("status.paused" if self.paused_prompt is not None else
-                                              "status.stopped" if interrupted else "ui.no_response"))
+        if session.worker.command_reply:
+            self.set_command_output(session, reply, True)
+            self.update_subtitles(reply.splitlines()[0], session)
+        elif not session.current_reply:
+            self.update_subtitles(reply or tr("status.paused" if session.paused_prompt is not None else
+                                              "status.stopped" if interrupted else "ui.no_response"), session)
         else:
-            self.update_subtitles("")
+            self.update_subtitles("", session)
 
-        self.current_reply = None
-        self.current_response_view = None
-        self.busy = False
-        self.speaking = False
-        self.stopping = False
-        if self.paused_prompt is not None:
-            self.set_status("status.paused")
-        self.orb.clear()
-        self.set_orbs_speaking(False)
-        self.set_orbs_thinking(False)
-        QTimer.singleShot(700, lambda turn_id=self.turn_id: self.task_presentation.settle(turn_id))
+        session.current_reply = None
+        session.current_response_view = None
+        session.busy = False
+        session.speaking = False
+        session.stopping = False
+        if session.paused_prompt is not None:
+            self.set_status("status.paused", session)
+        if session is self.session:
+            self.orb.clear()
+            self.set_orbs_speaking(False)
+            self.set_orbs_thinking(False)
+        QTimer.singleShot(700, lambda turn_id=session.turn_id, presentation=session.presentation:
+                          presentation.settle(turn_id))
         self.refresh_privacy_indicator()
+        self.refresh_session_indicator()
         self.set_enabled(True)
-        if self.isVisible():
+        if self.isVisible() and session is self.session:
             self.input.setFocus()
 
-        if self.worker.assistant.shutdown_requested.is_set():
+        if self.assistant.shutdown_requested.is_set():
             self.quitting = True
             QTimer.singleShot(0, self.request_quit)
             return
 
-        snapshot, self._completed_git_diff = self._completed_git_diff, None
+        snapshot, session.completed_git_diff = session.completed_git_diff, None
         if snapshot is not None and not interrupted and not task_failed:
             from src.init.visuals.diff_workspace import DiffWorkspacePanel
             directory, diff = snapshot
             self.workspace.open_registered_panel(
                 "git_diff", tr("git_workspace.title"), lambda: DiffWorkspacePanel(directory, diff))
 
-        if self.pending_wake_barge:
-            self.pending_wake_barge = False
-            self.start_recording(automatic=True)
-            self.finish_wake_command(
-                "completed" if self.recording else "failed",
-                "" if self.recording else "Recording was unavailable",
-            )
-        elif self.pending_voice_barge:
-            self.pending_voice_barge = False
-            QTimer.singleShot(0, self.start_recording)
-        else:
-            self.resume_pending_prompt()
-            self.resume_live_listening()
+        self.resume_after_turn(session)
         if self.quitting:
             QTimer.singleShot(0, self.close)
 
-    @Slot(str, str)
-    def on_git_diff_ready(self, directory, diff):
-        self._completed_git_diff = (directory, diff)
-
-    def resume_pending_prompt(self):
-        if self.worker.assistant.shutdown_requested.is_set():
-            self.pending_prompt = None
-            return
-        prompt, self.pending_prompt = self.pending_prompt, None
-        if prompt:
-            self.start_prompt(prompt)
-
-    @Slot(str)
-    def on_error(self, error):
-        if self.voice_thread is not None and self.voice_thread.live:
-            self.voice_thread.stop_event.set()
-        if self.task_stop_requested:
-            self.cancel_current_task()
-        if not self.ready:
-            self.status_key = ""
-            self.status.setText(tr("ui.error", error=error))
-            self.status.show()
-
-        self._reset_response_timer()
-        self.task_presentation.finish(self.turn_id, failed=True)
-        self.finish_wake_command("failed", error)
-        self.showing_greeting = False
-        self.update_subtitles(tr("ui.error", error=error))
-        self.current_reply = None
-        if self.current_response_view is not None:
-            self.current_response_view.finish()
-        self.current_response_view = None
-        self.busy = False
-        self.speaking = False
-        self.stopping = False
-        self.orb.clear()
-        self.set_orbs_speaking(False)
-        self.set_orbs_thinking(False)
-        if not self.ready:
-            self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
-        QTimer.singleShot(700, lambda turn_id=self.turn_id: self.task_presentation.settle(turn_id))
-
-        self.set_enabled(self.ready)
-        if self.pending_wake_barge:
-            self.pending_wake_barge = False
-            self.start_recording(automatic=True)
+    def resume_after_turn(self, session, *, live=True):
+        if session.pending_wake_barge:
+            session.pending_wake_barge = False
+            self.start_recording(automatic=True, session=session)
             self.finish_wake_command(
-                "completed" if self.recording else "failed",
+                session, "completed" if self.recording else "failed",
                 "" if self.recording else "Recording was unavailable",
             )
-        elif self.pending_voice_barge:
-            self.pending_voice_barge = False
-            QTimer.singleShot(0, self.start_recording)
+        elif session.pending_voice_barge:
+            session.pending_voice_barge = False
+            QTimer.singleShot(0, lambda: self.start_recording(session=session))
         else:
-            self.resume_pending_prompt()
+            self.resume_pending_prompt(session)
+            if live:
+                self.resume_live_listening(session)
+
+    def resume_pending_prompt(self, session):
+        if self.assistant.shutdown_requested.is_set():
+            session.pending_prompt = None
+            return
+        prompt, session.pending_prompt = session.pending_prompt, None
+        if prompt:
+            self.start_prompt(prompt, session)
+
+    def on_error(self, session, error):
+        if (self.voice_thread is not None and self.voice_thread.live
+                and self.voice_session is session):
+            self.voice_thread.stop_event.set()
+        if session.task_stop_requested:
+            self.cancel_current_task(session)
+        if not session.ready:
+            session.status_key = ""
+            if session is self.session:
+                self.status.setText(tr("ui.error", error=error))
+                self.status.show()
+
+        self._reset_response_timer(session)
+        session.presentation.finish(session.turn_id, failed=True)
+        self.finish_wake_command(session, "failed", error)
+        if session.index == 0:
+            self.showing_greeting = False
+        self.update_subtitles(tr("ui.error", error=error), session)
+        session.current_reply = None
+        if session.current_response_view is not None:
+            session.current_response_view.finish()
+        session.current_response_view = None
+        session.busy = False
+        session.speaking = False
+        session.stopping = False
+        if session is self.session:
+            self.orb.clear()
+            self.set_orbs_speaking(False)
+            self.set_orbs_thinking(False)
+            if not session.ready:
+                self.set_orbs_visual_state(Orb.State.DENIED_ERROR, fade_in=100, fade_out=300)
+        QTimer.singleShot(700, lambda turn_id=session.turn_id, presentation=session.presentation:
+                          presentation.settle(turn_id))
+
+        self.refresh_session_indicator()
+        self.set_enabled(self.session.ready)
+        self.resume_after_turn(session, live=False)
         if self.quitting:
             QTimer.singleShot(0, self.close)
 
@@ -1794,7 +1890,7 @@ class AssistantWindow(DesktopWindow):
             self.voice_thread.stop_event.set()
             event.ignore()
             return
-        if self.thread.isRunning() and self.busy:
+        if any(session.worker_thread.isRunning() and session.busy for session in self.sessions):
             event.ignore()
             return
 
@@ -1806,9 +1902,11 @@ class AssistantWindow(DesktopWindow):
             return
 
         kill_self()
-        if self.thread.isRunning():
-            self.thread.quit()
-            self.thread.wait()
+        for session in self.sessions:
+            if session.worker_thread.isRunning():
+                session.worker_thread.quit()
+        for session in self.sessions:
+            session.worker_thread.wait()
 
         self.mascot.close()
         event.accept()

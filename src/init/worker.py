@@ -153,12 +153,16 @@ class AssistantWorker(QObject):
     exit_requested = Signal()
     model_changed = Signal(str)
     model_failed = Signal(str)
+    _confirmation_ids = itertools.count(1)
 
-    def __init__(self, startup_greeting="", *, muted=False):
+    def __init__(self, startup_greeting="", *, muted=False, session_key=None, primary=True):
         super().__init__()
         self.assistant = Assistant()
         self.startup_greeting = startup_greeting
         self.muted = bool(muted)
+        self.session_key = session_key
+        self.primary = primary
+        self.speech_owner = False
         self._voice_settings_lock = threading.Lock()
         self.session = SessionLog()
         self.history = self.session.context.messages
@@ -166,7 +170,6 @@ class AssistantWorker(QObject):
         self.confirmation_answer = False
         self._confirmation_lock = threading.Lock()
         self._pending_confirmation = None
-        self._confirmation_ids = itertools.count(1)
         self.permission_mode = PermissionMode.ASK
         self.cancel_event = threading.Event()
         self.command_reply = False
@@ -224,16 +227,22 @@ class AssistantWorker(QObject):
 
     @Slot(int, object)
     def ask(self, turn_id, message):
+        speech = self.assistant.acquire_speech(self)
+        self.speech_owner = speech
         try:
             live = (isinstance(message, DesktopVoiceMessage) and message.live
                     and self.live_capture is not None)
-            lease = nullcontext() if live else desktop_audio(stop_event=self.cancel_event)
+            lease = (nullcontext() if live or not speech
+                     else desktop_audio(stop_event=self.cancel_event))
             with lease as audio_lease:
-                self._ask(turn_id, message, audio_lease)
+                self._ask(turn_id, message, audio_lease, speech)
         except Exception as error:
             self.rejected.emit(turn_id, str(error))
+        finally:
+            self.speech_owner = False
+            self.assistant.release_speech(self)
 
-    def _ask(self, turn_id, message, audio_lease):
+    def _ask(self, turn_id, message, audio_lease, speech_enabled=True):
         message = DesktopMessage(message) if isinstance(message,
                                                         str) else message
         voice_input = isinstance(message, DesktopVoiceMessage)
@@ -250,7 +259,7 @@ class AssistantWorker(QObject):
         self.accepted.emit(turn_id)
         prompt = message.transcript.strip() if voice_input else message.text
         try:
-            self.assistant.task_state = None
+            self.session.context.task_state = None
             cancel_event = self.cancel_event
             set_confirmation_handler(
                 lambda message: self.confirm_command(message, cancel_event,
@@ -280,7 +289,8 @@ class AssistantWorker(QObject):
                     logging.getLogger("assistant.voice").exception(
                         "Local voice transcript unavailable; attempting native transcription")
                     prompt = self.assistant.transcribe_audio(
-                        message.audio_wav, event_loop=self.event_loop)
+                        message.audio_wav, event_loop=self.event_loop,
+                        context=self.session.context)
             if voice_input:
                 if cancel_event.is_set():
                     self.finished.emit("")
@@ -314,7 +324,8 @@ class AssistantWorker(QObject):
                     return True
                 try:
                     from src.init.visuals.response import request_response_workspace
-                    result = request_response_workspace(title or "Response")
+                    result = request_response_workspace(title or "Response",
+                                                        owner=self.session_key)
                     logging.getLogger("assistant.response").info(
                         "Response workspace result: %s", result)
                     return False
@@ -345,6 +356,7 @@ class AssistantWorker(QObject):
                 task_title=task_title,
                 on_surface=receive_surface,
                 on_task_title=receive_task_title,
+                speech_enabled=speech_enabled,
                 resume_task_id=getattr(message, "resume_task_id", ""))
 
             self.history[:] = history
@@ -353,13 +365,13 @@ class AssistantWorker(QObject):
 
             if reply:
                 from .session_log import message_status
-                task_state = getattr(self.assistant, "task_state", None)
+                task_state = self.session.context.task_state
                 self.session.write(self.assistant.name, reply,
                                    status=("interrupted" if cancel_event.is_set() else
                                            message_status(task_state.status) if task_state is not None
                                            else "completed"))
 
-            task_state = getattr(self.assistant, "task_state", None)
+            task_state = self.session.context.task_state
             if (not cancel_event.is_set() and not self.assistant.shutdown_requested.is_set()
                     and (task_state is None or task_state.status == "complete")):
                 from src.init.visuals.git_diff_connector import get_git_patch
@@ -397,10 +409,10 @@ class AssistantWorker(QObject):
 
     def interrupt(self):
         self.cancel_event.set()
-        self.assistant.cancel_active_generation()
+        self.assistant.cancel_active_generation(self.session.context)
         self.resolve_confirmation(False)
         voice = self.assistant.voice
-        if voice is not None:
+        if voice is not None and self.speech_owner:
             try:
                 voice.stop()
             except Exception:
@@ -410,7 +422,7 @@ class AssistantWorker(QObject):
     @Slot()
     def shutdown(self):
         self.session.close()
-        if self.assistant.voice is not None:
+        if self.primary and self.assistant.voice is not None:
             self.assistant.voice.close()
         if self.event_loop is not None:
             self.event_loop.close()
