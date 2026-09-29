@@ -123,7 +123,7 @@ from src.init.visuals.bridge import FlowchartBridge
 from src.init.visuals.browser_bridge import BrowserBridge
 from src.init.terminal import TerminalBridge
 
-MICROPHONE_SIZE = 32
+MICROPHONE_SIZE = 28
 
 # noinspection PyBroadException
 class AssistantWindow(DesktopWindow):
