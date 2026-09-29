@@ -35,7 +35,6 @@ QListWidget#fileTagResults {
     background-color: #24273a;
     color: #cad3f5;
     border: 2px solid #494d64;
-    border-radius: 12px;
     padding: 4px;
     outline: none;
 }
