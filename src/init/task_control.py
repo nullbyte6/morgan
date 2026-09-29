@@ -834,12 +834,15 @@ and retain its consent checks. cd requests use change_directory and Git requests
             no_execution = result.outcome in {Outcome.REJECTED, Outcome.WAITING, Outcome.EXTERNAL_BLOCKER}
             confirmed_presentation = (spec.domain == "presentation" and spec.ancillary
                                       and spec.verification_capable and result.successful)
-            uncertain = spec.effectful and not no_execution and not confirmed_presentation
+            confirmed_check = (self.state.role == "verify" and spec.effectful and spec.verification_capable
+                               and not spec.ancillary and result.successful
+                               and all(value is not None for value in after.values()))
+            uncertain = spec.effectful and not no_execution and not confirmed_presentation and not confirmed_check
             for resource in declared_resources:
                 if not resource.startswith(("file:", "entry:", "domain:git:")) and spec.effectful and not no_execution and (
                         not spec.ancillary or resource == "domain:presentation"):
                     after[resource] = str(self.state.sequence + 1)
-                    if not confirmed_presentation:
+                    if not confirmed_presentation and not confirmed_check:
                         effects.append(resource)
             if spec.path_argument and not spec.domain and result.successful and all(value is not None for value in after.values()):
                 uncertain = False
