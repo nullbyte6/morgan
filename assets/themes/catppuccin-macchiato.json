@@ -29,7 +29,6 @@
     "toggle_track_off": "#494d64",
     "toggle_track_on": "#8aadf4",
     "toggle_thumb": "#cad3f5",
-
     "orb_idle": "#b7bdf8",
     "orb_processing": "#7dc4e4",
     "orb_reading": "#8aadf4",
@@ -38,23 +37,19 @@
     "orb_awaiting_permission": "#eed49f",
     "orb_error": "#ed8796",
     "orb_success": "#a6da95",
-
     "audio_wave_layer_1": "#cad3f5",
     "audio_wave_layer_2": "#b7bdf8",
     "audio_wave_layer_3": "#8aadf4",
     "audio_wave_layer_4": "#8aadf4",
-
     "flowchart_background": "#24273a",
     "flowchart_node": "#363a4f",
     "flowchart_node_border": "#494d64",
     "flowchart_node_selected": "#b7bdf8",
     "flowchart_text": "#cad3f5",
     "flowchart_edge": "#8aadf4",
-
     "editor_gutter": "#181926",
     "editor_current_line": "#24273a",
     "line_number": "#8087a2",
-
     "syntax_keyword": "#c6a0f6",
     "syntax_builtin": "#f5a97f",
     "syntax_function": "#8bd5ca",
@@ -63,7 +58,6 @@
     "syntax_number": "#f5a97f",
     "syntax_comment": "#6e738d",
     "syntax_decorator": "#f5bde6",
-
     "code_inline_text": "#f5bde6",
     "code_inline_background": "#363a4f",
     "code_block_text": "#cad3f5",
@@ -73,7 +67,6 @@
     "table_header_text": "#f5bde6",
     "table_header_background": "#363a4f",
     "table_row_alternate": "#1e2030",
-
     "terminal_foreground": "#cad3f5",
     "terminal_background": "#24273a",
     "terminal_cursor": "#f4dbd6",
@@ -85,14 +78,14 @@
     "terminal_blue": "#8aadf4",
     "terminal_magenta": "#f5bde6",
     "terminal_cyan": "#8bd5ca",
-    "terminal_white": "#b8c0e0",
+    "terminal_white": "#a5adcb",
     "terminal_bright_black": "#5b6078",
-    "terminal_bright_red": "#ed8796",
-    "terminal_bright_green": "#a6da95",
-    "terminal_bright_yellow": "#eed49f",
-    "terminal_bright_blue": "#8aadf4",
-    "terminal_bright_magenta": "#f5bde6",
-    "terminal_bright_cyan": "#8bd5ca",
-    "terminal_bright_white": "#a5adcb"
+    "terminal_bright_red": "#ec7486",
+    "terminal_bright_green": "#8ccf7f",
+    "terminal_bright_yellow": "#e1c682",
+    "terminal_bright_blue": "#78a1f6",
+    "terminal_bright_magenta": "#f2a9dd",
+    "terminal_bright_cyan": "#63cbc0",
+    "terminal_bright_white": "#b8c0e0"
   }
 }
