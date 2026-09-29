@@ -1203,8 +1203,10 @@ class AssistantWindow(DesktopWindow):
 
         if self.submitting is not None or not self.attachment_tray.can_send:
             return
+        controller = getattr(self.worker.assistant, "_active_task_controller", None) if self.busy else None
         message = DesktopMessage(
-            self.input.toPlainText().strip(), self.attachment_tray.snapshot())
+            self.input.toPlainText().strip(), self.attachment_tray.snapshot(),
+            resume_task_id=controller.state.id if controller is not None and controller.state.status == "active" else "")
         if not message.text and not message.attachments:
             return
         if self.busy and self.stopping:

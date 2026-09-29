@@ -1001,7 +1001,7 @@ class Assistant:
                 if any(item["operational"] and TOOL_SPECS[item["tool"]].effectful
                        for item in controller.executions):
                     controller.promote("interrupted_after_effects")
-            if controller.state is not None:
+            if controller.state is not None and controller.state.status == Lifecycle.ACTIVE:
                 controller.state.suspend(Lifecycle.INTERRUPTED, "Interrupted by the user.")
             controller.publish_activity()
             if not execution_started:
