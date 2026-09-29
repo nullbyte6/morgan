@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -82,55 +83,86 @@ def audio_requested(directory: Path | None = None) -> bool:
     return False
 
 
+class _DesktopAudio:
+    """Process-wide audio ownership shared by every desktop session thread."""
+
+    def __init__(self, directory):
+        self.priority = ProcessLock("desktop-audio", directory)
+        self.microphone = ProcessLock("microphone", directory)
+        self.holds = 0
+        self.lock = threading.Lock()
+
+    def hold(self, stop_event, timeout):
+        deadline = time.monotonic() + timeout
+        while True:
+            with self.lock:
+                if self.holds or (self.priority.acquire() and self.microphone.acquire()):
+                    self.holds += 1
+                    return
+            if stop_event is not None and stop_event.is_set():
+                self._abandon()
+                raise InterruptedError("Audio request cancelled")
+            if time.monotonic() >= deadline:
+                self._abandon()
+                raise TimeoutError("Microphone is busy; please try again")
+            time.sleep(0.025)
+
+    def _abandon(self):
+        with self.lock:
+            if not self.holds:
+                self.microphone.release()
+                self.priority.release()
+
+    def release(self):
+        with self.lock:
+            self.holds -= 1
+            if not self.holds:
+                self.microphone.release()
+                self.priority.release()
+
+
+_desktop_audio = {}
+_desktop_audio_lock = threading.Lock()
+
+
 @contextmanager
 def desktop_audio(*, stop_event=None, timeout=5.0, tail=0.6, directory=None):
     """Ask wake capture to yield, then own input/playback for the entire turn.
     Only worker threads wait here. The wake thread checks the priority lock on
     every audio block, closes its stream, then releases the microphone lock.
+    Concurrent sessions of this process share one hold on the OS locks.
     """
-    priority = ProcessLock("desktop-audio", directory)
-    microphone = ProcessLock("microphone", directory)
-    deadline = time.monotonic() + timeout
+    key = str(directory or voice_directory())
+    with _desktop_audio_lock:
+        audio = _desktop_audio.get(key)
+        if audio is None:
+            audio = _desktop_audio[key] = _DesktopAudio(directory)
     acquired = False
 
     class AudioLease:
         def yield_to_wake_listener(self):
             nonlocal acquired
             if acquired:
-                microphone.release()
-                priority.release()
+                audio.release()
                 acquired = False
 
         def reclaim(self):
-            nonlocal acquired, deadline
+            nonlocal acquired
             if acquired:
                 return
-            deadline = time.monotonic() + timeout
-            for lock in (priority, microphone):
-                while not lock.acquire():
-                    if stop_event is not None and stop_event.is_set():
-                        raise InterruptedError("Audio request cancelled")
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError("Microphone is busy; please try again")
-                    time.sleep(0.025)
+            audio.hold(stop_event, timeout)
             acquired = True
 
     try:
-        for lock in (priority, microphone):
-            while not lock.acquire():
-                if stop_event is not None and stop_event.is_set():
-                    raise InterruptedError("Audio request cancelled")
-                if time.monotonic() >= deadline:
-                    raise TimeoutError("Microphone is busy; please try again")
-                time.sleep(0.025)
+        audio.hold(stop_event, timeout)
         acquired = True
         yield AudioLease()
     finally:
         # Let speaker/reverb tails settle before wake capture resumes.
-        if acquired and tail:
-            time.sleep(tail)
-        microphone.release()
-        priority.release()
+        if acquired:
+            if tail:
+                time.sleep(tail)
+            audio.release()
 
 
 class WakeInbox:
