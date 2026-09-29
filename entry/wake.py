@@ -43,11 +43,16 @@ from src.init.voice_ipc import (
     audio_requested,
     voice_directory,
 )
-from src.init.identity import get_assistant_name, get_assistant_identifier, get_assistant_environment
+from src.init.identity import (
+    get_assistant_environment,
+    get_assistant_identifier,
+    get_assistant_installation,
+    get_assistant_name,
+)
 from src.init.wake_capture import BLOCK_SECONDS, SAMPLE_RATE, WakeCapture, WakeSettings
 
 ROOT = Path(__file__).resolve().parent.parent
-LAUNCHER = "$env:ARLO" / "arlo.exe" if sys.platform == "win32" else ROOT / "scripts" / "arlo-start.bat"
+DEVELOPMENT_LAUNCHER = ROOT / "scripts" / "arlo-start.bat"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,18 +89,31 @@ def is_assistant_running() -> bool:
     return False
 
 
+def resolve_launcher() -> Path:
+    """Prefer the installed executable named by <NAME>, then the repository launcher."""
+    installation = get_assistant_installation()
+    if installation is not None:
+        return installation / "Arlo.exe"
+    return DEVELOPMENT_LAUNCHER
+
+
 def launch_assistant() -> None:
     """Start the desktop without waiting for its services or UI."""
-    if not LAUNCHER.is_file():
-        log.error(tr("wake.launcher_not_found", path=LAUNCHER))
+    launcher = resolve_launcher()
+    if not launcher.is_file():
+        log.error(tr("wake.launcher_not_found", path=launcher))
         return
     if is_assistant_running():
         return
 
     log.info(tr("wake.activation_detected"))
+    if launcher.suffix.casefold() == ".exe":
+        command, directory = [str(launcher)], launcher.parent
+    else:
+        command, directory = ["cmd.exe", "/c", str(launcher)], ROOT
     subprocess.Popen(
-        ["cmd.exe", "/c", str(LAUNCHER)],
-        cwd=str(ROOT),
+        command,
+        cwd=str(directory),
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
 

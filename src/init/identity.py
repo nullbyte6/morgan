@@ -55,6 +55,14 @@ def get_assistant_identifier() -> str:
     return HOME_PATH.name.removeprefix(".")
 
 
+def get_assistant_installation(config: dict | None = None):
+    """Return the installed application directory named by the <NAME> variable."""
+    import os
+    from pathlib import Path
+    value = os.environ.get(get_assistant_name(config).upper(), "").strip()
+    return Path(value) if value else None
+
+
 def get_assistant_environment(key: str, default=None):
     """Read generic environment options while accepting legacy launcher options."""
     import os
