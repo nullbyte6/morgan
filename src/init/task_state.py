@@ -317,8 +317,9 @@ class TaskState:
         for finding in findings:
             self.findings[fingerprint(finding)] = finding
         self.record("checkpoint", completed=completed, resolutions=resolutions, reopened=reopen)
-        return {"accepted": True, "outcome": Outcome.SUCCESS, "status": "accepted", "ready_to_complete": self.complete(),
-                "criteria": list(self.criteria)}
+        ready = self.complete()
+        return {"accepted": True, "outcome": Outcome.SUCCESS, "status": "accepted", "ready_to_complete": ready,
+                "criteria": list(self.criteria), **({} if ready else {"requirements": self.requirements()})}
 
     def complete(self):
         return bool(self.kind and self.criteria and not self.obligations and not self.dependencies

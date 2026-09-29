@@ -568,6 +568,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
                         "criteria": ["User outcome"], "kind": ["read_only", "mutation"]}
             if first["loc"] and first["loc"][0] in examples:
                 result["expected"]["example"] = examples[first["loc"][0]]
+            if first["loc"] and first["loc"][0] == "verification" and first["loc"][-1] == "evidence":
+                result["expected"]["cite_evidence_in"] = {"completed": examples["completed"]}
             result["errors"] = errors
             return result
         return control_rejection(str(error), "arguments", "Arguments matching the declared tool schema",
