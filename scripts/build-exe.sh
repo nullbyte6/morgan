@@ -86,6 +86,7 @@ command=("$python" -B -m PyInstaller.utils.cliutils.makespec
     --collect-submodules winrt
     --collect-data pyfiglet
     --collect-data faster_whisper
+    --collect-data winpty
     --recursive-copy-metadata pydantic-ai-slim
     --exclude-module PyQt5 --exclude-module PyQt6 --exclude-module PySide2
     --exclude-module torch --exclude-module torchaudio --exclude-module transformers
