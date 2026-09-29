@@ -83,6 +83,7 @@ class DesktopSession(QObject):
         worker.permission_denied.connect(self.on_permission_denied)
         worker.finished.connect(self.on_finished)
         worker.git_diff_ready.connect(self.on_git_diff_ready)
+        worker.directory.connect(self.on_directory)
         worker.failed.connect(self.on_failed)
         worker.confirmation_requested.connect(self.on_confirmation_requested)
         worker.confirmation_closed.connect(self.on_confirmation_closed)
@@ -138,6 +139,11 @@ class DesktopSession(QObject):
             self.window.release_session(self)
         else:
             self.window.on_finished(self, reply)
+
+    @Slot(str)
+    def on_directory(self, directory):
+        if not self.closing:
+            self.window.on_session_directory(self, directory)
 
     @Slot(str, str)
     def on_git_diff_ready(self, directory, diff):

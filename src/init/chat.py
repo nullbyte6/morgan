@@ -74,8 +74,9 @@ def expand_file_tags(text, directory=None):
 
 
 class FileTagHighlighter(QSyntaxHighlighter):
-    def __init__(self, document):
+    def __init__(self, document, directory=os.getcwd):
         super().__init__(document)
+        self.directory = directory
         on_theme_changed(self.apply_theme)
 
     def apply_theme(self, theme):
@@ -84,7 +85,7 @@ class FileTagHighlighter(QSyntaxHighlighter):
     def highlightBlock(self, text):
         tag_format = QTextCharFormat()
         tag_format.setForeground(current_theme().color("file_tag"))
-        for start, end, _name, _path in find_file_tags(text):
+        for start, end, _name, _path in find_file_tags(text, self.directory()):
             self.setFormat(start, end - start, tag_format)
 
 
@@ -102,8 +103,9 @@ class FileTagPopup(QListWidget):
 class ChatInput(QTextEdit):
     submitted = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, directory=os.getcwd):
         super().__init__(parent)
+        self.directory = directory
         self.min_lines = 1
         self.max_lines = 4
         self.setAcceptRichText(False)
@@ -111,11 +113,11 @@ class ChatInput(QTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.file_tag_highlighter = FileTagHighlighter(self.document())
+        self.file_tag_highlighter = FileTagHighlighter(self.document(), self.directory)
         self.file_tag_popup = FileTagPopup(self)
         self.file_tag_popup.itemClicked.connect(self.accept_file_tag)
         self.file_tag_start = -1
-        self.file_tag_directory = os.getcwd()
+        self.file_tag_directory = self.directory()
 
         # Conectar señales de cambio de contenido para ajustar altura
         self.textChanged.connect(self.adjust_height)
@@ -137,7 +139,7 @@ class ChatInput(QTextEdit):
         self.setFixedHeight(height)
 
     def refresh_file_tags(self):
-        directory = os.getcwd()
+        directory = self.directory()
         if directory == self.file_tag_directory:
             return
         self.file_tag_directory = directory
@@ -160,7 +162,7 @@ class ChatInput(QTextEdit):
             return
         query = (match.group(1) if match.group(1) is not None else match.group(2)).casefold()
         try:
-            entries = [(entry.name, entry.is_dir()) for entry in os.scandir(os.getcwd())]
+            entries = [(entry.name, entry.is_dir()) for entry in os.scandir(self.directory())]
         except OSError:
             entries = []
         matches = [entry for entry in entries if query in entry[0].casefold()]

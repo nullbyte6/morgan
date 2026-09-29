@@ -77,6 +77,7 @@ class SessionContext:
         self.task_controller = None
         self.task_state = None
         self.cancellation_token = None
+        self.working_directory = str(Path.cwd())
         self.artifact_paths = set()
         self.directory = Path(directory).resolve() / "artifacts" / session_id
 

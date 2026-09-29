@@ -151,11 +151,13 @@ register("render_flowchart", ToolSpec(True, "presentation", ancillary=True, veri
 
 
 def file_resource(path):
-    return "file:" + str(Path(path).expanduser().resolve())
+    from .brain import resolve_safe_path
+    return "file:" + str(resolve_safe_path(path))
 
 
 def entry_resource(path):
-    path = Path(path).expanduser().absolute()
+    from .brain import resolve_entry_path
+    path = resolve_entry_path(path)
     return "entry:" + str(path.parent.resolve() / path.name)
 
 
@@ -234,10 +236,12 @@ def resources_for(name, arguments):
         raise ValueError(f"Tool has no effect declaration: {name}")
     resources = []
     if spec.domain:
-        resources.append("domain:" + spec.domain + (":" + str((PROJECT_ROOT if spec.source else Path.cwd()).joinpath(arguments.get("repository", ".")).resolve())
+        from .brain import get_working_directory
+        resources.append("domain:" + spec.domain + (":" + str((PROJECT_ROOT if spec.source else Path(get_working_directory())).joinpath(arguments.get("repository", ".")).resolve())
                                                         if spec.domain == "git" else ""))
     if spec.path_argument:
-        base = PROJECT_ROOT if spec.source else Path.cwd()
+        from .brain import get_working_directory
+        base = PROJECT_ROOT if spec.source else Path(get_working_directory())
         path = arguments.get(spec.path_argument, ".")
         if name == "read_code" and arguments.get("cursor"):
             from .self_code import code_cursor

@@ -22,6 +22,7 @@ from src.init.lang import tr
 import base64
 import codecs
 import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -36,6 +37,7 @@ import urllib.request
 import wave
 from src.init.visuals.browser_bridge import open_embedded_url
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 from datetime import datetime
 from functools import lru_cache
 from math import asin, cos, radians, sin, sqrt
@@ -224,9 +226,18 @@ def refresh_model_keep_alive() -> None:
     threading.Thread(target=keep_model_loaded, daemon=True).start()
 
 
+_working_directory_owner = ContextVar("arlo_working_directory_owner", default=None)
+
+
+def set_working_directory_owner(owner) -> None:
+    """Resolve this thread's relative paths against owner.working_directory."""
+    _working_directory_owner.set(owner)
+
+
 def get_working_directory() -> str:
     """Return the current directory used by relative file and Git operations."""
-    return str(Path.cwd())
+    owner = _working_directory_owner.get()
+    return owner.working_directory if owner is not None else str(Path.cwd())
 
 
 def change_directory(path: str = "") -> str:
@@ -245,7 +256,15 @@ def change_directory(path: str = "") -> str:
         if not path:
             return tr('brain.error_directory_path_is_empty')
         destination = resolve_safe_path(os.path.expandvars(path))
-        os.chdir(destination)
+        owner = _working_directory_owner.get()
+        if owner is None:
+            os.chdir(destination)
+        elif destination.is_dir():
+            owner.working_directory = str(destination)
+        elif destination.exists():
+            raise NotADirectoryError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), str(destination))
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(destination))
         _SHOW_WORKING_DIRECTORY = True
         return tr('brain.current_directory', value0=get_working_directory())
     except (OSError, ValueError) as error:
@@ -1725,11 +1744,11 @@ def list_media_sessions() -> str:
 
 
 def resolve_safe_path(path: str) -> Path:
-    return Path(path).expanduser().resolve()
+    return Path(get_working_directory()).joinpath(Path(path).expanduser()).resolve()
 
 def resolve_entry_path(path: str) -> Path:
     """Resolve a directory entry without following its final symbolic link."""
-    return Path(os.path.abspath(Path(path).expanduser()))
+    return Path(os.path.abspath(Path(get_working_directory()).joinpath(Path(path).expanduser())))
 
 def _is_arlo_source_path(path: Path) -> bool:
     from src.init.paths import PROJECT_ROOT

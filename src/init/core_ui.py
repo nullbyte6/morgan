@@ -356,7 +356,7 @@ class AssistantWindow(DesktopWindow):
         ui.status = QLabel()
         ui.subtitles = QLabel(self.startup_greeting if session.index == 0 else "")
         ui.command_output = QPlainTextEdit()
-        ui.input = ChatInput()
+        ui.input = ChatInput(directory=lambda: session.worker.session.context.working_directory)
         ui.composer_widget = QWidget()
         ui.input_meter = AudioVisualizer()
         ui.input_meter.setMinimumWidth(0)
@@ -771,14 +771,13 @@ class AssistantWindow(DesktopWindow):
             worker.clipboard_requested.connect(self.on_clipboard_requested)
         worker.model_changed.connect(self.on_model_changed)
         worker.model_failed.connect(self.on_model_failed)
-        worker.directory.connect(self.on_directory_changed)
         worker.exit_requested.connect(self.request_quit)
         session.worker_thread.start()
 
-    @Slot(str)
-    def on_directory_changed(self, directory):
-        for session in self._views():
+    def on_session_directory(self, session, directory):
+        if session.ui is not None:
             session.ui.directory_indicator.set_directory(directory)
+            session.ui.branch_indicator.set_directory(directory)
 
     @Slot()
     def new_session(self):
@@ -970,7 +969,7 @@ class AssistantWindow(DesktopWindow):
 
     def open_terminal_command(self, command: str) -> None:
         from src.init.terminal import TerminalView
-        view = TerminalView(directory=os.getcwd(), command=command,
+        view = TerminalView(directory=self.session.worker.session.context.working_directory, command=command,
                             preserve_output=True, autostart=False)
         try:
             self.workspace.open_registered_panel("terminal", "Terminal", lambda: view)
@@ -1212,8 +1211,8 @@ class AssistantWindow(DesktopWindow):
                 item.ui.privacy_indicator.setVisible(item.worker.session.private)
 
     def refresh_directory_indicators(self):
-        directory = Path.cwd()
         for session in self._views():
+            directory = session.worker.session.context.working_directory
             session.ui.directory_indicator.set_directory(directory)
             session.ui.branch_indicator.set_directory(directory)
             session.ui.input.refresh_file_tags()

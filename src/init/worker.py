@@ -205,7 +205,7 @@ class AssistantWorker(QObject):
                     voice.speaking_callback = None
                     voice.subtitle_callback = None
                     self.speaking.emit(0, False)
-            self.directory.emit(str(Path.cwd()))
+            self.directory.emit(self.session.context.working_directory)
             self.ready.emit()
         except Exception as error:
             self.failed.emit(str(error))
@@ -227,6 +227,8 @@ class AssistantWorker(QObject):
 
     @Slot(int, object)
     def ask(self, turn_id, message):
+        from src.init import brain
+        brain.set_working_directory_owner(self.session.context)
         speech = self.assistant.acquire_speech(self)
         self.speech_owner = speech
         try:
@@ -340,7 +342,7 @@ class AssistantWorker(QObject):
                 self.speaking.emit(turn_id, speaking)
 
             reply, history = self.assistant.run(
-                prompt if voice_input else expand_file_tags(prompt),
+                prompt if voice_input else expand_file_tags(prompt, self.session.context.working_directory),
                 self.history,
                 on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),
                 on_audio=lambda samples, rate: self.report_audio(
@@ -375,7 +377,7 @@ class AssistantWorker(QObject):
             if (not cancel_event.is_set() and not self.assistant.shutdown_requested.is_set()
                     and (task_state is None or task_state.status == "complete")):
                 from src.init.visuals.git_diff_connector import get_git_patch
-                directory = str(Path.cwd())
+                directory = self.session.context.working_directory
                 patch = get_git_patch(directory)
                 if patch:
                     self.git_diff_ready.emit(directory, patch)
@@ -391,7 +393,7 @@ class AssistantWorker(QObject):
             self.failed.emit(message)
 
         finally:
-            self.directory.emit(str(Path.cwd()))
+            self.directory.emit(self.session.context.working_directory)
             if self.assistant.shutdown_requested.is_set():
                 self.exit_requested.emit()
 

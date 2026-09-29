@@ -586,7 +586,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         if resource.startswith(("file:", "entry:", "domain:git:")):
             return content_revision(resource)
         if resource == "domain:working_directory":
-            return str(Path.cwd())
+            from .brain import get_working_directory
+            return get_working_directory()
         return self.state.revisions.get(resource, "0")
 
     def refresh_resources(self):
@@ -1600,7 +1601,8 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
         if resource.startswith(("file:", "entry:", "domain:git:")):
             return content_revision(resource)
         if resource == "domain:working_directory":
-            return str(Path.cwd())
+            from .brain import get_working_directory
+            return get_working_directory()
         return "0"
 
     def partial_result(self, spec, result, changed=False):
@@ -1616,7 +1618,8 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
         if spec.effectful or spec.source or not spec.path_argument:
             return False
         try:
-            path = str(Path(arguments.get(spec.path_argument, ".")).expanduser().resolve())
+            from .brain import resolve_safe_path
+            path = str(resolve_safe_path(arguments.get(spec.path_argument, ".")))
         except (OSError, TypeError, ValueError):
             return False
         return path in getattr(self.context, "artifact_paths", set())
