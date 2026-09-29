@@ -239,7 +239,7 @@ QComboBox#modelSelector {
     border: 2px solid #494d64;
     border-radius: 16px;
     color: #cad3f5;
-    padding: 5px 26px 5px 10px;
+    padding: 6px 28px 6px 12px;
 }
 
 QComboBox#modelSelector:hover,
@@ -634,7 +634,7 @@ QPushButton#privacyIndicator {
     background-color: rgba(34, 197, 94, 0.08);
     border: 2px solid #466d62;
     border-radius: 14px;
-    padding: 4px 10px;
+    padding: 6px 12px;
 }
 
 QToolButton#branchIndicator {

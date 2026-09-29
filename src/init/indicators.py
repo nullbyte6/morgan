@@ -105,7 +105,7 @@ class ModelSelector(QComboBox):
         arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         arrow.setFixedWidth(24)
         arrow_layout = QHBoxLayout(self)
-        arrow_layout.setContentsMargins(0, 0, 2, 0)
+        arrow_layout.setContentsMargins(0, 0, 4, 0)
         arrow_layout.addStretch()
         arrow_layout.addWidget(arrow)
         self.currentIndexChanged.connect(self.updateGeometry)
