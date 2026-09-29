@@ -19,6 +19,7 @@
 """Workspace-local discovery and execution of existing desktop actions."""
 
 from dataclasses import dataclass
+from math import ceil
 from typing import Callable
 
 from PySide6.QtCore import QEvent, Qt
@@ -49,7 +50,7 @@ class CommandRegistry:
     def search(self, query):
         tokens = query.casefold().split()
         if not tokens:
-            return list(self.commands)
+            return []
         return [command for command in self.commands
                 if all(token in " ".join((tr(command.label), command.id,
                                            *command.keywords)).casefold()
@@ -195,18 +196,33 @@ class CommandPalette(QFrame):
             return
         area = self.host.rect().adjusted(12, 12, -12, -12)
         width = max(0, min(560, area.width()))
-        self.search_input.setFixedHeight(min(6, self.search_input.document().blockCount())
-                                        * self.search_input.fontMetrics().lineSpacing() + 24)
-        row_height = max(32, self.results.fontMetrics().height() + 18)
+        self.search_input.ensurePolished()
+        search_margins = self.search_input.contentsMargins()
+        block = self.search_input.document().firstBlock()
+        content = 0.0
+        while block.isValid():
+            content += self.search_input.blockBoundingRect(block).height()
+            block = block.next()
+        limit = 6 * self.search_input.fontMetrics().lineSpacing()
+        self.search_input.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded if content > limit else Qt.ScrollBarAlwaysOff)
+        self.search_input.setFixedHeight(
+            ceil(min(content, limit) + 2 * self.search_input.document().documentMargin())
+            + search_margins.top() + search_margins.bottom())
+        count = self.results.count()
+        row_height = self.results.sizeHintForRow(0) if count else 0
+        list_frame = 2 * self.results.frameWidth()
         margins = self.layout().contentsMargins()
         overhead = (margins.top() + margins.bottom() + self.layout().spacing()
                     + self.search_input.height())
+        needed = overhead + (row_height * min(3, count) + list_frame if count
+                             else self.empty.sizeHint().height() if not self.empty.isHidden() else 0)
         orb = getattr(self.owner, "orb", None)
         if orb is not None and self.host.isAncestorOf(orb):
             orb_top = orb.mapTo(self.host, orb.rect().topLeft()).y()
-            if orb_top - 12 >= area.y() + overhead:
+            if orb_top - 12 >= area.y() + needed:
                 area.setBottom(min(area.bottom(), orb_top - 12))
-        self.results.setFixedHeight(max(0, min(row_height * min(8, self.results.count()) + 4,
+        self.results.setFixedHeight(max(0, min(row_height * min(8, count) + list_frame,
                                               area.height() - overhead)))
         height = min(max(0, area.height()), self.layout().sizeHint().height())
         self.setGeometry(area.x() + (area.width() - width) // 2,
