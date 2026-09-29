@@ -272,12 +272,12 @@ def code_cursor(cursor):
         raise ValueError("Use an unchanged next_cursor returned by read_code") from error
 
 
-def read_code(path: str = "", start_line: Annotated[int, Field(ge=1)] = 1,
+def read_code(path: str = "", start_line: Annotated[int, Field(ge=0)] = 1,
               end_line: Annotated[int, Field(ge=0)] = 0,
               character_offset: Annotated[int, Field(ge=0)] = 0, cursor: str = "",
               mode: Literal["content", "index"] = "content") -> dict:
     """Read source content, or explicitly request mode='index'.
-    Line numbers start at 1 and end_line is inclusive; 0 reads through the file's end.
+    Line numbers start at 1 (start_line 0 is read as 1) and end_line is inclusive; 0 reads through the file's end.
     character_offset starts at 0 within the requested range.
     Results identify actual coverage, truncated and exhausted ranges, and next_cursor.
     Continue with read_code(cursor=next_cursor), without changing any range arguments.
@@ -289,6 +289,7 @@ def read_code(path: str = "", start_line: Annotated[int, Field(ge=1)] = 1,
         return ActionResult(Outcome.REJECTED, {"reason": reason, "field": field,
                             "expected": expected, "actual": actual, "recoverable": True},
                             "inspection_precondition").payload()
+    start_line = max(start_line, 1)
     try:
         continuation = code_cursor(cursor) if cursor else None
         if continuation:

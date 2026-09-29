@@ -472,6 +472,7 @@ def read_file(path: str, offset: int = 0, limit: int = 2000) -> dict:
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 "Use search_code/read_code for source inspection. "
+                f"Pass path '{_source_path(file_path)}'; source tools resolve paths from the project root. "
                 "Do not retry read_file for this path.", "self_code_required").payload())
         
         from .attachments import active_attachments
@@ -511,6 +512,7 @@ def create_file(path: str, content: str = "", encoding: str = "utf-8") -> dict:
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use create_code to create {get_assistant_name()} source. "
+                f"Pass path '{_source_path(file_path)}'; source tools resolve paths from the project root. "
                 "Do not retry create_file for this path.", "self_code_required").payload())
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("x", encoding=encoding) as file:
@@ -530,6 +532,7 @@ def write_file(path: str, content: str) -> str:
             return (
                 f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
+                f"Pass path '{_source_path(file_path)}'; source tools resolve paths from the project root. "
                 "Do not retry write_file for this path.")
         atomic_write_bytes(file_path, content.encode("utf-8"))
         return tr('brain.file_written', file_path=file_path)
@@ -551,6 +554,7 @@ def edit_file(path: str, content: str) -> dict:
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
+                f"Pass path '{_source_path(file_path)}'; source tools resolve paths from the project root. "
                 "Do not retry edit_file for this path.", "self_code_required").payload())
         if not file_path.exists():
             return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
@@ -571,6 +575,7 @@ def append_file(path: str, content: str) -> dict:
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
+                f"Pass path '{_source_path(file_path)}'; source tools resolve paths from the project root. "
                 "Do not retry append_file for this path.", "self_code_required").payload())
         file_path.parent.mkdir(parents=True, exist_ok=True)
         encoding = "utf-8"
@@ -593,6 +598,7 @@ def replace_in_file(path: str, old_text: str, new_text: str) -> dict:
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
+                f"Pass path '{_source_path(file_path)}'; source tools resolve paths from the project root. "
                 "Do not retry replace_in_file for this path.", "self_code_required").payload())
         if not file_path.exists():
             return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
@@ -793,6 +799,7 @@ def write_binary_file(path: str, base64_content: str,
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
+                f"Pass path '{_source_path(file_path)}'; source tools resolve paths from the project root. "
                 "Do not retry write_binary_file for this path.", "self_code_required").payload())
         already_exists = file_path.exists()
         if already_exists and not overwrite:
@@ -1732,6 +1739,11 @@ def _is_arlo_source_path(path: Path) -> bool:
         return True
     except ValueError:
         return False
+
+def _source_path(path: Path) -> str:
+    from src.init.paths import PROJECT_ROOT
+
+    return path.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
 
 def decode_text(data: bytes) -> tuple[str, str]:
     """Decode common Windows text formats and return text plus its encoding."""
