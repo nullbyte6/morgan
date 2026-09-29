@@ -1,5 +1,5 @@
 {
-  "version": "1.4.31-beta",
+  "version": "1.4.32-beta",
   "model_name": "arlo-deepseek-r1:8b",
   "base_model_name": "deepseek-r1:8b",
   "context_length": 32768,
