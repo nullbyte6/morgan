@@ -122,6 +122,8 @@ from src.init.visuals.bridge import FlowchartBridge
 from src.init.visuals.browser_bridge import BrowserBridge
 from src.init.terminal import TerminalBridge
 
+MICROPHONE_SIZE = 32
+
 # noinspection PyBroadException
 class AssistantWindow(DesktopWindow):
     """Assistant window class, not its brain, which is somewhere else"""
@@ -178,7 +180,7 @@ class AssistantWindow(DesktopWindow):
         self.quitting = False
         self.send = QPushButton("")
         font = self.send.font()
-        font.setPointSize(32 if self.send.text() == "" or "" else 11)
+        font.setPointSize(MICROPHONE_SIZE if self.send.text() == "" or "" else 12)
         self.send.setFont(font)
         self.greeting_key = f"greeting.{random.randrange(6)}"
 
@@ -966,7 +968,7 @@ class AssistantWindow(DesktopWindow):
                           "" if self.has_text else "")
 
         font = self.send.font()
-        font.setPointSize(32 if self.send.text() == "" or "" else 12)
+        font.setPointSize(MICROPHONE_SIZE if self.send.text() == "" or "" else 12)
         self.send.setFont(font)
 
         self.send.setEnabled(
