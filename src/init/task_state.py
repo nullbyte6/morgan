@@ -76,6 +76,7 @@ class Criterion:
     verification: str
     resources: list[str]
     evidence: list[str] = field(default_factory=list)
+    claim: str | None = None
 
 
 @dataclass
@@ -240,6 +241,15 @@ class TaskState:
                 observed.add(resource)
         return all(any(contains(scope, resource) for scope in observed) for resource in resources)
 
+    def exercises(self, item):
+        spec = TOOL_SPECS.get(item.tool)
+        return spec is not None and (item.effectful or bool(spec.domain) and not spec.path_argument)
+
+    def satisfied(self, criterion, refs=None):
+        refs = criterion.evidence if refs is None else refs
+        return self.valid_evidence(refs, criterion.resources, inspection=self.kind == "read_only") and (
+            criterion.claim != "behavior" or any(self.exercises(self.evidence[ref]) for ref in refs))
+
     def checkpoint(self, role, criteria, verification, completed, decisions, strategy,
                    resolutions, reopen, kind, resources, findings=()):
         def reject(reason, field="criteria", expected="A valid task contract"):
@@ -264,6 +274,9 @@ class TaskState:
             if not isinstance(contract, dict) or not isinstance(contract.get("method"), str) or not isinstance(contract.get("resources"), list):
                 return reject("Verification entries must be keyed by the exact criterion, without a wrapper.",
                               "verification." + key, {"method": "Describe the observable check", "resources": []})
+            if contract.get("claim") not in {None, "state", "behavior"}:
+                return reject("A verification claim is state or behavior.", "verification." + key + ".claim",
+                              ["state", "behavior"])
             declared_resources.extend(contract["resources"])
         if any(not isinstance(resource, str) or not (
                 resource.startswith("domain:") and resource[7:].strip()
@@ -277,7 +290,8 @@ class TaskState:
                 if not contract or not contract.get("method", "").strip():
                     return reject("Each new criterion needs an explicit verification method and resource list.",
                                   "verification." + criterion, {"method": "Describe the observable check", "resources": []})
-                proposed[criterion] = Criterion(contract["method"], list(contract.get("resources", [])))
+                proposed[criterion] = Criterion(contract["method"], list(contract.get("resources", [])),
+                                                claim=contract.get("claim"))
             elif contract:
                 removed = set(proposed[criterion].resources) - set(contract["resources"])
                 if not contract["method"].strip() or removed and (
@@ -288,12 +302,24 @@ class TaskState:
                                    for scope in self.changed_at) for resource in removed)):
                     return reject("Retain observed verification dependencies. To correct an unobserved missing path, reopen the criterion and supply its actual resources.",
                                   "verification." + criterion, {"reopen": [criterion], "resources": "Retain existing observed dependencies"})
+                claim = contract.get("claim") or proposed[criterion].claim
+                if proposed[criterion].claim == "behavior" and claim != "behavior":
+                    return reject("A behavior claim cannot be weakened to a state claim.",
+                                  "verification." + criterion + ".claim", "behavior")
                 if contract["method"] != proposed[criterion].verification or contract["resources"] != proposed[criterion].resources:
                     proposed[criterion] = Criterion(contract["method"], list(contract["resources"]))
+                proposed[criterion].claim = claim
         if not proposed or set(verification) - set(proposed):
             return reject("Define criteria for the full objective; verification keys must name criteria.")
         if any(criterion not in proposed for criterion in reopen):
             return reject("Cannot reopen an unknown criterion.")
+        unclaimed = [name for name, value in proposed.items() if value.claim is None]
+        if proposed_kind == "mutation" and unclaimed:
+            return reject("Mutation criteria declare what verification must establish: 'state' when observing the "
+                          "resulting content, presence or absence proves the criterion; 'behavior' when it claims that "
+                          "something works, is fixed, or prevents or preserves behavior.",
+                          "verification." + unclaimed[0] + ".claim",
+                          {"claim": ["state", "behavior"], "criteria": unclaimed})
         for criterion in reopen:
             proposed[criterion].evidence = []
         for criterion, refs in completed.items():
@@ -301,6 +327,11 @@ class TaskState:
                                                                   inspection=proposed_kind == "read_only"):
                 return reject("Cite successful current observations covering the criterion's resources; effects need independent verification.",
                               "completed." + criterion, {"evidence_ids": "Successful current call IDs"})
+            if proposed[criterion].claim == "behavior" and not any(self.exercises(self.evidence[ref]) for ref in refs):
+                return reject("A behavior claim needs evidence exercising the claimed behavior after the change. "
+                              "Observing the changed resources establishes only that the effect exists.",
+                              "completed." + criterion, {"evidence_ids": "A current check exercising the behavior, "
+                                                         "with observations covering the criterion's resources"})
             proposed[criterion].evidence = list(refs)
         obligations = copy.deepcopy(self.obligations)
         resolutions = {**self.effect_resolutions(completed), **resolutions}
@@ -347,8 +378,7 @@ class TaskState:
 
     def complete(self):
         return bool(self.kind and self.criteria and not self.obligations and not self.dependencies
-                    and all(self.valid_evidence(value.evidence, value.resources, inspection=self.kind == "read_only")
-                            for value in self.criteria.values()))
+                    and all(self.satisfied(value) for value in self.criteria.values()))
 
     def requirements(self):
         if self.kind == "direct":
@@ -358,19 +388,24 @@ class TaskState:
             result.append({"code": "contract_required", "tool": "task_checkpoint", "fields": {
                 "kind": "read_only or mutation", "phase": "verify" if self.obligations else "inspect",
                 "criteria": ["User outcome"],
-                "verification": {"User outcome": {"method": "Observable check", "resources": []}}}})
+                "verification": {"User outcome": {"method": "Observable check", "resources": [],
+                                                  "claim": "state or behavior"}}}})
         for name, criterion in self.criteria.items():
-            if not self.valid_evidence(criterion.evidence, criterion.resources, inspection=self.kind == "read_only"):
+            if not self.satisfied(criterion):
                 missing = [resource for resource in criterion.resources
                            if resource.startswith(("file:", "entry:")) and self.revisions.get(resource) == "missing"
                            and not any(contains(scope, resource) or contains(resource, scope)
                                        for scope in self.changed_at)]
                 evidence_ids = self.criterion_evidence(criterion)
+                behavior = criterion.claim == "behavior" and not any(
+                    self.exercises(self.evidence[ref]) for ref in evidence_ids)
                 result.append({"code": "criterion_evidence_required", "criterion": name,
                                "method": criterion.verification, "resources": criterion.resources,
-                               "evidence_ids": evidence_ids,
+                               "evidence_ids": [] if behavior else evidence_ids,
+                               **({"claim": "behavior", "effect_evidence_ids": evidence_ids} if behavior else {}),
                                "repair": ("If these paths were declared incorrectly, use task_checkpoint with reopen=[criterion] and verification keyed by the exact criterion to replace missing resources with discovered paths."
-                                          if missing else "Valid evidence exists: cite evidence_ids for this criterion in completed through task_finish(completed=..., output=...)."
+                                          if missing else "This criterion claims behavior. Observing the changed resources proves only that the effect exists. In phase verify, run a proportional check exercising the claimed behavior, such as an existing test, focused invocation or runtime check, covering the behavior that motivated the change and relevant behavior the changed code already provided. Cite it with current observations covering the resources."
+                                          if behavior else "Valid evidence exists: cite evidence_ids for this criterion in completed through task_finish(completed=..., output=...)."
                                           if evidence_ids else "Phase is already verify; do not send another checkpoint. Reobserve the resources now with an inspection tool, then cite the new evidence IDs through task_finish(completed=..., output=...)."
                                           if self.kind == "mutation" and self.role == "verify" else "Mutation criteria accept only evidence observed in phase verify: send a phase-only verify task_checkpoint, reobserve the resources, then cite the new evidence IDs in completed."
                                           if self.kind == "mutation" else "Cite current evidence IDs in completed; read_only accepts inspection evidence."),
@@ -393,10 +428,10 @@ class TaskState:
     def available_evidence(self):
         completed = {}
         for name, criterion in self.criteria.items():
-            if self.valid_evidence(criterion.evidence, criterion.resources, inspection=self.kind == "read_only"):
+            if self.satisfied(criterion):
                 continue
             refs = self.criterion_evidence(criterion)
-            if refs and self.valid_evidence(refs, criterion.resources, inspection=self.kind == "read_only"):
+            if refs and self.satisfied(criterion, refs):
                 completed[name] = refs
         return completed
 

@@ -76,6 +76,7 @@ class VerificationContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
     method: str = Field(min_length=1)
     resources: list[str]
+    claim: Literal["state", "behavior"] | None = None
 
 
 class EvidenceFinding(BaseModel):
@@ -179,7 +180,13 @@ For implementation tasks, declare kind='mutation' even when the first phase is i
 For example task_checkpoint(kind='read_only', phase='inspect', criteria=['Review tool contracts'],
 verification={'Review tool contracts': {'method': 'Inspect contracts and cite findings', 'resources': []}}).
 Before effects, declare the user's outcome with task_checkpoint(kind='mutation', criteria=[...],
-verification={exact_criterion: {'method': 'specific independent check', 'resources': [resource IDs]}}).
+verification={exact_criterion: {'method': 'specific independent check', 'resources': [resource IDs],
+'claim': 'state' or 'behavior'}}). Mutation criteria declare claim: 'state' when observing the resulting
+content, presence or absence proves it (create a file with content, rename a value, a section exists once);
+'behavior' when it claims something works, is fixed, prevents or preserves behavior. Rereading changed
+resources proves only a state claim. A behavior claim also needs a proportional check exercising that
+behavior after the change, such as an existing test, focused invocation or runtime check, covering the
+behavior that motivated the change and relevant behavior the changed code already provided.
 For research/audits use kind='read_only'. Each criterion must describe the user's outcome,
 never supervisor protocol. Criteria updates are additive: omitted existing criteria and their evidence
 are preserved. Use stable exact criterion keys; do not translate or rename them after registration.
@@ -335,9 +342,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self.refresh_resources()
         if completed:
             pending = {name: refs for name, refs in completed.items()
-                       if name not in self.state.criteria or not self.state.valid_evidence(
-                           self.state.criteria[name].evidence, self.state.criteria[name].resources,
-                           inspection=self.state.kind == "read_only")}
+                       if name not in self.state.criteria or not self.state.satisfied(self.state.criteria[name])}
             resolutions = self.state.effect_resolutions(completed)
             if pending or resolutions:
                 result = self.state.checkpoint(self.state.role, [], {}, pending, [], "", resolutions, [],
@@ -600,7 +605,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             result = control_rejection(first["msg"], ".".join(map(str, first["loc"])),
                                        {"type": first["type"], "schema": self.tool_schema(name)},
                                        code="invalid_arguments")
-            examples = {"verification": {"Exact criterion from criteria": {"method": "Observable check", "resources": []}},
+            examples = {"verification": {"Exact criterion from criteria": {"method": "Observable check", "resources": [],
+                                                                           "claim": "state"}},
                         "resolutions": {"Recorded effect obligation ID": {"finding": "Observed reconciliation", "evidence": ["call_id"]}},
                         "completed": {"Exact criterion from criteria": ["call_id"]},
                         "criteria": ["User outcome"], "kind": ["read_only", "mutation"]}
