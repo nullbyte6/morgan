@@ -966,6 +966,12 @@ class AssistantWindow(DesktopWindow):
         stopping_available = self.busy and self.speaking and not self.stopping
         self.send.setText("" if stopping_available or self.recording or live_active else
                           "" if self.has_text else "")
+        mic = not (stopping_available or self.recording or live_active
+                   or self.has_text)
+        if self.send.property("mic") != mic:
+            self.send.setProperty("mic", mic)
+            self.send.style().unpolish(self.send)
+            self.send.style().polish(self.send)
 
         self.send.setEnabled(
             self.ready and (live_active or self.recording or stopping_available or (

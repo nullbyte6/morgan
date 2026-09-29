@@ -154,6 +154,10 @@ QPushButton#send {
     border: 2px solid @border;
 }
 
+QPushButton#send[mic="true"] {
+    font-size: 24pt;
+}
+
 QPushButton#attach {
     background-color: transparent;
     border: none;
