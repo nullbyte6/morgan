@@ -767,7 +767,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.state.refresh(before)
             key = self._inspection_key(name, arguments, resources, before) if not spec.effectful else None
             cached = self.state.evidence.get(self.read_cache.get(key)) if key else None
-            if cached is not None and (self.state.kind != "mutation" or self.state.role != "verify"
+            if cached is not None and (self.state.kind != "mutation" and not self.state.obligations
+                                       or self.state.role != "verify"
                                        or cached.role == "verify") and self.state.valid_evidence(
                     [cached.id], resources, inspection=True):
                 self.trace("observation_reused", call_id=call_id, evidence_id=cached.id, inspection_key=key)

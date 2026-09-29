@@ -297,7 +297,8 @@ class TaskState:
                               "resolutions." + obligation_id, {"known_obligations": list(obligations)})
             if not isinstance(resolution, dict) or obligation is None or not isinstance(resolution.get("finding"), str) or not resolution["finding"].strip() or not self.valid_evidence(
                     resolution.get("evidence", []), obligation.resources, after=obligation.sequence):
-                return reject("Resolve each effect with a finding and subsequent verification of its resources.",
+                return reject("Resolve each effect with a finding and evidence observed in phase verify after the effect. "
+                              "Use a phase-only verify checkpoint, then reobserve its resources.",
                               "resolutions." + obligation_id, {"finding": "Observed reconciliation", "evidence": []})
             del obligations[obligation_id]
         for index, finding in enumerate(findings):
@@ -332,7 +333,8 @@ class TaskState:
         result = []
         if self.kind is None or not self.criteria:
             result.append({"code": "contract_required", "tool": "task_checkpoint", "fields": {
-                "kind": "read_only or mutation", "phase": "inspect", "criteria": ["User outcome"],
+                "kind": "read_only or mutation", "phase": "verify" if self.obligations else "inspect",
+                "criteria": ["User outcome"],
                 "verification": {"User outcome": {"method": "Observable check", "resources": []}}}})
         for name, criterion in self.criteria.items():
             if not self.valid_evidence(criterion.evidence, criterion.resources, inspection=self.kind == "read_only"):
