@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$MainModel = "qwen3.5:9b"
+$MainModel = "deepseek-r1:8b"
 
 function Get-AssistantIdentifier {
     param([string]$Name)
