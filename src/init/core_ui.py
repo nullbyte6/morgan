@@ -172,6 +172,7 @@ class AssistantWindow(DesktopWindow):
         self.voice_thread = None
         self.pending_voice_barge = False
         self.permission_denied_state = False
+        self.confirmation_dialog = None
         self.pending_wake_barge = False
         self.closing_after_voice = False
         self.quitting = False
@@ -754,6 +755,7 @@ class AssistantWindow(DesktopWindow):
 
         self.worker.confirmation_requested.connect(
             self.on_confirmation_requested)
+        self.worker.confirmation_closed.connect(self.on_confirmation_closed)
 
     @Slot()
     def open_workspace(self, direction: Qt.Key | None = None) -> None:
@@ -900,12 +902,12 @@ class AssistantWindow(DesktopWindow):
         finally:
             request.completed.set()
 
-    @Slot(int, str)
-    def on_confirmation_requested(self, turn_id, message):
+    @Slot(int, str, int, int)
+    def on_confirmation_requested(self, turn_id, message, request_id, timeout):
         if turn_id != self.turn_id:
             return
         if self.stopping:
-            self.worker.resolve_confirmation(False)
+            self.worker.resolve_confirmation(False, request_id)
             return
         self.task_presentation.awaiting_permission(turn_id)
         dialog = QMessageBox(self)
@@ -915,12 +917,33 @@ class AssistantWindow(DesktopWindow):
         dialog.setInformativeText(message)
         dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         dialog.button(QMessageBox.Yes).setText(tr("command.yes"))
-        dialog.button(QMessageBox.No).setText(tr("command.no"))
+        reject_button = dialog.button(QMessageBox.No)
         dialog.setDefaultButton(QMessageBox.No)
+        deadline = QDeadlineTimer(timeout * 1000)
+        countdown = QTimer(dialog)
+        countdown.setInterval(250)
 
-        accepted = dialog.exec() == QMessageBox.Yes
+        def show_remaining():
+            remaining = max(0, (deadline.remainingTime() + 999) // 1000)
+            reject_button.setText(f"{tr('command.no')} · {remaining}s")
+
+        countdown.timeout.connect(show_remaining)
+        show_remaining()
+        countdown.start()
+        self.confirmation_dialog = (request_id, dialog)
+        try:
+            accepted = dialog.exec() == QMessageBox.Yes
+        finally:
+            countdown.stop()
+            self.confirmation_dialog = None
+            dialog.deleteLater()
         self.task_presentation.awaiting_permission(turn_id, waiting=False)
-        self.worker.resolve_confirmation(accepted)
+        self.worker.resolve_confirmation(accepted, request_id)
+
+    @Slot(int)
+    def on_confirmation_closed(self, request_id):
+        if self.confirmation_dialog is not None and self.confirmation_dialog[0] == request_id:
+            self.confirmation_dialog[1].done(0)
 
     def set_status(self, key):
         self.status_key = key

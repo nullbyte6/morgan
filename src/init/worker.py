@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import asyncio
 import io
+import itertools
 import logging
 import threading
 import time
@@ -33,7 +34,7 @@ from src.init.attachments import (DesktopMessage, DesktopVoiceMessage, Attachmen
 
 from src.init.chat import expand_file_tags
 from src.init.commands import set_confirmation_handler
-from src.init.config import load_config
+from src.init.config import PermissionMode, load_config
 from src.init.core import Assistant
 from src.init.lang import tr
 from src.init.session_log import SessionLog
@@ -129,6 +130,7 @@ class VoiceInputWorker(QThread):
 
 # noinspection PyBroadException
 class AssistantWorker(QObject):
+    CONFIRMATION_TIMEOUT = 30
     chunk = Signal(int, str)
     audio = Signal(int, object)
     directory = Signal(str)
@@ -142,7 +144,8 @@ class AssistantWorker(QObject):
     git_diff_ready = Signal(str, str)
     failed = Signal(str)
     ready = Signal()
-    confirmation_requested = Signal(int, str)
+    confirmation_requested = Signal(int, str, int, int)
+    confirmation_closed = Signal(int)
     accepted = Signal(int)
     rejected = Signal(int, str)
     screenshot_requested = Signal(object)
@@ -163,6 +166,8 @@ class AssistantWorker(QObject):
         self.confirmation_answer = False
         self._confirmation_lock = threading.Lock()
         self._pending_confirmation = None
+        self._confirmation_ids = itertools.count(1)
+        self.permission_mode = PermissionMode.ASK
         self.cancel_event = threading.Event()
         self.command_reply = False
         self.live_capture = None
@@ -410,15 +415,24 @@ class AssistantWorker(QObject):
         if self.event_loop is not None:
             self.event_loop.close()
 
+    def set_permission_mode(self, mode):
+        self.permission_mode = PermissionMode(mode)
+
     def confirm_command(self, message: str, cancel_event=None,
                         turn_id=0, context=None) -> bool:
         cancel_event = self.cancel_event if cancel_event is None else cancel_event
         if cancel_event.is_set():
             return False
+        log = logging.getLogger("assistant.permissions")
+        request_id = next(self._confirmation_ids)
+        if self.permission_mode is PermissionMode.AUTO:
+            log.info("Confirmation %s for turn %s required; approved automatically by permission mode %s",
+                     request_id, turn_id, PermissionMode.AUTO.value)
+            return True
         self.confirmation_answer = False
         self.confirmation_event.clear()
         pending = {"turn_id": turn_id, "message": message,
-                   **(context or {})}
+                   **(context or {}), "id": request_id}
         with self._confirmation_lock:
             self._pending_confirmation = pending
         if cancel_event.is_set():
@@ -426,23 +440,42 @@ class AssistantWorker(QObject):
                 if self._pending_confirmation is pending:
                     self._pending_confirmation = None
             return False
-        self.confirmation_requested.emit(turn_id, message)
+        deadline = time.monotonic() + self.CONFIRMATION_TIMEOUT
+        self.confirmation_requested.emit(turn_id, message, request_id,
+                                         self.CONFIRMATION_TIMEOUT)
         try:
             while not self.confirmation_event.wait(0.05):
                 if cancel_event.is_set():
+                    log.info("Confirmation %s for turn %s cancelled", request_id, turn_id)
                     return False
-            accepted = self.confirmation_answer and not cancel_event.is_set()
+                if time.monotonic() >= deadline:
+                    with self._confirmation_lock:
+                        expired = not self.confirmation_event.is_set()
+                        if expired:
+                            self._pending_confirmation = None
+                    if expired:
+                        break
+            else:
+                expired = False
+            accepted = (not expired and self.confirmation_answer
+                        and not cancel_event.is_set())
         finally:
             with self._confirmation_lock:
                 if self._pending_confirmation is pending:
                     self._pending_confirmation = None
+            self.confirmation_closed.emit(request_id)
+        log.info("Confirmation %s for turn %s %s", request_id, turn_id,
+                 "timed out and was rejected" if expired else
+                 "accepted by the user" if accepted else "rejected by the user")
         if not accepted:
             self.permission_denied.emit(turn_id)
         return accepted
 
-    def resolve_confirmation(self, accepted: bool):
+    def resolve_confirmation(self, accepted: bool, request_id=None):
         with self._confirmation_lock:
-            if self._pending_confirmation is None:
+            pending = self._pending_confirmation
+            if (pending is None or self.confirmation_event.is_set()
+                    or request_id is not None and pending["id"] != request_id):
                 return False
             self.confirmation_answer = accepted
             self.confirmation_event.set()
