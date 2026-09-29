@@ -46,6 +46,19 @@ from .task_trace import (TaskJournal, active_model_request, measurement_error, r
 from .task_activity import TaskActivity, tool_activity
 
 
+def select_schemas(names, available, control):
+    selected = [name for name in dict.fromkeys(names) if name in available and name not in control]
+    for name in tuple(selected):
+        spec = TOOL_SPECS.get(name)
+        if spec is None or spec.effectful or not spec.path_argument:
+            continue
+        selected.extend(other for other, other_spec in TOOL_SPECS.items()
+                        if other in available and other not in selected and other not in control
+                        and not other_spec.effectful and other_spec.path_argument
+                        and (other_spec.domain, other_spec.source) == (spec.domain, spec.source))
+    return set(selected[:12])
+
+
 class VerificationContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
     method: str = Field(min_length=1)
@@ -436,7 +449,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         if (self.selected_tools is None or name in self.selected_tools or name in self.control_tools
                 or name not in self.available_tools or len(self.selected_tools) >= 12):
             return
-        self.selected_tools.add(name)
+        self.selected_tools = select_schemas([*sorted(self.selected_tools), name], self.available_tools, self.control_tools)
         self.trace("tool_schemas_selected", active_tools=sorted(self.selected_tools), reason="called")
 
     def tool_schema(self, name):
@@ -1009,8 +1022,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         before = await measure(history)
         if before["estimated_input_tokens"] > input_limit and self.selected_tools is None:
             recent = [part.tool_name for message in history[-6:] for part in message.parts if part.part_kind == "tool-call"]
-            self.selected_tools = set([name for name in dict.fromkeys(reversed(recent))
-                                       if name in self.available_tools and name not in self.control_tools][:12])
+            self.selected_tools = select_schemas(reversed(recent), self.available_tools, self.control_tools)
             request_context.model_request_parameters = replace(parameters, function_tools=[
                 tool for tool in parameters.function_tools if tool.name in self.control_tools or tool.name in self.selected_tools])
             self.trace("tool_schemas_selected", active_tools=sorted(self.selected_tools), reason="context_budget")
@@ -1372,9 +1384,7 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
                       if part.part_kind == "tool-call"]
             candidates = [*reversed(recent), *[item["tool"] for item in reversed(self.executions)
                                              if item["operational"]], *sorted(self.selected_tools)]
-            self.controller.selected_tools = set([name for name in dict.fromkeys(candidates)
-                                                  if name in self.available_tools
-                                                  and name not in self.control_tools][:12]) or None
+            self.controller.selected_tools = select_schemas(candidates, self.available_tools, self.control_tools) or None
         self.controller.recovery_attempts = self.recovery_attempts
         self.controller.force_compaction = self.force_compaction
         self.controller.last_budget = dict(self.last_budget)
@@ -1488,8 +1498,7 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
         before = await measure(history)
         if before["estimated_input_tokens"] > input_limit and self.selected_tools is None:
             recent = [part.tool_name for message in history[-6:] for part in message.parts if part.part_kind == "tool-call"]
-            self.selected_tools = set(name for name in list(dict.fromkeys(reversed(recent)))[:12]
-                                      if name in self.available_tools and name not in self.control_tools)
+            self.selected_tools = select_schemas(reversed(recent), self.available_tools, self.control_tools)
             select()
         history = await self.context_budget.compact(history, measure, input_limit, force=self.force_compaction)
         measured = await measure(history)
@@ -1581,8 +1590,8 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
                                              previous["call_id"], code="call_id_conflict")
                 return previous["raw"] if previous["returned"] else previous["result"].payload()
             if (self.controller is None and self.selected_tools is not None and name not in self.control_tools
-                    and name in self.available_tools and len(self.selected_tools) < 12):
-                self.selected_tools.add(name)
+                    and name in self.available_tools and len(self.selected_tools) < 12 and name not in self.selected_tools):
+                self.selected_tools = select_schemas([*sorted(self.selected_tools), name], self.available_tools, self.control_tools)
             if self.controller is None and self.final_output is not None:
                 return control_rejection("The response has already been delivered.", "lifecycle", "A new execution",
                                          code="execution_complete")
@@ -1702,6 +1711,8 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
         if self.controller is not None:
             return await self.controller.on_tool_validate_error(ctx, call=call, tool_def=tool_def, args=args, error=error)
         if (self.selected_tools is not None and call.tool_name not in self.control_tools
-                and call.tool_name in self.available_tools and len(self.selected_tools) < 12):
-            self.selected_tools.add(call.tool_name)
+                and call.tool_name in self.available_tools and len(self.selected_tools) < 12
+                and call.tool_name not in self.selected_tools):
+            self.selected_tools = select_schemas([*sorted(self.selected_tools), call.tool_name],
+                                                 self.available_tools, self.control_tools)
         return await super().on_tool_validate_error(ctx, call=call, tool_def=tool_def, args=args, error=error)
