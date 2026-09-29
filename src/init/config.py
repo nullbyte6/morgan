@@ -57,7 +57,7 @@ DEFAULTS = {
     "keep_alive": "24h",
     "temperature": 0.2,
     "voice_reference": "arlo-01.wav",
-    "permission_mode": PermissionMode.ASK.value,
+    "permission_mode": "ask",
     "weather_location": "",
     "message_service": "whatsapp",
     "whatsapp_phone_number_id": "",
@@ -164,10 +164,8 @@ def validate_config(config):
             or "/" in reference or "\\" in reference
             or Path(reference).suffix.casefold() != ".wav"):
         raise ValueError("voice_reference must be a WAV filename")
-    try:
-        result["permission_mode"] = PermissionMode(result["permission_mode"]).value
-    except (TypeError, ValueError):
-        result["permission_mode"] = PermissionMode.ASK.value
+    if result["permission_mode"] not in ("ask", "auto"):
+        result["permission_mode"] = "ask"
     if result["lang"] not in ("english", "spanish"):
         raise ValueError(tr('config.lang_must_be_english_or_spanish'))
     for key in ("model", "message_service", "whatsapp_phone_number_id",
