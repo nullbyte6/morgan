@@ -17,13 +17,14 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation, QTimer
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QVBoxLayout, QWidget)
+    QAbstractButton, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QPushButton, QVBoxLayout,
+    QWidget)
 
 from .lang import get_language, tr
-from .theme import current_theme
+from .theme import current_theme, discover_themes, on_theme_changed, seed_user_themes, select_theme
 from .voice_profiles import available_voices, selected_voice, select_voice, VOICE_NAMES
 
 
@@ -133,6 +134,15 @@ class ToggleSwitch(QAbstractButton):
             diameter)
 
         painter.end()
+
+
+class ThemeDropdown(QComboBox):
+    """Combo box that asks for a fresh theme list before opening."""
+    popup_requested = Signal()
+
+    def showPopup(self):
+        self.popup_requested.emit()
+        super().showPopup()
 
 
 class SettingsView(QWidget):
@@ -262,7 +272,50 @@ class SettingsView(QWidget):
         language_row.addStretch()
         language_row.addWidget(self.model_dropdown)
         layout.addLayout(language_row)
+
+        self.theme_label = QLabel()
+        self.theme_label.setObjectName("muted")
+        self.theme_dropdown = ThemeDropdown()
+        self.theme_dropdown.setObjectName("themeDropdown")
+        self.theme_dropdown.view().setAutoFillBackground(True)
+        self.theme_dropdown.view().viewport().setAutoFillBackground(True)
+
+        arrow = QLabel("\uf0d7", self.theme_dropdown)
+        arrow.setObjectName("languageDropdownArrow")
+        arrow.setAttribute(Qt.WA_TransparentForMouseEvents)
+        arrow.setAlignment(Qt.AlignCenter)
+        arrow.setFixedWidth(28)
+        arrow_layout = QHBoxLayout(self.theme_dropdown)
+        arrow_layout.setContentsMargins(0, 0, 1, 0)
+        arrow_layout.addStretch()
+        arrow_layout.addWidget(arrow)
+
+        theme_options = QListView(self.theme_dropdown)
+        theme_options.setMouseTracking(True)
+        self.theme_dropdown.setView(theme_options)
+        self.theme_dropdown.setMaxVisibleItems(4)
+        self.theme_dropdown.setMinimumWidth(180)
+        self.theme_label.setBuddy(self.theme_dropdown)
+        theme_row = QHBoxLayout()
+        theme_row.addWidget(self.theme_label)
+        theme_row.addStretch()
+        theme_row.addWidget(self.theme_dropdown)
+        layout.addLayout(theme_row)
+
+        self.themes_folder_button = QPushButton()
+        self.themes_folder_button.setObjectName("themesFolderButton")
+        self.themes_folder_button.setCursor(Qt.PointingHandCursor)
+        themes_folder_row = QHBoxLayout()
+        themes_folder_row.addStretch()
+        themes_folder_row.addWidget(self.themes_folder_button)
+        layout.addLayout(themes_folder_row)
         layout.addStretch()
+
+        self.theme_dropdown.popup_requested.connect(self.refresh_themes)
+        self.theme_dropdown.activated.connect(self.change_theme)
+        self.themes_folder_button.clicked.connect(self.open_themes_folder)
+        on_theme_changed(self.apply_theme)
+        self.refresh_themes()
 
         self.model_dropdown.activated.connect(self.change_voice)
         self.refresh_voices()
@@ -271,6 +324,35 @@ class SettingsView(QWidget):
         self.voice_timer.setInterval(1000)
         self.voice_timer.timeout.connect(self.refresh_voices)
         self.voice_timer.start()
+
+    def refresh_themes(self):
+        current = current_theme()
+        themes = discover_themes()
+        if current.id not in {theme.id for theme in themes}:
+            themes.append(current)
+        items = [(theme.name, theme.id) for theme in themes]
+        self.theme_dropdown.blockSignals(True)
+        try:
+            existing = [(self.theme_dropdown.itemText(i), self.theme_dropdown.itemData(i))
+                        for i in range(self.theme_dropdown.count())]
+            if existing != items:
+                self.theme_dropdown.clear()
+                for name, theme_id in items:
+                    self.theme_dropdown.addItem(name, theme_id)
+            self.theme_dropdown.setCurrentIndex(self.theme_dropdown.findData(current.id))
+        finally:
+            self.theme_dropdown.blockSignals(False)
+
+    def change_theme(self, index):
+        theme_id = self.theme_dropdown.itemData(index)
+        if theme_id:
+            select_theme(theme_id)
+
+    def apply_theme(self, theme):
+        self.refresh_themes()
+
+    def open_themes_folder(self):
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(seed_user_themes())))
 
     def refresh_voices(self):
         voices = available_voices()
@@ -327,3 +409,8 @@ class SettingsView(QWidget):
             self.model_label.setText(tr("ui.voice"))
             self.model_dropdown.setAccessibleName(tr("ui.voice"))
             self.model_dropdown.setToolTip(tr("ui.voice_hint"))
+        if hasattr(self, "theme_label"):
+            self.theme_label.setText(tr("ui.theme"))
+            self.theme_dropdown.setAccessibleName(tr("ui.theme"))
+            self.theme_dropdown.setToolTip(tr("ui.theme_hint"))
+            self.themes_folder_button.setText(tr("ui.open_themes_folder"))
