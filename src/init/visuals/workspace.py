@@ -52,6 +52,8 @@ class WorkspacePanel(QFrame):
         self._drag_start: QPoint | None = None
         self._dragging = False
         self._drag_target = None
+        self._minimum = QSize(0, 0)
+        self._animating = False
 
         self.setObjectName("workspacePanel")
         self.setProperty("workspacePanel", True)
@@ -125,6 +127,18 @@ class WorkspacePanel(QFrame):
 
     def minimumSizeHint(self) -> QSize:
         return QSize(0, 0)
+
+    def set_minimum(self, size: QSize) -> None:
+        """Keep the content minimum, deferring it while a split animates."""
+        self._minimum = QSize(size)
+        if not self._animating:
+            self.setMinimumSize(self._minimum)
+
+    def set_animating(self, animating: bool) -> None:
+        if self._animating == animating:
+            return
+        self._animating = animating
+        self.setMinimumSize(QSize(0, 0) if animating else self._minimum)
 
     def _create_placeholder(self) -> QWidget:
         """Create an empty surface for the standalone demonstration."""
@@ -542,6 +556,15 @@ class Workspace(QWidget):
                 self._animations.pop(splitter)
                 animation.stop()
                 animation.deleteLater()
+        self._update_panel_minimums()
+
+    def _update_panel_minimums(self):
+        """Let panels in an animating split shrink past their content minimum."""
+        animated = {panel for splitter in self._animations
+                    if splitter is not self._surface and isValid(splitter)
+                    for panel in splitter.findChildren(WorkspacePanel)}
+        for panel in self.findChildren(WorkspacePanel):
+            panel.set_animating(panel in animated)
 
     @property
     def active_panel_id(self) -> str | None:
@@ -667,6 +690,7 @@ class Workspace(QWidget):
             self)
 
         self._animations[splitter] = animation
+        self._update_panel_minimums()
 
         def finish() -> None:
             if self._animations.get(splitter) is not animation:
@@ -678,6 +702,7 @@ class Workspace(QWidget):
             if on_finished is not None:
                 on_finished()
 
+            self._update_panel_minimums()
             animation.deleteLater()
 
         animation.finished.connect(finish)

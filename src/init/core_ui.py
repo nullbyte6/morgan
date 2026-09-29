@@ -577,8 +577,7 @@ class AssistantWindow(DesktopWindow):
             minimum = QSize(size.width() + margins.left() + margins.right(),
                             size.height() + panel.header.height() + panel.layout().spacing()
                             + margins.top() + margins.bottom())
-            if panel.minimumSize() != minimum:
-                panel.setMinimumSize(minimum)
+            panel.set_minimum(minimum)
 
     def _update_response_timer(self):
         for session in self._views():
