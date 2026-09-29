@@ -56,7 +56,7 @@ DEFAULTS = {
     "model": "",
     "keep_alive": "24h",
     "temperature": 0.2,
-    "voice_reference": "arlo-01.wav",
+    "voice_reference": "voice-01.wav",
     "permission_mode": "ask",
     "theme": "catppuccin-macchiato",
     "weather_location": "",

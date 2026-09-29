@@ -24,18 +24,14 @@ from pathlib import Path
 VOICE_DIR = Path(__file__).resolve().parents[1] / "voices"
 MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
 VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
-VOICE_REFERENCE = VOICE_DIR / "arlo-01.wav"
+VOICE_REFERENCE = VOICE_DIR / "voice-01.wav"
 VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy aquí para ayudarte "
                         "con lo que necesites.")
 VOICE_NAMES = {
-    "arlo-01.wav": "Javier",
-    "arlo-02.wav": "Oscar",
-    "arlo-03.wav": "Ciro",
-    "arlo-04.wav": "Miguel",
-    "arlo-05.wav": "Aitana",
-    "arlo-06.wav": "Fiona",
-    "arlo-07.wav": "Cristina",
-    "arlo-08.wav": "Sofia"
+    "voice-01.wav": "Javier",
+    "voice-02.wav": "David",
+    "voice-03.wav": "Aitana",
+    "voice-04.wav": "Marina",
 }
 
 
