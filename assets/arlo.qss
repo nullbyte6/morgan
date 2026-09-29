@@ -31,6 +31,25 @@ QListWidget#commandPaletteResults::item:selected {
     color: #cad3f5;
 }
 
+QListWidget#fileTagResults {
+    background-color: #24273a;
+    color: #cad3f5;
+    border: 2px solid #494d64;
+    border-radius: 12px;
+    padding: 4px;
+    outline: none;
+}
+
+QListWidget#fileTagResults::item {
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+QListWidget#fileTagResults::item:selected {
+    background-color: #494d64;
+    color: #8aadf4;
+}
+
 QListWidget#commandPaletteResults::item:disabled,
 QLabel#commandPaletteEmpty {
     color: #a5adcb;

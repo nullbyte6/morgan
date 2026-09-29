@@ -31,6 +31,7 @@ from PySide6.QtCore import *
 from src.init.attachments import (DesktopMessage, DesktopVoiceMessage, AttachmentSession,
     ollama_capabilities)
 
+from src.init.chat import expand_file_tags
 from src.init.commands import set_confirmation_handler
 from src.init.config import load_config
 from src.init.core import Assistant
@@ -323,7 +324,7 @@ class AssistantWorker(QObject):
                 self.speaking.emit(turn_id, speaking)
 
             reply, history = self.assistant.run(
-                prompt,
+                prompt if voice_input else expand_file_tags(prompt),
                 self.history,
                 on_chunk=lambda chunk: self.chunk.emit(turn_id, chunk),
                 on_audio=lambda samples, rate: self.report_audio(

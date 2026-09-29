@@ -1034,6 +1034,7 @@ class AssistantWindow(DesktopWindow):
         directory = Path.cwd()
         self.directory_indicator.set_directory(directory)
         self.branch_indicator.set_directory(directory)
+        self.input.refresh_file_tags()
 
     @Slot()
     def on_ready(self):
