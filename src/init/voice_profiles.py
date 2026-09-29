@@ -31,11 +31,11 @@ VOICE_NAMES = {
     "arlo-01.wav": "Javier",
     "arlo-02.wav": "Oscar",
     "arlo-03.wav": "Ciro",
-    "arlo-04.wav": "Brian",
-    "arlo-05.wav": "Gabriel",
-    "arlo-06.wav": "David",
-    "arlo-07.wav": "Mark",
-    "arlo-08.wav": "James"
+    "arlo-04.wav": "Miguel",
+    "arlo-05.wav": "Aitana",
+    "arlo-06.wav": "Fiona",
+    "arlo-07.wav": "Cristina",
+    "arlo-08.wav": "Sofia"
 }
 
 
