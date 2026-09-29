@@ -25,7 +25,7 @@ VOICE_DIR = Path(__file__).resolve().parents[1] / "voices"
 MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
 VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
 VOICE_REFERENCE = VOICE_DIR / "arlo-01.wav"
-VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy preparado para ayudarte "
+VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy aquí para ayudarte "
                         "con lo que necesites.")
 VOICE_NAMES = {
     "arlo-01.wav": "Javier",
