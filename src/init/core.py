@@ -321,6 +321,16 @@ class Assistant:
                 self._loop_models[event_loop] = runtime
             return runtime
 
+    def release_event_loop(self, event_loop):
+        with self._loop_models_lock:
+            runtime = self._loop_models.pop(event_loop, None)
+        if runtime is None or event_loop.is_closed():
+            return
+        try:
+            event_loop.run_until_complete(runtime["provider"].client.close())
+        except Exception:
+            logging.getLogger("assistant.model").exception("Unable to close a session HTTP client")
+
     def _loop_model(self, event_loop, name, factory):
         runtime = self._loop_runtime(event_loop)
         model = runtime["models"].get(name)

@@ -269,6 +269,7 @@ class AssistantWindow(DesktopWindow):
 
         self.session_shortcuts = []
         for sequence, action in (("Ctrl+Shift+N", self.new_session),
+                                 ("Ctrl+Shift+W", self.close_session),
                                  ("Ctrl+Tab", lambda: self.switch_session())):
             shortcut = QShortcut(QKeySequence(sequence), self)
             shortcut.setContext(Qt.ApplicationShortcut)
@@ -630,6 +631,9 @@ class AssistantWindow(DesktopWindow):
             Command("session.switch", "palette.switch_session", self.switch_session,
                     ("switch session", "cambiar sesion", "cambiar sesión"),
                     lambda: len(self.sessions) > 1),
+            Command("session.close", "palette.close_session", self.close_session,
+                    ("close session", "cerrar sesion", "cerrar sesión"),
+                    lambda: len(self.sessions) > 1),
             Command("task.stop", "palette.stop_task", self.stop_current_task,
                     ("stop task", "detener tarea", "cancelar"),
                     lambda: self.session.ready and (self.session.busy and not self.session.stopping
@@ -773,6 +777,46 @@ class AssistantWindow(DesktopWindow):
         self.build_worker(session)
         logging.getLogger("assistant.sessions").info("Created session %d", session.index + 1)
         self.switch_session(session.index)
+
+    @Slot()
+    def close_session(self):
+        if len(self.sessions) < 2 or self.quitting:
+            return
+        session = self.sessions[-1]
+        if session.closing:
+            return
+        session.closing = True
+        session.pending_prompt = None
+        session.paused_prompt = None
+        session.pending_voice_barge = False
+        session.pending_wake_barge = False
+        if self.voice_session is session and self.voice_thread is not None:
+            self.voice_session = None
+            self.voice_thread.stop_event.set()
+        if session.busy:
+            if not session.stopping:
+                self.stop_response(session)
+            return
+        self._remove_session(session)
+
+    def _remove_session(self, session):
+        if session not in self.sessions:
+            return
+        for dialog in tuple(session.confirmation_dialogs.values()):
+            dialog.done(0)
+        self.sessions.remove(session)
+        if self.session is session:
+            self.session = self.sessions[0]
+            self.input.setPlainText(self.session.draft)
+        session.current_response_view = None
+        thread = session.worker_thread
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(session.deleteLater)
+        thread.quit()
+        logging.getLogger("assistant.sessions").info("Closed session %d", session.index + 1)
+        self.render_session()
+        if self.isVisible() and self.session.ready:
+            self.input.setFocus()
 
     def switch_session(self, index=None):
         if len(self.sessions) < 2 or self.quitting:
@@ -1361,6 +1405,9 @@ class AssistantWindow(DesktopWindow):
             self.voice_thread.stop_event.set()
         self.update_send_button()
         self.refresh_session_indicator()
+        if session.closing:
+            self._remove_session(session)
+            return
         QMessageBox.warning(self, tr("ui.attach_files"), error)
 
     @Slot()
@@ -1809,7 +1856,9 @@ class AssistantWindow(DesktopWindow):
             QTimer.singleShot(0, self.close)
 
     def resume_after_turn(self, session, *, live=True):
-        if session.pending_wake_barge:
+        if session.closing:
+            self._remove_session(session)
+        elif session.pending_wake_barge:
             session.pending_wake_barge = False
             self.start_recording(automatic=True, session=session)
             self.finish_wake_command(

@@ -35,6 +35,7 @@ class DesktopSession(QObject):
         self.worker_thread = QThread(window)
         self.presentation = TaskPresentation(self)
         self.ready = False
+        self.closing = False
         self.busy = False
         self.stopping = False
         self.speaking = False

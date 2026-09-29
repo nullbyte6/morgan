@@ -425,6 +425,7 @@ class AssistantWorker(QObject):
         if self.primary and self.assistant.voice is not None:
             self.assistant.voice.close()
         if self.event_loop is not None:
+            self.assistant.release_event_loop(self.event_loop)
             self.event_loop.close()
 
     def set_permission_mode(self, mode):
