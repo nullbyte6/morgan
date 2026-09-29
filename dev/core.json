@@ -1,7 +1,7 @@
 {
   "version": "1.4.32-beta",
-  "model_name": "arlo-deepseek-r1:8b",
-  "base_model_name": "deepseek-r1:8b",
+  "model_name": "arlo-qwen3.5:9b",
+  "base_model_name": "qwen3.5:9b",
   "context_length": 32768,
   "audio_model": "gemma4:e2b"
 }
