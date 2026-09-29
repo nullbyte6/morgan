@@ -288,6 +288,20 @@ QToolButton#permissionSelector:pressed {
     border: 2px solid @accent;
 }
 
+QToolButton#sessionSelector {
+    background-color: transparent;
+    border: 2px solid @border;
+    border-radius: 16px;
+    color: @text;
+    padding: 4px 10px;
+}
+
+QToolButton#sessionSelector[running="true"],
+QToolButton#sessionSelector:hover,
+QToolButton#sessionSelector:pressed {
+    border: 2px solid @accent;
+}
+
 QFrame#permissionOptions {
     background-color: @surface;
     border: 2px solid @border;

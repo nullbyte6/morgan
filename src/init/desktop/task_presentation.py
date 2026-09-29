@@ -98,6 +98,10 @@ class TaskPresentation(QObject):
             self.view = view
             self.changed.emit(view)
 
+    def present(self, view):
+        self.view = view
+        self.changed.emit(view)
+
     def begin(self, turn_id):
         self.view = TaskView(turn_id=turn_id, lifecycle="active", active=True)
         self.changed.emit(self.view)

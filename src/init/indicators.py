@@ -165,6 +165,28 @@ class PrivacyIndicator(QPushButton):
         self.hide()
 
 
+class SessionSelector(QToolButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("sessionSelector")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAutoRaise(True)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.hide()
+
+    def set_sessions(self, index: int, count: int, background_running: bool):
+        label = tr("session.label", index=index + 1, count=count)
+        self.setText(f"{label} ●" if background_running else label)
+        self.setToolTip(tr("session.switch_hint"))
+        self.setAccessibleName(label)
+        if self.property("running") != background_running:
+            self.setProperty("running", background_running)
+            self.style().unpolish(self)
+            self.style().polish(self)
+        self.setVisible(count > 1)
+
+
 class PermissionSelector(QToolButton):
     mode_changed = Signal(str)
 
