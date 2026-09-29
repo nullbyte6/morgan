@@ -233,6 +233,20 @@ QToolButton#directory:pressed {
     border: 2px solid #8aadf4;
 }
 
+QComboBox#modelSelector {
+    combobox-popup: 0;
+    background-color: transparent;
+    border: 2px solid #494d64;
+    border-radius: 16px;
+    color: #cad3f5;
+    padding: 5px 26px 5px 10px;
+}
+
+QComboBox#modelSelector:hover,
+QComboBox#modelSelector:on {
+    border: 2px solid #8aadf4;
+}
+
 QLabel#logTitle {
     color: #cad3f5;
     font-size: 24px;
@@ -258,7 +272,8 @@ QComboBox#modelDropdown:focus {
 }
 
 QComboBox#languageDropdown::drop-down,
-QComboBox#modelDropdown::drop-down {
+QComboBox#modelDropdown::drop-down,
+QComboBox#modelSelector::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
     width: 0;
@@ -267,7 +282,8 @@ QComboBox#modelDropdown::drop-down {
 }
 
 QComboBox#languageDropdown QAbstractItemView,
-QComboBox#modelDropdown QAbstractItemView {
+QComboBox#modelDropdown QAbstractItemView,
+QComboBox#modelSelector QAbstractItemView {
     background-color: #24273a;
     color: #cad3f5;
     border: 2px solid #494d64;
@@ -278,15 +294,18 @@ QComboBox#modelDropdown QAbstractItemView {
 }
 
 QComboBox#languageDropdown QAbstractItemView::item,
-QComboBox#modelDropdown QAbstractItemView::item {
+QComboBox#modelDropdown QAbstractItemView::item,
+QComboBox#modelSelector QAbstractItemView::item {
     padding: 8px 12px;
     min-height: 24px;
 }
 
 QComboBox#languageDropdown QAbstractItemView::item:hover,
 QComboBox#modelDropdown QAbstractItemView::item:hover,
+QComboBox#modelSelector QAbstractItemView::item:hover,
 QComboBox#languageDropdown QAbstractItemView::item:selected,
-QComboBox#modelDropdown QAbstractItemView::item:selected {
+QComboBox#modelDropdown QAbstractItemView::item:selected,
+QComboBox#modelSelector QAbstractItemView::item:selected {
     background-color: #494d64;
     color: #cad3f5;
 }

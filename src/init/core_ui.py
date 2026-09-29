@@ -48,8 +48,8 @@ from src.init.orb_subtitles import MascotSubtitleBubble
 from src.init.audio_visualizer import AudioVisualizer
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
-from src.init.indicators import (GitBranchIndicator, PrivacyIndicator,
-                                 WorkingDirectory)
+from src.init.indicators import (GitBranchIndicator, ModelSelector,
+                                 PrivacyIndicator, WorkingDirectory)
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
 
@@ -84,7 +84,7 @@ WORKSPACE_VIEW_CONFIG = {
 
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
-from src.init.brain import kill_self
+from src.init.brain import MODEL_OVERRIDE, kill_self
 from src.init.config import DEFAULTS, HOME_PATH, load_dev_file, load_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
@@ -126,6 +126,7 @@ from src.init.terminal import TerminalBridge
 class AssistantWindow(DesktopWindow):
     """Assistant window class, not its brain, which is somewhere else"""
     request = Signal(int, object)
+    model_request = Signal(str)
     username = getuser().capitalize()
 
     def __init__(self):
@@ -187,6 +188,9 @@ class AssistantWindow(DesktopWindow):
         self.directory_indicator = WorkingDirectory(self)
         self.branch_indicator = GitBranchIndicator(self)
         self.privacy_indicator = PrivacyIndicator(self)
+        self.model_selector = ModelSelector(self)
+        self.model_switching = False
+        self.model_selector.model_selected.connect(self.request_model)
 
         self.privacy_indicator.clicked.connect(
             lambda: self.privacy_indicator.private_toggle(self.worker)
@@ -417,6 +421,7 @@ class AssistantWindow(DesktopWindow):
         indicator_row.addWidget(self.branch_indicator)
         indicator_row.addWidget(self.privacy_indicator)
         indicator_row.addStretch()
+        indicator_row.addWidget(self.model_selector)
         self.indicator_row = QWidget()
         self.indicator_row.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -443,6 +448,8 @@ class AssistantWindow(DesktopWindow):
         self.send.setFixedSize(48, 48)
         self.send.clicked.connect(self.on_send_clicked)
         self.send.hide()
+        indicator_row.setContentsMargins(
+            0, 0, self.send.width() + input_row.spacing(), 0)
 
         input_group.setLayout(input_column)
         self.input_group = input_group
@@ -716,7 +723,10 @@ class AssistantWindow(DesktopWindow):
 
         self.thread.started.connect(self.worker.initialize)
         self.request.connect(self.worker.ask)
+        self.model_request.connect(self.worker.select_model)
         self.worker.ready.connect(self.on_ready)
+        self.worker.model_changed.connect(self.on_model_changed)
+        self.worker.model_failed.connect(self.on_model_failed)
         self.worker.directory.connect(
             self.directory_indicator.set_directory
         )
@@ -939,6 +949,10 @@ class AssistantWindow(DesktopWindow):
                     self.submitting is None and self.attachment_tray.can_send)))
         editable = self.ready and self.submitting is None and not voice_active
         self.attach.setEnabled(editable)
+        self.model_selector.setEnabled(
+            editable and not self.busy and not self.model_switching and not MODEL_OVERRIDE)
+        self.model_selector.setToolTip(tr("ui.model_locked" if MODEL_OVERRIDE else "ui.model_hint"))
+        self.model_selector.setAccessibleName(tr("ui.model"))
         self.attachment_tray.setEnabled(editable)
         self.input.setEnabled(editable)
         self.attach.setToolTip(tr("ui.attach_files"))
@@ -1027,10 +1041,34 @@ class AssistantWindow(DesktopWindow):
         self.set_status("")
         self.set_orbs_visual_state(Orb.State.IDLE)
         self.set_enabled(True)
+        self.model_selector.refresh(self.worker.assistant.selected_model)
         self._reveal_startup_controls()
 
         if self.isVisible():
             self.input.setFocus()
+
+    @Slot(str)
+    def request_model(self, model):
+        if (not model or model == self.worker.assistant.selected_model
+                or self.busy or self.model_switching):
+            self.model_selector.set_current(self.worker.assistant.selected_model)
+            return
+        self.model_switching = True
+        self.update_send_button()
+        self.model_request.emit(model)
+
+    @Slot(str)
+    def on_model_changed(self, model):
+        self.model_switching = False
+        self.model_selector.set_current(model)
+        self.update_send_button()
+
+    @Slot(str)
+    def on_model_failed(self, error):
+        self.model_switching = False
+        self.model_selector.set_current(self.worker.assistant.selected_model)
+        self.update_send_button()
+        QMessageBox.warning(self, tr("ui.model"), error)
 
     def _reveal_startup_controls(self):
         """Slide the composer and subtitles into view after startup."""

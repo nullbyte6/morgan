@@ -85,6 +85,66 @@ class GitBranchIndicator(QToolButton):
         self.setVisible(bool(branch))
 
 
+class ModelSelector(QComboBox):
+    model_selected = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("modelSelector")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        options = QListView(self)
+        options.setMouseTracking(True)
+        self.setView(options)
+        options.setAutoFillBackground(True)
+        options.viewport().setAutoFillBackground(True)
+        arrow = QLabel("", self)
+        arrow.setObjectName("languageDropdownArrow")
+        arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        arrow.setFixedWidth(24)
+        arrow_layout = QHBoxLayout(self)
+        arrow_layout.setContentsMargins(0, 0, 2, 0)
+        arrow_layout.addStretch()
+        arrow_layout.addWidget(arrow)
+        self.currentIndexChanged.connect(self.updateGeometry)
+        self.activated.connect(lambda index: self.model_selected.emit(self.itemData(index) or ""))
+
+    def sizeHint(self):
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        metrics = self.fontMetrics()
+        return self.style().sizeFromContents(
+            QStyle.ContentsType.CT_ComboBox, option,
+            QSize(metrics.horizontalAdvance(self.currentText()), metrics.height()), self)
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
+
+    def set_current(self, model: str):
+        if not model:
+            return
+        with QSignalBlocker(self):
+            if self.findData(model) < 0:
+                self.insertItem(0, model, model)
+            self.setCurrentIndex(self.findData(model))
+        self.updateGeometry()
+
+    def refresh(self, model: str):
+        from src.init.brain import main_models
+        with QSignalBlocker(self):
+            self.clear()
+            for name in main_models() or ():
+                self.addItem(name, name)
+        self.set_current(model)
+        self.view().setMinimumWidth(self.view().sizeHintForColumn(0) + 32)
+
+    def showPopup(self):
+        self.refresh(self.currentData())
+        super().showPopup()
+
+
 class PrivacyIndicator(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
