@@ -290,6 +290,7 @@ class TaskState:
                               "completed." + criterion, {"evidence_ids": "Successful current call IDs"})
             proposed[criterion].evidence = list(refs)
         obligations = copy.deepcopy(self.obligations)
+        resolutions = {**self.effect_resolutions(completed), **resolutions}
         for obligation_id, resolution in resolutions.items():
             obligation = obligations.get(obligation_id)
             if obligation is None:
@@ -321,6 +322,15 @@ class TaskState:
         ready = self.complete()
         return {"accepted": True, "outcome": Outcome.SUCCESS, "status": "accepted", "ready_to_complete": ready,
                 "criteria": list(self.criteria), **({} if ready else {"requirements": self.requirements()})}
+
+    def effect_resolutions(self, completed):
+        cited = list(dict.fromkeys(ref for refs in completed.values() for ref in refs))
+        resolutions = {}
+        for obligation in self.obligations.values():
+            refs = [ref for ref in cited if self.valid_evidence([ref], [], after=obligation.sequence)]
+            if self.valid_evidence(refs, obligation.resources, after=obligation.sequence):
+                resolutions[obligation.id] = {"finding": "Verified for " + ", ".join(completed), "evidence": refs}
+        return resolutions
 
     def complete(self):
         return bool(self.kind and self.criteria and not self.obligations and not self.dependencies
