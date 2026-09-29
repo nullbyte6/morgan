@@ -147,6 +147,8 @@ class AssistantWorker(QObject):
     screenshot_requested = Signal(object)
     clipboard_requested = Signal(object)
     exit_requested = Signal()
+    model_changed = Signal(str)
+    model_failed = Signal(str)
 
     def __init__(self, startup_greeting="", *, muted=False):
         super().__init__()
@@ -205,6 +207,14 @@ class AssistantWorker(QObject):
             self.muted = bool(muted)
             if self.assistant.voice is not None:
                 self.assistant.voice.set_muted(self.muted)
+
+    @Slot(str)
+    def select_model(self, model):
+        try:
+            self.model_changed.emit(self.assistant.select_model(model))
+        except Exception as error:
+            logging.getLogger("assistant.model").exception("Model selection failed")
+            self.model_failed.emit(str(error))
 
     @Slot(int, object)
     def ask(self, turn_id, message):

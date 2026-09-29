@@ -65,7 +65,9 @@ from src.init.desktop.capture import request_screenshot
 
 VERSION = "no-version-found"
 
-MODEL_NAME = os.environ.get("MODEL", load_dev_file()["model_name"])
+MODEL_OVERRIDE = os.environ.get("MODEL", "")
+MAIN_MODEL_CAPABILITIES = {"completion", "tools"}
+_MODEL_CAPABILITIES: dict[str, set[str]] = {}
 OLLAMA_KEEP_ALIVE = os.environ.get("KEEP_ALIVE",
                                    load_config().get("keep_alive"))
 GIT_TIMEOUT_SECONDS = int(os.environ.get("GIT_TIMEOUT", "120"))
@@ -114,10 +116,92 @@ def refresh() -> str:
         return tr('brain.error_at_refresh_attempt', error=error)
 
 
+def _ollama_api(endpoint: str, payload: dict | None = None, timeout: float = 2):
+    request = urllib.request.Request(
+        f"http://127.0.0.1:11434/api/{endpoint}",
+        data=None if payload is None else json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.load(response)
+
+
+def _tagged_model(name: str) -> str:
+    return name if ":" in name.rsplit("/", 1)[-1] else f"{name}:latest"
+
+
+def _managed_model(name: str) -> str:
+    return "arlo-" + name.replace("/", "-")
+
+
+def main_models() -> list[str] | None:
+    """List installed Ollama models usable as the main model; None when Ollama is unreachable.
+
+    The audio model from the application configuration and the context-managed
+    copies derived from installed models are auxiliary and never offered.
+    """
+    try:
+        installed = {_tagged_model(entry["name"]): entry.get("digest") or entry["name"]
+                     for entry in _ollama_api("tags")["models"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    core = load_dev_file()
+    reserved = {_tagged_model(core["audio_model"]),
+                _tagged_model(f"arlo-voice-{core['audio_model']}"),
+                _tagged_model(core["model_name"])}
+    reserved.update(_tagged_model(_managed_model(name)) for name in installed)
+    models = []
+    for name, digest in installed.items():
+        if name in reserved:
+            continue
+        if digest not in _MODEL_CAPABILITIES:
+            try:
+                _MODEL_CAPABILITIES[digest] = set(
+                    _ollama_api("show", {"model": name}).get("capabilities") or ())
+            except (OSError, ValueError, TypeError):
+                continue
+        if MAIN_MODEL_CAPABILITIES <= _MODEL_CAPABILITIES[digest]:
+            models.append(name)
+    return sorted(models, key=str.casefold)
+
+
+def get_selected_model(models: list[str] | None = None) -> str:
+    """Resolve the main model: user selection, then the configured default, then any installed main model."""
+    if MODEL_OVERRIDE:
+        return MODEL_OVERRIDE
+    default = _tagged_model(load_dev_file()["base_model_name"])
+    selected = _tagged_model(load_config()["model"] or default)
+    models = main_models() if models is None else models
+    if models is None:
+        return selected
+    for candidate in (selected, default):
+        if candidate in models:
+            return candidate
+    return models[0] if models else default
+
+
+def main_model_id(model: str) -> str:
+    """Return the Ollama model requested for a main model, configuring its context window."""
+    if MODEL_OVERRIDE:
+        return model
+    core = load_dev_file()
+    if model == _tagged_model(core["base_model_name"]):
+        return core["model_name"]
+    managed = _managed_model(model)
+    result = _ollama_api("create", {
+        "model": managed,
+        "from": model,
+        "parameters": {"num_ctx": core["context_length"]},
+        "stream": False,
+    }, timeout=300)
+    if result.get("error") or result.get("status") != "success":
+        raise RuntimeError(result.get("error") or str(result))
+    return managed
+
+
 def keep_model_loaded() -> None:
     """Extend Ollama's model lifetime without delaying the next prompt."""
     payload = json.dumps({
-        "model": MODEL_NAME,
+        "model": get_assistant().MODEL_NAME,
         "prompt": "",
         "keep_alive": OLLAMA_KEEP_ALIVE,
         "stream": False,

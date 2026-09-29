@@ -46,6 +46,7 @@ DEFAULTS = {
     },
     "attachments": dict(DEFAULT_LIMITS),
     "lang": "spanish",
+    "model": "",
     "keep_alive": "24h",
     "temperature": 0.2,
     "voice_reference": "arlo-01.wav",
@@ -157,7 +158,7 @@ def validate_config(config):
         raise ValueError("voice_reference must be a WAV filename")
     if result["lang"] not in ("english", "spanish"):
         raise ValueError(tr('config.lang_must_be_english_or_spanish'))
-    for key in ("message_service", "whatsapp_phone_number_id",
+    for key in ("model", "message_service", "whatsapp_phone_number_id",
                 "whatsapp_api_version", "twilio_account_sid",
                 "twilio_auth_token", "twilio_from_number", "email_provider",
                 "email_address", "email_password", "email_smtp_host",

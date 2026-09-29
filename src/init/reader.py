@@ -18,7 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
-from src.init.identity import get_assistant_name, get_assistant_environment
+from src.init.identity import get_assistant, get_assistant_name, get_assistant_environment
 
 import asyncio
 import os
@@ -28,10 +28,10 @@ from pydantic_ai import Agent, BinaryContent
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 
-from src.init.config import load_dev_file
 from src.init.desktop.capture import request_screen_image
 
-VISION_MODEL = get_assistant_environment("VISION_MODEL", load_dev_file()["base_model_name"])
+VISION_MODEL = get_assistant_environment("VISION_MODEL")
+VISION_PROVIDER = OllamaProvider(base_url="http://localhost:11434/v1")
 IMAGE_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -41,10 +41,6 @@ IMAGE_TYPES = {
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
 vision_agent = Agent(
-    OllamaModel(
-        VISION_MODEL,
-        provider=OllamaProvider(
-            base_url="http://localhost:11434/v1")),
     instructions=lambda: (
         f"You are {get_assistant_name()}'s image analysis module. "
         "Analyze the supplied image and answer the user's question. "
@@ -54,6 +50,10 @@ vision_agent = Agent(
         "Do not claim to have interacted with the computer."
     ),
 )
+
+
+def vision_model() -> OllamaModel:
+    return OllamaModel(VISION_MODEL or get_assistant().selected_model, provider=VISION_PROVIDER)
 
 
 async def analyze_image_async(
@@ -76,7 +76,8 @@ async def analyze_image_async(
 
     result = await vision_agent.run(
         [question, BinaryContent(data=image,
-                media_type=media_type)]
+                media_type=media_type)],
+        model=vision_model()
     )
 
     return result.output
@@ -88,7 +89,8 @@ async def analyze_screen(
     image_data = await asyncio.to_thread(request_screen_image)
     result = await vision_agent.run(
         [question,BinaryContent( data=image_data,
-                media_type="image/png")])
+                media_type="image/png")],
+        model=vision_model())
 
     return result.output
 

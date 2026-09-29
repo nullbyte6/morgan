@@ -251,7 +251,7 @@ class Assistant:
             logger.setLevel(logging.CRITICAL)
             logger.propagate = False
 
-        from src.init.brain import MODEL_NAME
+        from src.init.brain import get_selected_model, main_model_id
         from src.init.tools import TOOLS
 
         if self.voice is None:
@@ -260,7 +260,8 @@ class Assistant:
                     if self.terminal_ui is not None
                     else None))
 
-        self.MODEL_NAME = MODEL_NAME
+        self.selected_model = get_selected_model()
+        self.MODEL_NAME = main_model_id(self.selected_model)
         self.model_settings = {
             "thinking": False,
             "openai_reasoning_effort": "none",
@@ -271,13 +272,7 @@ class Assistant:
             timeout=httpx2.Timeout(timeout=DEFAULT_HTTP_TIMEOUT, connect=5),
             headers={"User-Agent": get_user_agent()}, event_hooks={"request": [trace_provider_request]})
         self.provider = OllamaProvider(base_url="http://127.0.0.1:11434/v1", http_client=http_client)
-        self.model = OllamaModel(
-            self.MODEL_NAME,
-            provider=self.provider,
-            profile={"openai_chat_supports_multiple_system_messages": False,
-                     "openai_chat_supports_max_completion_tokens": False,
-                     "openai_supports_tool_choice_required": False},
-            settings=self.model_settings)
+        self.model = self._main_model()
 
         self.agent = Agent(
             model=self.model,
@@ -295,27 +290,54 @@ class Assistant:
             "It does not require an existing diagram. Do not claim "
             "this capability is unavailable.")
 
+    def _main_model(self):
+        from pydantic_ai.models.ollama import OllamaModel
+
+        return OllamaModel(
+            self.MODEL_NAME, provider=self.provider,
+            profile={"openai_chat_supports_multiple_system_messages": False,
+                     "openai_chat_supports_max_completion_tokens": False,
+                     "openai_supports_tool_choice_required": False},
+            settings=self.model_settings)
+
+    def select_model(self, model: str) -> str:
+        """Persist and apply a main model between turns, keeping the agent and task state."""
+        with self._reload_lock:
+            from src.init.brain import MODEL_OVERRIDE, main_model_id, main_models
+            from src.init.config import load_config, save_config
+            from src.init.lang import tr
+
+            if MODEL_OVERRIDE:
+                raise ValueError(tr("ui.model_locked"))
+            if model not in (main_models() or ()):
+                raise ValueError(tr("ui.model_unavailable", model=model))
+            model_id = main_model_id(model)
+            config = load_config()
+            config["model"] = model
+            save_config(config)
+            self.selected_model = model
+            self.MODEL_NAME = model_id
+            if self.agent is not None:
+                self.model = self._main_model()
+                self.agent.model = self.model
+            return model
+
     def reload_source(self) -> str:
         """Reload source modules and rebuild the model and tools for next turn."""
         with self._reload_lock:
             from src.init.hot_reload import reload_project_modules
 
             reloaded, errors = reload_project_modules()
-            from src.init.brain import MODEL_NAME
-            self.MODEL_NAME = MODEL_NAME
             self.audio_model = None
             self.audio_model_name = None
 
             if self.agent is not None:
-                from pydantic_ai.models.ollama import OllamaModel
+                from src.init.brain import get_selected_model, main_model_id
                 from src.init.tools import TOOLS
 
-                self.model = OllamaModel(
-                    self.MODEL_NAME, provider=self.provider,
-                    profile={"openai_chat_supports_multiple_system_messages": False,
-                             "openai_chat_supports_max_completion_tokens": False,
-                             "openai_supports_tool_choice_required": False},
-                    settings=self.model_settings)
+                self.selected_model = get_selected_model()
+                self.MODEL_NAME = main_model_id(self.selected_model)
+                self.model = self._main_model()
                 self.agent = Agent(
                     model=self.model,
                     tools=[Tool(function, sequential=True)
@@ -670,7 +692,7 @@ class Assistant:
             "operational_context_tokens": request_config["context_length"],
             "provider_context_tokens": provider_context,
             "effective_context_tokens": min(request_config["context_length"], provider_context),
-            "configured_model": request_config["model_name"],
+            "configured_model": self.MODEL_NAME,
             "source": "minimum_of_dev_configuration_and_ollama_show_or_ps; provider_fallback_4096"}
         controller.task_title = task_title
         controller.on_action = on_phase
