@@ -5,19 +5,7 @@ Ollama to run tools and automate tasks on Windows. It requires Windows,
 PowerShell, Python 3.12, Git. The `arlo.ps1` launcher starts the 
 application using the `.venv` virtual environment.
 Configuration and user data are stored in `C:\Users\<username>\.arlo`. Refer to the source code and `config.json` to discover additional features and configuration options.
-You can install Arlo from Git Bash or WSL by running the repository installer 
-directly:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/xddigs/arlo/main/install.sh | bash
-```
-
-The installation script creates the virtual environment, installs the required dependencies, 
-sets up Ollama, and downloads the configured model, If you have already 
-cloned the repository, navigate to its directory and run:
-```bash
-bash install.sh
-```
 For an existing installation, you can start arlo directly by running `arlo.ps1`.
 
 Arlo also has a desktop interface application (`scripts\arlo.bat`) which, if you 
