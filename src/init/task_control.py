@@ -432,6 +432,19 @@ and retain its consent checks. cd requests use change_directory and Git requests
         return {"accepted": True, "outcome": Outcome.SUCCESS,
                 "active_tools": sorted(self.selected_tools | self.control_tools.keys())}
 
+    def activate_tool_schema(self, name):
+        if (self.selected_tools is None or name in self.selected_tools or name in self.control_tools
+                or name not in self.available_tools or len(self.selected_tools) >= 12):
+            return
+        self.selected_tools.add(name)
+        self.trace("tool_schemas_selected", active_tools=sorted(self.selected_tools), reason="called")
+
+    def tool_schema(self, name):
+        tool = self.available_tools.get(name)
+        if tool is None or name in self.control_tools:
+            return "See the named tool's declared schema"
+        return tool.parameters_json_schema
+
     @staticmethod
     def page(raw, offset, limit, digest=""):
         if offset < 0 or offset > len(raw) or limit < 1:
@@ -542,12 +555,12 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.state.final_output = None
             self.state.notice = "A verification dependency changed; reverify the affected criteria."
 
-    def _validation_rejection(self, error):
+    def _validation_rejection(self, error, name=""):
         if isinstance(error, ValidationError):
             errors = error.errors(include_input=False, include_url=False)
             first = errors[0]
             result = control_rejection(first["msg"], ".".join(map(str, first["loc"])),
-                                       {"type": first["type"], "schema": "See the named tool's declared schema"},
+                                       {"type": first["type"], "schema": self.tool_schema(name)},
                                        code="invalid_arguments")
             examples = {"verification": {"Exact criterion from criteria": {"method": "Observable check", "resources": []}},
                         "resolutions": {"Recorded effect obligation ID": {"finding": "Observed reconciliation", "evidence": ["call_id"]}},
@@ -701,11 +714,12 @@ and retain its consent checks. cd requests use change_directory and Git requests
         async with self.tool_lock:
             self.check_cancelled()
             self.trace("tool_proposed", tool=name, arguments=arguments, call_id=call_id)
+            self.activate_tool_schema(name)
             if validator is not None:
                 try:
                     arguments = validator(arguments)
                 except (ValidationError, ValueError, TypeError) as error:
-                    result = self._validation_rejection(error)
+                    result = self._validation_rejection(error, name)
                     return self.reject(name, arguments, call_id, result["code"], result, validated=False)
             self.trace("tool_attempt", tool=name, arguments=arguments, call_id=call_id, validated=True)
             if self.state.status != Lifecycle.ACTIVE:
@@ -757,7 +771,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
                 interrupted = True
                 result = ActionResult(Outcome.CANCELLED, "Action interrupted; effects may be partial.", "interrupted")
             except (ValidationError, ModelRetry) as error:
-                result = ActionResult(Outcome.REJECTED, self._validation_rejection(error), "invalid_arguments")
+                result = ActionResult(Outcome.REJECTED, self._validation_rejection(error, name), "invalid_arguments")
             except Exception as error:
                 result = ActionResult(Outcome.FAILED, str(error), "execution_exception")
             after = {resource: self.revision(resource) for resource in resources}
@@ -851,8 +865,9 @@ and retain its consent checks. cd requests use change_directory and Git requests
 
     async def on_tool_validate_error(self, ctx, *, call, tool_def, args, error):
         from pydantic_ai.exceptions import ToolFailed
-        result = self._validation_rejection(error)
+        result = self._validation_rejection(error, call.tool_name)
         self.trace("tool_proposed", tool=call.tool_name, arguments=args, call_id=call.tool_call_id)
+        self.activate_tool_schema(call.tool_name)
         returned = self.reject(call.tool_name, args, call.tool_call_id, result["code"], result, validated=False)
         raise ToolFailed(encoded(returned))
 
@@ -1563,6 +1578,9 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
                     return control_rejection("A tool call ID cannot identify a different operation.", "call_id",
                                              previous["call_id"], code="call_id_conflict")
                 return previous["raw"] if previous["returned"] else previous["result"].payload()
+            if (self.controller is None and self.selected_tools is not None and name not in self.control_tools
+                    and name in self.available_tools and len(self.selected_tools) < 12):
+                self.selected_tools.add(name)
             if self.controller is None and self.final_output is not None:
                 return control_rejection("The response has already been delivered.", "lifecycle", "A new execution",
                                          code="execution_complete")
@@ -1681,4 +1699,7 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
             self.promote("checkpoint")
         if self.controller is not None:
             return await self.controller.on_tool_validate_error(ctx, call=call, tool_def=tool_def, args=args, error=error)
+        if (self.selected_tools is not None and call.tool_name not in self.control_tools
+                and call.tool_name in self.available_tools and len(self.selected_tools) < 12):
+            self.selected_tools.add(call.tool_name)
         return await super().on_tool_validate_error(ctx, call=call, tool_def=tool_def, args=args, error=error)
