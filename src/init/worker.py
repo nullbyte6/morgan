@@ -229,22 +229,24 @@ class AssistantWorker(QObject):
     def ask(self, turn_id, message):
         from src.init import brain
         brain.set_working_directory_owner(self.session.context)
-        speech = self.assistant.acquire_speech(self)
-        self.speech_owner = speech
         try:
             live = (isinstance(message, DesktopVoiceMessage) and message.live
                     and self.live_capture is not None)
-            lease = (nullcontext() if live or not speech
+            lease = (nullcontext() if live
                      else desktop_audio(stop_event=self.cancel_event))
             with lease as audio_lease:
-                self._ask(turn_id, message, audio_lease, speech)
+                self._ask(turn_id, message, audio_lease)
         except Exception as error:
             self.rejected.emit(turn_id, str(error))
         finally:
             self.speech_owner = False
             self.assistant.release_speech(self)
 
-    def _ask(self, turn_id, message, audio_lease, speech_enabled=True):
+    def claim_speech(self):
+        self.speech_owner = self.assistant.acquire_speech(self)
+        return self.speech_owner
+
+    def _ask(self, turn_id, message, audio_lease):
         message = DesktopMessage(message) if isinstance(message,
                                                         str) else message
         voice_input = isinstance(message, DesktopVoiceMessage)
@@ -358,7 +360,7 @@ class AssistantWorker(QObject):
                 task_title=task_title,
                 on_surface=receive_surface,
                 on_task_title=receive_task_title,
-                speech_enabled=speech_enabled,
+                acquire_speech=self.claim_speech,
                 resume_task_id=getattr(message, "resume_task_id", ""))
 
             self.history[:] = history

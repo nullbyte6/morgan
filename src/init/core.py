@@ -646,7 +646,8 @@ class Assistant:
             session=None,
             audio_input=None, *,
             speech_enabled: bool = True, task_title: str = "", on_activity=None,
-            on_surface=None, on_task_title=None, resume_task_id: str = ""):
+            on_surface=None, on_task_title=None, resume_task_id: str = "",
+            acquire_speech=None):
         """Cancel the model stream and queued speech before accepting steering."""
         import asyncio
         from src.init import brain
@@ -680,12 +681,18 @@ class Assistant:
 
         self._initialize_runtime()
 
-        owns_speech = speech_enabled
-        if speech_enabled:
-            self.voice.audio_callback = on_audio
-            self.voice.speaking_callback = on_speaking
-            self.voice.subtitle_callback = on_subtitle
-            self.voice.begin_turn(language_context=prompt)
+        owns_speech = False
+
+        def claim_speech():
+            nonlocal owns_speech
+            if (not owns_speech and speech_enabled
+                    and (acquire_speech is None or acquire_speech())):
+                self.voice.audio_callback = on_audio
+                self.voice.speaking_callback = on_speaking
+                self.voice.subtitle_callback = on_subtitle
+                self.voice.begin_turn(language_context=prompt)
+                owns_speech = True
+            return owns_speech
 
         cancel_event = cancel_event if cancel_event is not None else threading.Event()
         cancellation_token = CancellationToken()
@@ -821,12 +828,9 @@ class Assistant:
                                         speech_enabled=speech_enabled, on_surface=on_surface)
 
             def deliver_output(output, *, streamed=""):
-                nonlocal speech_enabled
-                try:
-                    delivery.deliver(output, streamed=streamed,
-                                     surface=controller.output_surface, title=controller.output_title)
-                finally:
-                    speech_enabled = delivery.speech_enabled
+                delivery.speech_enabled = delivery.speech_enabled and claim_speech()
+                delivery.deliver(output, streamed=streamed,
+                                 surface=controller.output_surface, title=controller.output_title)
 
             def emit_step(name, call_id, result, failed=False):
                 if on_phase is None:
@@ -928,6 +932,7 @@ class Assistant:
                     notice = controller.state.notice if controller.state is not None else controller.notice
                     if on_phase is not None and controller.state is not None:
                         on_phase(controller.state.status)
+                    delivery.speech_enabled = delivery.speech_enabled and claim_speech()
                     delivery.emit(notice)
                     conversation_messages = [*stream_messages,
                                              ModelResponse(parts=[TextPart(notice)])]
@@ -1013,7 +1018,7 @@ class Assistant:
             if session is not None:
                 completed_history = session.context.externalize_messages(completed_history)
 
-            if speech_enabled:
+            if owns_speech and delivery.speech_enabled:
                 delivery.flush_speech(cancel_event)
 
                 self.voice.request_done()
@@ -1078,7 +1083,7 @@ class Assistant:
                 self.voice.speaking_callback = None
                 self.voice.subtitle_callback = None
 
-            if speech_enabled and on_speaking is not None:
+            if owns_speech and on_speaking is not None:
                 on_speaking(False)
 
         text = "".join(reply)
