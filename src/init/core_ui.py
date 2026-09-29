@@ -123,8 +123,6 @@ from src.init.visuals.bridge import FlowchartBridge
 from src.init.visuals.browser_bridge import BrowserBridge
 from src.init.terminal import TerminalBridge
 
-MICROPHONE_SIZE = 28
-
 # noinspection PyBroadException
 class AssistantWindow(DesktopWindow):
     """Assistant window class, not its brain, which is somewhere else"""
@@ -180,9 +178,6 @@ class AssistantWindow(DesktopWindow):
         self.closing_after_voice = False
         self.quitting = False
         self.send = QPushButton("")
-        font = self.send.font()
-        font.setPointSize(MICROPHONE_SIZE if self.send.text() == "" or "" else 12)
-        self.send.setFont(font)
         self.greeting_key = f"greeting.{random.randrange(6)}"
 
         self.worker = AssistantWorker(self.startup_greeting, muted=self.muted)
@@ -971,10 +966,6 @@ class AssistantWindow(DesktopWindow):
         stopping_available = self.busy and self.speaking and not self.stopping
         self.send.setText("" if stopping_available or self.recording or live_active else
                           "" if self.has_text else "")
-
-        font = self.send.font()
-        font.setPointSize(MICROPHONE_SIZE if self.send.text() == "" or "" else 12)
-        self.send.setFont(font)
 
         self.send.setEnabled(
             self.ready and (live_active or self.recording or stopping_available or (
@@ -1950,12 +1941,6 @@ def main():
         app.setFont(font)
         window = AssistantWindow()
         window.show()
-        icon_font = QFont(nerd_font, 18)
-
-        for button in (
-                window.send,
-                window.attach):
-            button.setFont(icon_font)
 
         def activate_existing_window():
             while instance_server.hasPendingConnections():

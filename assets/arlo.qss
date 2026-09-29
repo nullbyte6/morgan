@@ -144,6 +144,8 @@ QTextEdit {
 QPushButton#attach,
 QPushButton#send {
     border-radius: 24px;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 18pt;
 }
 
 QPushButton#send {
