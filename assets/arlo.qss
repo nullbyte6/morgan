@@ -55,20 +55,24 @@ QLabel#commandPaletteEmpty {
     background: transparent;
 }
 
-QListWidget#commandPaletteResults QScrollBar:vertical {
+QListWidget#commandPaletteResults QScrollBar:vertical,
+QListWidget#fileTagResults QScrollBar:vertical {
     background: transparent;
     width: 6px;
     margin: 4px 0;
 }
 
-QListWidget#commandPaletteResults QScrollBar::handle:vertical {
+QListWidget#commandPaletteResults QScrollBar::handle:vertical,
+QListWidget#fileTagResults QScrollBar::handle:vertical {
     background-color: #6e738d;
     border-radius: 3px;
     min-height: 24px;
 }
 
 QListWidget#commandPaletteResults QScrollBar::add-line:vertical,
-QListWidget#commandPaletteResults QScrollBar::sub-line:vertical {
+QListWidget#commandPaletteResults QScrollBar::sub-line:vertical,
+QListWidget#fileTagResults QScrollBar::add-line:vertical,
+QListWidget#fileTagResults QScrollBar::sub-line:vertical {
     height: 0;
 }
 

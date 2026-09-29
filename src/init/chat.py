@@ -83,9 +83,8 @@ class FileTagPopup(QListWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.setObjectName("fileTagResults")
-        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setFocusPolicy(Qt.NoFocus)
+        self.hide()
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.setTextElideMode(Qt.ElideRight)
         self.setUniformItemSizes(True)
@@ -173,18 +172,21 @@ class ChatInput(QTextEdit):
 
     def position_file_tags(self):
         popup = self.file_tag_popup
+        host = self.window()
+        if popup.parentWidget() is not host:
+            popup.setParent(host)
+            popup.setFocusPolicy(Qt.NoFocus)
         rows = min(popup.count(), 8)
         height = popup.sizeHintForRow(0) * rows + popup.frameWidth() * 2 + 8
         width = max(240, min(420, self.width()))
         popup.resize(width, height)
         anchor = self.cursorRect(self.textCursor())
-        point = self.viewport().mapToGlobal(anchor.topLeft())
-        screen = QGuiApplication.screenAt(point) or QGuiApplication.primaryScreen()
-        area = screen.availableGeometry()
-        x = min(max(point.x(), area.left()), area.right() - width)
+        point = self.viewport().mapTo(host, anchor.topLeft())
+        area = host.rect()
+        x = max(area.left(), min(point.x(), area.right() - width))
         y = point.y() - height - 6
         if y < area.top():
-            y = self.viewport().mapToGlobal(anchor.bottomLeft()).y() + 6
+            y = self.viewport().mapTo(host, anchor.bottomLeft()).y() + 6
         popup.move(x, y)
         popup.show()
         popup.raise_()
