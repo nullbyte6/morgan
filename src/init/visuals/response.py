@@ -209,8 +209,8 @@ class ResponseView(QWidget):
         self.document_view.setFrameShape(QFrame.NoFrame)
         self.document_view.setReadOnly(True)
         self.document_view.setOpenExternalLinks(True)
-        self.document_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.document_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.document_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.document_view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.document_view.document().setDocumentMargin(8)
         self.document_view.document().setDefaultStyleSheet(
             current_theme().render(self.DOCUMENT_CSS))
