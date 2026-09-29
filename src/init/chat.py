@@ -67,7 +67,8 @@ def expand_file_tags(text, directory=None):
         return text
     lines = [f"- @{name}: {path} ({'directory' if path.is_dir() else 'file'})"
              for name, path in tags.items()]
-    return (text + "\n\nTagged paths from the current working directory:\n"
+    return (text + "\n\nTagged paths from the current working directory "
+            "(@name is only a reference; pass the resolved path to tools):\n"
             + "\n".join(lines))
 
 

@@ -67,7 +67,13 @@ def _source_index(path: str, content: str) -> str:
 
 def _path(path):
     target = (PROJECT_ROOT / path).resolve()
-    relative = target.relative_to(PROJECT_ROOT)
+    try:
+        relative = target.relative_to(PROJECT_ROOT)
+    except ValueError:
+        raise ValueError(
+            f"{target} is outside the assistant's project root {PROJECT_ROOT}. "
+            "Source tools resolve paths relative to the project root, not the working directory; "
+            "use a path relative to the project root, or list_files/read_file for files outside it.") from None
     if any(part.casefold() in (".git", ".venv", "__pycache__") for part in relative.parts):
         raise ValueError(
             tr('self_code.choose_a_source_file_not_git_metadata_or_the_runtime'))
@@ -104,6 +110,7 @@ def list_code(directory: str = ".", recursive: bool = False,
               suffix: str = "", offset: int = 0,
               limit: int = LIST_CODE_MAX_ENTRIES) -> dict:
     """List source entries with bounded pagination in the working inspection context.
+    directory is relative to the assistant's project root, not the working directory.
     Reuse existing evidence. Older results may be archived to make room for new evidence.
     """
     from .brain import list_files
@@ -158,7 +165,7 @@ def search_code(query: str, directory: str = ".",
     An exact phrase match is preferred. If the complete query does not occur
     literally, multiple whitespace-separated terms are matched when all of
     them occur on the same source line, regardless of order or text between
-    them.
+    them. directory is relative to the assistant's project root, not the working directory.
     Returns bounded matching paths, line numbers and source lines. Use this
     to locate relevant source before read_code(). This searches source files,
     not conversation history or long-term memory. Reuse existing evidence;
