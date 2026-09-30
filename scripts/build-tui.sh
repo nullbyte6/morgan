@@ -121,4 +121,13 @@ text = head + separator + collection
 path.write_text(text, encoding='utf-8')
 PY
 run_python -B -m PyInstaller --noconfirm --distpath "$arlo" --workpath "$build/work" "$build/ArloTUI.spec" "$@"
+
+system32="${SYSTEMROOT:-C:\\Windows}"
+system32="${system32//\\//}/System32"
+for runtime in vcruntime140 vcruntime140_1 msvcp140 msvcp140_1 msvcp140_2 \
+        msvcp140_atomic_wait msvcp140_codecvt_ids concrt140 vcomp140; do
+    if [[ -f "$system32/$runtime.dll" ]]; then
+        cp -f -- "$system32/$runtime.dll" "$arlo/tui/_internal/"
+    fi
+done
 printf '\nExecutable: %s/tui/ArloTUI.exe\n' "$arlo"
