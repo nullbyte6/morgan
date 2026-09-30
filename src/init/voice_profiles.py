@@ -23,7 +23,19 @@ from pathlib import Path
 
 VOICE_DIR = Path(__file__).resolve().parents[1] / "voices"
 MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
-VOICE_MODEL = MODEL_DIR / "Fun-CosyVoice3-0.5B"
+VOICE_MODEL_NAME = "Fun-CosyVoice3-0.5B"
+
+
+def _voice_model() -> Path:
+    bundled = MODEL_DIR / VOICE_MODEL_NAME
+    if (bundled / "cosyvoice3.yaml").is_file():
+        return bundled
+    from .config import HOME_PATH
+
+    return HOME_PATH / "models" / VOICE_MODEL_NAME
+
+
+VOICE_MODEL = _voice_model()
 VOICE_REFERENCE = VOICE_DIR / "voice-01.wav"
 VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy aquí para ayudarte "
                         "con lo que necesites.")
