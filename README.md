@@ -1,5 +1,9 @@
-![Arlo](assets/header.png)
-# ARLO
+<p align="center">
+  <img src="assets/arlo.png" alt="Arlo" width="200">
+</p>
+
+<h1 align="center">ARLO</h1>
+
 Adaptive Reasoning Local Operator is a local desktop assistant that uses 
 Ollama to run tools and automate tasks on Windows. It requires Windows, 
 PowerShell, Python 3.12, Git. The `arlo.ps1` launcher starts the 
