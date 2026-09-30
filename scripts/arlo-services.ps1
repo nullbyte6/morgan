@@ -2,6 +2,10 @@ param([switch]$NoConsole)
 
 $ErrorActionPreference = "Stop"
 
+$env:Path = ((@("Machine", "User") | ForEach-Object {
+    [Environment]::GetEnvironmentVariable("Path", $_)
+}) + $env:Path) -join ";"
+
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $ttsModule = "src.init.tts_server"
@@ -140,7 +144,8 @@ if ($managedModel) {
     $modelContext = $core.context_length
     if ($baseModelName -isnot [string] -or
         [string]::IsNullOrWhiteSpace($baseModelName) -or
-        $modelContext -isnot [long] -or $modelContext -lt 4096) {
+        ($modelContext -isnot [int] -and $modelContext -isnot [long]) -or
+        $modelContext -lt 4096) {
         throw "Managed model configuration is invalid in $corePath."
     }
 
