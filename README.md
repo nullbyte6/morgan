@@ -19,9 +19,10 @@ required. The installer:
 - installs Git for Windows through WinGet if Git Bash is not found;
 - installs Ollama through WinGet if it is missing, starts it, and downloads the
   `qwen3.5:9b` model (about 6.6 GB);
-- creates the data directory `C:\Users\<username>\.arlo` and checks for the
-  CosyVoice voice model in `.arlo\models\Fun-CosyVoice3-0.5B`. The voice model
-  is not downloaded automatically.
+- creates the data directory `C:\Users\<username>\.arlo` and downloads the
+  CosyVoice voice model (`Fun-CosyVoice3-0.5B-2512`, about 6.3 GB) from Hugging
+  Face into `.arlo\models\Fun-CosyVoice3-0.5B` if it is missing. Interrupted
+  downloads resume on the next run, and files already present are skipped.
 
 Configuration and user data are stored in `C:\Users\<username>\.arlo`. Refer
 to the source code and `config.json` to discover additional features and
