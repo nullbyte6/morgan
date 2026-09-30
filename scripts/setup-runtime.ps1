@@ -33,12 +33,8 @@ if (-not $AssistantName) {
     $AssistantName = "Arlo"
 }
 
-$AnchorDir = Join-Path $env:USERPROFILE ".arlo"
+$LegacyDir = Join-Path $env:USERPROFILE ".arlo"
 $DataDir = Join-Path $env:USERPROFILE ("." + (Get-AssistantIdentifier $AssistantName))
-
-if (($DataDir -ne $AnchorDir) -and (Test-Path $AnchorDir) -and -not (Test-Path $DataDir)) {
-    $DataDir = $AnchorDir
-}
 
 $ConfigFile = Join-Path $DataDir "json\config.json"
 $ModelsDir = Join-Path $DataDir "models"
@@ -669,8 +665,72 @@ function Ensure-VoiceRuntime {
     Write-Host "Voice runtime installed successfully."
 }
 
+function Move-LegacyDataDirectory {
+    if (-not (Test-Path $LegacyDir)) {
+        return
+    }
+
+    $Legacy = Get-Item $LegacyDir -Force
+    $IsLink = [bool]$Legacy.LinkType
+    $Source = $LegacyDir
+
+    if ($IsLink) {
+        $Source = @($Legacy.Target)[0]
+    }
+
+    $SameFolder = [string]::Equals(
+        [IO.Path]::GetFullPath($Source).TrimEnd("\"),
+        [IO.Path]::GetFullPath($DataDir).TrimEnd("\"),
+        [StringComparison]::OrdinalIgnoreCase)
+
+    if ((-not $SameFolder) -and (-not (Test-Path $DataDir)) -and (Test-Path $Source)) {
+        Write-Host "Moving $Source to $DataDir..."
+        Move-Item -LiteralPath $Source -Destination $DataDir
+        $SameFolder = $true
+    }
+
+    if ($IsLink -and $SameFolder) {
+        [IO.Directory]::Delete($LegacyDir)
+    }
+}
+
+function Set-AssistantConfig {
+    New-Item `
+        -ItemType Directory `
+        -Path (Split-Path $ConfigFile) `
+        -Force | Out-Null
+
+    $Config = $null
+
+    if (Test-Path $ConfigFile -PathType Leaf) {
+        try {
+            $Config = Get-Content -LiteralPath $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+        catch {
+            Write-Host "Existing config.json is not valid JSON and will be replaced."
+        }
+    }
+
+    if (-not $Config) {
+        $Config = [pscustomobject]@{}
+    }
+
+    if (-not $Config.PSObject.Properties["assistant"] -or -not $Config.assistant) {
+        $Config | Add-Member -NotePropertyName "assistant" -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+
+    $Config.assistant | Add-Member -NotePropertyName "name" -NotePropertyValue $AssistantName -Force
+
+    [IO.File]::WriteAllText(
+        $ConfigFile,
+        ($Config | ConvertTo-Json -Depth 20),
+        (New-Object Text.UTF8Encoding $false))
+}
+
 function Ensure-Directories {
     Write-Step "Preparing $AssistantName data directories..."
+
+    Move-LegacyDataDirectory
 
     $Directories = @(
         $DataDir,
@@ -686,22 +746,7 @@ function Ensure-Directories {
         }
     }
 
-    if (-not (Test-Path $AnchorDir)) {
-        New-Item `
-            -ItemType Junction `
-            -Path $AnchorDir `
-            -Target $DataDir | Out-Null
-    }
-
-    if (-not (Test-Path $ConfigFile)) {
-        New-Item `
-            -ItemType Directory `
-            -Path (Split-Path $ConfigFile) `
-            -Force | Out-Null
-
-        $Config = @{ assistant = @{ name = $AssistantName } } | ConvertTo-Json
-        [IO.File]::WriteAllText($ConfigFile, $Config, (New-Object Text.UTF8Encoding $false))
-    }
+    Set-AssistantConfig
 }
 
 try {

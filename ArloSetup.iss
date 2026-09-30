@@ -53,6 +53,7 @@ Source: "scripts\setup-runtime.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Registry]
 Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvironmentPrefix}"; ValueData: "{app}"
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "ASSISTANT_NAME"; ValueData: "{code:GetAssistantName}"
 Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvironmentPrefix}_HOME"; ValueData: "{code:GetRepositoryScripts}"; Check: HasArloRepository
 Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "AssistantName"; ValueData: "{code:GetAssistantName}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
@@ -128,7 +129,7 @@ begin
   RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'InstallPath', PreviousInstallPath);
   AssistantPage := CreateInputQueryPage(wpSelectDir,
     'Assistant name', 'Customize the assistant and its environment variables.',
-    'This name will be saved in the application settings. Arlo creates ARLO and ARLO_HOME; Luna creates LUNA and LUNA_HOME. The first variable points to the installation folder. The second is only created when a cloned Arlo repository is found and points to its scripts folder.');
+    'This name will be saved in the application settings and names the data folder (.name in your user profile). Arlo creates ARLO and ARLO_HOME; Luna creates LUNA and LUNA_HOME. The first variable points to the installation folder. The second is only created when a cloned Arlo repository is found and points to its scripts folder.');
   AssistantPage.Add('Assistant name:', False);
   AssistantPage.Values[0] := ExpandConstant('{param:ASSISTANTNAME|' + GetPreviousData('AssistantName', 'Arlo') + '}');
 end;
@@ -313,6 +314,7 @@ begin
   if (CurUninstallStep = usPostUninstall) and
      (UninstallPrefix <> '') and (UninstallPath <> '') then begin
     DeleteEnvironmentIfMatching(UninstallPrefix, UninstallPath);
+    DeleteEnvironmentIfMatching('ASSISTANT_NAME', UninstallPrefix);
     DeleteEnvironmentIfMatching(UninstallPrefix + '_HOME', AddBackslash(UninstallPath) + 'scripts');
   end;
 end;
