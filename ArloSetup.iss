@@ -43,6 +43,12 @@ Source: "{#ArloSourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignor
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "scripts\arlo-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "dev\core.json"; DestDir: "{app}\dev"; Flags: ignoreversion
+Source: "src\__init__.py"; DestDir: "{app}\src"; Flags: ignoreversion
+Source: "src\init\*"; DestDir: "{app}\src\init"; Excludes: "__pycache__"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "src\cosyvoice\*"; DestDir: "{app}\src\cosyvoice"; Excludes: "__pycache__"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "src\third_party\Matcha-TTS\*"; DestDir: "{app}\src\third_party\Matcha-TTS"; Excludes: "__pycache__"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "src\voices\*"; DestDir: "{app}\src\voices"; Flags: ignoreversion
 Source: "scripts\setup-runtime.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Registry]
@@ -50,6 +56,10 @@ Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvir
 Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvironmentPrefix}_HOME"; ValueData: "{code:GetRepositoryScripts}"; Check: HasArloRepository
 Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "AssistantName"; ValueData: "{code:GetAssistantName}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\.venv"
+Type: filesandordirs; Name: "{app}\src"
 
 [Icons]
 Name: "{autoprograms}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"
@@ -265,6 +275,14 @@ begin
   Result := AddBackslash(FindArloRepository) + 'scripts';
 end;
 
+function GetRuntimeSwitches(Param: String): String;
+begin
+  if HasArloRepository then
+    Result := ' -SkipVoiceRuntime'
+  else
+    Result := '';
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
@@ -301,6 +319,6 @@ end;
 
 [Run]
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\setup-runtime.ps1"" -InstallDir ""{app}"" -AssistantName ""{code:GetAssistantName}"""; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\setup-runtime.ps1"" -InstallDir ""{app}"" -AssistantName ""{code:GetAssistantName}""{code:GetRuntimeSwitches}"; \
     StatusMsg: "Preparing {code:GetAssistantName} runtime..."; \
     Flags: waituntilterminated

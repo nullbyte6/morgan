@@ -3,7 +3,10 @@ param(
     [string]$InstallDir = "C:\Arlo",
 
     [Parameter(Mandatory = $false)]
-    [string]$AssistantName = "Arlo"
+    [string]$AssistantName = "Arlo",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$SkipVoiceRuntime
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,6 +63,103 @@ $CosyVoiceSkipped = @(
     "README.md",
     "llm.rl.pt",
     "speech_tokenizer_v3.batch.onnx"
+)
+
+$VenvDir = Join-Path $InstallDir ".venv"
+$VenvPython = Join-Path $VenvDir "Scripts\python.exe"
+$TorchVersion = "2.8.0"
+$TorchCudaIndex = "https://download.pytorch.org/whl/cu128"
+$VoicePackages = @(
+    "antlr4-python3-runtime==4.9.3",
+    "attrs==26.1.0",
+    "babel==2.18.0",
+    "beautifulsoup4==4.15.0",
+    "certifi==2026.7.22",
+    "charset-normalizer==3.5.1",
+    "cloudpickle==3.1.2",
+    "colorama==0.4.6",
+    "conformer==0.3.2",
+    "cryptography==50.0.1",
+    "cycler==0.12.1",
+    "decorator==5.3.1",
+    "diffusers==0.29.2",
+    "einops==0.8.2",
+    "einx==0.4.3",
+    "filelock==4.0.0",
+    "fonttools==4.65.0",
+    "frozendict==2.4.7",
+    "fsspec==2026.7.0",
+    "gdown==6.4.0",
+    "huggingface_hub==0.36.2",
+    "hydra-core==1.3.7",
+    "HyperPyYAML==1.2.3",
+    "idna==3.20",
+    "inflect==7.5.0",
+    "Jinja2==3.1.6",
+    "joblib==1.6.0",
+    "kiwisolver==1.5.1",
+    "lazy-loader==0.5",
+    "librosa==0.10.2.post1",
+    "lightning==2.6.6",
+    "lightning-utilities==0.15.3",
+    "lingua-language-detector==2.2.0",
+    "llvmlite==0.49.0",
+    "loguru==0.7.3",
+    "lxml==6.1.3",
+    "MarkupSafe==3.0.3",
+    "matplotlib==3.11.2",
+    "modelscope==1.40.1",
+    "modelscope-hub==0.4.3",
+    "more-itertools==11.1.0",
+    "mpmath==1.3.0",
+    "msgpack==1.2.2",
+    "narwhals==2.26.0",
+    "num2words==0.5.14",
+    "numba==0.67.0",
+    "numpy==2.2.6",
+    "omegaconf==2.3.1",
+    "onnxruntime-directml==1.24.4",
+    "openai-whisper==20250625",
+    "packaging==26.3",
+    "pandas==3.0.5",
+    "pillow==12.3.0",
+    "protobuf==5.29.6",
+    "psutil==7.2.2",
+    "pyarrow==21.0.0",
+    "pydub==0.25.1",
+    "Pygments==2.21.0",
+    "pyparsing==3.3.2",
+    "PySocks==1.7.1",
+    "python-dateutil==2.9.0.post0",
+    "pywin32==312",
+    "pyworld==0.3.5",
+    "PyYAML==6.0.3",
+    "regex==2026.9.10",
+    "requests==2.34.2",
+    "rich==14.3.4",
+    "ruamel.yaml==0.18.17",
+    "safetensors==0.8.0",
+    "scikit-learn==1.9.1",
+    "scipy==1.15.3",
+    "six==1.17.0",
+    "sounddevice==0.5.6",
+    "soundfile==0.14.0",
+    "soupsieve==2.9.2",
+    "sympy==1.14.0",
+    "threadpoolctl==3.7.0",
+    "tiktoken==0.14.0",
+    "tokenizers==0.21.4",
+    "torch-einops-utils==0.1.27",
+    "torchmetrics==1.9.0",
+    "tqdm==4.70.1",
+    "transformers==4.51.3",
+    "typeguard==4.6.0",
+    "typing_extensions==4.16.0",
+    "urllib3==2.8.0",
+    "wetext==0.1.8",
+    "wget==3.2",
+    "win32_setctime==1.2.0",
+    "x-transformers==2.28.8"
 )
 
 function Write-Step {
@@ -358,6 +458,217 @@ function Ensure-CosyVoice {
     Write-Host "CosyVoice model installed successfully."
 }
 
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$File,
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$Arguments = @()
+    )
+
+    $Previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
+    try {
+        & $File @Arguments 2>&1 | ForEach-Object { Write-Host "$_" }
+
+        return $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $Previous
+    }
+}
+
+function Install-WinGetPackage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Id,
+
+        [Parameter(Mandatory = $false)]
+        [string[]]$Extra = @()
+    )
+
+    $Winget = Get-Command "winget.exe" -ErrorAction SilentlyContinue
+
+    if (-not $Winget) {
+        throw "WinGet is required to install $Id automatically."
+    }
+
+    $ExitCode = Invoke-Native -File $Winget.Source -Arguments (@(
+        "install",
+        "--id", $Id,
+        "--exact",
+        "--source", "winget",
+        "--silent",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+        "--disable-interactivity"
+    ) + $Extra)
+
+    if (($ExitCode -ne 0) -and ($ExitCode -ne -1978335189)) {
+        throw "Installation of $Id failed with exit code $ExitCode."
+    }
+}
+
+function Update-SessionPath {
+    $Paths = @("Machine", "User") | ForEach-Object {
+        [Environment]::GetEnvironmentVariable("Path", $_)
+    }
+
+    $env:Path = (($Paths + $env:Path) -join ";")
+}
+
+function Find-Python {
+    $Candidates = @()
+    $Launcher = Get-Command "py.exe" -ErrorAction SilentlyContinue
+
+    if ($Launcher) {
+        try {
+            $Candidates += @(& $Launcher.Source -3.12 -c "import sys; print(sys.executable)" 2>$null)
+        }
+        catch {
+        }
+    }
+
+    $Candidates += @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\python.exe"),
+        (Join-Path $env:ProgramFiles "Python312\python.exe")
+    )
+
+    $Command = Get-Command "python.exe" -ErrorAction SilentlyContinue
+
+    if ($Command) {
+        $Candidates += $Command.Source
+    }
+
+    foreach ($Candidate in $Candidates) {
+        if (-not $Candidate -or -not (Test-Path $Candidate -PathType Leaf)) {
+            continue
+        }
+
+        try {
+            $Version = & $Candidate -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+
+            if ($Version -eq "3.12") {
+                return $Candidate
+            }
+        }
+        catch {
+        }
+    }
+
+    return $null
+}
+
+function Test-VoiceRuntime {
+    if (-not (Test-Path $VenvPython -PathType Leaf)) {
+        return $false
+    }
+
+    try {
+        & $VenvPython -c "import torch, torchaudio, onnxruntime, transformers, hyperpyyaml, whisper, modelscope, sounddevice, librosa, wetext, pyworld, x_transformers, lingua" *> $null
+
+        return ($LASTEXITCODE -eq 0)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Get-TorchIndexArguments {
+    $Adapters = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+        ForEach-Object { $_.Name })
+
+    if ($Adapters -match "NVIDIA") {
+        Write-Host "NVIDIA GPU detected. Using CUDA PyTorch."
+
+        return @("--index-url", $TorchCudaIndex)
+    }
+
+    Write-Host "No NVIDIA GPU detected. Using CPU PyTorch."
+
+    return @()
+}
+
+function Ensure-Ffmpeg {
+    Write-Step "Checking FFmpeg..."
+
+    Update-SessionPath
+
+    if (Get-Command "ffmpeg.exe" -ErrorAction SilentlyContinue) {
+        Write-Host "FFmpeg found."
+        return
+    }
+
+    Write-Host "FFmpeg is missing. Installing..."
+
+    Install-WinGetPackage -Id "Gyan.FFmpeg"
+
+    Update-SessionPath
+
+    if (-not (Get-Command "ffmpeg.exe" -ErrorAction SilentlyContinue)) {
+        throw "FFmpeg was installed but ffmpeg.exe could not be found."
+    }
+}
+
+function Ensure-VoiceRuntime {
+    Write-Step "Checking the voice runtime..."
+
+    if (Test-VoiceRuntime) {
+        Write-Host "Voice runtime found:"
+        Write-Host "  $VenvDir"
+        return
+    }
+
+    $Python = Find-Python
+
+    if (-not $Python) {
+        Write-Host "Python 3.12 is missing. Installing..."
+
+        Install-WinGetPackage -Id "Python.Python.3.12" -Extra @("--scope", "user")
+
+        $Python = Find-Python
+    }
+
+    if (-not $Python) {
+        throw "Python 3.12 was installed but could not be found."
+    }
+
+    Write-Host "Python found:"
+    Write-Host "  $Python"
+
+    if (-not (Test-Path $VenvPython -PathType Leaf)) {
+        Write-Host "Creating $VenvDir..."
+
+        if ((Invoke-Native -File $Python -Arguments @("-m", "venv", $VenvDir)) -ne 0) {
+            throw "Could not create the voice runtime environment."
+        }
+    }
+
+    $Pip = @("-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--progress-bar", "off")
+
+    Write-Host "Installing PyTorch..."
+
+    $Arguments = $Pip + @("torch==$TorchVersion", "torchaudio==$TorchVersion") + (Get-TorchIndexArguments)
+
+    if ((Invoke-Native -File $VenvPython -Arguments $Arguments) -ne 0) {
+        throw "Failed to install PyTorch."
+    }
+
+    Write-Host "Installing voice dependencies..."
+
+    if ((Invoke-Native -File $VenvPython -Arguments ($Pip + $VoicePackages)) -ne 0) {
+        throw "Failed to install the voice dependencies."
+    }
+
+    if (-not (Test-VoiceRuntime)) {
+        throw "The voice runtime was installed but could not be verified."
+    }
+
+    Write-Host "Voice runtime installed successfully."
+}
+
 function Ensure-Directories {
     Write-Step "Preparing $AssistantName data directories..."
 
@@ -421,6 +732,12 @@ try {
         -Model $MainModel
 
     Ensure-CosyVoice
+
+    if (-not $SkipVoiceRuntime) {
+        Ensure-Ffmpeg
+
+        Ensure-VoiceRuntime
+    }
 
     Write-Host ""
     Write-Host "========================================"
