@@ -13,7 +13,8 @@ Run `ArloSetup.exe` (Windows 10 or later, 64-bit). No administrator rights are
 required. The installer:
 
 - installs `Arlo.exe` to `C:\Arlo` by default, with a Start menu entry and an
-  optional desktop shortcut;
+  optional desktop shortcut, and the terminal version `tui\ArloTUI.exe` with its
+  own Start menu entry when it was built;
 - asks for the assistant name (default `Arlo`) and sets the `ARLO` environment
   variable (or `<NAME>` for a custom name) to the installation folder;
 - installs Git for Windows through WinGet if Git Bash is not found;
@@ -50,7 +51,10 @@ the `.venv` otherwise.
 
 To build the executable, run `scripts/build-exe.sh` from Git Bash (PyInstaller,
 output in `C:\Arlo` by default), then compile `ArloSetup.iss` with Inno Setup.
-`scripts\rebuild.bat` runs both steps. The installer is written to
+`scripts\rebuild.bat` runs both steps. Build the terminal version with
+`scripts/build-tui.sh` (output in `C:\Arlo\tui`, without Qt); `scripts\rebuild-tui.bat`
+builds it and compiles the installer, which includes `tui` when present. Build the
+desktop first, because its build replaces the whole `C:\Arlo` folder. The installer is written to
 `build\installer\ArloSetup.exe`. `dev\export_orb_icon.py` regenerates
 `assets\arlo.ico` and `assets\arlo.png` from the orb widget.
 
