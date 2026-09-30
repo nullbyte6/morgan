@@ -40,8 +40,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 [Files]
 Source: "{#ArloSourceDir}\Arlo.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ArloSourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#ArloSourceDir}\tui\ArloTUI.exe"; DestDir: "{app}\tui"; Flags: ignoreversion skipifsourcedoesntexist
-Source: "{#ArloSourceDir}\tui\_internal\*"; DestDir: "{app}\tui\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "{#ArloSourceDir}\tui\ArloTUI.exe"; DestDir: "{app}\tui"; Flags: ignoreversion
+Source: "{#ArloSourceDir}\tui\_internal\*"; DestDir: "{app}\tui\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "scripts\arlo-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
@@ -68,7 +68,7 @@ Type: filesandordirs; Name: "{app}\tui"
 [Icons]
 Name: "{autoprograms}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{autoprograms}\{code:GetAssistantName} Terminal"; Filename: "{app}\tui\ArloTUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Arlo.exe"; Check: HasTerminalVersion
+Name: "{autoprograms}\{code:GetAssistantName} Terminal"; Filename: "{app}\tui\ArloTUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Arlo.exe"
 
 [Code]
 var
@@ -273,11 +273,6 @@ end;
 function HasArloRepository: Boolean;
 begin
   Result := FindArloRepository <> '';
-end;
-
-function HasTerminalVersion: Boolean;
-begin
-  Result := FileExists(ExpandConstant('{app}\tui\ArloTUI.exe'));
 end;
 
 function GetRepositoryScripts(Param: String): String;
