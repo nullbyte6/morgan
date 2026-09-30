@@ -1,2 +1,3 @@
 @echo off
-"D:\arlo\.venv\Scripts\python.exe" "D:\arlo\entry\desktop.py"
+set "ARLO_ROOT=%~dp0.."
+"%ARLO_ROOT%\.venv\Scripts\pythonw.exe" "%ARLO_ROOT%\entry\desktop.py"
