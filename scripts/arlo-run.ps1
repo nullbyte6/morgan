@@ -1,10 +1,10 @@
-param([ValidateSet("Desktop", "Tui")] [string]$Mode = "Desktop")
+param([ValidateSet("Desktop", "Tui")] [string]$Mode = "Desktop", [switch]$NoVoice)
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $services = Join-Path $PSScriptRoot "arlo-services.ps1"
-$module = "entry.desktop"
+if ($Mode -eq "Tui") { $module = "entry.tui" } else { $module = "entry.desktop" }
 
 foreach ($path in @($python, $services)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -22,11 +22,11 @@ $env:ASSISTANT_EXTERNAL_CONSOLE = "1"
 
 Set-Location -LiteralPath $root
 
-if ($Mode -eq "Desktop") {
-    & $services -NoConsole
+if ($Mode -eq "Tui" -and $NoVoice) {
+    & $services -NoConsole -NoVoice
 }
 else {
-    & $services
+    & $services -NoConsole
 }
 
 if (-not $?) {
@@ -54,6 +54,11 @@ if ($Mode -eq "Desktop") {
     exit 0
 }
 
-& $python -m $module
+if ($Mode -eq "Tui" -and $NoVoice) {
+    & $python -m $module --no-voice
+}
+else {
+    & $python -m $module
+}
 
 exit $LASTEXITCODE

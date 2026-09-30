@@ -54,6 +54,20 @@ output in `C:\Arlo` by default), then compile `ArloSetup.iss` with Inno Setup.
 `build\installer\ArloSetup.exe`. `dev\export_orb_icon.py` regenerates
 `assets\arlo.ico` and `assets\arlo.png` from the orb widget.
 
+## Terminal version
+
+`scripts\arlo-tui.bat` (or `.venv\Scripts\python.exe -m entry.tui`) starts a
+lightweight dark terminal interface that shares the desktop's runtime, tools and
+configuration, so it is always as up to date as the desktop. It has no orb,
+workspaces or concurrent sessions: the assistant's name is drawn with pyfiglet,
+followed by its version, and replies appear as subtitles synchronized with the
+voice. The composer supports `@file` references, file attachments (button,
+`Ctrl+O`, or pasting/dropping file paths), live voice input (button or `Ctrl+R`)
+and direct shell commands when the text starts with `>`. `Ctrl+K` opens the action
+palette, `F2` shows the last response, `Ctrl+J` inserts a new line, `Esc` or
+`Ctrl+C` stops a response, and `Ctrl+D` exits. Pass `--no-voice` (or
+`arlo-tui.bat -NoVoice`) to skip the TTS service entirely and show text only.
+
 ## Usage
 
 Closing the desktop window keeps Arlo and its local services running in the
