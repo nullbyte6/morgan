@@ -189,7 +189,15 @@ class Assistant:
             return
         name: str = load_config()["assistant"]["name"]
         candidates = [PROJECT_ROOT / "scripts" / f"{name}-services.ps1"]
-        home = os.environ.get(f"{name.upper()}_HOME")
+        variable = f"{name.upper()}_HOME"
+        home = os.environ.get(variable)
+        if not home:
+            import winreg
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                    home = os.path.expandvars(winreg.QueryValueEx(key, variable)[0])
+            except OSError:
+                home = None
         if home:
             candidates[:0] = [Path(home) / f"{name}-services.ps1",
                               Path(home) / "scripts" / f"{name}-services.ps1"]
