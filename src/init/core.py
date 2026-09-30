@@ -188,19 +188,26 @@ class Assistant:
         if services_ready():
             return
         name: str = load_config()["assistant"]["name"]
-        candidates = [PROJECT_ROOT / "scripts" / f"{name}-services.ps1"]
-        variable = f"{name.upper()}_HOME"
-        home = os.environ.get(variable)
-        if not home:
+        launchers = dict.fromkeys((f"{name}-services.ps1", "arlo-services.ps1"))
+        directories = [PROJECT_ROOT / "scripts"]
+        if getattr(sys, "frozen", False):
+            directories.append(Path(sys.executable).resolve().parent / "scripts")
+
+        def registry_value(variable):
             import winreg
             try:
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-                    home = os.path.expandvars(winreg.QueryValueEx(key, variable)[0])
+                    return os.path.expandvars(winreg.QueryValueEx(key, variable)[0])
             except OSError:
-                home = None
+                return None
+
+        install = os.environ.get(name.upper()) or registry_value(name.upper())
+        if install:
+            directories.append(Path(install) / "scripts")
+        home = os.environ.get(f"{name.upper()}_HOME") or registry_value(f"{name.upper()}_HOME")
         if home:
-            candidates[:0] = [Path(home) / f"{name}-services.ps1",
-                              Path(home) / "scripts" / f"{name}-services.ps1"]
+            directories[:0] = [Path(home), Path(home) / "scripts"]
+        candidates = [directory / launcher for directory in directories for launcher in launchers]
         services = next((path for path in candidates if path.is_file()), None)
         if services is None:
             raise RuntimeError(tr("startup.services_missing"))
