@@ -52,7 +52,7 @@
   "console.error_pwsh_not_found": "PowerShell 7 (pwsh.exe) no fue encontrado",
   "console.error_wt_not_found": "Windows Terminal (wt.exe) no fue encontrado",
   "status.waking": "Despertando",
-  "startup.services_missing": "No se encuentra el lanzador de los servicios locales. Configura ARLO_HOME con la carpeta scripts del repositorio y ejecuta el instalador.",
+  "startup.services_missing": "No se encuentra el lanzador de los servicios locales. Reinstala Arlo o, si ejecutas desde el repositorio, configura ARLO_HOME con su carpeta scripts.",
   "startup.powershell_missing": "No se encuentra PowerShell. Es necesario para iniciar los servicios locales.",
   "startup.services_timeout": "Los servicios locales no han terminado de arrancar. Revisa el servicio de Ollama y el registro de TTS.",
   "startup.services_failed": "No se han podido iniciar los servicios locales: {error}",
