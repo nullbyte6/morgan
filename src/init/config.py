@@ -111,7 +111,41 @@ DEFAULTS = {
         "response_workspace": "Respond normally in Markdown. The application manages the output surface automatically. Do not emit JSON objects, action envelopes, tool-call representations, or escaped Markdown to control where your response appears. Do not call tools merely to display a response. Include code examples directly in fenced Markdown blocks; create files only when explicitly requested."
     },
 }
-HOME_PATH = Path.home() / ("." + DEFAULTS["assistant"]["name"].casefold())
+LOCATOR = "ASSISTANT_NAME"
+
+
+def _storage_identifier(name: str) -> str:
+    name = unicodedata.normalize("NFKC", name).casefold()
+    identifier = re.sub(r"[^\w-]+", "-", name).strip("-_")
+    if identifier.split(".")[0] in {"con", "prn", "aux", "nul", *[f"com{i}" for i in range(1, 10)], *[f"lpt{i}" for i in range(1, 10)]}:
+        identifier = "_" + identifier
+    return identifier
+
+
+def _located_name() -> str:
+    """Name that locates the storage folder before its config.json can be read."""
+    name = os.environ.get(LOCATOR, "").strip()
+    if not name and os.name == "nt":
+        import winreg
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+                name = str(winreg.QueryValueEx(key, LOCATOR)[0]).strip()
+        except OSError:
+            name = ""
+    if not name or len(name) > 80 or not _storage_identifier(name):
+        return DEFAULTS["assistant"]["name"]
+    return name
+
+
+def _persist_locator(name: str) -> None:
+    os.environ[LOCATOR] = name
+    if os.name == "nt":
+        import winreg
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            winreg.SetValueEx(key, LOCATOR, 0, winreg.REG_SZ, name)
+
+
+HOME_PATH = Path.home() / ("." + _storage_identifier(_located_name()))
 CONFIG_FILE = HOME_PATH / "json" / "config.json"
 _last_valid = deepcopy(DEFAULTS)
 _last_error = None
@@ -257,7 +291,8 @@ def load_config() -> dict:
         ensure_storage()
         if not CONFIG_FILE.exists():
             initial = json.loads(LEGACY_CONFIG.read_text(
-                encoding="utf-8-sig")) if LEGACY_CONFIG.exists() else DEFAULTS
+                encoding="utf-8-sig")) if LEGACY_CONFIG.exists() else {
+                    **DEFAULTS, "assistant": {"name": _located_name()}}
             save_config(initial)
         _last_valid = validate_config(
             json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig")))
@@ -310,73 +345,72 @@ def load_dev_file() -> dict:
     return result
 
 
+def _is_link(path: Path) -> bool:
+    return path.is_symlink() or getattr(os.path, "isjunction", lambda _: False)(path)
+
+
+def _remove_link(path: Path) -> None:
+    if os.name == "nt":
+        os.rmdir(path)
+    else:
+        path.unlink()
+
+
 def _migrate_storage() -> Path:
-    """Migrate named storage at startup while retaining a single config locator."""
-    anchor = Path.home() / ("." + DEFAULTS["assistant"]["name"].casefold())
-    if not CONFIG_FILE.exists():
-        return HOME_PATH
+    """Keep the storage folder named after the configured assistant."""
+    home = Path.home()
+    located = _located_name()
+    target = home / ("." + _storage_identifier(located))
+    legacy = home / ("." + _storage_identifier(DEFAULTS["assistant"]["name"]))
+    found = target if target.exists() else legacy if legacy.exists() else None
+    if found is None:
+        return target
     try:
-        config = validate_config(json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig")))
-        name = unicodedata.normalize("NFKC", config["assistant"]["name"]).casefold()
-        identifier = re.sub(r"[^\w-]+", "-", name).strip("-_")
-        if identifier.split(".")[0] in {"con", "prn", "aux", "nul", *[f"com{i}" for i in range(1, 10)], *[f"lpt{i}" for i in range(1, 10)]}:
-            identifier = "_" + identifier
-        target = anchor.parent / ("." + identifier)
-        current = anchor.resolve()
-        if current == target:
-            return current
-        if current.parent != anchor.parent.resolve() or target.parent.resolve() != anchor.parent.resolve():
-            raise OSError("Assistant storage migration must remain inside the user home directory")
-        if target.exists() and target != anchor:
-            raise OSError(f"Assistant storage destination already exists: {target}")
-        with socket.socket() as probe:
-            probe.settimeout(0.1)
-            if probe.connect_ex(("127.0.0.1", 18765)) == 0:
-                raise OSError("Stop the voice service before migrating assistant storage")
-        locks = []
-        try:
-            for path in (current / "voice").glob("*.lock"):
-                file = path.open("r+b")
-                locks.append(file)
-                if os.name == "nt":
+        current = found.resolve()
+        config_file = current / "json" / "config.json"
+        name = located
+        if config_file.exists():
+            name = validate_config(json.loads(config_file.read_text(encoding="utf-8-sig")))["assistant"]["name"]
+        desired = home / ("." + _storage_identifier(name))
+        if os.path.normcase(str(current)) != os.path.normcase(str(desired)):
+            if os.name != "nt":
+                return current
+            if current.parent != home.resolve() or desired.parent.resolve() != home.resolve():
+                raise OSError("Assistant storage migration must remain inside the user home directory")
+            if desired.exists():
+                raise OSError(f"Assistant storage destination already exists: {desired}")
+            with socket.socket() as probe:
+                probe.settimeout(0.1)
+                if probe.connect_ex(("127.0.0.1", 18765)) == 0:
+                    raise OSError("Stop the voice service before migrating assistant storage")
+            locks = []
+            try:
+                for path in (current / "voice").glob("*.lock"):
+                    file = path.open("r+b")
+                    locks.append(file)
                     import msvcrt
                     msvcrt.locking(file.fileno(), msvcrt.LK_NBLCK, 1)
-                else:
-                    import fcntl
-                    fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        finally:
-            for file in locks:
-                file.close()
-        linked = current != anchor
-        if linked:
-            if os.name == "nt":
-                os.rmdir(anchor)
-            else:
-                anchor.unlink()
-        try:
-            current.rename(target)
-            if target != anchor:
-                if os.name == "nt":
-                    result = subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(anchor), str(target)],
-                                            capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-                    if result.returncode:
-                        raise OSError("Could not create the assistant storage compatibility junction")
-                else:
-                    anchor.symlink_to(target, target_is_directory=True)
-        except OSError:
-            if target.exists() and not current.exists():
-                target.rename(current)
-            if linked and not anchor.exists():
-                if os.name == "nt":
-                    subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(anchor), str(current)],
-                                   capture_output=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
-                else:
-                    anchor.symlink_to(current, target_is_directory=True)
-            raise
-        return target
+            finally:
+                for file in locks:
+                    file.close()
+            current.rename(desired)
+            try:
+                _persist_locator(name)
+            except OSError:
+                desired.rename(current)
+                raise
+            current = desired
+        elif _storage_identifier(located) != _storage_identifier(name):
+            _persist_locator(name)
+        if _is_link(legacy) and os.path.normcase(str(legacy)) != os.path.normcase(str(current)):
+            try:
+                _remove_link(legacy)
+            except OSError:
+                pass
+        return current
     except (OSError, ValueError) as error:
         warnings.warn(f"Assistant storage migration deferred: {error}", RuntimeWarning)
-        return anchor.resolve()
+        return found.resolve()
 
 
 def initialize_storage() -> Path:
