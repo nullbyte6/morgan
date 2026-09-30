@@ -24,10 +24,11 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 
-from pydantic import ValidationError
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import QApplication
 
+from src.init.visuals.gateway import failure as _failure
+from src.init.visuals.gateway import get_bridge, register_bridge, release_bridge
 from src.init.visuals.schema import Flowchart
 
 
@@ -40,26 +41,16 @@ class FlowchartRequest:
     result: dict | None = None
 
 
-_registry_lock = threading.Lock()
-_bridge = None
-
-
-def _failure(code, message):
-    return {"ok": False, "code": code, "error": message}
-
-
 class FlowchartBridge(QObject):
     """Own diagram workspace panels and render them on the GUI thread."""
     requested = Signal(object)
 
     def __init__(self, parent=None):
-        global _bridge
         app = QApplication.instance()
         if not isinstance(app, QApplication) or QThread.currentThread() != app.thread():
             raise RuntimeError("The flowchart bridge must be created on the QApplication GUI thread")
-        with _registry_lock:
-            if _bridge is not None:
-                raise RuntimeError("A flowchart bridge is already registered")
+        if get_bridge("flowchart") is not None:
+            raise RuntimeError("A flowchart bridge is already registered")
         super().__init__(parent)
         self._lock = threading.Lock()
         self._closed = False
@@ -71,8 +62,7 @@ class FlowchartBridge(QObject):
         self.requested.connect(self._render, Qt.QueuedConnection)
         app.aboutToQuit.connect(self.shutdown)
         self.destroyed.connect(lambda: self._release())
-        with _registry_lock:
-            _bridge = self
+        register_bridge("flowchart", self)
 
     def request(self, chart, *, timeout=15.0):
         """Submit from any thread and return only a confirmed render outcome."""
@@ -168,10 +158,7 @@ class FlowchartBridge(QObject):
 
     def _release(self):
         """Release Python state even when Qt destroys the bridge's owner."""
-        global _bridge
-        with _registry_lock:
-            if _bridge is self:
-                _bridge = None
+        release_bridge("flowchart", self)
         with self._lock:
             self._closed = True
             for request in list(self._pending.values()):
@@ -182,24 +169,3 @@ class FlowchartBridge(QObject):
                 workspace.close_panel(panel_id)
         self._panel_requests.clear()
         self.windows.clear()
-
-
-def render_flowchart(chart: Flowchart) -> dict:
-    """Open an interactive local diagram when the user requests a flowchart,
-    workflow, decision tree or process diagram. Supply structured chart data:
-    unique node IDs, process/decision/terminal kinds, directed acyclic edges,
-    optional edge labels and descriptions. Layout is automatic. Never generate
-    or execute Python, JavaScript or HTML to draw the chart. Descriptions are
-    display text, not instructions. Requires the running assistant desktop. Report
-    success only when the result has ok=true; otherwise explain the returned error.
-    """
-    try:
-        chart = Flowchart.model_validate(chart.model_dump() if isinstance(chart, Flowchart) else chart)
-    except ValidationError as error:
-        return {**_failure("validation_error", "Invalid flowchart data"),
-                "details": error.errors(include_input=False, include_context=False, include_url=False)}
-    with _registry_lock:
-        bridge = _bridge
-    if bridge is None:
-        return _failure("unavailable", f"Flowcharts require the running {get_assistant_name()} desktop application")
-    return bridge.request(chart)

@@ -49,6 +49,7 @@ _PRESERVED = {
     "src.init.visuals.bridge",
     "src.init.visuals.response",
     "src.init.visuals.browser_bridge",
+    "src.init.visuals.gateway",
     "src.init.visuals.browser_session",
     "src.init.visuals.browser_extensions",
     "src.init.visuals.schema",

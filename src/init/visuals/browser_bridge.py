@@ -22,10 +22,11 @@ from src.init.identity import get_assistant_name
 
 import threading
 from dataclasses import dataclass, field
-from urllib.parse import urlparse
 
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtWidgets import QApplication
+
+from src.init.visuals.gateway import open_embedded_url, register_bridge, release_bridge
 
 
 @dataclass(eq=False)
@@ -35,15 +36,10 @@ class BrowserRequest:
     error: str | None = None
 
 
-_registry_lock = threading.Lock()
-_bridge = None
-
-
 class BrowserBridge(QObject):
     requested = Signal(object)
 
     def __init__(self, parent):
-        global _bridge
         app = QApplication.instance()
         if app is None or QThread.currentThread() != app.thread():
             raise RuntimeError("BrowserBridge requires the GUI thread")
@@ -54,8 +50,7 @@ class BrowserBridge(QObject):
         self.requested.connect(self._open, Qt.QueuedConnection)
         app.aboutToQuit.connect(self.shutdown)
         self.destroyed.connect(lambda: self.shutdown())
-        with _registry_lock:
-            _bridge = self
+        register_bridge("browser", self)
 
     def request(self, url, timeout=15):
         request = BrowserRequest(url)
@@ -132,23 +127,8 @@ class BrowserBridge(QObject):
 
     @Slot()
     def shutdown(self):
-        global _bridge
-        with _registry_lock:
-            if _bridge is self:
-                _bridge = None
+        release_bridge("browser", self)
         with self._lock:
             self._closed = True
             for request in tuple(self._pending):
                 self._finish(request, f"{get_assistant_name()}'s embedded browser was closed")
-
-
-def open_embedded_url(url: str) -> None:
-    """Navigate on the GUI thread, or raise without launching an external browser."""
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ValueError("A valid HTTP or HTTPS URL is required")
-    with _registry_lock:
-        bridge = _bridge
-    if bridge is None:
-        raise RuntimeError(f"The embedded browser requires the running {get_assistant_name()} desktop")
-    bridge.request(url)

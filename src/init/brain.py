@@ -35,7 +35,7 @@ import threading
 import time
 import urllib.request
 import wave
-from src.init.visuals.browser_bridge import open_embedded_url
+from src.init.visuals.gateway import open_embedded_url
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from datetime import datetime

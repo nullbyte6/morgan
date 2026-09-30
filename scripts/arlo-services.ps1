@@ -1,4 +1,4 @@
-param([switch]$NoConsole)
+param([switch]$NoConsole, [switch]$NoVoice)
 
 $ErrorActionPreference = "Stop"
 
@@ -218,6 +218,11 @@ else {
     catch {
         throw "Model preload failed: $($_.Exception.Message)"
     }
+}
+
+if ($NoVoice) {
+    Write-Host "Voice service skipped."
+    exit 0
 }
 
 Write-Host "[2/3] Checking CosyVoice..."

@@ -124,6 +124,7 @@ class Assistant:
 
     voice: VoiceClient = None
     speech_enabled: bool = True
+    voice_service_required: bool = True
     _instance = None
     _instance_lock = threading.Lock()
     debug_console = None
@@ -177,7 +178,7 @@ class Assistant:
         from src.init.paths import PROJECT_ROOT
 
         def services_ready():
-            for port in (11434, 18765):
+            for port in (11434, 18765) if self.voice_service_required else (11434,):
                 try:
                     with socket.create_connection(("127.0.0.1", port), timeout=1):
                         pass
@@ -228,7 +229,8 @@ class Assistant:
             try:
                 process = subprocess.Popen(
                     [powershell, "-NoLogo", "-NoProfile", "-NonInteractive",
-                     "-ExecutionPolicy", "Bypass", "-File", str(services), "-NoConsole"],
+                     "-ExecutionPolicy", "Bypass", "-File", str(services), "-NoConsole",
+                     *(() if self.voice_service_required else ("-NoVoice",))],
                     cwd=str(services.parent.parent), env=environment,
                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)

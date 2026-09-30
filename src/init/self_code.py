@@ -30,7 +30,7 @@ import logging
 import os
 import subprocess
 from pydantic import Field
-from src.init.visuals.browser_bridge import open_embedded_url
+from src.init.visuals.gateway import open_embedded_url
 from src.init.paths import PROJECT_ROOT
 from .task_outcomes import ActionResult, Outcome, normalize_result
 

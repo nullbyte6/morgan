@@ -18,59 +18,14 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import os
 import re
-from pathlib import Path
 
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 
+from .file_tags import (FILE_TAG_LIMIT, FILE_TAG_QUERY, expand_file_tags,
+                        find_file_tags)
 from .theme import current_theme, on_theme_changed
-
-FILE_TAG_PATTERN = re.compile(r'(?<!\S)@(?:"([^"\r\n]+)"|([^\s"]+))')
-FILE_TAG_QUERY = re.compile(r'(?<!\S)@(?:"([^"\r\n]*)|([^\s"]*))$')
-FILE_TAG_TRAILING = ",.;:!?)]}"
-FILE_TAG_LIMIT = 50
-
-
-def _tag_path(base, name):
-    if not name or name in (".", "..") or "/" in name or "\\" in name:
-        return None
-    path = base / name
-    return path if os.path.lexists(path) else None
-
-
-def find_file_tags(text, directory=None):
-    base = Path(directory or os.getcwd())
-    tags = []
-    for match in FILE_TAG_PATTERN.finditer(text):
-        if match.group(1) is not None:
-            path = _tag_path(base, match.group(1))
-            if path is not None:
-                tags.append((match.start(), match.end(), match.group(1), path))
-            continue
-        name = match.group(2)
-        while name:
-            path = _tag_path(base, name)
-            if path is not None:
-                tags.append((match.start(), match.start() + 1 + len(name), name, path))
-                break
-            if name[-1] not in FILE_TAG_TRAILING:
-                break
-            name = name[:-1]
-    return tags
-
-
-def expand_file_tags(text, directory=None):
-    tags = {}
-    for _start, _end, name, path in find_file_tags(text, directory):
-        tags.setdefault(name, path)
-    if not tags:
-        return text
-    lines = [f"- @{name}: {path} ({'directory' if path.is_dir() else 'file'})"
-             for name, path in tags.items()]
-    return (text + "\n\nTagged paths from the current working directory "
-            "(@name is only a reference; pass the resolved path to tools):\n"
-            + "\n".join(lines))
 
 
 class FileTagHighlighter(QSyntaxHighlighter):

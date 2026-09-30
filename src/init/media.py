@@ -27,7 +27,7 @@ import re
 import subprocess
 import sys
 import time
-from src.init.visuals.browser_bridge import open_embedded_url
+from src.init.visuals.gateway import open_embedded_url
 from collections import OrderedDict
 from typing import Literal
 
