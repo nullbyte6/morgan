@@ -1,5 +1,5 @@
 {
-  "version": "1.4.38-beta",
+  "version": "1.4.39-beta",
   "model_name": "arlo-qwen3.5:9b",
   "base_model_name": "qwen3.5:9b",
   "context_length": 32768,
