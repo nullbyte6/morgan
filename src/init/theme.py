@@ -65,7 +65,7 @@ ROLES = frozenset((
 _HEX_COLOR = re.compile(r"#[0-9a-fA-F]{6}")
 _THEME_ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 _log = logging.getLogger("assistant.theme")
-_TOKEN = re.compile(r"@([a-z][a-z0-9_]*)(?:/(\d{1,3}))?")
+_TOKEN = re.compile(r"@([a-z][a-z0-9_]*)(?:/(\d{1,3})(?:~([a-z][a-z0-9_]*))?)?")
 
 
 class Theme:
@@ -119,10 +119,19 @@ class Theme:
         color = self._qcolors[role]
         return f"rgba({color.red()}, {color.green()}, {color.blue()}, {int(alpha)})"
 
+    def blend(self, role: str, alpha: int, base: str) -> str:
+        """Return role at alpha pre-composited over base as an opaque color."""
+        color, under = self._qcolors[role], self._qcolors[base]
+        ratio = min(255, int(alpha)) / 255
+        return "#{:02x}{:02x}{:02x}".format(*(
+            round(back + (front - back) * ratio) for front, back in (
+                (color.red(), under.red()), (color.green(), under.green()), (color.blue(), under.blue()))))
+
     def render(self, template: str) -> str:
-        """Replace @role and @role/alpha tokens (alpha 0-255) with CSS colors."""
+        """Replace @role, @role/alpha and @role/alpha~base tokens (alpha 0-255) with CSS colors."""
         return _TOKEN.sub(
-            lambda match: self.css(
+            lambda match: self.blend(match.group(1), int(match.group(2)), match.group(3))
+            if match.group(3) else self.css(
                 match.group(1),
                 None if match.group(2) is None else min(255, int(match.group(2)))),
             template)
