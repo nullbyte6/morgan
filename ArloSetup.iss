@@ -1,0 +1,306 @@
+#ifndef ArloSourceDir
+  #define ArloSourceDir "C:\Arlo"
+#endif
+#ifndef ArloVersion
+  #define ArloVersion GetStringFileInfo(ArloSourceDir + "\Arlo.exe", "ProductVersion")
+#endif
+#ifndef ArloRepositoryDir
+  #define ArloRepositoryDir SourcePath
+#endif
+
+[Setup]
+AppId={{EFC7E428-7C68-4FF5-A608-C737BD547853}
+AppName=Arlo
+AppVersion={#ArloVersion}
+AppPublisher=XDG
+DefaultDirName=C:\Arlo
+DisableDirPage=no
+DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+MinVersion=10.0
+ChangesEnvironment=yes
+SetupLogging=yes
+OutputDir=build\installer
+OutputBaseFilename=ArloSetup
+Compression=lzma2/fast
+SolidCompression=yes
+WizardStyle=modern
+SetupIconFile=assets\arlo.ico
+UninstallDisplayIcon={app}\Arlo.exe
+LicenseFile=LICENSE
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
+
+[Files]
+Source: "{#ArloSourceDir}\Arlo.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ArloSourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "scripts\arlo-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\setup-runtime.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
+
+[Registry]
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvironmentPrefix}"; ValueData: "{app}"
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvironmentPrefix}_HOME"; ValueData: "{code:GetRepositoryScripts}"; Check: HasArloRepository
+Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "AssistantName"; ValueData: "{code:GetAssistantName}"; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
+
+[Icons]
+Name: "{autoprograms}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+
+[Code]
+var
+  AssistantPage: TInputQueryWizardPage;
+  BashPath: String;
+  PreviousAssistantName: String;
+  PreviousInstallPath: String;
+  UninstallPrefix: String;
+  UninstallPath: String;
+
+function GetAssistantName(Param: String): String;
+begin
+  Result := Trim(AssistantPage.Values[0]);
+end;
+
+function GetEnvironmentPrefix(Param: String): String;
+begin
+  Result := Uppercase(GetAssistantName(''));
+end;
+
+function IsCustomAssistantName: Boolean;
+begin
+  Result := CompareText(GetAssistantName(''), 'Arlo') <> 0;
+end;
+
+function AssistantNameError: String;
+var
+  Name: String;
+  Prefix: String;
+  Index: Integer;
+  HasAlphanumeric: Boolean;
+begin
+  Result := '';
+  Name := GetAssistantName('');
+  HasAlphanumeric := False;
+  if (Length(Name) < 1) or (Length(Name) > 80) then
+    Result := 'The name must contain between 1 and 80 characters.'
+  else begin
+    for Index := 1 to Length(Name) do begin
+      if ((Name[Index] >= 'A') and (Name[Index] <= 'Z')) or
+         ((Name[Index] >= 'a') and (Name[Index] <= 'z')) or
+         ((Name[Index] >= '0') and (Name[Index] <= '9')) then
+        HasAlphanumeric := True;
+      if not (((Name[Index] >= 'A') and (Name[Index] <= 'Z')) or
+              ((Name[Index] >= 'a') and (Name[Index] <= 'z')) or
+              (Name[Index] = '_') or
+              ((Index > 1) and (Name[Index] >= '0') and (Name[Index] <= '9'))) then
+        Result := 'Use ASCII letters, digits and underscores; start with a letter or an underscore.';
+    end;
+    if not HasAlphanumeric then
+      Result := 'The name must include at least one letter or digit.';
+    Prefix := GetEnvironmentPrefix('');
+    if Pos('|' + Prefix + '|',
+      '|ALLUSERSPROFILE|APPDATA|BASH_ENV|COMMONPROGRAMFILES|COMPUTERNAME|COMSPEC|ENV|GIT_INSTALL_ROOT|HOME|HOMEDRIVE|HOMEPATH|LOCALAPPDATA|LOGONSERVER|NUMBER_OF_PROCESSORS|OS|PATH|PATHEXT|PROCESSOR_ARCHITECTURE|PROCESSOR_IDENTIFIER|PROGRAMDATA|PROGRAMFILES|PSMODULEPATH|PYTHONHOME|PYTHONPATH|SHELL|SYSTEMDRIVE|SYSTEMROOT|TEMP|TMP|USERDOMAIN|USERNAME|USERPROFILE|WINDIR|') > 0 then
+      Result := 'That name is reserved for a system environment variable. Choose another name.';
+  end;
+end;
+
+procedure InitializeWizard;
+begin
+  RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'AssistantName', PreviousAssistantName);
+  RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'InstallPath', PreviousInstallPath);
+  AssistantPage := CreateInputQueryPage(wpSelectDir,
+    'Assistant name', 'Customize the assistant and its environment variables.',
+    'This name will be saved in the application settings. Arlo creates ARLO and ARLO_HOME; Luna creates LUNA and LUNA_HOME. The first variable points to the installation folder. The second is only created when a cloned Arlo repository is found and points to its scripts folder.');
+  AssistantPage.Add('Assistant name:', False);
+  AssistantPage.Values[0] := ExpandConstant('{param:ASSISTANTNAME|' + GetPreviousData('AssistantName', 'Arlo') + '}');
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Error: String;
+begin
+  Result := True;
+  if CurPageID = AssistantPage.ID then begin
+    Error := AssistantNameError;
+    Result := Error = '';
+    if not Result then
+      MsgBox(Error, mbError, MB_OK);
+  end;
+end;
+
+procedure RegisterPreviousData(PreviousDataKey: Integer);
+begin
+  SetPreviousData(PreviousDataKey, 'AssistantName', GetAssistantName(''));
+end;
+
+function BashUnder(GitDirectory: String): String;
+begin
+  Result := '';
+  if FileExists(AddBackslash(GitDirectory) + 'cmd\git.exe') and
+     FileExists(AddBackslash(GitDirectory) + 'bin\bash.exe') then
+    Result := AddBackslash(GitDirectory) + 'bin\bash.exe';
+end;
+
+function FindGitBash: String;
+var
+  Directory: String;
+  GitPath: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKCU, 'Software\GitForWindows', 'InstallPath', Directory) then
+    Result := BashUnder(Directory);
+  if (Result = '') and RegQueryStringValue(HKLM64, 'Software\GitForWindows', 'InstallPath', Directory) then
+    Result := BashUnder(Directory);
+  if (Result = '') and RegQueryStringValue(HKLM32, 'Software\GitForWindows', 'InstallPath', Directory) then
+    Result := BashUnder(Directory);
+  if Result = '' then
+    Result := BashUnder(ExpandConstant('{localappdata}\Programs\Git'));
+  if Result = '' then
+    Result := BashUnder(ExpandConstant('{commonpf64}\Git'));
+  if Result = '' then
+    Result := BashUnder(ExpandConstant('{commonpf32}\Git'));
+  if Result = '' then begin
+    GitPath := FileSearch('git.exe', GetEnv('PATH'));
+    if GitPath <> '' then
+      Result := BashUnder(ExtractFileDir(ExtractFileDir(GitPath)));
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Winget: String;
+  ResultCode: Integer;
+begin
+  Result := AssistantNameError;
+  if Result <> '' then
+    Exit;
+  BashPath := FindGitBash;
+  if BashPath <> '' then
+    Exit;
+  Winget := FileSearch('winget.exe', GetEnv('PATH'));
+  if Winget = '' then
+    Winget := ExpandConstant('{localappdata}\Microsoft\WindowsApps\winget.exe');
+  if not FileExists(Winget) then begin
+    Result := 'Install Git for Windows (including Git Bash) or WinGet, then run this installer again.';
+    Exit;
+  end;
+  WizardForm.StatusLabel.Caption := 'Installing Git for Windows to run install.sh...';
+  if not Exec(Winget,
+    'install --id Git.Git --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity',
+    '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then begin
+    Result := 'Could not run WinGet: ' + SysErrorMessage(ResultCode);
+    Exit;
+  end;
+  if ResultCode <> 0 then begin
+    Result := 'Git installation failed with exit code ' + IntToStr(ResultCode) + '.';
+    Exit;
+  end;
+  BashPath := FindGitBash;
+  if BashPath = '' then
+    Result := 'Git Bash could not be found after installing Git for Windows.';
+end;
+
+procedure DependencyOutput(const Line: String; const Error, FirstLine: Boolean);
+begin
+  Log(Line);
+  if (not Error) and (Trim(Line) <> '') then
+    WizardForm.StatusLabel.Caption := Copy(Line, 1, 180);
+end;
+
+procedure DeleteEnvironmentIfMatching(Name, ExpectedValue: String);
+var
+  Value: String;
+begin
+  if RegQueryStringValue(HKCU, 'Environment', Name, Value) and
+     (CompareText(Value, ExpectedValue) = 0) then
+    RegDeleteValue(HKCU, 'Environment', Name);
+end;
+
+function IsArloRepository(Directory: String): Boolean;
+begin
+  Directory := RemoveBackslashUnlessRoot(Trim(Directory));
+  Result := (Directory <> '') and
+    (DirExists(Directory + '\.git') or FileExists(Directory + '\.git')) and
+    FileExists(Directory + '\scripts\arlo-services.ps1') and
+    FileExists(Directory + '\src\init\core.py');
+end;
+
+function RepositoryFromHome(Name: String): String;
+var
+  Value: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKCU, 'Environment', Name, Value) then begin
+    Value := RemoveBackslashUnlessRoot(Trim(Value));
+    if (CompareText(ExtractFileName(Value), 'scripts') = 0) and
+       IsArloRepository(ExtractFileDir(Value)) then
+      Result := ExtractFileDir(Value);
+  end;
+end;
+
+function FindArloRepository: String;
+begin
+  Result := RepositoryFromHome(GetEnvironmentPrefix('') + '_HOME');
+  if Result = '' then
+    Result := RepositoryFromHome('ARLO_HOME');
+  if (Result = '') and IsArloRepository('{#ArloRepositoryDir}') then
+    Result := RemoveBackslashUnlessRoot('{#ArloRepositoryDir}');
+end;
+
+function HasArloRepository: Boolean;
+begin
+  Result := FindArloRepository <> '';
+end;
+
+function GetRepositoryScripts(Param: String): String;
+begin
+  Result := AddBackslash(FindArloRepository) + 'scripts';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then begin
+    if HasArloRepository then
+      Log('Arlo repository found: ' + GetRepositoryScripts(''))
+    else begin
+      Log('No cloned Arlo repository found; ' + GetEnvironmentPrefix('') + '_HOME is not configured.');
+      DeleteEnvironmentIfMatching(GetEnvironmentPrefix('') + '_HOME', ExpandConstant('{app}\scripts'));
+    end;
+  end;
+  if (CurStep = ssPostInstall) and (PreviousAssistantName <> '') and
+     (PreviousInstallPath <> '') and
+     (CompareText(PreviousAssistantName, GetAssistantName('')) <> 0) then begin
+    DeleteEnvironmentIfMatching(Uppercase(PreviousAssistantName), PreviousInstallPath);
+    DeleteEnvironmentIfMatching(Uppercase(PreviousAssistantName) + '_HOME', AddBackslash(PreviousInstallPath) + 'scripts');
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Name: String;
+begin
+  if CurUninstallStep = usUninstall then begin
+    if RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'AssistantName', Name) then
+      UninstallPrefix := Uppercase(Name);
+    RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'InstallPath', UninstallPath);
+  end;
+  if (CurUninstallStep = usPostUninstall) and
+     (UninstallPrefix <> '') and (UninstallPath <> '') then begin
+    DeleteEnvironmentIfMatching(UninstallPrefix, UninstallPath);
+    DeleteEnvironmentIfMatching(UninstallPrefix + '_HOME', AddBackslash(UninstallPath) + 'scripts');
+  end;
+end;
+
+[Run]
+Filename: "powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\setup-runtime.ps1"" -InstallDir ""{app}"" -AssistantName ""{code:GetAssistantName}"""; \
+    StatusMsg: "Preparing {code:GetAssistantName} runtime..."; \
+    Flags: waituntilterminated
