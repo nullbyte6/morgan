@@ -54,7 +54,7 @@ _PRESERVED = {
     "src.init.visuals.browser_extensions",
     "src.init.visuals.schema",
 }
-_PRESERVED_PREFIXES = ("src.init.memory.",)
+_PRESERVED_PREFIXES = ("src.init.memory.", "src.init.tui.")
 _RELOAD_LAST = ("src.init.brain", "src.init.rules", "src.init.tools")
 
 
