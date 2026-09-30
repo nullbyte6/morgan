@@ -730,7 +730,7 @@ QSplitter#workspaceSplitter::handle:hover {
 QPushButton#privacyIndicator {
     color: @private_indicator;
     background-color: @private_indicator/20;
-    border: 2px solid @private_indicator/89;
+    border: 2px solid @private_indicator/89~surface;
     border-radius: 16px;
     padding: 6px 12px;
 }
@@ -738,14 +738,14 @@ QPushButton#privacyIndicator {
 QToolButton#branchIndicator {
     color: @git_branch;
     background-color: @git_branch/20;
-    border: 2px solid @git_branch/77;
+    border: 2px solid @git_branch/77~surface;
     border-radius: 16px;
     padding: 4px 10px;
 }
 
 QPushButton#privacyIndicator:hover {
     background-color: @private_indicator/31;
-    border-color: @private_indicator/140;
+    border-color: @private_indicator/140~surface;
 }
 
 QWidget#mainWorkspaceContent,
