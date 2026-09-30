@@ -40,6 +40,27 @@ if (($DataDir -ne $AnchorDir) -and (Test-Path $AnchorDir) -and -not (Test-Path $
 $ConfigFile = Join-Path $DataDir "json\config.json"
 $ModelsDir = Join-Path $DataDir "models"
 $CosyVoiceDir = Join-Path $ModelsDir "Fun-CosyVoice3-0.5B"
+$CosyVoiceRepo = "FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+$CosyVoiceRequired = @(
+    "cosyvoice3.yaml",
+    "campplus.onnx",
+    "speech_tokenizer_v3.onnx",
+    "flow.pt",
+    "flow.decoder.estimator.fp32.onnx",
+    "hift.pt",
+    "llm.pt",
+    "CosyVoice-BlankEN/config.json",
+    "CosyVoice-BlankEN/merges.txt",
+    "CosyVoice-BlankEN/model.safetensors",
+    "CosyVoice-BlankEN/tokenizer_config.json",
+    "CosyVoice-BlankEN/vocab.json"
+)
+$CosyVoiceSkipped = @(
+    ".gitattributes",
+    "README.md",
+    "llm.rl.pt",
+    "speech_tokenizer_v3.batch.onnx"
+)
 
 function Write-Step {
     param([string]$Message)
@@ -201,16 +222,102 @@ function Ensure-OllamaModel {
 }
 
 function Test-CosyVoice {
-    if (-not (Test-Path $CosyVoiceDir -PathType Container)) {
-        return $false
+    foreach ($Relative in $CosyVoiceRequired) {
+        $File = Join-Path $CosyVoiceDir ($Relative -replace "/", "\")
+
+        if (-not (Test-Path $File -PathType Leaf)) {
+            return $false
+        }
+
+        if ((Get-Item $File).Length -le 0) {
+            return $false
+        }
     }
 
-    $Contents = Get-ChildItem `
-        -Path $CosyVoiceDir `
-        -Force `
-        -ErrorAction SilentlyContinue
+    return $true
+}
 
-    return $null -ne $Contents
+function Get-CosyVoiceFiles {
+    $Uri = "https://huggingface.co/api/models/$CosyVoiceRepo/tree/main?recursive=true"
+
+    try {
+        $Entries = Invoke-RestMethod -Uri $Uri -UseBasicParsing
+    }
+    catch {
+        throw "Could not list the CosyVoice model files: $($_.Exception.Message)"
+    }
+
+    $Files = @($Entries | Where-Object {
+        ($_.type -eq "file") -and
+        ($CosyVoiceSkipped -notcontains $_.path) -and
+        (-not $_.path.StartsWith("asset/"))
+    })
+
+    foreach ($Relative in $CosyVoiceRequired) {
+        if (-not ($Files | Where-Object { $_.path -eq $Relative })) {
+            throw "CosyVoice repository is missing $Relative."
+        }
+    }
+
+    return $Files
+}
+
+function Save-CosyVoiceFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Curl,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Relative,
+
+        [Parameter(Mandatory = $true)]
+        [long]$Size
+    )
+
+    $Target = Join-Path $CosyVoiceDir ($Relative -replace "/", "\")
+
+    if ((Test-Path $Target -PathType Leaf) -and ((Get-Item $Target).Length -eq $Size)) {
+        Write-Host "$Relative is already downloaded."
+        return
+    }
+
+    New-Item `
+        -ItemType Directory `
+        -Path (Split-Path $Target) `
+        -Force | Out-Null
+
+    $Part = "$Target.part"
+    $Url = "https://huggingface.co/$CosyVoiceRepo/resolve/main/$Relative"
+
+    Write-Host "Downloading $Relative ($([math]::Round($Size / 1MB, 1)) MB)..."
+
+    $Partial = 0
+
+    if (Test-Path $Part -PathType Leaf) {
+        $Partial = (Get-Item $Part).Length
+    }
+
+    if ($Partial -ne $Size) {
+        & $Curl `
+            --location `
+            --fail `
+            --retry 5 `
+            --retry-delay 3 `
+            --continue-at - `
+            --output $Part `
+            $Url
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to download $Relative (curl exit code $LASTEXITCODE)."
+        }
+    }
+
+    if ((Get-Item $Part).Length -ne $Size) {
+        Remove-Item $Part -Force
+        throw "$Relative was downloaded incompletely."
+    }
+
+    Move-Item -Path $Part -Destination $Target -Force
 }
 
 function Ensure-CosyVoice {
@@ -222,10 +329,33 @@ function Ensure-CosyVoice {
         return
     }
 
-    Write-Warning "CosyVoice model is not installed."
-    Write-Warning "Expected location:"
-    Write-Warning "  $CosyVoiceDir"
-    Write-Warning "Automatic CosyVoice installation has not been configured yet."
+    $Curl = Get-Command "curl.exe" -ErrorAction SilentlyContinue
+
+    if (-not $Curl) {
+        throw "curl.exe is required to download the CosyVoice model."
+    }
+
+    Write-Host "CosyVoice model is missing. Downloading..."
+
+    $Files = Get-CosyVoiceFiles
+    $Total = ($Files | Measure-Object -Property size -Sum).Sum
+
+    Write-Host "Source: https://huggingface.co/$CosyVoiceRepo"
+    Write-Host "Destination: $CosyVoiceDir"
+    Write-Host "Total size: $([math]::Round($Total / 1GB, 1)) GB"
+
+    foreach ($File in $Files) {
+        Save-CosyVoiceFile `
+            -Curl $Curl.Source `
+            -Relative $File.path `
+            -Size ([long]$File.size)
+    }
+
+    if (-not (Test-CosyVoice)) {
+        throw "CosyVoice model was downloaded but could not be verified."
+    }
+
+    Write-Host "CosyVoice model installed successfully."
 }
 
 function Ensure-Directories {
