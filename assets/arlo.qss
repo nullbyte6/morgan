@@ -209,7 +209,6 @@ QWidget#windowContainer {
 
 QPushButton#settingsNav,
 QPushButton#chatNav,
-QPushButton#logsNav,
 QPushButton#editorNav,
 QPushButton#terminalNav,
 QPushButton#browserNav,
@@ -236,7 +235,6 @@ QPushButton#logCopyNav {
 
 QPushButton#settingsNav:hover,
 QPushButton#chatNav:hover,
-QPushButton#logsNav:hover,
 QPushButton#editorNav:hover,
 QPushButton#terminalNav:hover,
 QPushButton#browserNav:hover,
@@ -312,12 +310,6 @@ QPushButton#permissionOption:hover {
 QPushButton#permissionOption:checked {
     background-color: @surface_selected;
     color: @text;
-}
-
-QLabel#logTitle {
-    color: @text;
-    font-size: 24px;
-    padding-left: 16px;
 }
 
 QComboBox#languageDropdown,
@@ -404,21 +396,18 @@ QComboBox#modelSelector QAbstractItemView::item:selected {
     color: @text;
 }
 
-QScrollArea#chatScroll,
-QScrollArea#logScroll {
+QScrollArea#chatScroll {
     background: transparent;
     border: none;
 }
 
-QScrollArea#chatScroll QScrollBar:vertical,
-QScrollArea#logScroll QScrollBar:vertical {
+QScrollArea#chatScroll QScrollBar:vertical {
     background: transparent;
     width: 0px;
     margin: 0;
 }
 
-QScrollArea#chatScroll QScrollBar:horizontal,
-QScrollArea#logScroll QScrollBar:horizontal {
+QScrollArea#chatScroll QScrollBar:horizontal {
     background: transparent;
     height: 0px;
     margin: 0;
@@ -825,10 +814,6 @@ QPushButton#taskProgressClose:focus {
 
 QPushButton#taskProgressClose:pressed {
     color: @error;
-}
-
-QWidget#logContainer {
-    background: transparent;
 }
 
 QFrame#logMessageCard {

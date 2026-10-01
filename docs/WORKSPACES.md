@@ -73,7 +73,7 @@ palette (`Ctrl + K`, then "Nova") or with `Ctrl + Alt + N`. It lives inside a
 workspace panel and uses Arlo's theme, fonts and animations.
 
 A new workspace shows a single Nova star in place of the row of buttons. Press it to
-slide out the workspace buttons (Arlo, Logs, Browser, Editor, Settings and Terminal) and
+slide out the workspace buttons (Arlo, Browser, Editor, Settings and Terminal) and
 press it again to fold them. `Ctrl + click` on the star opens Nova in that panel instead.
 
 Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar and Diary,

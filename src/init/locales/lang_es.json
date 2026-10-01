@@ -526,7 +526,6 @@
   "palette.pause_task": "Pausar tarea actual",
   "palette.resume_task": "Reanudar tarea actual",
   "palette.resume_prompt": "Continúa la tarea pausada desde su estado conservado. Revisa los efectos pendientes antes de repetir acciones y completa el objetivo original.",
-  "palette.logs": "Abrir registros",
   "palette.browser": "Abrir navegador",
   "palette.editor": "Abrir editor",
   "palette.settings": "Abrir ajustes",

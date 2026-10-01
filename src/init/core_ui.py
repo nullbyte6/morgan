@@ -65,11 +65,6 @@ from src.init.notifications import send_notification
 
 
 WORKSPACE_VIEW_CONFIG = {
-    "logs": {
-        "title": "Logs",
-        "shortcut": "Ctrl+L",
-        "icon": "",
-    },
     "browser" : {
         "title": "Browser",
         "shortcut": "Ctrl+B",
@@ -100,10 +95,9 @@ WORKSPACE_VIEW_CONFIG = {
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
 from src.init.brain import MODEL_OVERRIDE, is_cloud_model, kill_self
-from src.init.config import DEFAULTS, HOME_PATH, load_dev_file, load_config, save_config
+from src.init.config import DEFAULTS, load_dev_file, load_config, save_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
-from src.init.logs import LogView
 from src.init.settings import SettingsView
 from src.init.theme import on_theme_changed
 
@@ -208,8 +202,6 @@ class AssistantWindow(DesktopWindow):
         self.browser_bridge = BrowserBridge(self)
         self.terminal_bridge = TerminalBridge(self)
         self.response_bridge = ResponseBridge(self)
-
-        self.log_dir = HOME_PATH / ".log"
 
         self.session.status_key = "status.waking"
         self.showing_greeting = True
@@ -921,8 +913,6 @@ class AssistantWindow(DesktopWindow):
 
     def _workspace_view_factory(self, view_key: str) -> QWidget:
         """Create a fresh view instance for one workspace panel."""
-        if view_key == "logs":
-            return LogView(self.log_dir)
         if view_key == "editor":
             return EditorView()
         if view_key == "terminal":

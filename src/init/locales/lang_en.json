@@ -526,7 +526,6 @@
   "palette.pause_task": "Pause current task",
   "palette.resume_task": "Resume current task",
   "palette.resume_prompt": "Continue the paused task from its preserved state. Inspect unresolved effects before repeating actions and complete the original objective.",
-  "palette.logs": "Open logs",
   "palette.browser": "Open browser",
   "palette.editor": "Open editor",
   "palette.settings": "Open settings",
