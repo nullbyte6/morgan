@@ -123,12 +123,17 @@ class ModelSelector(QComboBox):
     def minimumSizeHint(self):
         return self.sizeHint()
 
+    @staticmethod
+    def _label(model: str) -> str:
+        from src.init.brain import is_cloud_model
+        return f"{model} ({tr('ui.cloud')})" if is_cloud_model(model) else model
+
     def set_current(self, model: str):
         if not model:
             return
         with QSignalBlocker(self):
             if self.findData(model) < 0:
-                self.insertItem(0, model, model)
+                self.insertItem(0, self._label(model), model)
             self.setCurrentIndex(self.findData(model))
         self.updateGeometry()
 
@@ -137,7 +142,7 @@ class ModelSelector(QComboBox):
         with QSignalBlocker(self):
             self.clear()
             for name in main_models() or ():
-                self.addItem(name, name)
+                self.addItem(self._label(name), name)
         self.set_current(model)
         self.view().setMinimumWidth(self.view().sizeHintForColumn(0) + 32)
 

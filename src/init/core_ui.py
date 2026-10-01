@@ -89,7 +89,7 @@ WORKSPACE_VIEW_CONFIG = {
 
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
-from src.init.brain import MODEL_OVERRIDE, kill_self
+from src.init.brain import MODEL_OVERRIDE, is_cloud_model, kill_self
 from src.init.config import DEFAULTS, HOME_PATH, load_dev_file, load_config, save_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
@@ -1231,6 +1231,11 @@ class AssistantWindow(DesktopWindow):
     def request_model(self, model):
         if (not model or model == self.assistant.selected_model
                 or any(session.busy for session in self.sessions) or self.model_switching):
+            self._set_model_selectors(self.assistant.selected_model)
+            return
+        if is_cloud_model(model) and QMessageBox.question(
+                self, tr("ui.model"), tr("ui.cloud_model_confirm", model=model)
+        ) != QMessageBox.StandardButton.Yes:
             self._set_model_selectors(self.assistant.selected_model)
             return
         self.model_switching = True
