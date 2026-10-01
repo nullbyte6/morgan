@@ -227,6 +227,13 @@ class SpeechBuffer:
         return [remaining] if remaining else []
 
 
+def prefers_response_workspace(text):
+    """Return whether a final answer is long enough to read in a response workspace."""
+    return (len(text) >= 1200
+            or text.count("\n") >= 25
+            or len(re.findall(r"^\s*```", text, re.MULTILINE)) >= 4)
+
+
 class ResponseDelivery:
     """Deliver visible text and speech to the selected response surface."""
 
@@ -252,9 +259,14 @@ class ResponseDelivery:
                 if cancel_event is None or not cancel_event.is_set():
                     self.enqueue_speech(phrase)
 
-    def deliver(self, output, *, streamed="", surface="chat", title=""):
+    def deliver(self, output, *, streamed="", surface="auto", title="", searched=""):
         if self.delivered_output == output:
             return
+        if surface == "auto":
+            surface = ("response_view" if searched or prefers_response_workspace(output)
+                       else "chat")
+        if surface == "response_view":
+            title = title or searched
         if self.on_surface is not None:
             allow_speech = self.on_surface(surface, title)
             self.speech_enabled = self.speech_enabled and allow_speech

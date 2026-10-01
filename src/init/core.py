@@ -856,6 +856,7 @@ class Assistant:
             conversation_messages = list(history)
             current_prompt = model_prompt
             tool_arguments = {}
+            searches = []
 
             def emit_visible(chunk):
                 if not chunk:
@@ -871,9 +872,23 @@ class Assistant:
             def deliver_output(output, *, streamed=""):
                 delivery.speech_enabled = delivery.speech_enabled and claim_speech()
                 delivery.deliver(output, streamed=streamed,
-                                 surface=controller.output_surface, title=controller.output_title)
+                                 surface=controller.output_surface, title=controller.output_title,
+                                 searched=searches[-1][:72] if searches else "")
+
+            def note_search(name, call_id, failed):
+                if name != "search_web" or failed:
+                    return
+                arguments = tool_arguments.get(call_id, {})
+                if isinstance(arguments, str):
+                    try:
+                        arguments = json.loads(arguments)
+                    except ValueError:
+                        arguments = {}
+                query = str(arguments.get("query", "")).strip() if isinstance(arguments, dict) else ""
+                searches.append(query or "Web search")
 
             def emit_step(name, call_id, result, failed=False):
+                note_search(name, call_id, failed)
                 if on_phase is None:
                     return
                 receipt = controller.receipts.get(call_id, {})

@@ -129,7 +129,7 @@ class TaskControl(AbstractCapability):
         self.on_action = None
         self.on_activity = None
         self.on_task_title = None
-        self.output_surface = "chat"
+        self.output_surface = "auto"
         self.output_title = ""
         self.toolset = FunctionToolset()
         self.control_tools = {function.__name__: function for function in (
@@ -225,9 +225,11 @@ Choose the final desktop output surface within this turn, without a separate rou
 Obey explicit requests to answer in the main chat or a separate response workspace, in any language.
 Otherwise use surface='response_view' for substantial explanations, tutorials, documentation or
 multiple code examples, and surface='chat' for ordinary conversation and operational commands.
+Without a surface, long explanations and answers based on a web search open in the response
+workspace automatically, so pass surface='chat' only when the user asks for the main chat.
 Tools, diagrams and intermediate views do not override the explicitly requested final destination.
 For a response workspace use task_finish(output=..., surface='response_view', title='Short panel title');
-use direct=True when no external work is needed. Plain text defaults to the main chat.
+use direct=True when no external work is needed. Plain text is routed automatically.
 Provide task_title naming the user's objective in at most four words, in the user's language,
 through task_checkpoint or task_finish. Describe the action and subject, never progress.
 Propose waiting/blocked with task_defer, naming an outstanding criterion/obligation, a concrete
@@ -1323,7 +1325,7 @@ class ExecutionControl(AbstractCapability):
         self.force_compaction = False
         self.notice = ""
         self.final_output = None
-        self._output_surface = "chat"
+        self._output_surface = "auto"
         self._output_title = ""
         self.task_title = ""
         self.on_action = None
@@ -1395,10 +1397,10 @@ When your objective requires dependent actions or verification, call task_checkp
 contract before work. A second operational action, a composite operation, or a pending result
 promotes this execution to supervision; then establish the contract and use task_finish.
 Never replay the first operation after promotion; its original result is preserved as prior evidence.
-For final delivery, plain text defaults to chat. Use response_finish(output=..., surface='response_view',
-title='Short panel title') for substantial explanations, tutorials or an explicitly requested response
-workspace; surface='chat' respects an explicit main-chat request. Choose the surface before writing
-the answer. Response delivery and schema preparation do not count as operational actions.
+For final delivery, plain text is routed automatically: long explanations and answers based on a web
+search open in the response workspace. Use response_finish(output=..., surface='response_view',
+title='Short panel title') to choose it yourself; surface='chat' respects an explicit main-chat
+request. Choose the surface before writing the answer. Response delivery and schema preparation do not count as operational actions.
 task_read_state(field='tools', query=...) discovers all registered tools even when schemas were
 reduced for context budget. task_select_tools(names=[...]) activates up to twelve schemas.
 A preserved pending task belongs to an earlier request. Only call task_resume(task_id=...) when
@@ -1507,7 +1509,7 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
         return control_rejection("Declare a supervised contract with task_checkpoint first.",
                                  "tool", "task_checkpoint", code="contract_required")
 
-    def response_finish(self, output: str, surface: Literal["chat", "response_view"] = "chat",
+    def response_finish(self, output: str, surface: Literal["auto", "chat", "response_view"] = "auto",
                         title: str = "") -> dict:
         """Deliver a complete DIRECT answer to chat or a response workspace."""
         if self.controller is not None:
