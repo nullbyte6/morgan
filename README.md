@@ -19,7 +19,7 @@ required. The installer:
   variable (or `<NAME>` for a custom name) to the installation folder;
 - installs Git for Windows through WinGet if Git Bash is not found;
 - installs Ollama through WinGet if it is missing, starts it, and downloads the
-  `qwen3.5:9b` model (about 6.6 GB);
+  `gemma4:e4b` model (about 6.6 GB), which handles both text and voice input;
 - creates the data directory `C:\Users\<username>\.<name>` (`.arlo` for the
   default name), saves the chosen name in its `config.json`, and downloads the
   CosyVoice voice model (`Fun-CosyVoice3-0.5B-2512`, about 6.3 GB) from Hugging

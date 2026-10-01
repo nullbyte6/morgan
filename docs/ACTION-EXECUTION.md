@@ -2,9 +2,9 @@
 
 Typed messages and voice messages reach `AssistantWorker._ask`. Voice capture
 converts microphone PCM to 16 kHz WAV and also obtains a local Whisper transcript
-for the conversation log. The WAV is sent directly to `gemma4:e2b` as
-`input_audio`, with the registered tools; the transcript is not used as an
-intermediate command or transferred to Qwen.
+for the conversation log. The WAV is sent directly to the audio model
+(`gemma4:e4b`, the same model as the default main model) as `input_audio`, with
+the registered tools; the transcript is not used as an intermediate command.
 
 Gemma also handles subsequent turns while the conversation contains audio.
 Image attachments alone do not select the audio model. Gemma uses low reasoning
