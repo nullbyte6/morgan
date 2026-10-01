@@ -190,6 +190,8 @@ class TuiApp:
         self.fade_start = -10.0
         self.quit_armed = 0.0
         self.exiting = False
+        self.history_index = None
+        self.history_draft = ""
         self.input = Buffer(
             multiline=True, history=InMemoryHistory(),
             read_only=Condition(lambda: not self.normal() or not self.session.editable()),
@@ -268,7 +270,30 @@ class TuiApp:
         self.place_tag_popup()
         self.application.invalidate()
 
+    def browse_history(self, step):
+        history = self.session.history
+        if not history:
+            return
+        if self.history_index is None:
+            if step > 0:
+                return
+            self.history_draft = self.input.text
+            index = len(history) - 1
+        else:
+            index = self.history_index + step
+            if index < 0:
+                return
+        if index >= len(history):
+            self.history_index = None
+            text = self.history_draft
+        else:
+            self.history_index = index
+            text = history[index]
+        self.input.text = text
+        self.input.cursor_position = len(text)
+
     def on_draft_accepted(self):
+        self.history_index = None
         self.input.reset(append_to_history=True)
         self.tag_popup.hide()
         self.panel.reset()
@@ -936,6 +961,9 @@ class TuiApp:
         command = shell_command_text(text)
         if command is not None:
             if session.run_shell(command):
+                if not session.history or session.history[-1] != text.strip():
+                    session.history.append(text.strip())
+                self.history_index = None
                 self.input.reset(append_to_history=True)
             return
         session.send_message(text)
@@ -989,6 +1017,7 @@ class TuiApp:
         confirming = Condition(lambda: self.session.confirmation is not None)
         modal = overlay_open | confirming
         popup = Condition(lambda: self.tag_popup.visible)
+        editable = Condition(self.session.editable)
         scrollable = Condition(lambda: self.normal() and (
             self.panel_visible() or self.session.command_output_visible))
 
@@ -1064,6 +1093,14 @@ class TuiApp:
         def _(event):
             self.tag_popup.move(1)
             self.application.invalidate()
+
+        @kb.add("escape", "up", filter=normal & editable)
+        def _(event):
+            self.browse_history(-1)
+
+        @kb.add("escape", "down", filter=normal & editable)
+        def _(event):
+            self.browse_history(1)
 
         @kb.add("enter", filter=normal)
         def _(event):

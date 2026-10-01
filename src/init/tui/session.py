@@ -171,6 +171,7 @@ class TuiSession:
         self.timer_started = None
         self.timer_text = "0s"
         self.attachments = {}
+        self.history = []
         self.attachment_jobs = 0
         self.confirmation = None
         self.recording = False
@@ -420,6 +421,9 @@ class TuiSession:
     def on_accepted(self, turn_id):
         if turn_id != self.turn_id or self.submitting is None:
             return
+        text = self.submitting.text
+        if text and (not self.history or self.history[-1] != text):
+            self.history.append(text)
         self.attachments.clear()
         self.submitting = None
         self.draft_accepted.emit()
