@@ -4,8 +4,10 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.1-beta (2026-10-01)
 
+- Add ARLO Home, the 26th built-in color theme, in blues and whites
 - Fix log pruning that deleted unrelated YYYY-MM-DD.md files because its header check never matched and failed on unreadable files
 - Fix memory updates failing with a database constraint error when the new content or key already belonged to another active memory
+- Update theme folder seeding to deliver new built-in themes to existing installs without overwriting edited themes or restoring deleted ones
 - Update versioning to the current date in YY.M.D form, starting at 26.10.1-beta
 
 ## 1.4.45-beta (2026-10-01)

@@ -31,6 +31,7 @@ from PySide6.QtGui import QColor
 THEMES_DIR = Path(__file__).resolve().parents[2] / "assets" / "themes"
 DEFAULT_THEME_ID = "catppuccin-macchiato"
 THEME_FORMAT_VERSION = 1
+SEED_MANIFEST = ".builtin-themes"
 
 ROLES = frozenset((
     "text", "text_secondary", "text_muted", "text_subtle", "text_disabled",
@@ -152,14 +153,23 @@ def user_themes_dir() -> Path:
 
 
 def seed_user_themes() -> Path:
-    """Create the user theme folder with the built-in themes on first use."""
+    """Copy built-in themes the user folder has not received yet, never overwriting or restoring deleted ones."""
     directory = user_themes_dir()
-    if directory.exists():
-        return directory
+    manifest = directory / SEED_MANIFEST
     try:
-        directory.mkdir(parents=True)
-        for source in sorted(THEMES_DIR.glob("*.json")):
-            shutil.copyfile(source, directory / source.name)
+        directory.mkdir(parents=True, exist_ok=True)
+        if manifest.is_file():
+            seeded = set(manifest.read_text(encoding="utf-8").split())
+        else:
+            seeded = {path.name for path in directory.glob("*.json")}
+        pending = [source for source in sorted(THEMES_DIR.glob("*.json")) if source.name not in seeded]
+        for source in pending:
+            target = directory / source.name
+            if not target.exists():
+                shutil.copyfile(source, target)
+            seeded.add(source.name)
+        if pending or not manifest.is_file():
+            manifest.write_text("\n".join(sorted(seeded)) + "\n", encoding="utf-8")
     except OSError as error:
         _log.warning("Unable to seed themes in %s: %s", directory, error)
     return directory
