@@ -519,7 +519,6 @@
   "palette.empty": "没有匹配的命令",
   "palette.unavailable": "当前不可用",
   "palette.new_workspace": "新建工作区",
-  "palette.chat": "聚焦聊天",
   "palette.stop_task": "停止当前任务",
   "palette.pause_task": "暂停当前任务",
   "palette.resume_task": "继续当前任务",

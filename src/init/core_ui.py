@@ -626,18 +626,10 @@ class AssistantWindow(DesktopWindow):
         session.response_timer_text = "0s"
         self._update_response_timer()
 
-    def focus_main_workspace(self):
-        self.workspace.focus_panel(self.session.panel_id)
-        if self.session.ready:
-            self.session.ui.input.setFocus()
-
     def build_command_palette(self):
         commands = [
             Command("workspace.new", "palette.new_workspace", self.open_workspace,
                     ("new workspace", "nuevo espacio")),
-            Command("workspace.chat", "palette.chat", self.focus_main_workspace,
-                    ("chat", "home", "inicio"),
-                    lambda: self.workspace.get_panel(self.main_workspace_panel_id) is not None),
             Command("session.new", "palette.new_session", self.new_session,
                     ("new session", "nueva sesion", "nueva sesión"),
                     lambda: len(self.sessions) < self.MAX_SESSIONS),

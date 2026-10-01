@@ -17,7 +17,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix directory change and module reload commands being stored as conversations, and remove the ones already stored
 - Fix log pruning that deleted unrelated YYYY-MM-DD.md files because its header check never matched and failed on unreadable files
 - Fix memory updates failing with a database constraint error when the new content or key already belonged to another active memory
-- Remove the chat button from new workspaces, which only focused the main chat
+- Remove the chat button from new workspaces and the Focus Chat palette command, which only focused the main chat
 - Remove the Logs workspace and its button, Ctrl+L shortcut and command, since the Nova diary shows the same daily conversation messages
 - Update due Nova reminders to be announced as Windows notifications while Arlo runs
 - Update Nova diary to show every message of a conversation as a log card with Markdown, a copy button for the content only and live updates, including system and interrupted messages, with the daily Markdown log as fallback

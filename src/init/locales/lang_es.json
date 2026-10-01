@@ -519,7 +519,6 @@
   "palette.empty": "No hay comandos coincidentes",
   "palette.unavailable": "No disponible ahora",
   "palette.new_workspace": "Nuevo espacio de trabajo",
-  "palette.chat": "Ir al chat",
   "palette.stop_task": "Detener tarea actual",
   "palette.pause_task": "Pausar tarea actual",
   "palette.resume_task": "Reanudar tarea actual",
