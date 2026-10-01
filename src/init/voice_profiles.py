@@ -40,8 +40,8 @@ VOICE_REFERENCE = VOICE_DIR / "voice-01.wav"
 VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy aquí para ayudarte "
                         "con lo que necesites.")
 VOICE_NAMES = {
-    "voice-01.wav": "Javier",
-    "voice-02.wav": "David",
+    "voice-01.wav": "David",
+    "voice-02.wav": "Javier",
     "voice-03.wav": "Aitana",
     "voice-04.wav": "Marina",
 }
