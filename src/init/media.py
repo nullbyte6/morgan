@@ -27,7 +27,7 @@ import re
 import subprocess
 import sys
 import time
-from src.init.visuals.gateway import open_embedded_url
+from src.init.visuals.gateway import open_url
 from collections import OrderedDict
 from typing import Literal
 
@@ -554,7 +554,7 @@ def play_youtube_song(video_id: str) -> str:
         return tr('media.error_video_id_must_come_from_a_recent_search_youtube_songs_resu')
     url = candidate["url"] + "&autoplay=1"
     try:
-        open_embedded_url(url)
+        open_url(url)
         return json.dumps({"opened": True, "title": candidate["title"], "url": url,
                            "playback_confirmed": False,
                            "note": tr('media.check_get_current_media_before_claiming_playback_browser_autopla')},

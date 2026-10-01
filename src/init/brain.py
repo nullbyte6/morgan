@@ -35,7 +35,7 @@ import threading
 import time
 import urllib.request
 import wave
-from src.init.visuals.gateway import open_embedded_url
+from src.init.visuals.gateway import open_url
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from datetime import datetime
@@ -881,30 +881,30 @@ def open_directory(path: str = ".") -> str:
 
 
 def open_browser(url: str) -> str:
-    """Open a website in the assistant's integrated browser workspace."""
+    """Open a website in the user's default web browser."""
     try:
         if "://" not in url:
             url = "https://" + url
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
             return tr('brain.error_only_http_and_https_urls_are_allowed')
-        open_embedded_url(url)
+        open_url(url)
         return tr('brain.opened_browser', url=url)
     except Exception as error:
         return f"Error: {error}"
 
 
 def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
-    """Show a search in the assistant's browser and return web results for inspection and citation."""
+    """Show a search in the user's default web browser and return web results for inspection and citation."""
     query = query.strip()
     if not query:
         return tr('brain.error_search_query_is_empty')
     from urllib.parse import urlencode
     browser_note = ""
     try:
-        open_embedded_url("https://www.google.com/search?" + urlencode({"q": query}))
+        open_url("https://www.google.com/search?" + urlencode({"q": query}))
     except (RuntimeError, ValueError) as error:
-        browser_note = f"Embedded browser unavailable: {error}\n\n"
+        browser_note = f"Default browser unavailable: {error}\n\n"
     try:
         from ddgs import DDGS
 
@@ -931,7 +931,7 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
 
 def read_web_page(url: str, max_characters: int = 12_000,
                   show_in_browser: bool = False) -> str:
-    """Read page text; show_in_browser also opens it in the assistant's browser workspace.
+    """Read page text; show_in_browser also opens it in the user's default web browser.
     Choose show_in_browser when inspecting a page together with the user.
     """
     parsed = urlparse(url)
@@ -942,9 +942,9 @@ def read_web_page(url: str, max_characters: int = 12_000,
     browser_note = ""
     if show_in_browser:
         try:
-            open_embedded_url(url)
+            open_url(url)
         except (RuntimeError, ValueError) as error:
-            browser_note = f"Embedded browser unavailable: {error}\n\n"
+            browser_note = f"Default browser unavailable: {error}\n\n"
     try:
         from ddgs import DDGS
 

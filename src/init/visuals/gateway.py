@@ -21,6 +21,7 @@
 from src.init.identity import get_assistant_name
 
 import threading
+import webbrowser
 from urllib.parse import urlparse
 
 from pydantic import ValidationError
@@ -51,15 +52,13 @@ def failure(code, message):
     return {"ok": False, "code": code, "error": message}
 
 
-def open_embedded_url(url: str) -> None:
-    """Navigate on the GUI thread, or raise without launching an external browser."""
+def open_url(url: str) -> None:
+    """Open an HTTP or HTTPS URL in the operating system's default browser."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError("A valid HTTP or HTTPS URL is required")
-    bridge = get_bridge("browser")
-    if bridge is None:
-        raise RuntimeError(f"The embedded browser requires the running {get_assistant_name()} desktop")
-    bridge.request(url)
+    if not webbrowser.open(url):
+        raise RuntimeError("The default browser could not be opened")
 
 
 def render_flowchart(chart: Flowchart) -> dict:

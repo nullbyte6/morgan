@@ -67,11 +67,6 @@ from src.init.notifications import send_notification
 
 
 WORKSPACE_VIEW_CONFIG = {
-    "browser" : {
-        "title": "Browser",
-        "shortcut": "Ctrl+B",
-        "icon": ""
-    },
     "editor": {
         "title": "Editor",
         "shortcut": "Ctrl+E",
@@ -131,7 +126,6 @@ from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
 from src.init.desktop.file_drop import FileDropRouter
 from src.init.visuals.bridge import FlowchartBridge
-from src.init.visuals.browser_bridge import BrowserBridge
 from src.init.terminal import TerminalBridge
 
 # noinspection PyBroadException
@@ -200,7 +194,6 @@ class AssistantWindow(DesktopWindow):
         self.clipboard_handler = self.session.worker.clipboard_requested.emit
         register_clipboard_handler(self.clipboard_handler)
         self.flowchart_bridge = FlowchartBridge(self)
-        self.browser_bridge = BrowserBridge(self)
         self.terminal_bridge = TerminalBridge(self)
         self.response_bridge = ResponseBridge(self)
 
@@ -908,9 +901,6 @@ class AssistantWindow(DesktopWindow):
         if view_key == "terminal":
             from src.init.terminal import TerminalView
             return TerminalView()
-        if view_key == "browser":
-            from src.init.visuals.browser import BrowserView
-            return BrowserView()
         if view_key == "nova":
             return NovaView(self.get_nova_store())
         if view_key == "settings":
@@ -2023,7 +2013,6 @@ class AssistantWindow(DesktopWindow):
         unregister_capture_handler(self.capture_handler)
         unregister_clipboard_handler(self.clipboard_handler)
         self.flowchart_bridge.shutdown()
-        self.browser_bridge.shutdown()
         self.terminal_bridge.shutdown()
         self.response_bridge.shutdown()
         if self.voice_thread is not None:

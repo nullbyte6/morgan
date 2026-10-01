@@ -358,9 +358,9 @@ class LogMessageCard(QFrame):
             return
 
         if url.scheme() in ("https", "http"):
-            from src.init.visuals.browser_bridge import open_embedded_url
+            from src.init.visuals.gateway import open_url
             try:
-                open_embedded_url(url.toString())
+                open_url(url.toString())
             except (RuntimeError, ValueError) as error:
                 self.body.setToolTip(str(error))
 

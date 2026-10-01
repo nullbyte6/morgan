@@ -48,10 +48,7 @@ _PRESERVED = {
     "src.init.desktop.clipboard",
     "src.init.visuals.bridge",
     "src.init.visuals.response",
-    "src.init.visuals.browser_bridge",
     "src.init.visuals.gateway",
-    "src.init.visuals.browser_session",
-    "src.init.visuals.browser_extensions",
     "src.init.visuals.schema",
 }
 _PRESERVED_PREFIXES = ("src.init.memory.", "src.init.tui.")

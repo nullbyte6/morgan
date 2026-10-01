@@ -23,6 +23,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix memory updates failing with a database constraint error when the new content or key already belonged to another active memory
 - Fix Nova diary conversations not unfolding when their header was clicked, because the ignored mouse press kept the release from reaching them inside the zoomable window
 - Remove the chat button from new workspaces and the Focus Chat palette command, which only focused the main chat
+- Remove the embedded browser, its extension manager, persistent sessions, Ctrl+B shortcut and Open browser command, which also drops Qt WebEngine from the app
 - Remove the Logs workspace and its button, Ctrl+L shortcut and command, since the Nova diary shows the same daily conversation messages
 - Update due Nova reminders to be announced as Windows notifications while Arlo runs
 - Update Nova diary copy button to sit in the top right corner of each message and briefly show a tick after copying
@@ -31,6 +32,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update startup to load CosyVoice while the model preloads and to import the agent runtime while the local services start
 - Update theme folder seeding to deliver new built-in themes to existing installs without overwriting edited themes or restoring deleted ones
 - Update versioning to the current date in YY.M.D form, starting at 26.10.1-beta
+- Update web searches, website requests, YouTube selections, conversation links and the repository link to open in the operating system's default browser
 
 ## 1.4.45-beta (2026-10-01)
 

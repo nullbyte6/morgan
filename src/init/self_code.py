@@ -30,7 +30,7 @@ import logging
 import os
 import subprocess
 from pydantic import Field
-from src.init.visuals.gateway import open_embedded_url
+from src.init.visuals.gateway import open_url
 from src.init.paths import PROJECT_ROOT
 from .task_outcomes import ActionResult, Outcome, normalize_result
 
@@ -81,12 +81,12 @@ def _path(path):
 
 
 def get_repo_lnk() -> str:
-    """Open the assistant's public repository in the assistant's integrated browser.
+    """Open the assistant's public repository in the user's default web browser.
     Use when asked to open the assistant's online repository, not to inspect local code.
     """
     url = "https://github.com/xddigs/arlo"
     try:
-        open_embedded_url(url)
+        open_url(url)
         return tr('self_code.opened_repository_in_the_default_browser', url=url)
     except Exception as error:
         return tr('self_code.error_opening_repository_repository', error=error, url=url)
