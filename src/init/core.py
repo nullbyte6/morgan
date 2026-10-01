@@ -269,7 +269,7 @@ class Assistant:
             logger.setLevel(logging.CRITICAL)
             logger.propagate = False
 
-        from src.init.brain import get_selected_model, main_model_id
+        from src.init.brain import get_selected_model
         from src.init.tools import TOOLS
 
         if self.voice is None:
@@ -279,7 +279,7 @@ class Assistant:
                     else None))
 
         self.selected_model = get_selected_model()
-        self.MODEL_NAME = main_model_id(self.selected_model)
+        self.MODEL_NAME = self.selected_model
         self.model_settings = {
             "thinking": False,
             "openai_reasoning_effort": "none",
@@ -377,7 +377,7 @@ class Assistant:
     def select_model(self, model: str) -> str:
         """Persist and apply a main model between turns, keeping the agent and task state."""
         with self._reload_lock:
-            from src.init.brain import MODEL_OVERRIDE, main_model_id, main_models
+            from src.init.brain import MODEL_OVERRIDE, main_models
             from src.init.config import load_config, save_config
             from src.init.lang import tr
 
@@ -385,12 +385,11 @@ class Assistant:
                 raise ValueError(tr("ui.model_locked"))
             if model not in (main_models() or ()):
                 raise ValueError(tr("ui.model_unavailable", model=model))
-            model_id = main_model_id(model)
             config = load_config()
             config["model"] = model
             save_config(config)
             self.selected_model = model
-            self.MODEL_NAME = model_id
+            self.MODEL_NAME = model
             if self.agent is not None:
                 self.model = self._main_model()
                 self.agent.model = self.model
@@ -409,11 +408,11 @@ class Assistant:
                     runtime["models"].clear()
 
             if self.agent is not None:
-                from src.init.brain import get_selected_model, main_model_id
+                from src.init.brain import get_selected_model
                 from src.init.tools import TOOLS
 
                 self.selected_model = get_selected_model()
-                self.MODEL_NAME = main_model_id(self.selected_model)
+                self.MODEL_NAME = self.selected_model
                 self.model = self._main_model()
                 self.agent = Agent(
                     model=self.model,
@@ -743,11 +742,10 @@ class Assistant:
             from src.init.config import load_dev_file
 
             audio_model_name = load_dev_file()["audio_model"]
-            managed_audio_model = f"arlo-voice-{audio_model_name}"
 
             def audio_model(provider):
                 return OllamaModel(
-                    managed_audio_model, provider=provider,
+                    audio_model_name, provider=provider,
                     profile={"openai_chat_supports_multiple_system_messages": False,
                              "openai_chat_supports_max_completion_tokens": False,
                              "openai_supports_tool_choice_required": False},
@@ -755,25 +753,10 @@ class Assistant:
 
             with self._audio_model_lock:
                 if self.audio_model is None or self.audio_model_name != audio_model_name:
-                    import urllib.request
-
-                    request = urllib.request.Request(
-                        "http://127.0.0.1:11434/api/create",
-                        data=json.dumps({
-                            "model": managed_audio_model,
-                            "from": audio_model_name,
-                            "parameters": {"num_ctx": load_dev_file()["context_length"]},
-                            "stream": False,
-                        }).encode("utf-8"),
-                        headers={"Content-Type": "application/json"})
-                    with urllib.request.urlopen(request, timeout=300) as response:
-                        result = json.load(response)
-                    if result.get("error") or result.get("status") != "success":
-                        raise RuntimeError(result.get("error") or str(result))
                     self.audio_model = audio_model(self.provider)
                     self.audio_model_name = audio_model_name
             turn_model = (self.audio_model if event_loop is None else
-                          self._loop_model(event_loop, ("audio", managed_audio_model), audio_model))
+                          self._loop_model(event_loop, ("audio", audio_model_name), audio_model))
             turn_model_settings["thinking"] = False
         session_model = self._session_main_model(event_loop)
         attachment_tools = [attachments.toolset()] if attachments else []

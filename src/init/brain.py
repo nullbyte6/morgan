@@ -131,10 +131,6 @@ def _tagged_model(name: str) -> str:
     return name if ":" in name.rsplit("/", 1)[-1] else f"{name}:latest"
 
 
-def _managed_model(name: str) -> str:
-    return "arlo-" + name.replace("/", "-")
-
-
 def is_cloud_model(name: str) -> bool:
     tag = name.rsplit("/", 1)[-1].partition(":")[2]
     return tag == "cloud" or tag.endswith("-cloud")
@@ -143,19 +139,16 @@ def is_cloud_model(name: str) -> bool:
 def main_models() -> list[str] | None:
     """List installed Ollama models usable as the main model; None when Ollama is unreachable.
 
-    The audio model from the application configuration and the context-managed
-    copies derived from installed models are auxiliary and never offered.
+    Copies left behind by earlier versions (arlo-<model> and arlo-voice-<model>)
+    are never offered.
     """
     try:
         installed = {_tagged_model(entry["name"]): entry.get("digest") or entry["name"]
                      for entry in _ollama_api("tags")["models"]}
     except (OSError, ValueError, KeyError, TypeError):
         return None
-    core = load_dev_file()
-    reserved = {_tagged_model(core["audio_model"]),
-                _tagged_model(f"arlo-voice-{core['audio_model']}"),
-                _tagged_model(core["model_name"])}
-    reserved.update(_tagged_model(_managed_model(name)) for name in installed)
+    reserved = {_tagged_model(f"{prefix}-{name.replace('/', '-')}")
+                for name in installed for prefix in ("arlo", "arlo-voice")}
     models = []
     for name, digest in installed.items():
         if name in reserved:
@@ -184,25 +177,6 @@ def get_selected_model(models: list[str] | None = None) -> str:
         if candidate in models:
             return candidate
     return models[0] if models else default
-
-
-def main_model_id(model: str) -> str:
-    """Return the Ollama model requested for a main model, configuring its context window."""
-    if MODEL_OVERRIDE or is_cloud_model(model):
-        return model
-    core = load_dev_file()
-    if model == _tagged_model(core["base_model_name"]):
-        return core["model_name"]
-    managed = _managed_model(model)
-    result = _ollama_api("create", {
-        "model": managed,
-        "from": model,
-        "parameters": {"num_ctx": core["context_length"]},
-        "stream": False,
-    }, timeout=300)
-    if result.get("error") or result.get("status") != "success":
-        raise RuntimeError(result.get("error") or str(result))
-    return managed
 
 
 def keep_model_loaded() -> None:

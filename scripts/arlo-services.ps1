@@ -100,7 +100,20 @@ function Wait-TcpPort {
 
 Write-Host "$($assistantName.ToUpper()) SERVICES" -ForegroundColor Cyan
 Write-Host "-------------"
+$corePath = Join-Path $root "dev\core.json"
+if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
+    throw "$assistantName model configuration not found: $corePath"
+}
+
+$core = Get-Content -LiteralPath $corePath -Raw -Encoding utf8 | ConvertFrom-Json
+$modelContext = $core.context_length
+if (($modelContext -isnot [int] -and $modelContext -isnot [long]) -or
+    $modelContext -lt 4096) {
+    throw "Model context is invalid in $corePath."
+}
+
 Write-Host "[1/3] Checking Ollama..."
+$env:OLLAMA_CONTEXT_LENGTH = [string]$modelContext
 if (-not (Test-TcpPort -Address "127.0.0.1" -Port 11434)) {
     $ollama = Get-Command "ollama.exe" -ErrorAction SilentlyContinue
     if (-not $ollama) {
@@ -123,50 +136,13 @@ if (-not (Test-TcpPort -Address "127.0.0.1" -Port 11434)) {
 }
 
 Write-Host "Ollama ready." -ForegroundColor Green
-$corePath = Join-Path $root "dev\core.json"
 $modelName = $env:MODEL
-$managedModel = [string]::IsNullOrWhiteSpace($modelName)
 if ([string]::IsNullOrWhiteSpace($modelName)) {
-    if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
-        throw "$assistantName model configuration not found: $corePath"
-    }
-
-    $core = Get-Content -LiteralPath $corePath -Raw -Encoding utf8 | ConvertFrom-Json
-    $modelName = $core.model_name
+    $modelName = $core.base_model_name
 }
 
 if ($modelName -isnot [string] -or [string]::IsNullOrWhiteSpace($modelName)) {
-    throw "Model name is missing or invalid in $corePath. Set model_name or MODEL."
-}
-
-if ($managedModel) {
-    $baseModelName = $core.base_model_name
-    $modelContext = $core.context_length
-    if ($baseModelName -isnot [string] -or
-        [string]::IsNullOrWhiteSpace($baseModelName) -or
-        ($modelContext -isnot [int] -and $modelContext -isnot [long]) -or
-        $modelContext -lt 4096) {
-        throw "Managed model configuration is invalid in $corePath."
-    }
-
-    Write-Host "Configuring model context: $modelContext"
-    $createPayload = @{
-        model = $modelName
-        from = $baseModelName
-        parameters = @{num_ctx = $modelContext}
-        stream = $false
-    } | ConvertTo-Json -Compress
-    try {
-        $null = Invoke-RestMethod `
-            -Uri "$ollamaUrl/api/create" `
-            -Method Post `
-            -ContentType "application/json" `
-            -Body $createPayload `
-            -TimeoutSec 300
-    }
-    catch {
-        throw "Managed model configuration failed: $($_.Exception.Message)"
-    }
+    throw "Model name is missing or invalid in $corePath. Set base_model_name or MODEL."
 }
 
 $keepAlive = $env:KEEP_ALIVE

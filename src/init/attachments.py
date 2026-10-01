@@ -193,6 +193,8 @@ def ollama_capabilities(model: str) -> tuple[bool, int]:
                               if key.endswith(".context_length") and isinstance(value, int)]
                 from src.init.config import load_dev_file
                 return vision, max(512, advertised[0] if advertised else load_dev_file()["context_length"])
+            from src.init.config import load_dev_file
+            context = load_dev_file()["context_length"]
         with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=2) as response:
             running = json.load(response)
         for entry in running.get("models", []):
