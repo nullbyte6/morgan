@@ -198,7 +198,8 @@ completed maps exact criteria to nonempty lists of verification call IDs. resolu
 maps effect obligation IDs to {'finding': 'observed reconciliation', 'evidence': [verification IDs]}.
 For read_only, current successful inspection IDs can satisfy completed; you do not need to
 repeat unchanged reads in phase verify. task_finish(completed={exact_criterion: [evidence IDs]})
-can certify remaining criteria and finish. Mutations still need independent verification.
+can certify remaining criteria and finish; omit completed to certify every criterion that current
+valid evidence already satisfies. Mutations still need independent verification.
 For a diagram that only visualizes supplied information, use kind='read_only' and render_flowchart.
 Its successful result confirms the diagram opened and can satisfy the diagram criterion with its
 evidence ID, using resources=[] or ['domain:presentation']. Do not substitute Mermaid, ASCII or
@@ -340,6 +341,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
                     title: str = "", task_title: str = "") -> dict:
         """Propose verified completion with the complete answer in output for immediate delivery."""
         self.refresh_resources()
+        if not completed:
+            completed = self.current_evidence_completion()
         if completed:
             pending = {name: refs for name, refs in completed.items()
                        if name not in self.state.criteria or not self.state.satisfied(self.state.criteria[name])}
@@ -1218,6 +1221,16 @@ and retain its consent checks. cd requests use change_directory and Git requests
                              "Do not repeat effects. Inspect outstanding requirements, use current evidence, "
                              "and call task_finish(output=...) with a complete answer. "
                              "For a direct answer with no external work, complete the answer in text.")
+        if reason == "empty_output":
+            self.state.notice += (" The previous response was empty because its tool call could not be parsed: "
+                                  "use only flat arguments and omit completed and other nested objects.")
+
+    def current_evidence_completion(self):
+        if (self.state.status != Lifecycle.ACTIVE or self.state.kind not in {"read_only", "mutation"}
+                or self.state.complete()):
+            return {}
+        latest = max(self.state.evidence.values(), key=lambda item: item.sequence, default=None)
+        return self.state.available_evidence() if latest is None or latest.tool != "user_input" else {}
 
     def stop_output_recovery(self, reason):
         self.state.suspend(Lifecycle.LIMIT_REACHED, reason + tr("task_control.output_recovery_resume"))
@@ -1230,13 +1243,17 @@ and retain its consent checks. cd requests use change_directory and Git requests
         if self.state.status == Lifecycle.CANCELLED:
             self.trace("output_assessment", accepted=True, requirements=[])
             return True
-        if (not truncated and self.state.status == Lifecycle.ACTIVE and self.state.kind in {"read_only", "mutation"}
-                and not self.state.complete()):
-            latest = max(self.state.evidence.values(), key=lambda item: item.sequence, default=None)
-            completed = self.state.available_evidence() if latest is None or latest.tool != "user_input" else {}
-            if completed and self.state.checkpoint(self.state.role, [], {}, completed, [], "", {}, [], self.state.kind,
-                                                   self.state.role_resources)["accepted"]:
-                self.trace("evidence_auto_certified", completed=completed)
+        reason = ("length" if truncated else "empty_output" if output is not None and not output.strip()
+                  else "uncertified_text")
+        if reason == "empty_output" and self.state.status == Lifecycle.ACTIVE:
+            self.trace("output_assessment", accepted=False,
+                       requirements=[{"code": "task_finish_required", "tool": "task_finish"}])
+            self.recover_model_output(reason)
+            return False
+        completed = {} if truncated else self.current_evidence_completion()
+        if completed and self.state.checkpoint(self.state.role, [], {}, completed, [], "", {}, [], self.state.kind,
+                                               self.state.role_resources)["accepted"]:
+            self.trace("evidence_auto_certified", completed=completed)
         if not truncated and not self.state.output_recovery and self.state.status == Lifecycle.ACTIVE:
             if self.state.kind in {None, "direct"} and self.state.can_finish_direct():
                 self.state.finish(direct=True)
@@ -1246,10 +1263,10 @@ and retain its consent checks. cd requests use change_directory and Git requests
             if self.state.can_finish_direct() or self.state.complete():
                 result = self.task_finish(direct=self.state.can_finish_direct(), output=output)
                 if not result.get("accepted"):
-                    self.recover_model_output("uncertified_text")
+                    self.recover_model_output(reason)
                     return False
             else:
-                self.recover_model_output("uncertified_text")
+                self.recover_model_output(reason)
                 return False
         accepted = self.state.status == Lifecycle.COMPLETE and (
             self.state.kind == "direct" or self.state.complete()) and not truncated
@@ -1260,7 +1277,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.trace("output_truncated")
         self.trace("output_assessment", accepted=accepted, requirements=requirements)
         if not accepted:
-            self.recover_model_output("length" if truncated else "uncertified_text")
+            self.recover_model_output(reason)
         return accepted
 
     def resume(self, context, cancel_event, prompt=""):
