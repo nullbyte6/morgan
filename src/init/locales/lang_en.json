@@ -571,5 +571,20 @@
   "tui.cmd_permissions": "Switch permissions (now {mode})",
   "tui.cmd_model": "Change model",
   "tui.quit_hint": "Press Ctrl+C again to exit",
-  "tui.already_running": "{assistant_name} is already running on this computer. Close it before starting the terminal version."
+  "tui.already_running": "{assistant_name} is already running on this computer. Close it before starting the terminal version.",
+  "nova.today": "Today",
+  "nova.tomorrow": "Tomorrow",
+  "nova.yesterday": "Yesterday",
+  "nova.all_day": "All day",
+  "nova.format.day": "dddd, d MMMM",
+  "nova.format.short_day": "ddd, d MMM",
+  "nova.format.month": "MMMM yyyy",
+  "nova.format.range_day": "d MMM",
+  "nova.calendar.week": "Week",
+  "nova.calendar.month": "Month",
+  "nova.calendar.year": "Year",
+  "nova.calendar.today": "Today",
+  "nova.calendar.previous": "Previous",
+  "nova.calendar.next": "Next",
+  "nova.calendar.more": "+{count} more"
 }

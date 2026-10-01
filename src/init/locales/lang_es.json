@@ -571,5 +571,20 @@
   "tui.cmd_permissions": "Cambiar permisos (ahora {mode})",
   "tui.cmd_model": "Cambiar de modelo",
   "tui.quit_hint": "Pulsa Ctrl+C de nuevo para salir",
-  "tui.already_running": "{assistant_name} ya se está ejecutando en este equipo. Ciérralo antes de iniciar la versión de terminal."
+  "tui.already_running": "{assistant_name} ya se está ejecutando en este equipo. Ciérralo antes de iniciar la versión de terminal.",
+  "nova.today": "Hoy",
+  "nova.tomorrow": "Mañana",
+  "nova.yesterday": "Ayer",
+  "nova.all_day": "Todo el día",
+  "nova.format.day": "dddd, d 'de' MMMM",
+  "nova.format.short_day": "ddd, d MMM",
+  "nova.format.month": "MMMM 'de' yyyy",
+  "nova.format.range_day": "d MMM",
+  "nova.calendar.week": "Semana",
+  "nova.calendar.month": "Mes",
+  "nova.calendar.year": "Año",
+  "nova.calendar.today": "Hoy",
+  "nova.calendar.previous": "Anterior",
+  "nova.calendar.next": "Siguiente",
+  "nova.calendar.more": "+{count} más"
 }

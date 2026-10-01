@@ -1062,3 +1062,75 @@ QScrollArea#browserExtensionsScroll QScrollBar::add-page:vertical,
 QScrollArea#browserExtensionsScroll QScrollBar::sub-page:vertical {
     background: transparent;
 }
+
+QWidget#novaCalendar,
+QWidget#novaWeekHeader,
+QWidget#novaWeekHours,
+QWidget#novaMonthGrid,
+QWidget#novaYearGrid,
+QWidget#novaMiniMonth {
+    background: transparent;
+}
+
+QLabel#novaCalendarTitle {
+    color: @text;
+    font-size: 22px;
+    background: transparent;
+}
+
+QPushButton#novaArrow {
+    background-color: transparent;
+    color: @text_muted;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 18px;
+    padding: 0;
+}
+
+QPushButton#novaArrow:hover {
+    background-color: @surface_raised;
+    color: @text;
+}
+
+QPushButton#novaTodayButton,
+QPushButton#novaSegment {
+    background-color: transparent;
+    color: @text_muted;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-size: 14px;
+}
+
+QPushButton#novaTodayButton {
+    border-color: @border;
+}
+
+QPushButton#novaTodayButton:hover,
+QPushButton#novaSegment:hover {
+    background-color: @surface_raised;
+    color: @text;
+}
+
+QPushButton#novaSegment:checked {
+    background-color: @surface_selected;
+    color: @text;
+}
+
+QScrollArea#novaScroll {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea#novaScroll QScrollBar:vertical {
+    background: transparent;
+    width: 0px;
+    margin: 0;
+}
+
+QScrollArea#novaScroll QScrollBar:horizontal {
+    background: transparent;
+    height: 0px;
+    margin: 0;
+}
