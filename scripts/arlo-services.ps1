@@ -150,6 +150,64 @@ if (-not $keepAlive) {
     $keepAlive = "24h"
 }
 
+$ttsProcess = $null
+if (-not $NoVoice) {
+    Write-Host "[2/3] Checking CosyVoice..."
+
+    $voiceSources = @(
+        "src\init\tts_server.py", "src\init\voice_service.py",
+        "src\init\voice_profiles.py", "src\init\voice_client.py",
+        "src\cosyvoice\cli\cosyvoice.py", "src\cosyvoice\cli\frontend.py",
+        "src\cosyvoice\cli\model.py"
+    )
+    $latestVoiceChange = ($voiceSources | ForEach-Object {
+        (Get-Item -LiteralPath (Join-Path $root $_)).LastWriteTime
+    } | Sort-Object -Descending | Select-Object -First 1)
+    $pythonProcesses = @(Get-CimInstance Win32_Process -Filter "Name = 'python.exe'")
+    $ownedTts = @($pythonProcesses | Where-Object {
+        $_.ExecutablePath -eq $python -and
+        $_.CommandLine -match '\s-m\s+src\.init\.tts_server(?:\s|$)' -and
+        $_.CreationDate -lt $latestVoiceChange
+    })
+    foreach ($ttsOwner in $ownedTts) {
+        Write-Host "Reloading the updated $assistantName voice service..."
+        $ttsChildren = @($pythonProcesses | Where-Object {
+            $_.ParentProcessId -eq $ttsOwner.ProcessId -and
+            $_.CommandLine -match '\s-m\s+src\.init\.tts_server(?:\s|$)'
+        })
+        foreach ($ttsChild in $ttsChildren) {
+            Stop-Process -Id $ttsChild.ProcessId -ErrorAction SilentlyContinue
+            Wait-Process -Id $ttsChild.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
+        }
+        Stop-Process -Id $ttsOwner.ProcessId -ErrorAction SilentlyContinue
+        Wait-Process -Id $ttsOwner.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
+    }
+
+    if (Test-TcpPort -Address $ttsHost -Port $ttsPort) {
+
+        Write-Host "TTS port already in use." -ForegroundColor Yellow
+        Write-Host "Reusing the existing service."
+
+    }
+    else {
+        Write-Host "Starting CosyVoice..."
+        $ttsCommand = @(
+            "/d",
+            "/s",
+            "/c",
+            ('""{0}" -u -m {1} >> "{2}" 2>&1"' -f `
+                $python, $ttsModule, $ttsLog)
+        )
+
+        $ttsProcess = Start-Process `
+            -FilePath "cmd.exe" `
+            -ArgumentList $ttsCommand `
+            -WorkingDirectory $root `
+            -WindowStyle Hidden `
+            -PassThru
+    }
+}
+
 $modelReady = $false
 try {
     $runningModels = Invoke-RestMethod `
@@ -201,60 +259,7 @@ if ($NoVoice) {
     exit 0
 }
 
-Write-Host "[2/3] Checking CosyVoice..."
-
-$voiceSources = @(
-    "src\init\tts_server.py", "src\init\voice_service.py",
-    "src\init\voice_profiles.py", "src\init\voice_client.py",
-    "src\cosyvoice\cli\cosyvoice.py", "src\cosyvoice\cli\frontend.py",
-    "src\cosyvoice\cli\model.py"
-)
-$latestVoiceChange = ($voiceSources | ForEach-Object {
-    (Get-Item -LiteralPath (Join-Path $root $_)).LastWriteTime
-} | Sort-Object -Descending | Select-Object -First 1)
-$pythonProcesses = @(Get-CimInstance Win32_Process -Filter "Name = 'python.exe'")
-$ownedTts = @($pythonProcesses | Where-Object {
-    $_.ExecutablePath -eq $python -and
-    $_.CommandLine -match '\s-m\s+src\.init\.tts_server(?:\s|$)' -and
-    $_.CreationDate -lt $latestVoiceChange
-})
-foreach ($ttsOwner in $ownedTts) {
-    Write-Host "Reloading the updated $assistantName voice service..."
-    $ttsChildren = @($pythonProcesses | Where-Object {
-        $_.ParentProcessId -eq $ttsOwner.ProcessId -and
-        $_.CommandLine -match '\s-m\s+src\.init\.tts_server(?:\s|$)'
-    })
-    foreach ($ttsChild in $ttsChildren) {
-        Stop-Process -Id $ttsChild.ProcessId -ErrorAction SilentlyContinue
-        Wait-Process -Id $ttsChild.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
-    }
-    Stop-Process -Id $ttsOwner.ProcessId -ErrorAction SilentlyContinue
-    Wait-Process -Id $ttsOwner.ProcessId -Timeout 10 -ErrorAction SilentlyContinue
-}
-
-if (Test-TcpPort -Address $ttsHost -Port $ttsPort) {
-
-    Write-Host "TTS port already in use." -ForegroundColor Yellow
-    Write-Host "Reusing the existing service."
-
-}
-else {
-    Write-Host "Starting CosyVoice..."
-    $ttsCommand = @(
-        "/d",
-        "/s",
-        "/c",
-        ('""{0}" -u -m {1} >> "{2}" 2>&1"' -f `
-            $python, $ttsModule, $ttsLog)
-    )
-
-    $ttsProcess = Start-Process `
-        -FilePath "cmd.exe" `
-        -ArgumentList $ttsCommand `
-        -WorkingDirectory $root `
-        -WindowStyle Hidden `
-        -PassThru
-
+if ($ttsProcess) {
     Write-Host "Waiting for CosyVoice to load..."
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $ready = $false

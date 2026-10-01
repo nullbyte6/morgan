@@ -122,8 +122,7 @@ class TuiSession:
         self.subtitles_enabled = prefs["subtitles"]
         self.steps_enabled = prefs["ephemeral_steps"]
         self.username = getuser().capitalize()
-        self.greeting = self.assistant.startup_greeting
-        self.runner = TuiRunner(self.greeting, muted=self.muted, session_key=0, primary=True)
+        self.runner = TuiRunner(True, muted=self.muted, session_key=0, primary=True)
         self.runner.response_surface = lambda title: scheduler.post(self.on_response_surface, title)
         self.presentation = TaskProjection()
         self.worker = WorkerThread()
@@ -153,7 +152,7 @@ class TuiSession:
         self.status_key = "status.waking"
         self.notice = ""
         self.notice_until = 0.0
-        self.subtitle_text = self.greeting
+        self.subtitle_text = ""
         self.visual_state = "idle"
         self.trail_activity = ("", "")
         self.trail_text = ""

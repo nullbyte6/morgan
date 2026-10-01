@@ -23,7 +23,6 @@ import itertools
 import logging
 import os
 import re
-import random
 import sys
 import threading
 import tempfile
@@ -183,7 +182,6 @@ class AssistantWindow(DesktopWindow):
         self.voice_session = None
         self.closing_after_voice = False
         self.quitting = False
-        self.greeting_key = f"greeting.{random.randrange(6)}"
         self.model_switching = False
         self.active_language = None
 
@@ -192,7 +190,7 @@ class AssistantWindow(DesktopWindow):
         self.sessions = []
         self.closing_sessions = []
         self._turn_ids = itertools.count(1)
-        self.session = self.create_session(self.startup_greeting)
+        self.session = self.create_session(greet=True)
         self.session.worker.set_permission_mode(load_config()["permission_mode"])
 
         self.capture_handler = self.session.worker.screenshot_requested.emit
@@ -205,7 +203,6 @@ class AssistantWindow(DesktopWindow):
         self.response_bridge = ResponseBridge(self)
 
         self.session.status_key = "status.waking"
-        self.showing_greeting = True
         self.response_timer_tick = QTimer(self)
         self.response_timer_tick.setInterval(50)
         self.response_timer_tick.timeout.connect(self._update_response_timer)
@@ -363,7 +360,7 @@ class AssistantWindow(DesktopWindow):
         ui.activity_trail = ActivityTrail(
             session.presentation, steps_enabled=self.settings.value("ephemeral_steps", True, type=bool))
         ui.status = QLabel()
-        ui.subtitles = QLabel(self.startup_greeting if session.index == 0 else "")
+        ui.subtitles = QLabel()
         ui.command_output = QPlainTextEdit()
         ui.input = ChatInput(directory=lambda: session.worker.session.context.working_directory)
         ui.composer_widget = QWidget()
@@ -743,10 +740,6 @@ class AssistantWindow(DesktopWindow):
     def apply_theme(self, theme):
         self.load_stylesheet()
 
-    @property
-    def startup_greeting(self) -> str:
-        return tr(self.greeting_key, username=self.username, name=get_assistant_name())
-
     def _orbs(self, session=None):
         session = session or self.session
         orbs = [session.ui.orb] if session.ui is not None else []
@@ -762,9 +755,9 @@ class AssistantWindow(DesktopWindow):
         for orb in self._orbs(session):
             orb.set_thinking(thinking)
 
-    def create_session(self, greeting=""):
+    def create_session(self, greet=False):
         index = len(self.sessions)
-        worker = AssistantWorker(greeting, muted=self.muted, session_key=index,
+        worker = AssistantWorker(greet, muted=self.muted, session_key=index,
                                  primary=not index)
         session = DesktopSession(self, index, worker)
         self.sessions.append(session)
@@ -1237,8 +1230,6 @@ class AssistantWindow(DesktopWindow):
         for navigation in self.workspace.findChildren(WorkspaceNavigation):
             navigation.refresh_language()
         self.update_send_button()
-        if self.showing_greeting:
-            self.update_subtitles(self.startup_greeting, self.sessions[0])
 
     def refresh_settings_workspaces(self):
         for view in self.workspace.findChildren(SettingsView):
@@ -1587,8 +1578,6 @@ class AssistantWindow(DesktopWindow):
         self.set_status("", session)
         session.turn_id = next(self._turn_ids)
         session.presentation.begin(session.turn_id)
-        if session.index == 0:
-            self.showing_greeting = False
         session.worker.cancel_event = threading.Event()
         session.stopping = False
         session.permission_denied_state = False
@@ -2001,8 +1990,6 @@ class AssistantWindow(DesktopWindow):
         self._reset_response_timer(session)
         session.presentation.finish(session.turn_id, failed=True)
         self.finish_wake_command(session, "failed", error)
-        if session.index == 0:
-            self.showing_greeting = False
         self.update_subtitles(tr("ui.error", error=error), session)
         session.current_reply = None
         if session.current_response_view is not None:

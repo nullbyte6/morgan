@@ -19,7 +19,6 @@
 import logging
 import json
 import os
-import random
 import re
 import subprocess
 import threading
@@ -155,11 +154,34 @@ class Assistant:
                 cls._instance = instance
             return cls._instance
 
-    @property
-    def startup_greeting(self) -> str:
-        from src.init.lang import tr
-        return tr(f"greeting.{random.randrange(6)}",
-                  username=self.username, name=self.name)
+    def generate_greeting(self) -> str:
+        """Ask the main model for a short startup greeting in the interface language."""
+        import urllib.request
+        from src.init.brain import OLLAMA_KEEP_ALIVE
+        from src.init.lang import get_language
+
+        language = {"english": "English", "spanish": "European Spanish"}.get(get_language(), "English")
+        prompt = (f"You are {self.name}, a personal desktop assistant that has just started. "
+                  f"Write one short, natural greeting of at most twelve words in {language} for the user, "
+                  f"{self.username}, offering your help. Infer your grammatical gender from your name "
+                  "and use it consistently. Use a "
+                  f"{load_config()['personality']['tone']} tone and vary the wording. "
+                  "Reply with the greeting only, without quotes, emojis or Markdown.")
+        payload = json.dumps({
+            "model": self.MODEL_NAME, "prompt": prompt, "stream": False, "think": False,
+            "keep_alive": OLLAMA_KEEP_ALIVE, "options": {"temperature": 1.0, "num_predict": 60},
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            "http://127.0.0.1:11434/api/generate", data=payload,
+            headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                text = json.loads(response.read())["response"]
+        except (OSError, ValueError, KeyError, TypeError):
+            logging.getLogger("assistant.model").exception("Startup greeting could not be generated")
+            return ""
+        lines = (line.strip().strip("\"'“”«»*").strip() for line in str(text).splitlines())
+        return next((line for line in lines if line), "")[:200]
 
 
     @property
@@ -251,12 +273,23 @@ class Assistant:
             raise RuntimeError(tr("startup.services_not_ready"))
         logging.getLogger("assistant.services").info(output.rstrip())
 
+    @staticmethod
+    def _preload_runtime():
+        try:
+            import pydantic_ai.models.ollama
+            import src.init.tools
+        except Exception:
+            logging.getLogger("assistant.startup").exception("Runtime modules could not be preloaded")
+
     def _initialize_runtime(self):
         if self.agent is not None:
             return
-        self._ensure_services()
         os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
         os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+        preload = threading.Thread(target=self._preload_runtime, name="runtime-preload", daemon=True)
+        preload.start()
+        self._ensure_services()
+        preload.join()
         from pydantic_ai import Agent, Tool
 
         for logger_name in (

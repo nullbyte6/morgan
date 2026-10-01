@@ -74,9 +74,9 @@ class SessionRunner:
     model_failed = Event()
     _confirmation_ids = itertools.count(1)
 
-    def __init__(self, startup_greeting="", *, muted=False, session_key=None, primary=True):
+    def __init__(self, greet=False, *, muted=False, session_key=None, primary=True):
         self.assistant = Assistant()
-        self.startup_greeting = startup_greeting
+        self.greet = greet
         self.muted = bool(muted)
         self.session_key = session_key
         self.primary = primary
@@ -101,7 +101,9 @@ class SessionRunner:
             self.assistant._initialize_runtime()
             with self._voice_settings_lock:
                 self.assistant.voice.set_muted(self.muted)
-            if self.startup_greeting:
+            greeting = self.assistant.generate_greeting() if self.greet else ""
+            if greeting:
+                self.subtitle.emit(0, greeting)
                 voice = self.assistant.voice
                 voice.audio_callback = lambda samples, rate: self.report_audio(
                     0, samples, rate)
@@ -112,7 +114,7 @@ class SessionRunner:
                 try:
                     with desktop_audio():
                         voice.begin_turn()
-                        voice.enqueue(self.startup_greeting)
+                        voice.enqueue(greeting)
                         voice.wait_until_done()
                 except Exception:
                     logging.getLogger("assistant.voice").exception(

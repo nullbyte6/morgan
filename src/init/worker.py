@@ -63,9 +63,9 @@ class AssistantWorker(SessionRunner, QObject):
     model_changed = Signal(str)
     model_failed = Signal(str)
 
-    def __init__(self, startup_greeting="", *, muted=False, session_key=None, primary=True):
+    def __init__(self, greet=False, *, muted=False, session_key=None, primary=True):
         QObject.__init__(self)
-        SessionRunner.__init__(self, startup_greeting, muted=muted,
+        SessionRunner.__init__(self, greet, muted=muted,
                                session_key=session_key, primary=primary)
 
     @Slot()
