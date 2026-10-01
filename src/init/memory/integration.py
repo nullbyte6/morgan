@@ -67,7 +67,7 @@ def configured_service():
 
 
 def clear_memories():
-    """Delete every stored conversation, memory and daily log, keeping settings and the Nova agenda."""
+    """Delete every stored conversation, memory, daily log and artifact, keeping settings and the Nova agenda."""
     from ..config import load_config
     from ..session_log import clear_logs
     _settings_service(load_config()["memory"]).clear()

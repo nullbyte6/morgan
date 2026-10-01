@@ -26,6 +26,7 @@ import json
 import logging
 import math
 import re
+import shutil
 import uuid
 import wave
 from contextlib import contextmanager
@@ -66,11 +67,14 @@ def _session_logs(directory: Path) -> list[Path]:
 
 
 def clear_logs(directory: Path | None = None) -> None:
-    """Delete every daily Markdown conversation log."""
+    """Delete every daily Markdown conversation log and the stored session artifacts."""
     directory = (Path(directory) if directory is not None else HOME_PATH / ".log").resolve()
     if directory.is_dir():
         for path in _session_logs(directory):
             path.unlink(missing_ok=True)
+        artifacts = directory / "artifacts"
+        if artifacts.is_dir() and not artifacts.is_symlink() and not artifacts.is_junction():
+            shutil.rmtree(artifacts)
 
 
 def open_current_session_log() -> str:

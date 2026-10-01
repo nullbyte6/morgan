@@ -37,7 +37,7 @@
   "ui.open_themes_folder": "打开主题文件夹",
   "ui.remove_memories": "删除记忆",
   "ui.remove_memories_hint": "永久删除 {assistant_name} 保存的所有对话和记忆",
-  "ui.remove_memories_confirm": "这将永久删除 {assistant_name} 保存的所有对话、记忆和每日日志。设置、主题以及 Nova 的提醒和事件会保留。是否继续？",
+  "ui.remove_memories_confirm": "这将永久删除 {assistant_name} 保存的所有对话、记忆、每日日志和工件。设置、主题以及 Nova 的提醒和事件会保留。是否继续？",
   "ui.remove_memories_done": "{assistant_name} 的记忆和对话已删除。",
   "ui.model": "模型",
   "ui.model_hint": "Ollama 主模型，本地或云端。从下一条消息开始生效。",

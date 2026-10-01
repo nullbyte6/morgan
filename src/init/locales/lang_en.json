@@ -37,7 +37,7 @@
   "ui.open_themes_folder": "Open Themes Folder",
   "ui.remove_memories": "Remove Memories",
   "ui.remove_memories_hint": "Permanently delete every conversation and memory {assistant_name} has stored",
-  "ui.remove_memories_confirm": "This permanently deletes every conversation, memory and daily log {assistant_name} has stored. Settings, themes and Nova reminders and events are kept. Continue?",
+  "ui.remove_memories_confirm": "This permanently deletes every conversation, memory, daily log and artifact {assistant_name} has stored. Settings, themes and Nova reminders and events are kept. Continue?",
   "ui.remove_memories_done": "{assistant_name}'s memories and conversations have been deleted.",
   "ui.model": "Model",
   "ui.model_hint": "Main Ollama model, local or cloud. Applies from the next message.",
