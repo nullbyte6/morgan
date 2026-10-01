@@ -14,6 +14,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add Nova star button to new workspaces that slides out the other workspace buttons and opens Nova with Ctrl+click
 - Add Remove Memories button to Settings that deletes every stored conversation, memory, daily log and session artifact after confirmation, keeping settings, themes and the Nova agenda
 - Fix Arlo forgetting stored facts such as family names and pets by including every confirmed memory in each turn again, relevant ones first and within the context budget
+- Fix Nova diary conversations not unfolding when their header was clicked, because the ignored mouse press kept the release from reaching them inside the zoomable window
 - Fix directory change and module reload commands being stored as conversations, and remove the ones already stored
 - Fix log pruning that deleted unrelated YYYY-MM-DD.md files because its header check never matched and failed on unreadable files
 - Fix memory updates failing with a database constraint error when the new content or key already belonged to another active memory

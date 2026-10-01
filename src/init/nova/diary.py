@@ -145,10 +145,21 @@ class ConversationCard(QFrame):
         self._body.setVisible(opened)
         self._marker.setText(CHEVRON_DOWN if opened else CHEVRON_RIGHT)
 
+    def _on_head(self, event) -> bool:
+        return (event.button() == Qt.MouseButton.LeftButton
+                and self._head.geometry().contains(event.position().toPoint()))
+
+    def mousePressEvent(self, event):
+        if self._on_head(event):
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
     def mouseReleaseEvent(self, event):
-        if (event.button() == Qt.MouseButton.LeftButton
-                and self._head.geometry().contains(event.position().toPoint())):
+        if self._on_head(event):
             self.set_open(not self.is_open)
+            event.accept()
+            return
         super().mouseReleaseEvent(event)
 
 
