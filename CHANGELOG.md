@@ -9,6 +9,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add Ctrl+L shortcut and Open diary command that open Nova on the Diary, reusing an open Nova panel
 - Add Nova as a workspace view, with a sidebar folded into the panel, agenda, reminder and event lists, and an overlay to create, edit and delete entries, opened with Ctrl+Alt+N or the command palette
 - Add Nova calendar widgets with week, month and year views, drill-down between them, a date picker and Spanish and English day and month names
+- Add Nova diary remove buttons next to each message copy button and on each conversation, which after a second click delete the message or the whole conversation from the memory database and the daily Markdown log
 - Add Nova diary that presents the memory database one day at a time, with the day's agenda, remembered facts and unfoldable conversations
 - Add Nova persistence with one SQLite database for reminders and another for events, stored in the Arlo user folder, with due-reminder tracking
 - Add Nova star button to new workspaces that slides out the other workspace buttons and opens Nova with Ctrl+click

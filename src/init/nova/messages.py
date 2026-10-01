@@ -24,13 +24,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QFont, QFontDatabase, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                                QTextBrowser, QVBoxLayout)
 
 from src.init.config import DEFAULTS
 from src.init.identity import get_assistant_name
+from src.init.lang import tr
 
 ENTRY_HEADER = re.compile(
     r"^\[(?:\d{4}-\d{2}-\d{2}[ T])?"
@@ -44,6 +45,8 @@ FENCE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 COPY_GLYPH = ""
 COPIED_GLYPH = ""
 COPIED_MS = 1200
+REMOVE_GLYPH = ""
+ARMED_MS = 3000
 
 @dataclass(frozen=True)
 class LogMessage:
@@ -51,6 +54,7 @@ class LogMessage:
     author: str
     content: str
     role: str = ""
+    id: str = ""
 
 
 def parse_log(content: str) -> list[LogMessage]:
@@ -141,8 +145,47 @@ def parse_log(content: str) -> list[LogMessage]:
     return messages
 
 
+class RemoveButton(QPushButton):
+    """A trash button that arms on the first click and asks for a second one before removing."""
+
+    confirmed = Signal()
+
+    def __init__(self, font_family: str, parent=None):
+        super().__init__(REMOVE_GLYPH, parent)
+        self.setObjectName("logRemoveNav")
+        icon_font = QFont(font_family)
+        icon_font.setPixelSize(16)
+        self.setFont(icon_font)
+        self.setFixedSize(24, 24)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.disarm_timer = QTimer(self)
+        self.disarm_timer.setSingleShot(True)
+        self.disarm_timer.setInterval(ARMED_MS)
+        self.disarm_timer.timeout.connect(lambda: self.set_armed(False))
+        self.clicked.connect(self.press)
+        self.set_armed(False)
+
+    def set_armed(self, armed: bool) -> None:
+        self.setProperty("armed", armed)
+        self.setToolTip(tr("nova.diary.remove_confirm" if armed else "nova.diary.remove"))
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def press(self) -> None:
+        if self.property("armed"):
+            self.disarm_timer.stop()
+            self.set_armed(False)
+            self.confirmed.emit()
+            return
+        self.set_armed(True)
+        self.disarm_timer.start()
+
+
 class LogMessageCard(QFrame):
     """A single conversation entry with Markdown rendering."""
+
+    removed = Signal(object)
+
     def __init__(
         self,
         message: LogMessage,
@@ -199,6 +242,10 @@ class LogMessageCard(QFrame):
         header.addWidget(self.timestamp)
         header.addStretch(1)
         header.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignTop)
+        if message.id:
+            self.remove_button = RemoveButton(self.code_font_family)
+            self.remove_button.confirmed.connect(lambda: self.removed.emit(self.message))
+            header.addWidget(self.remove_button, 0, Qt.AlignmentFlag.AlignTop)
 
         layout.addLayout(header)
 

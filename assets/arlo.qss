@@ -219,7 +219,8 @@ QPushButton#novaNav {
     font-size: 32px;
 }
 
-QPushButton#logCopyNav {
+QPushButton#logCopyNav,
+QPushButton#logRemoveNav {
     background-color: transparent;
     color: @text_muted;
     border: 2px solid transparent;
@@ -241,9 +242,15 @@ QPushButton#novaNav:hover {
     color: @text;
 }
 
-QPushButton#logCopyNav:hover {
+QPushButton#logCopyNav:hover,
+QPushButton#logRemoveNav:hover {
     background-color: @surface_raised;
     color: @text;
+}
+
+QPushButton#logRemoveNav[armed="true"] {
+    background-color: @error/30;
+    color: @error;
 }
 
 QToolButton#directory {

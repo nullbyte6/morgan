@@ -636,6 +636,8 @@
   "nova.diary.disabled": "Memory is turned off, so conversations and memories are not recorded.",
   "nova.diary.error": "The diary could not be read: {error}",
   "nova.diary.previous_entry": "Previous entry",
+  "nova.diary.remove": "Remove from memory",
+  "nova.diary.remove_confirm": "Click again to remove",
   "nova.diary.category.preference": "Preference",
   "nova.diary.category.fact": "Fact",
   "nova.diary.category.project": "Project",

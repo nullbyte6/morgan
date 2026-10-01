@@ -636,6 +636,8 @@
   "nova.diary.disabled": "记忆已关闭，因此不会记录对话和记忆。",
   "nova.diary.error": "无法读取日记：{error}",
   "nova.diary.previous_entry": "上一条记录",
+  "nova.diary.remove": "从记忆中删除",
+  "nova.diary.remove_confirm": "再次点击以删除",
   "nova.diary.category.preference": "偏好",
   "nova.diary.category.fact": "事实",
   "nova.diary.category.project": "项目",

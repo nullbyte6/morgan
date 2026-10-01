@@ -636,6 +636,8 @@
   "nova.diary.disabled": "La memoria está desactivada, así que no se registran conversaciones ni recuerdos.",
   "nova.diary.error": "No se pudo leer el diario: {error}",
   "nova.diary.previous_entry": "Entrada anterior",
+  "nova.diary.remove": "Eliminar de la memoria",
+  "nova.diary.remove_confirm": "Haz clic de nuevo para eliminar",
   "nova.diary.category.preference": "Preferencia",
   "nova.diary.category.fact": "Dato",
   "nova.diary.category.project": "Proyecto",

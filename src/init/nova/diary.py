@@ -32,7 +32,7 @@ from src.init.memory.integration import configured_service
 from . import formatting
 from .calendar_paint import CHEVRON_LEFT, CHEVRON_RIGHT
 from .entries import Entry, Reminder
-from .messages import LogMessage, LogMessageCard, code_font_family, parse_log
+from .messages import LogMessage, LogMessageCard, RemoveButton, code_font_family, parse_log
 from .rows import EntryRow
 from .store import NovaStore
 
@@ -67,7 +67,7 @@ def stored_messages(rows: list[dict]) -> list[LogMessage]:
     authors = {"user": getuser().capitalize(), "assistant": get_assistant_name(), "system": "System"}
     return [LogMessage(timestamp=local_moment(row["created_at"]).strftime("%H:%M:%S"),
                        author=authors.get(row["role"], row["role"]), content=row["content"].strip("\n"),
-                       role=row["role"]) for row in rows]
+                       role=row["role"], id=row["id"]) for row in rows]
 
 
 def _label(text: str, name: str, wrap: bool = True) -> QLabel:
@@ -95,13 +95,14 @@ class MemoryCard(QFrame):
 class ConversationCard(QFrame):
     """A conversation held that day; a click on its header unfolds every message as a log card."""
 
-    def __init__(self, session: dict, loader, log_path: Path, parent: QWidget | None = None):
+    def __init__(self, session: dict, loader, log_path: Path, forget=None, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("novaRow")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.session_id = session["id"]
         self._loader = loader
         self._log_path = log_path
+        self._forget = forget
         self._loaded = False
         span = formatting.time_text(session["started"])
         if session["ended"] - session["started"] >= timedelta(minutes=1):
@@ -120,6 +121,10 @@ class ConversationCard(QFrame):
         top.setSpacing(14)
         top.addWidget(self._marker, 0, Qt.AlignmentFlag.AlignTop)
         top.addLayout(head, 1)
+        if forget is not None:
+            remove = RemoveButton(code_font_family())
+            remove.confirmed.connect(lambda: forget([message.id for message in loader(self.session_id)]))
+            top.addWidget(remove, 0, Qt.AlignmentFlag.AlignTop)
         self._dialogue = QVBoxLayout()
         self._dialogue.setContentsMargins(0, 12, 0, 0)
         self._dialogue.setSpacing(10)
@@ -141,7 +146,10 @@ class ConversationCard(QFrame):
             self._loaded = True
             family = code_font_family()
             for message in self._loader(self.session_id):
-                self._dialogue.addWidget(LogMessageCard(message, self._log_path, family))
+                card = LogMessageCard(message, self._log_path, family)
+                if self._forget is not None:
+                    card.removed.connect(lambda removed: self._forget([removed.id]))
+                self._dialogue.addWidget(card)
         self._body.setVisible(opened)
         self._marker.setText(CHEVRON_DOWN if opened else CHEVRON_RIGHT)
 
@@ -306,6 +314,17 @@ class DiaryView(QWidget):
                   "messages": len(messages), "topic": topic}],
                 lambda _session_id: self._markdown_messages())
 
+    def _forget(self, message_ids: list[str]) -> None:
+        service, _error = self._service()
+        if service is None:
+            return
+        try:
+            service.forget_messages(message_ids)
+        except Exception as error:
+            self._add(_label(tr("nova.diary.error", error=error), "novaDiaryNote"))
+            return
+        self.refresh()
+
     def _heading(self, text: str) -> None:
         self._rows.insertWidget(self._rows.count() - 1, _label(text, "novaGroup"))
 
@@ -360,7 +379,8 @@ class DiaryView(QWidget):
         if sessions:
             self._heading(tr("nova.diary.conversations"))
             for session in sessions:
-                card = ConversationCard(session, loader, self._log_path())
+                card = ConversationCard(session, loader, self._log_path(),
+                                        None if session["id"] == MARKDOWN_SESSION else self._forget)
                 self._add(card)
                 if session["id"] in self._expanded:
                     card.set_open(True)
