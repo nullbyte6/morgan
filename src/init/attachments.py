@@ -186,6 +186,13 @@ def ollama_capabilities(model: str) -> tuple[bool, int]:
         match = re.search(r"(?m)^num_ctx\s+(\d+)", data.get("parameters", ""))
         if match:
             context = int(match[1])
+        else:
+            from src.init.brain import is_cloud_model
+            if is_cloud_model(model):
+                advertised = [value for key, value in (data.get("model_info") or {}).items()
+                              if key.endswith(".context_length") and isinstance(value, int)]
+                from src.init.config import load_dev_file
+                return vision, max(512, advertised[0] if advertised else load_dev_file()["context_length"])
         with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=2) as response:
             running = json.load(response)
         for entry in running.get("models", []):

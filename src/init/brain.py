@@ -135,6 +135,11 @@ def _managed_model(name: str) -> str:
     return "arlo-" + name.replace("/", "-")
 
 
+def is_cloud_model(name: str) -> bool:
+    tag = name.rsplit("/", 1)[-1].partition(":")[2]
+    return tag == "cloud" or tag.endswith("-cloud")
+
+
 def main_models() -> list[str] | None:
     """List installed Ollama models usable as the main model; None when Ollama is unreachable.
 
@@ -183,7 +188,7 @@ def get_selected_model(models: list[str] | None = None) -> str:
 
 def main_model_id(model: str) -> str:
     """Return the Ollama model requested for a main model, configuring its context window."""
-    if MODEL_OVERRIDE:
+    if MODEL_OVERRIDE or is_cloud_model(model):
         return model
     core = load_dev_file()
     if model == _tagged_model(core["base_model_name"]):
@@ -202,8 +207,11 @@ def main_model_id(model: str) -> str:
 
 def keep_model_loaded() -> None:
     """Extend Ollama's model lifetime without delaying the next prompt."""
+    model = get_assistant().MODEL_NAME
+    if is_cloud_model(model):
+        return
     payload = json.dumps({
-        "model": get_assistant().MODEL_NAME,
+        "model": model,
         "prompt": "",
         "keep_alive": OLLAMA_KEEP_ALIVE,
         "stream": False,

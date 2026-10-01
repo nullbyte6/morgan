@@ -562,7 +562,12 @@ class Assistant:
 
     def current_instructions(self) -> str:
         from src.init import rules
-        return (rules.current_instructions()
+        from src.init.brain import is_cloud_model
+        cloud_notice = (
+            "\nThe current main model runs on Ollama Cloud, not on this computer: "
+            "never claim that this conversation is processed 100% locally."
+            if is_cloud_model(self.MODEL_NAME) else "")
+        return (rules.current_instructions() + cloud_notice
                 + "\nApplication execution: call the native open_application tool "
                 "for requested apps. Writing an action JSON or describing a call "
                 "does not execute it. Only report an app as open when its tool "
@@ -793,11 +798,14 @@ class Assistant:
         from src.init.config import load_dev_file
         request_config = load_dev_file()
         from src.init.attachments import ollama_capabilities
-        _, provider_context = ollama_capabilities((turn_model or session_model).model_name)
+        active_model = (turn_model or session_model).model_name
+        _, provider_context = ollama_capabilities(active_model)
+        operational_context = (provider_context if brain.is_cloud_model(active_model)
+                               else request_config["context_length"])
         controller.request_configuration = {
-            "operational_context_tokens": request_config["context_length"],
+            "operational_context_tokens": operational_context,
             "provider_context_tokens": provider_context,
-            "effective_context_tokens": min(request_config["context_length"], provider_context),
+            "effective_context_tokens": min(operational_context, provider_context),
             "configured_model": self.MODEL_NAME,
             "source": "minimum_of_dev_configuration_and_ollama_show_or_ps; provider_fallback_4096"}
         controller.task_title = task_title
