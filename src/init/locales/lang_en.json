@@ -626,5 +626,6 @@
   "nova.dialog.cancel": "Cancel",
   "nova.dialog.delete": "Delete",
   "nova.error.time": "Enter the time as HH:mm, for example 09:30.",
-  "nova.error.order": "The event cannot end before it starts."
+  "nova.error.order": "The event cannot end before it starts.",
+  "nova.nav.tooltip": "Nova: click to show the workspaces, Ctrl+click to open Nova"
 }

@@ -1370,3 +1370,20 @@ QPushButton#novaDangerButton {
 QPushButton#novaDangerButton:hover {
     background-color: @error/30;
 }
+
+QWidget#novaNavigation,
+QWidget#novaTray {
+    background: transparent;
+}
+
+QPushButton#novaNav {
+    color: @accent;
+}
+
+QPushButton#novaNav:hover {
+    color: @accent_hover;
+}
+
+QPushButton#novaNav[expanded="true"] {
+    background-color: @surface_selected;
+}

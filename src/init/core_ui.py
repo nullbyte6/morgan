@@ -58,6 +58,7 @@ from src.init.indicators import (GitBranchIndicator, ModelSelector, PermissionSe
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
 from src.init.nova import formatting as nova_formatting
+from src.init.nova.navigation import WorkspaceNavigation
 from src.init.nova.store import NovaStore
 from src.init.nova.view import NovaView
 from src.init.notifications import send_notification
@@ -548,10 +549,11 @@ class AssistantWindow(DesktopWindow):
         navigation = QHBoxLayout()
         navigation.setContentsMargins(0, 0, 0, 0)
         navigation.setSpacing(8)
+        tray_buttons = []
 
         buttons = [("󰭹", "chatNav", get_assistant_name(), None)]
         buttons.extend((options["icon"], f"{view_key}Nav", options["title"], view_key)
-                       for view_key, options in WORKSPACE_VIEW_CONFIG.items())
+                       for view_key, options in WORKSPACE_VIEW_CONFIG.items() if view_key != "nova")
 
         for icon, object_name, tooltip, view_key in buttons:
             button = QPushButton(icon, content)
@@ -565,8 +567,12 @@ class AssistantWindow(DesktopWindow):
                 button.clicked.connect(
                     lambda checked=False, key=view_key, source=button:
                     self.open_workspace_view(key, source))
-            navigation.addWidget(button)
+            tray_buttons.append(button)
 
+        workspace_navigation = WorkspaceNavigation(tray_buttons, content)
+        workspace_navigation.nova_requested.connect(
+            lambda source: self.open_workspace_view("nova", source))
+        navigation.addWidget(workspace_navigation)
         navigation.addStretch()
         layout.addLayout(navigation)
         placeholder = QLabel("Select a workspace type", content)
@@ -1222,6 +1228,8 @@ class AssistantWindow(DesktopWindow):
         self.refresh_settings_workspaces()
         for view in self.workspace.findChildren(NovaView):
             view.refresh_language()
+        for navigation in self.workspace.findChildren(WorkspaceNavigation):
+            navigation.refresh_language()
         self.update_send_button()
         if self.showing_greeting:
             self.update_subtitles(self.startup_greeting, self.sessions[0])
