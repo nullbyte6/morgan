@@ -19,6 +19,7 @@
 """User configuration and storage, independent of the working directory."""
 
 from src.init.lang import tr
+import hashlib
 import json
 import os
 import re
@@ -110,6 +111,46 @@ DEFAULTS = {
         "response": "Write for the terminal, using Markdown bold sparingly and preserving literal syntax in code. Execute the requested task and keep additions relevant. Do not ask permission for an action already requested; ask a concise clarification only for an essential missing detail. If the user changes your preferred tone, detail, humor, formality, or other conversational behavior, immediately persist the corresponding change in config.json with update_config and apply it to the current response.",
         "response_workspace": "Respond normally in Markdown. The application manages the output surface automatically. Do not emit JSON objects, action envelopes, tool-call representations, or escaped Markdown to control where your response appears. Do not call tools merely to display a response. Include code examples directly in fenced Markdown blocks; create files only when explicitly requested."
     },
+}
+LEGACY_INSTRUCTIONS = {
+    "applications": (
+        "825f335c44107e71",
+    ),
+    "commands": (
+        "6b1f2f850148d253",
+    ),
+    "conversation": (
+        "0338c4a619be8c28",
+        "9a1ce2d2f6cdbaae",
+    ),
+    "identity": (
+        "0660b26ab831130d",
+        "f99528eb03c1b570",
+    ),
+    "media": (
+        "1e1e4655929d6521",
+        "26705c7156379fbf",
+        "63e1ef42f44dd413",
+        "bb929a4d090c1a25",
+    ),
+    "repositories": (
+        "188fe57456e50049",
+        "23c3c2ffc696ca1d",
+        "874615c25433261e",
+    ),
+    "response_workspace": (
+        "11ca17e3b9eb4c00",
+        "f43837cfe33e0485",
+    ),
+    "system": (
+        "0e6b0120fb80bbf1",
+        "290aae5a29da0a7b",
+        "2af20f7ac30c9515",
+    ),
+    "workspace_tools": (
+        "8d2fce7493fe34c2",
+        "fedef84326513ca6",
+    ),
 }
 LOCATOR = "ASSISTANT_NAME"
 
@@ -284,6 +325,39 @@ def save_config(config):
             temporary.unlink(missing_ok=True)
 
 
+def _instruction_fingerprint(text):
+    text = re.sub(rf"\b{re.escape(DEFAULTS['assistant']['name'])}\b",
+                  "{assistant_name}", text)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def refresh_instructions(config):
+    """Replace instructions the user never edited with the current defaults.
+
+    A saved text counts as unedited when it matches an earlier shipped default or
+    the default it was last synced with; edited texts are left untouched.
+    """
+    saved = config.get("instructions")
+    if not isinstance(saved, dict):
+        return config
+    synced = config.get("instructions_synced")
+    synced = synced if isinstance(synced, dict) else {}
+    refreshed, record = dict(saved), {}
+    for key, default in DEFAULTS["instructions"].items():
+        value = saved.get(key)
+        if not isinstance(value, str):
+            continue
+        current = _instruction_fingerprint(default)
+        fingerprint = _instruction_fingerprint(value)
+        if fingerprint != current and fingerprint in (
+                *LEGACY_INSTRUCTIONS.get(key, ()), synced.get(key)):
+            refreshed[key] = default
+            fingerprint = current
+        if fingerprint == current:
+            record[key] = current
+    return {**config, "instructions": refreshed, "instructions_synced": record}
+
+
 def load_config() -> dict:
     """Read fresh settings; retain the last valid settings during invalid edits."""
     global _last_valid, _last_error
@@ -294,9 +368,12 @@ def load_config() -> dict:
                 encoding="utf-8-sig")) if LEGACY_CONFIG.exists() else {
                     **DEFAULTS, "assistant": {"name": _located_name()}}
             save_config(initial)
-        _last_valid = validate_config(
-            json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig")))
+        stored = json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
+        config = refresh_instructions(stored) if isinstance(stored, dict) else stored
+        _last_valid = validate_config(config)
         _last_error = None
+        if config != stored:
+            save_config(config)
     except (OSError, ValueError) as error:
         if str(error) != _last_error:
             warnings.warn(tr('config.application_config_keeping_last_valid_settings', error=error),
