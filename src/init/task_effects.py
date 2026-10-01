@@ -254,7 +254,7 @@ def resources_for(name, arguments):
             resources.append(entry_resource((base / path).with_name(arguments["new_name"])))
     if name in {"execute_command", "run_quick_command"}:
         resources.append(file_resource(arguments.get("working_directory", ".")))
-    if name == "search_web" or name == "read_web_page" and arguments.get("show_in_browser", False):
+    if name == "read_web_page" and arguments.get("show_in_browser", False):
         resources.append("domain:presentation")
     if name == "run_quick_command":
         from .quick_commands import TOOL_ALIASES, load_quick_commands

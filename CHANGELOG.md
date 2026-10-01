@@ -33,6 +33,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update startup to load CosyVoice while the model preloads and to import the agent runtime while the local services start
 - Update theme folder seeding to deliver new built-in themes to existing installs without overwriting edited themes or restoring deleted ones
 - Update versioning to the current date in YY.M.D form, starting at 26.10.1-beta
+- Update web search to stop opening a browser and to deliver answers based on its results to the response workspace
 - Update web searches, website requests, YouTube selections, conversation links and the repository link to open in the operating system's default browser
 
 ## 1.4.45-beta (2026-10-01)

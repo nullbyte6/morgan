@@ -895,16 +895,10 @@ def open_browser(url: str) -> str:
 
 
 def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
-    """Show a search in the user's default web browser and return web results for inspection and citation."""
+    """Search the web and return results for inspection and citation."""
     query = query.strip()
     if not query:
         return tr('brain.error_search_query_is_empty')
-    from urllib.parse import urlencode
-    browser_note = ""
-    try:
-        open_url("https://www.google.com/search?" + urlencode({"q": query}))
-    except (RuntimeError, ValueError) as error:
-        browser_note = f"Default browser unavailable: {error}\n\n"
     try:
         from ddgs import DDGS
 
@@ -916,7 +910,7 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
             max_results=result_limit
         ))
         if not results:
-            return browser_note + tr('brain.no_web_results_found_for', query=query)
+            return tr('brain.no_web_results_found_for', query=query)
         formatted_results = []
         for index, result in enumerate(results, start=1):
             formatted_results.append(
@@ -924,9 +918,9 @@ def search_web(query: str, region: str = "es-es", max_results: int = 6) -> str:
                 f"URL: {result.get('href', '')}\n"
                 f"Snippet: {result.get('body', '')}"
             )
-        return browser_note + "\n\n".join(formatted_results)
+        return "\n\n".join(formatted_results)
     except Exception as error:
-        return browser_note + tr('brain.error_searching_the_web', error=error)
+        return tr('brain.error_searching_the_web', error=error)
 
 
 def read_web_page(url: str, max_characters: int = 12_000,
