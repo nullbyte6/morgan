@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$MainModel = "qwen3.5:9b"
+$MainModel = "gemma4:e4b"
 
 function Get-AssistantIdentifier {
     param([string]$Name)
