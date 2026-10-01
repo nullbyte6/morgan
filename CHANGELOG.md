@@ -4,6 +4,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 1.4.45-beta (2026-10-01)
 
+- Add 14 new color themes (Ayu Mirage, Dracula, Everforest Dark, GitHub Light, Gruvbox Dark, Gruvbox Light, Kanagawa, Nord, One Dark, One Light, Rose Pine, Rose Pine Dawn, Synthwave '84, Tokyo Night)
 - Add previous message history with Alt + Up/Down to the desktop chat input
 - Add previous message history with Alt + Up/Down to the terminal chat input
 - Fix response workspace font size
