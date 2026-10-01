@@ -32,39 +32,11 @@ inherit the current zoom. Existing editor contents and terminal sessions stay op
 When the scaled panels need more space than the screen provides, scrollbars keep
 the rest of the interface reachable.
 
-## Browser sessions
+## Web links
 
-All browser panels share a persistent Arlo profile in `~/.arlo/browser`.
-Cookies (including session cookies), local storage and site login state survive
-closing panels and restarting Arlo. Sign in once inside Arlo to use the same
-session in its other browser panels. Websites can still expire or revoke logins.
-This profile does not import Chrome/Edge sessions or saved passwords, and it does
-not provide a password manager. Logging out on a website also logs out the other
-Arlo panels using that account.
-
-### Extensions
-
-The browser's **… Extensions** button opens its extension manager in a workspace panel.
-Opening it again focuses the existing panel. Buttons stack in narrow panels, and
-short panels scroll vertically to keep every control accessible. Install a
-Manifest V3 extension from a folder containing `manifest.json`, a ZIP, or a CRX
-file. CRX files are unpacked into Arlo's profile before installation. Installed extensions are enabled, copied into Arlo's profile,
-and restored at startup with their last enabled/disabled state. Select an
-extension to enable, disable or remove it; **Open panel** opens its action popup
-in another workspace panel when one is available. All browser panels share the same extensions.
-
-Extensions require Qt WebEngine 6.10 or newer. Compatibility depends on the
-extension APIs supported by Qt WebEngine; not every Chrome extension will work.
-Direct Chrome Web Store installation, Chrome Sync and Manifest V2 are not
-supported by this manager. Bitwarden's current Manifest V3 CRX can be imported
-with **Install ZIP**; its vault state then uses Arlo's persistent browser profile.
-
-Web searches and website requests from the assistant open in the embedded Browser
-workspace. Arlo reuses an existing browser panel or creates one, and restores the
-main window if it is hidden. Search results remain available to the assistant for
-reading and citation. Web links in conversation logs, YouTube selections and the
-repository link also use this browser. If the embedded browser is unavailable,
-Arlo reports an error instead of launching the system browser.
+Web searches and website requests from the assistant, web links in conversation
+logs, YouTube selections and the repository link open in the operating system's
+default browser.
 
 ## Nova
 
@@ -74,7 +46,7 @@ Diary, reusing a Nova panel that is already open. It lives inside a
 workspace panel and uses Arlo's theme, fonts and animations.
 
 A new workspace shows a single Nova star in place of the row of buttons. Press it to
-slide out the workspace buttons (Arlo, Browser, Editor, Settings and Terminal) and
+slide out the workspace buttons (Arlo, Editor, Settings and Terminal) and
 press it again to fold them. `Ctrl + click` on the star opens Nova in that panel instead.
 
 Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar and Diary,

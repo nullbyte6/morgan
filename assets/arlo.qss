@@ -210,7 +210,6 @@ QWidget#windowContainer {
 QPushButton#settingsNav,
 QPushButton#editorNav,
 QPushButton#terminalNav,
-QPushButton#browserNav,
 QPushButton#novaNav {
     background-color: transparent;
     color: @text_muted;
@@ -236,7 +235,6 @@ QPushButton#logRemoveNav {
 QPushButton#settingsNav:hover,
 QPushButton#editorNav:hover,
 QPushButton#terminalNav:hover,
-QPushButton#browserNav:hover,
 QPushButton#novaNav:hover {
     background-color: @surface_raised;
     color: @text;
@@ -930,145 +928,6 @@ QMenu#terminalMenu::item:selected {
 
 QMenu#terminalMenu::item:disabled {
     color: @text_disabled;
-}
-
-QWidget#browserView {
-    background-color: transparent;
-    color: @text;
-}
-
-QWidget#browserView QPushButton,
-QWidget#browserExtensionsPage QPushButton {
-    background-color: @surface_raised;
-    color: @text;
-    border: 2px solid @border;
-    border-radius: 10px;
-    padding: 0;
-    font-size: 24px;
-}
-
-QWidget#browserView QPushButton:hover,
-QWidget#browserExtensionsPage QPushButton:hover,
-QWidget#browserView QPushButton:focus,
-QWidget#browserExtensionsPage QPushButton:focus {
-    background-color: @surface_selected;
-    border-color: @accent;
-}
-
-QWidget#browserView QPushButton:pressed,
-QWidget#browserExtensionsPage QPushButton:pressed {
-    background-color: @accent;
-    color: @on_accent;
-}
-
-QWidget#browserView QPushButton:disabled,
-QWidget#browserExtensionsPage QPushButton:disabled {
-    background-color: @surface_raised;
-    color: @text_disabled;
-    border-color: @border;
-}
-
-QLineEdit#browserAddressBar {
-    background-color: @surface_raised;
-    color: @text;
-    border-radius: 12px;
-    padding: 0 12px;
-    font-size: 16px;
-    selection-background-color: @selection;
-    selection-color: @text;
-}
-
-QLineEdit#browserAddressBar:hover,
-QLineEdit#browserAddressBar:focus {
-    border-color: @accent;
-}
-
-QLineEdit#browserAddressBar:disabled {
-    color: @text_disabled;
-}
-
-QLabel#browserStatus,
-QLabel#browserUnavailable {
-    background: transparent;
-    color: @text_muted;
-    border: none;
-    font-size: 13px;
-    padding: 0 4px;
-}
-
-QLabel#browserUnavailable {
-    font-size: 16px;
-}
-
-QWidget#browserExtensionsPage,
-QWidget#browserExtensionPopup {
-    background-color: @surface;
-    color: @text;
-}
-
-QWidget#browserExtensionsPage QPushButton {
-    font-size: 16px;
-    padding: 8px 14px;
-    min-height: 22px;
-}
-
-QWidget#browserExtensionsPage QLabel {
-    background: transparent;
-    color: @text_muted;
-    border: none;
-    font-size: 16px;
-}
-
-QListWidget#browserExtensionsList {
-    background-color: @surface_sunken;
-    color: @text;
-    border: 2px solid @border;
-    border-radius: 12px;
-    padding: 6px;
-    font-size: 16px;
-    outline: none;
-}
-
-QListWidget#browserExtensionsList::item {
-    padding: 10px 12px;
-    border-radius: 8px;
-}
-
-QListWidget#browserExtensionsList::item:hover {
-    background-color: @surface_raised;
-}
-
-QListWidget#browserExtensionsList::item:selected {
-    background-color: @surface_selected;
-    color: @text;
-}
-
-QScrollArea#browserExtensionsScroll,
-QWidget#browserExtensionsContent {
-    background: @surface;
-    border: none;
-}
-
-QScrollArea#browserExtensionsScroll QScrollBar:vertical {
-    background: transparent;
-    width: 8px;
-    margin: 0;
-}
-
-QScrollArea#browserExtensionsScroll QScrollBar::handle:vertical {
-    background: @scrollbar;
-    border-radius: 4px;
-    min-height: 24px;
-}
-
-QScrollArea#browserExtensionsScroll QScrollBar::add-line:vertical,
-QScrollArea#browserExtensionsScroll QScrollBar::sub-line:vertical {
-    height: 0;
-}
-
-QScrollArea#browserExtensionsScroll QScrollBar::add-page:vertical,
-QScrollArea#browserExtensionsScroll QScrollBar::sub-page:vertical {
-    background: transparent;
 }
 
 QWidget#novaCalendar,

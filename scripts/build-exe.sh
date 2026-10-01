@@ -117,7 +117,7 @@ text = text.replace('pyz = PYZ(a.pure)',
     "    a.datas += Tree(directory, prefix=package, excludes=['__pycache__', '*.pyc'])\n"
     "pyz = PYZ(a.pure)")
 unused_qt = r'''import re
-unused = re.compile(r'^PySide6/(qml/|plugins/qmltooling/|Qt6?(3D|Charts|DataVisualization|Graphs|Location|MultimediaQuick|Quick3D|QuickShapes|QuickTest|QuickVectorImage|RemoteObjects|Scxml|Sensors|SpatialAudio|Test)[^/]*$|resources/(.*\.debug\.|qtwebengine_devtools)|translations/(?!qtwebengine_locales/(en-US|es|es-419)\.pak$))')
+unused = re.compile(r'^PySide6/(qml/|plugins/qmltooling/|Qt6?(3D|Charts|DataVisualization|Graphs|Location|MultimediaQuick|Quick3D|QuickShapes|QuickTest|QuickVectorImage|RemoteObjects|Scxml|Sensors|SpatialAudio|Test)[^/]*$|resources/.*\.debug\.|translations/)')
 a.binaries = [entry for entry in a.binaries if not unused.match(entry[0].replace('\\', '/'))]
 a.datas = [entry for entry in a.datas if not unused.match(entry[0].replace('\\', '/'))]
 '''
