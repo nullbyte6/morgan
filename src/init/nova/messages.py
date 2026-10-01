@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QFont, QFontDatabase, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                                QTextBrowser, QVBoxLayout)
@@ -41,6 +41,9 @@ AUTHOR_LINE = re.compile(
     r"^(?P<author>[^\n:]{1,100}):[ \t]?(?P<content>.*)$")
 
 FENCE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
+COPY_GLYPH = ""
+COPIED_GLYPH = ""
+COPIED_MS = 1200
 
 @dataclass(frozen=True)
 class LogMessage:
@@ -177,7 +180,7 @@ class LogMessageCard(QFrame):
         self.timestamp = QLabel(message.timestamp)
         self.timestamp.setObjectName("logMessageTime")
 
-        self.copy_button = QPushButton("")
+        self.copy_button = QPushButton(COPY_GLYPH)
         self.copy_button.setObjectName("logCopyNav")
 
         icon_font = QFont(self.code_font_family)
@@ -187,12 +190,15 @@ class LogMessageCard(QFrame):
         self.copy_button.setFixedSize(24, 24)
         self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.copy_button.clicked.connect(self.copy_log)
+        self.copy_reset = QTimer(self)
+        self.copy_reset.setSingleShot(True)
+        self.copy_reset.setInterval(COPIED_MS)
+        self.copy_reset.timeout.connect(lambda: self.copy_button.setText(COPY_GLYPH))
 
         header.addWidget(self.author)
         header.addWidget(self.timestamp)
-        header.addStretch(2)
-        header.addWidget(self.copy_button)
-        header.addStretch()
+        header.addStretch(1)
+        header.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignTop)
 
         layout.addLayout(header)
 
@@ -223,6 +229,8 @@ class LogMessageCard(QFrame):
         """Copy the original Markdown content of this message."""
         clipboard = QApplication.clipboard()
         clipboard.setText(self.message.content)
+        self.copy_button.setText(COPIED_GLYPH)
+        self.copy_reset.start()
 
     def render_markdown(self) -> None:
         """Render Markdown and apply the dedicated code font."""
