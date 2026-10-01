@@ -163,14 +163,14 @@ class ResponseView(QWidget):
     DOCUMENT_CSS = """
             code {
                 font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
-                font-size: 16px;
+                font-size: 12px;
                 color: @code_inline_text;
                 background-color: @code_inline_background;
             }
 
             pre {
                 font-family: "JetBrains Mono NL", "JetBrains Mono", monospace;
-                font-size: 16px;
+                font-size: 12px;
             }
 
             table {
@@ -243,7 +243,7 @@ class ResponseView(QWidget):
                          'color:@code_block_text; border:2px solid @code_block_border; ')
             + 'padding:12px 14px; margin:10px 0; '
             "font-family:'JetBrains Mono NL', 'JetBrains Mono', monospace; "
-            'font-size:16px; white-space:pre-wrap;">'
+            'font-size:12px; white-space:pre-wrap;">'
             + highlighted
             + '</pre>'
         )
