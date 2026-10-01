@@ -2,6 +2,10 @@
 
 All notable changes to Arlo, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.1-beta (2026-10-01)
+
+- Update versioning to the current date in YY.M.D form, starting at 26.10.1-beta
+
 ## 1.4.45-beta (2026-10-01)
 
 - Add 14 new color themes (Ayu Mirage, Dracula, Everforest Dark, GitHub Dark, GitHub Light, Gruvbox Dark, Gruvbox Light, Kanagawa, Nord, One Dark, One Light, Rose Pine, Rose Pine Dawn, Synthwave '84, Tokyo Night)
