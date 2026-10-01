@@ -69,7 +69,8 @@ Arlo reports an error instead of launching the system browser.
 ## Nova
 
 Nova is Arlo's reminders, events and agenda workspace. Open it from the command
-palette (`Ctrl + K`, then "Nova") or with `Ctrl + Alt + N`. It lives inside a
+palette (`Ctrl + K`, then "Nova") or with `Ctrl + Alt + N`. `Ctrl + L`, or "Open diary" in the palette, opens it straight on the
+Diary, reusing a Nova panel that is already open. It lives inside a
 workspace panel and uses Arlo's theme, fonts and animations.
 
 A new workspace shows a single Nova star in place of the row of buttons. Press it to

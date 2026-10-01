@@ -643,5 +643,6 @@
   "nova.diary.category.fact": "Fact",
   "nova.diary.category.project": "Project",
   "nova.diary.category.goal": "Goal",
-  "nova.diary.category.other": "Other"
+  "nova.diary.category.other": "Other",
+  "palette.diary": "Open diary"
 }

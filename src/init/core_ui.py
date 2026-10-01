@@ -59,6 +59,7 @@ from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
 from src.init.nova import formatting as nova_formatting
 from src.init.nova.navigation import WorkspaceNavigation
+from src.init.nova.sections import Section
 from src.init.nova.store import NovaStore
 from src.init.nova.view import NovaView
 from src.init.notifications import send_notification
@@ -228,6 +229,10 @@ class AssistantWindow(DesktopWindow):
             shortcut.activated.connect(
                 lambda view_key=view_key: self.open_workspace_view(view_key))
             self._workspace_shortcuts.append(shortcut)
+
+        self.diary_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
+        self.diary_shortcut.setContext(Qt.ApplicationShortcut)
+        self.diary_shortcut.activated.connect(self.open_nova_diary)
 
         self._workspace_chord_pending = False
         self._workspace_chord_timer = QTimer(self)
@@ -661,6 +666,8 @@ class AssistantWindow(DesktopWindow):
             Command(f"workspace.{key}", f"palette.{key}",
                     lambda key=key: self.open_workspace_view(key), (key,))
             for key in WORKSPACE_VIEW_CONFIG)
+        commands.append(Command("workspace.diary", "palette.diary", self.open_nova_diary,
+                                ("diary", "diario")))
         self.command_palette = CommandPalette(CommandRegistry(commands), self)
         self.workspace.panel_focused.connect(
             lambda _panel_id: self.command_palette.dismiss(restore_focus=False))
@@ -974,6 +981,22 @@ class AssistantWindow(DesktopWindow):
             logging.getLogger("assistant.workspace").exception(
                 "Failed to open workspace view %s", view_key)
             return
+
+    def open_nova_diary(self) -> None:
+        """Show the Nova diary, reusing an open Nova panel when there is one."""
+        view = next(iter(self.workspace.findChildren(NovaView)), None)
+        if view is None:
+            self.open_workspace_view("nova")
+            panel = self.workspace.get_panel(self.workspace.active_panel_id)
+            view = panel.content if panel is not None else None
+        else:
+            panel = view.parentWidget()
+            while panel is not None and not isinstance(panel, WorkspacePanel):
+                panel = panel.parentWidget()
+            if panel is not None:
+                self.workspace.focus_panel(panel.panel_id)
+        if isinstance(view, NovaView):
+            view.show_section(Section.DIARY)
 
     def get_nova_store(self) -> NovaStore:
         """Open Nova's databases on first use and keep one store for every Nova view."""
