@@ -134,9 +134,10 @@ imported messages are immediately searchable. Original Markdown still needs the
 explicit import described below. For the underlying index API see the
 [SQLite FTS5 vocabulary documentation](https://www.sqlite.org/fts5.html#the_fts5vocab_virtual_table_module).
 
-Only confirmed, explicit preferences are automatically injected, within the
-configured count and character budgets. Other facts and old conversations are
-retrieved on demand. The current session's Pydantic AI message history remains
+Every confirmed, explicit memory (preferences, facts, projects and goals) is
+automatically included in each turn, those matching the current request first and
+the rest newest first, within the `context_chars` budget. Old conversations are
+never injected; they are retrieved on demand. The current session's Pydantic AI message history remains
 separate and unchanged. Retrieved data is labelled untrusted and must never be
 treated as instructions or permission to execute tools.
 

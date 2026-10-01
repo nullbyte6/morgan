@@ -333,24 +333,21 @@ class MemoryService:
         return result
 
     def context(self, query=""):
+        """Confirmed memories for the model, the ones matching query first, within the character budget."""
+        try:
+            with self.db.connect() as db:
+                relevant = search_memories(db, query, self.max_results) if query.strip() else []
+        except ValueError:
+            relevant = []
         with self.db.connect() as db:
-            relevant = search_memories(db, query, self.max_results) if query.strip() else []
-            preferences = [dict(row) for row in db.execute("""SELECT id,content,category FROM memories
-                WHERE status='active' AND origin='explicit' AND category='preference'
-                AND (expires_at IS NULL OR expires_at > ?) ORDER BY modified_at DESC,id LIMIT ?""",
-                                                   (timestamp(), self.max_results))]
-            conversations = (search_history(db, query, min(2, self.max_results))
-                             if query.strip() and not relevant else [])
-        seen = {memory["id"] for memory in relevant}
-        memories = relevant + [memory for memory in preferences
-                               if memory["id"] not in seen]
-        budget = self.context_chars - len(UNTRUSTED) - 100
-        selected = bounded(memories, budget // 2 if conversations else budget)
-        remaining = budget - len(json.dumps(selected, ensure_ascii=False))
-        payload = {"memories": selected,
-                   "conversations": bounded(conversations, remaining)}
-        return (UNTRUSTED + "\n" + json.dumps(payload, ensure_ascii=False)
-                if selected or conversations else "")
+            stored = [dict(row) for row in db.execute("""SELECT id,content,category,memory_key FROM memories
+                WHERE status='active' AND origin='explicit' AND (expires_at IS NULL OR expires_at > ?)
+                ORDER BY modified_at DESC,id""", (timestamp(),))]
+        order = {memory["id"]: position for position, memory in enumerate(relevant)}
+        stored.sort(key=lambda memory: order.get(memory["id"], len(order)))
+        selected = bounded(stored, self.context_chars - len(UNTRUSTED) - 100)
+        return (UNTRUSTED + "\n" + json.dumps({"memories": selected}, ensure_ascii=False)
+                if selected else "")
 
     def diary(self, since, until):
         """Conversations and memories from [since, until), with timezone-aware ISO timestamps."""
