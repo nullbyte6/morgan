@@ -1,0 +1,551 @@
+# Changelog
+
+All notable changes to Arlo, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
+
+## Unreleased
+
+- Add CHANGELOG.md with the full version history
+
+## 1.4.45-beta (2026-10-01)
+
+- Fix response workspace font size
+
+## 1.4.44-beta (2026-10-01)
+
+- Update default model and installer to a single gemma4:e4b
+- Update docs for the single gemma4:e4b model
+- Update model handling to stop creating arlo-* Ollama copies
+
+## 1.4.43-beta (2026-10-01)
+
+- Add cloud label and consent prompt to the model selector
+- Add Ollama cloud model support to model resolution and context budget
+- Add terminal version build and installer packaging
+- Fix clearing the screen before launching the terminal interface
+- Fix installer to always include the terminal version
+- Fix terminal version crash on voice input by bundling the current C++ runtime
+
+## 1.4.42-beta (2026-09-30)
+
+- Add dark terminal interface that shares the desktop runtime
+- Add direct arlo executable through Python (pyarlo launcher)
+- Fix desktop entry point to run directly from Python without PYTHONPATH
+- Update launcher scripts and README for the terminal version
+- Update shared runtime to run without Qt and with an optional voice service
+
+## 1.4.41-beta (2026-09-30)
+
+- Fix installer to save the chosen assistant name and create the .<name> data folder
+- Update storage folder to follow the assistant name instead of a fixed .arlo anchor
+
+## 1.4.40-beta (2026-09-30)
+
+- Add standalone voice runtime setup to the installer without requiring the repository
+- Fix services launcher lookup to include the installation folder without ARLO_HOME
+- Fix services launcher on Windows PowerShell 5.1 and refresh PATH from the registry
+- Update missing services launcher message to make ARLO_HOME optional
+- Update voice model lookup to fall back to the assistant data directory
+
+## 1.4.39-beta (2026-09-30)
+
+- Add ArloSetup.iss Inno Setup script and rebuild.bat to the repository
+- Fix services launcher lookup falling back to the registry when ARLO_HOME is missing from the process environment
+- Update arlo.ico to match the current arlo.png
+
+## 1.4.38-beta (2026-09-30)
+
+- Add automatic CosyVoice model download to runtime setup
+
+## 1.4.37-beta (2026-09-30)
+
+- Fix arlo.png to include the orb's inner fill and match the app rendering
+
+## 1.4.36-beta (2026-09-30)
+
+- Add opaque blended color tokens to theme rendering
+- Fix seam marks on the privacy and branch indicator borders
+- Update arlo.png to match the current orb rendering
+- Update README header with centered title and arlo logo
+- Update README to document the installer and current launch scripts
+
+## 1.4.35-beta (2026-09-30)
+
+- No notable changes
+
+## 1.4.34-beta (2026-09-30)
+
+- Fix workspace border dragging passing splitter arguments in the wrong order
+- Update response workspace to hide its scrollbars
+
+## 1.4.33-beta (2026-09-30)
+
+- Fix concurrent sessions claiming speech only when an answer is ready
+- Fix session panel animation stalling at its minimum width
+- Update default main model to qwen3.5:9b
+
+## 1.4.32-beta (2026-09-30)
+
+- Fix startup crash when the day's session log does not exist yet
+- Update second session to open as its own workspace panel
+- Update working directory to be owned by each session
+
+## 1.4.31-beta (2026-09-29)
+
+- Add closing the second session without restarting
+- Add concurrent desktop sessions limited to two
+- Add session selector widget and session strings
+- Update default main model to deepseek-r1:8b
+- Update desktop audio lease to be shared across session threads
+
+## 1.4.30-beta (2026-09-29)
+
+- Fix removal of legacy arlo-01 to arlo-08 voices from the selector
+- Update microphone icon on the send button to a larger size
+
+## 1.4.29-beta (2026-09-29)
+
+- Update voice reference text to be gender neutral
+- Update voices reduced to 4 profiles, covering both genders
+
+## 1.4.28-beta (2026-09-29)
+
+- Add new voice profiles and remove the old ones
+
+## 1.4.27-beta (2026-09-29)
+
+- Fix runtime setup to derive the data directory from the assistant name
+- Fix wake launcher resolution from the assistant installation variable
+
+## 1.4.26-beta (2026-09-29)
+
+- Fix composer icon sizing across workspace and theme changes
+- Fix microphone icon to be smaller
+
+## 1.4.25-beta (2026-09-29)
+
+- Add built-in Catppuccin, Monokai, Solarized and custom themes
+- Add theme discovery, persistence and runtime switching
+- Add theme selector and themes folder button to settings
+
+## 1.4.24-beta (2026-09-29)
+
+- Update microphone icon size
+
+## 1.4.23-beta (2026-09-29)
+
+- Add generic theme contract with Catppuccin Macchiato default
+- Update painted components to use theme roles
+- Update stylesheet to resolve colors from theme roles
+
+## 1.4.22-beta (2026-09-29)
+
+- Add behavior claims to supervised verification criteria
+- Fix verify-phase checks leaving unresolvable system obligations
+
+## 1.4.21-beta (2026-09-29)
+
+- Add AUTO permission mode and fail-closed ASK timeout to confirmations
+- Add permission mode pill selector
+- Add permission mode setting to user config
+- Fix permission_mode to store plain JSON strings
+
+## 1.4.20-beta (2026-09-29)
+
+- Fix promoted mutation verification deadlock after direct effects
+- Fix self-code path hints and read_code start line zero
+- Fix steering resume and completed task interruption
+- Fix supervised verification stalls and add task cancellation
+- Fix task_checkpoint completed citations leaving effect obligations open
+- Fix task_finish ignoring verified evidence for effect obligations
+
+## 1.4.19-beta (2026-09-29)
+
+- Fix promoted tasks losing inspection tool schemas under the context budget
+- Fix supervised checkpoints hiding pending evidence requirements
+
+## 1.4.18-beta (2026-09-29)
+
+- Fix inactive tool schemas causing invalid argument loops
+- Fix packaged terminal closing by bundling winpty OpenConsole
+- Update source tool path guidance for project root and tagged paths
+
+## 1.4.17-beta (2026-09-29)
+
+- Add @ file tagging of the working directory in the chat input
+- Fix file tag popup background not rendering
+- Fix file tag popup freezing the chat input inside the zoom view
+- Update remove install.sh and its README references
+
+## 1.4.16-beta (2026-09-29)
+
+- Add file size metadata to directory listings
+- Add model selector to the input indicator row
+- Add persistent main Ollama model selection to runtime
+- Add setup-runtime script
+- Fix command palette clipping and results shown before typing
+- Fix interrupted execution recovery and local command association
+- Fix privacy and model indicator padding and border radius to match the row
+- Fix repeated evidence progress and verification reuse
+- Fix resuming suspended tasks by session identity
+- Fix tool schema selection during supervised promotion
+
+## 1.4.15-beta (2026-09-28)
+
+- Add composite tool execution metadata
+- Add declarative tool followup policies
+- Add lazy execution supervision and prior observation import
+- Fix discovering tools from the registry under context limits
+- Fix installer assistant name validation
+- Fix isolating new requests and resuming tasks explicitly
+- Fix launcher lookup for custom assistant names
+- Update agent routing and session-aware task resumption
+- Update installer for Inno Setup integration
+- Update the main header.png
+
+## 1.4.14-beta (2026-09-28)
+
+- Add dynamic PyInstaller build with Windows icon
+- Fix ARLO_HOME definition
+- Fix background terminal popups in PyInstaller builds and the packaged app
+- Fix confirmed flowchart evidence in task supervision
+- Fix conversational recovery after failed voice turns
+- Fix executable output and launcher paths
+- Fix finalized voice transcripts and response routing
+- Fix flowchart availability under context budgets
+- Fix frozen desktop startup and executable launch
+- Fix Git diff panel rendering and initialization
+- Fix Git diff workspace loading and refresh
+- Fix Git status parsing and translate the connector to English
+- Fix immediate streaming and certified response delivery
+- Fix immediate working directory commands
+- Fix live audio transport and meter overhead
+- Fix local service startup before runtime initialization
+- Fix localization for steps in task progress
+- Fix loopback delays and redundant voice filtering
+- Fix missing speech detection assets in packaged app
+- Fix native audio model context provisioning
+- Fix packaged microphone startup with SciPy source loading
+- Fix recent conversation retention during context compaction
+- Fix task progress overlay close button
+- Fix tool schema selection before session compaction
+- Fix transient voice connection refusals during startup
+- Fix verified task completion and finalization loops
+- Fix voice fallback to transcribe before answering
+- Fix wake script to execute the executable on Windows
+- Fix WAV context estimates using audio duration
+- Update context budgeting and compaction infrastructure
+- Update installer with FFmpeg and executable environment
+- Update main launcher to arlo-start.bat and remove arlo.bat
+- Update persistent voice loading and idle memory reclamation
+- Update response delivery infrastructure
+- Update simplified Git diff workspace
+
+## 1.4.13-beta (2026-09-27)
+
+- Add configurable assistant identity across prompts and UI
+- Add context-aware numeric speech normalization
+- Add continuous voice conversation with speech interruption and echo suppression
+- Add current evidence IDs to completion requirements
+- Add deterministic activity trail and shared task presentation
+- Add Git diff workspace for Git differentials
+- Add palette commands to stop, pause and resume tasks
+- Add protected migration for named storage and service namespaces
+- Add read-only workspace file viewers (including PDF)
+- Add setting to toggle ephemeral activity steps
+- Add terminal command execution in the palette
+- Add unified desktop file drop routing
+- Add workspace-local command palette
+- Fix accepting matching source cursor arguments
+- Fix audit contract declarations and repeated inspection repairs
+- Fix command palette label alignment during startup
+- Fix commit scope to preserve concurrent core changes
+- Fix condition speech on a stable response language
+- Fix context_tokens length, task handling and state machinery
+- Fix CosyVoice phrase startup and ready audio delays
+- Fix direct conversation completion without task contracts
+- Fix false continuation after evidence delivery completes
+- Fix fictional barrier on long complex tasks
+- Fix font rendering as global and task_control pending finalization
+- Fix installer directory and Windows import paths
+- Fix keeping the orb stationary when task progress appears
+- Fix map task lifecycle to session message status
+- Fix missing localizations for warnings
+- Fix missing task dependencies and mutation tool selection
+- Fix negative source listings and search limit schema
+- Fix Ollama reasoning disable parameter
+- Fix orb thinking animation during response preparation
+- Fix output recovery through actionable control turns
+- Fix palette input and sizing in zoomed workspaces
+- Fix partial task criteria updates and translate the stall warning
+- Fix portable Windows installation dependencies
+- Fix preserving source evidence within the context budget
+- Fix preserving task context and stopping inspection loops
+- Fix preserving the first complete speech sentence
+- Fix preserving the voice reference when controlling speech language
+- Fix preventive context budgets and recoverable tool evidence
+- Fix readonly voice model assignment during installation
+- Fix repeated output recovery without task progress
+- Fix response timing
+- Fix shared verification contracts for mutation criteria
+- Fix source read range contract and validation errors
+- Fix stream speech prose before line completion
+- Fix supervisor state recovery and progress accounting
+- Fix verified final answers without extra completion turns
+- Fix voice number language and bypass English normalization
+- Update answer routing to share the main model turn
+- Update command palette placement above the orb
+- Update command palette to show results only after typing
+- Update configured assistant names in messages and translations
+- Update generic assistant identifiers and storage bootstrap
+- Update native voice input and shorter speech phrases
+- Update source page capacity and empty search guidance
+- Update wake recognition and voice services to use the assistant identity
+
+## 1.4.12-beta (2026-09-27)
+
+- Add SPECS.md with the project specifications
+- Fix chat input scrollbars to remain hidden
+- Fix deterministic single-agent task supervision
+- Fix objective task titles and stable title delivery
+- Fix recoverable task completion and incremental execution journals
+- Fix response timer display formatting
+- Fix send button alignment with the input row
+- Fix source inspection pagination with revision-bound cursors
+- Fix thinking ring with continuous angular progress animation
+- Fix workspace composition and progress geometry
+
+## 1.4.10-beta (2026-09-26)
+
+- Add substantial use tracking of tools and blocks without parameters
+
+## Pre-1.4.10
+
+- Add ACTION-EXECUTION.md documentation
+- Add agent LLM mode with full TaskControl integration
+- Add allowlisted Windows queries and PowerShell tools
+- Add application icon and a custom personal icon for Arlo
+- Add application name normalization and ranking for open_application
+- Add application opening and window listing methods
+- Add app_cache to cache applications for faster lookups
+- Add Arlo as a background process, detached from the launcher terminal
+- Add Arlo mascot and ring in the new desktop package
+- Add Arlo microphone recording and speaking
+- Add Arlo response latency timer pill
+- Add Arlo's wake word script (wake.py)
+- Add assistant command execution in terminal workspaces
+- Add attachments system with attachment cards and a per-file size limit
+- Add ATTACHMENTS.md documentation
+- Add audio meter animation
+- Add audio visualizer module
+- Add autonomous agent execution core
+- Add bounded read-only project inspection models
+- Add bounded source inspection telemetry
+- Add built-in terminal integration in workspaces
+- Add bundled fonts (Ubuntu Nerd Font, Inter, JetBrains Mono, Arimo)
+- Add change directory and Git directory checking
+- Add clickable "Made with Arlo" privacy indicator
+- Add clipboard support
+- Add color-coded input and output
+- Add command execution with confirmation to the desktop interface
+- Add commands execution ability through sudo.exe, wired into tools
+- Add compact mascot subtitle bubble wired to speech state
+- Add config.json and config.py for editable assistant settings
+- Add console_input for page scrolling and moving
+- Add contextual browsing in workspace panels
+- Add copy button for log messages
+- Add core.json for the version and model name, separated from config.json
+- Add CosyVoice integration to the voice service
+- Add current directory widget
+- Add debug console in a separate window
+- Add desktop visual interface of the Arlo app
+- Add DIAGNOSTICS.md documentation for system health checks
+- Add drag and drop for the Arlo widget
+- Add drop previews while dragging workspaces
+- Add editor integration driven by the assistant (pyvim, later neovim)
+- Add email drafting tool
+- Add email_service for reading, writing and deleting emails
+- Add file and directory tools (create, write, edit, delete) with path resolution and text decoding
+- Add filters for SQL select queries in memory retrieval
+- Add flowcharts with live interactive drawing through the flowcharts API
+- Add folder searching and cache
+- Add folders module and update how applications and folders are opened
+- Add Forge agent mode with planning, persistent approvals, project inspection and conversational memory
+- Add Forge and Git branch pills to the indicator row
+- Add frameless window
+- Add generated assistant banner with pyfiglet
+- Add Git features to the assistant
+- Add global translator and tool
+- Add GNU GPL v3 license
+- Add greeting that is random, localized and uses the dynamic username
+- Add hot_reload to avoid rebooting Arlo
+- Add independent TTS server, voice client and arlo-services script
+- Add initial assistant script with Assistant class, chat abstraction and streaming responses
+- Add initial README with project description
+- Add install and uninstall of applications through app_manager
+- Add install.sh script
+- Add kill_process, shutdown_computer and cancel_shutdown tools
+- Add language and model dropdowns to settings
+- Add language strings translations and copyright notices
+- Add lexical search through FTS5 indexes for word retrieval in memory
+- Add live editor to the desktop interface with syntax highlighting and keyboard navigation
+- Add log tab
+- Add main workspace open and close animations
+- Add messaging with recipient resolution and sending through the WhatsApp Cloud API
+- Add multistate orbs with animations and color switching
+- Add music session listening methods ("shazam")
+- Add mute button
+- Add native audio model (Gemma) processing for faster response times
+- Add new Arlo voice models and voice profiles with a selection dropdown
+- Add new voice models Brian and Gabriel
+- Add notifications system with timers
+- Add number pronunciation tool for the local language
+- Add open current session log
+- Add Open-Meteo forecasts and saved weather location
+- Add output module
+- Add paths module for ARLO_ROOT
+- Add per-turn inspection context budget
+- Add persisted local session logs
+- Add persistent Chromium extension manager to the embedded browser
+- Add persistent embedded browser sessions across panels and restarts
+- Add persistent memory documentation
+- Add Piper voice service for spoken responses
+- Add pop-in and pop-out animations for the orb
+- Add private mode to keep conversations from being logged
+- Add project inventory boundaries for Forge
+- Add pronunciation persistence
+- Add proper app closing in combination with commands
+- Add quick command groups executed through registered tools
+- Add reader.py for image reading with a dedicated Ollama vision model, plus image and screen analysis tools
+- Add refresh method to reload the assistant
+- Add repository link tool
+- Add requests redirected to the built-in browser instead of the native one
+- Add requirements.txt
+- Add resource_path function for packaged installer
+- Add response workspace bridge with highlighting
+- Add Rich terminal
+- Add rules script to hold all instructions given to the agent
+- Add screenshotting function for Arlo
+- Add script to set up Arlo at boot (optional)
+- Add search_code tool to search codebase structures
+- Add self_code to let the assistant read and change its own code live
+- Add session context and artifact storage
+- Add settings button and settings page
+- Add smart browser integration
+- Add spinner animation
+- Add Spotify integration with OAuth and Spotify Dev API playback
+- Add SQLite persistent memory system
+- Add Steam games manager
+- Add streamed workspace response panels
+- Add streaming for both terminal and UI interfaces
+- Add subtitle background with dynamic sizing
+- Add subtitles parsing and subtitles toggle switch
+- Add symbol indexes to source inspection
+- Add system health diagnostics (telemetry, scanner and scoring)
+- Add tabs to the interface
+- Add task progress widget
+- Add tool for Arlo to close itself
+- Add tools.py to break down the main agent
+- Add version number for the assistant
+- Add voice commands
+- Add voice IPC and wake capturing
+- Add wake word documentation (WAKE-VOICE.md)
+- Add web searching with verified sources check
+- Add Windows playback controls and YouTube song selection
+- Add word-level subtitle timeline synced with spoken words
+- Add workspaces system with animations, shortcuts, dragging and renaming
+- Add WORKSPACES.md documentation
+- Add zoom and scaling to the interface
+- Fix agent plan grounding and execution evidence
+- Fix app opening and lookup methods
+- Fix application launching, window verification and premature success responses
+- Fix Arlo closing after a shutdown request
+- Fix Arlo hanging after any request
+- Fix Arlo hearing and replying to his own speech
+- Fix Arlo looping on the same actions over and over
+- Fix Arlo speaking delay and pauses between sentences
+- Fix assistant announcing an action and never executing it
+- Fix barge-in mechanic and wake word interruptions
+- Fix cache emptying in model.py
+- Fix chat input expansion on scrolling
+- Fix compatibility between CPU and GPU setups by making the voice script CUDA-agnostic
+- Fix CosyVoice empty final inference
+- Fix emails that could not be loaded
+- Fix File Explorer application launch
+- Fix flowchart workspace target resolution
+- Fix folders.json not being read correctly
+- Fix Forge approval routing and continuity
+- Fix Forge plan validation, replanning and read-only enforcement
+- Fix frozen timer on Arlo's actions
+- Fix ghost launching of Arlo
+- Fix hot reload of modules
+- Fix logs not rendering in the log tab
+- Fix long-term memory isolation from active tasks
+- Fix memory leak on temp tables
+- Fix native Gemma action reasoning and voice context
+- Fix normal chat session history retention
+- Fix persistent conversation continuity
+- Fix privacy indicator button not working
+- Fix Qwen structured tool context
+- Fix response timer never stopping
+- Fix retrieval of personal memories
+- Fix speaking_enabled to avoid the "vertical bar" bug
+- Fix speech patterns with tables
+- Fix Steam games detection and launching
+- Fix subtitles cutoff and not clearing after Arlo finishes
+- Fix task progress and compact workspace layout
+- Fix task_control recovery, loop breaking and execution safeguards
+- Fix tool continuation and response streaming
+- Fix truncated model response continuation
+- Fix wake words, recording sessions and how Arlo reacts
+- Fix web search suddenly not working
+- Fix workspace panel dragging and splitter resizing
+- Remove built-in editor tabs
+- Remove Forge runtime integration and UI
+- Remove neovim from dependencies
+- Remove power request shortcuts and support graceful Arlo closure
+- Remove terminal and agent integration, reworking Arlo into a desktop interface only
+- Remove usage limits
+- Update agent instructions to be more explicit and safeguarded for the LLM
+- Update agent runtime to use a shared Assistant class with a singleton identity
+- Update agent.py into smaller modules (brain, rules, tools, voice, spin)
+- Update Arlo as an independent Windows app
+- Update Arlo setting for pulsating the orb whilst speaking
+- Update Arlo's orb design to 2 rings
+- Update Arlo's private indicator
+- Update Arlo's thinking state animation
+- Update Assistant class into core.py and reduce agent.py features
+- Update basic config.json into a more robust editable version
+- Update code blocks to remain in conversation logs
+- Update default model to deepseek-r1:8b
+- Update desktop.py into modular components (core_ui, orb, worker, chat, indicators, subtitles)
+- Update disabled reasoning by default
+- Update documentation and legal licenses
+- Update documentation naming convention and repository structure (entry, scripts and docs folders)
+- Update embedded browser performance
+- Update flowcharts to be part of the workspace system
+- Update log view with new styling and timestamp format support
+- Update main script into a more robust version
+- Update memory instructions policy and memory retrieval tools
+- Update Nora personality to be less childish, less serviceable and adjustable live
+- Update Nora to Arlo
+- Update Ollama redirection towards GPU instead of CPU
+- Update Orb as the focus of Arlo's identity and unify the Orb
+- Update Orb with circular audio spectrum
+- Update pronunciation of paths and technical terms
+- Update response workspace design and table formatting
+- Update scripts into a unified arlo-run.ps1 launcher and arloui and arlo-tui launchers
+- Update session logs to match the terminal 1:1
+- Update shortcuts for creating and switching between workspaces
+- Update speech speed so Arlo replies faster
+- Update speech to skip symbols such as * and -
+- Update speech to stream before synthesis completes and start the first spoken phrase sooner
+- Update starting over with the pydantic-ai framework
+- Update startup to speak the greeting with animated orbs and the status above subtitles
+- Update stylesheet to its own file (arlo.qss), separated from desktop.py
+- Update subtitles synchronization with speech playback
+- Update system actions and spoken power requests to route through confirmed tools
+- Update task progress window to live inside the main workspace
+- Update terminal layout, colors and styling with Rich
+- Update to a safer .venv virtual environment
+- Update workspace animations to expand horizontally from center
+- Update workspaces so response and flowchart panels open on the right
