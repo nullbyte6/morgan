@@ -90,7 +90,9 @@ command=("$python" -B -m PyInstaller.utils.cliutils.makespec
     --recursive-copy-metadata pydantic-ai-slim
     --exclude-module PyQt5 --exclude-module PyQt6 --exclude-module PySide2
     --exclude-module torch --exclude-module torchaudio --exclude-module transformers
-    --exclude-module tensorflow --exclude-module src.init.voice_service
+    --exclude-module tensorflow --exclude-module numba --exclude-module llvmlite
+    --exclude-module pandas --exclude-module pyarrow --exclude-module matplotlib
+    --exclude-module src.init.voice_service
     --exclude-module src.init.tts_server
     "${hidden[@]}" "$root/entry/desktop.py")
 
@@ -114,6 +116,12 @@ text = text.replace('pyz = PYZ(a.pure)',
     "    directory = importlib.util.find_spec(package).submodule_search_locations[0]\n"
     "    a.datas += Tree(directory, prefix=package, excludes=['__pycache__', '*.pyc'])\n"
     "pyz = PYZ(a.pure)")
+unused_qt = r'''import re
+unused = re.compile(r'^PySide6/(qml/|plugins/qmltooling/|Qt6?(3D|Charts|DataVisualization|Graphs|Location|MultimediaQuick|Quick3D|QuickShapes|QuickTest|QuickVectorImage|RemoteObjects|Scxml|Sensors|SpatialAudio|Test)[^/]*$|resources/(.*\.debug\.|qtwebengine_devtools)|translations/(?!qtwebengine_locales/(en-US|es|es-419)\.pak$))')
+a.binaries = [entry for entry in a.binaries if not unused.match(entry[0].replace('\\', '/'))]
+a.datas = [entry for entry in a.datas if not unused.match(entry[0].replace('\\', '/'))]
+'''
+text = text.replace('pyz = PYZ(a.pure)', unused_qt + 'pyz = PYZ(a.pure)')
 head, separator, collection = text.rpartition('coll = COLLECT(')
 collection = collection.replace("name='Arlo',", f'name={sys.argv[2]!r},', 1)
 text = head + separator + collection
