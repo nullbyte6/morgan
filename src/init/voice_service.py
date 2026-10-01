@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import gc
+import os
 import queue
 import re
 import sys
@@ -31,6 +32,8 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
+
+os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
 import torch
 from transformers.utils import logging as transformers_logging
 

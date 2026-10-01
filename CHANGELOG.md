@@ -9,6 +9,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add previous message history with Alt + Up/Down to the terminal chat input
 - Fix Gemma 4 task_finish parse failures that looped without delivering an answer
 - Fix response workspace font size
+- Update voice service to use the MIOpen fast find mode for a quicker first synthesis
 
 ## 1.4.44-beta (2026-10-01)
 
