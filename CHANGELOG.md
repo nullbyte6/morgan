@@ -14,6 +14,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix log pruning that deleted unrelated YYYY-MM-DD.md files because its header check never matched and failed on unreadable files
 - Fix memory updates failing with a database constraint error when the new content or key already belonged to another active memory
 - Update due Nova reminders to be announced as Windows notifications while Arlo runs
+- Update Nova diary to show every message of a conversation as a log card with Markdown, a copy button for the content only and live updates, including system and interrupted messages, with the daily Markdown log as fallback
 - Update theme folder seeding to deliver new built-in themes to existing installs without overwriting edited themes or restoring deleted ones
 - Update versioning to the current date in YY.M.D form, starting at 26.10.1-beta
 

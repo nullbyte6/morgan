@@ -16,12 +16,15 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Arlo's diary: the memory database presented one day at a time."""
+"""Arlo's diary: a day's agenda, memories and conversations, with every message shown as a log card."""
 from datetime import date, datetime, time, timedelta, timezone
+from getpass import getuser
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
+from src.init.config import HOME_PATH
 from src.init.identity import get_assistant_name
 from src.init.lang import tr
 from src.init.memory.integration import configured_service
@@ -29,12 +32,14 @@ from src.init.memory.integration import configured_service
 from . import formatting
 from .calendar_paint import CHEVRON_LEFT, CHEVRON_RIGHT
 from .entries import Entry, Reminder
+from .messages import LogMessage, LogMessageCard, code_font_family, parse_log
 from .rows import EntryRow
 from .store import NovaStore
 
 CHEVRON_DOWN = "\U000f0140"
 TOPIC_LIMIT = 140
-MESSAGE_LIMIT = 1200
+REFRESH_MS = 2000
+MARKDOWN_SESSION = "markdown"
 
 
 def day_bounds(day: date) -> tuple[str, str]:
@@ -48,13 +53,21 @@ def local_moment(stamp: str) -> datetime:
     return datetime.fromisoformat(stamp).astimezone().replace(tzinfo=None)
 
 
-def clipped(text: str, limit: int) -> str:
-    text = " ".join(text.split()) if limit == TOPIC_LIMIT else text.strip()
-    return text if len(text) <= limit else text[:limit].rstrip() + "…"
+def clipped(text: str) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= TOPIC_LIMIT else text[:TOPIC_LIMIT].rstrip() + "…"
 
 
 def message_count(count: int) -> str:
     return tr("nova.diary.message_one") if count == 1 else tr("nova.diary.messages", count=count)
+
+
+def stored_messages(rows: list[dict]) -> list[LogMessage]:
+    """Database rows as log messages, named the way the daily log names its speakers."""
+    authors = {"user": getuser().capitalize(), "assistant": get_assistant_name(), "system": "System"}
+    return [LogMessage(timestamp=local_moment(row["created_at"]).strftime("%H:%M:%S"),
+                       author=authors.get(row["role"], row["role"]), content=row["content"].strip("\n"),
+                       role=row["role"]) for row in rows]
 
 
 def _label(text: str, name: str, wrap: bool = True) -> QLabel:
@@ -80,20 +93,20 @@ class MemoryCard(QFrame):
 
 
 class ConversationCard(QFrame):
-    """A conversation held that day; a click unfolds what was said."""
+    """A conversation held that day; a click on its header unfolds every message as a log card."""
 
-    def __init__(self, session: dict, loader, parent: QWidget | None = None):
+    def __init__(self, session: dict, loader, log_path: Path, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("novaRow")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._session_id = session["session_id"]
+        self.session_id = session["id"]
         self._loader = loader
+        self._log_path = log_path
         self._loaded = False
-        started, ended = local_moment(session["started_at"]), local_moment(session["ended_at"])
-        span = formatting.time_text(started)
-        if ended - started >= timedelta(minutes=1):
-            span += f" – {formatting.time_text(ended)}"
-        topic = clipped(session["topic"], TOPIC_LIMIT) or tr("nova.diary.untitled")
+        span = formatting.time_text(session["started"])
+        if session["ended"] - session["started"] >= timedelta(minutes=1):
+            span += f" – {formatting.time_text(session['ended'])}"
+        topic = clipped(session["topic"]) or tr("nova.diary.untitled")
         self._marker = QLabel(CHEVRON_RIGHT)
         self._marker.setObjectName("novaRowMarker")
         self._marker.setFixedWidth(24)
@@ -101,12 +114,14 @@ class ConversationCard(QFrame):
         head.setSpacing(3)
         head.addWidget(_label(topic, "novaRowTitle"))
         head.addWidget(_label(f"{span} · {message_count(session['messages'])}", "novaRowCaption", wrap=False))
-        top = QHBoxLayout()
+        self._head = QWidget()
+        top = QHBoxLayout(self._head)
+        top.setContentsMargins(0, 0, 0, 0)
         top.setSpacing(14)
         top.addWidget(self._marker, 0, Qt.AlignmentFlag.AlignTop)
         top.addLayout(head, 1)
         self._dialogue = QVBoxLayout()
-        self._dialogue.setContentsMargins(38, 6, 0, 0)
+        self._dialogue.setContentsMargins(0, 12, 0, 0)
         self._dialogue.setSpacing(10)
         self._body = QWidget()
         self._body.setLayout(self._dialogue)
@@ -114,41 +129,44 @@ class ConversationCard(QFrame):
         column = QVBoxLayout(self)
         column.setContentsMargins(16, 13, 16, 13)
         column.setSpacing(0)
-        column.addLayout(top)
+        column.addWidget(self._head)
         column.addWidget(self._body)
 
-    def _load(self) -> None:
-        self._loaded = True
-        you, arlo = tr("nova.diary.you"), get_assistant_name()
-        for message in self._loader(self._session_id):
-            role = "assistant" if message["role"] == "assistant" else "user"
-            who = f"{arlo if role == 'assistant' else you} · {formatting.time_text(local_moment(message['created_at']))}"
-            header = _label(who, "novaDiaryRole", wrap=False)
-            header.setProperty("role", role)
-            self._dialogue.addWidget(header)
-            self._dialogue.addWidget(_label(clipped(message["content"], MESSAGE_LIMIT), "novaDiaryMessage"))
+    @property
+    def is_open(self) -> bool:
+        return not self._body.isHidden()
+
+    def set_open(self, opened: bool) -> None:
+        if opened and not self._loaded:
+            self._loaded = True
+            family = code_font_family()
+            for message in self._loader(self.session_id):
+                self._dialogue.addWidget(LogMessageCard(message, self._log_path, family))
+        self._body.setVisible(opened)
+        self._marker.setText(CHEVRON_DOWN if opened else CHEVRON_RIGHT)
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
-            if not self._loaded:
-                self._load()
-            opened = not self._body.isVisible()
-            self._body.setVisible(opened)
-            self._marker.setText(CHEVRON_DOWN if opened else CHEVRON_RIGHT)
+        if (event.button() == Qt.MouseButton.LeftButton
+                and self._head.geometry().contains(event.position().toPoint())):
+            self.set_open(not self.is_open)
         super().mouseReleaseEvent(event)
 
 
 class DiaryView(QWidget):
-    """One day of Arlo's life with you: the agenda, what it learned and what you talked about."""
+    """One day of Arlo's life with you: the agenda, what it learned and every message exchanged."""
 
     entry_activated = Signal(object)
 
-    def __init__(self, store: NovaStore, memory=configured_service, parent: QWidget | None = None):
+    def __init__(self, store: NovaStore, memory=configured_service, log_directory: Path | None = None,
+                 parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("novaDiary")
         self._store = store
         self._memory = memory
+        self._log_directory = Path(log_directory) if log_directory is not None else HOME_PATH / ".log"
         self._day = date.today()
+        self._signature = None
+        self._expanded: set[str] = set()
 
         self.previous = self._arrow(CHEVRON_LEFT)
         self.next = self._arrow(CHEVRON_RIGHT)
@@ -197,7 +215,9 @@ class DiaryView(QWidget):
         self.today_button.clicked.connect(lambda: self.set_day(date.today()))
         self.earlier_button.clicked.connect(self._jump_earlier)
         store.changed.connect(self._store_changed)
-        self._dirty = True
+        self.clock = QTimer(self)
+        self.clock.setInterval(REFRESH_MS)
+        self.clock.timeout.connect(self._tick)
         self.refresh_language()
 
     @staticmethod
@@ -225,9 +245,11 @@ class DiaryView(QWidget):
 
     def _store_changed(self) -> None:
         if self.isVisible():
-            self.refresh()
-        else:
-            self._dirty = True
+            self.refresh(force=False)
+
+    def _tick(self) -> None:
+        if self._day == date.today():
+            self.refresh(force=False)
 
     def _service(self):
         try:
@@ -246,9 +268,32 @@ class DiaryView(QWidget):
         if stamp is not None:
             self.set_day(local_moment(stamp).date())
 
-    def _loader(self, service):
-        since, until = day_bounds(self._day)
-        return lambda session_id: service.diary_messages(session_id, since, until)
+    def _log_path(self) -> Path:
+        return self._log_directory / f"{self._day:%Y-%m-%d}.md"
+
+    def _markdown_messages(self) -> list[LogMessage]:
+        try:
+            return parse_log(self._log_path().read_text(encoding="utf-8"))
+        except OSError:
+            return []
+
+    def _sessions(self, service, data: dict) -> tuple[list[dict], object]:
+        """The day's conversations and a loader for their messages: the database, else the daily log."""
+        if service is not None and data["sessions"]:
+            since, until = day_bounds(self._day)
+            sessions = [{"id": row["session_id"], "started": local_moment(row["started_at"]),
+                         "ended": local_moment(row["ended_at"]), "messages": row["messages"],
+                         "topic": row["topic"]} for row in data["sessions"]]
+            return sessions, lambda session_id: stored_messages(service.diary_messages(session_id, since, until))
+        messages = self._markdown_messages()
+        if not messages:
+            return [], None
+        stamps = [datetime.combine(self._day, datetime.strptime(message.timestamp, "%H:%M:%S").time())
+                  for message in messages]
+        topic = next((message.content for message in messages if message.role == "user"), "")
+        return ([{"id": MARKDOWN_SESSION, "started": min(stamps), "ended": max(stamps),
+                  "messages": len(messages), "topic": topic}],
+                lambda _session_id: self._markdown_messages())
 
     def _heading(self, text: str) -> None:
         self._rows.insertWidget(self._rows.count() - 1, _label(text, "novaGroup"))
@@ -256,14 +301,9 @@ class DiaryView(QWidget):
     def _add(self, widget: QWidget) -> None:
         self._rows.insertWidget(self._rows.count() - 1, widget)
 
-    def refresh(self) -> None:
-        self._dirty = False
-        self.day_label.setText(formatting.day_heading(self._day))
-        position = self.scroll.verticalScrollBar().value()
-        while self._rows.count() > 1:
-            widget = self._rows.takeAt(0).widget()
-            widget.setParent(None)
-            widget.deleteLater()
+    def refresh(self, force: bool = True) -> None:
+        """Rebuild the page, unless nothing changed and force is off; unfolded conversations stay unfolded."""
+        now = datetime.now()
         service, error = self._service()
         data = {"sessions": [], "memories": []}
         if service is not None:
@@ -271,10 +311,32 @@ class DiaryView(QWidget):
                 data = service.diary(*day_bounds(self._day))
             except Exception as failure:
                 error = str(failure)
+        sessions, loader = self._sessions(service, data)
         entries = self._store.entries(self._day, self._day)
+        signature = (self._day, error, service is None, tuple(entries),
+                     tuple(entry.id for entry in entries if isinstance(entry, Reminder)
+                           and not entry.is_completed and entry.remind_at < now),
+                     tuple((row["id"], row["modified_at"]) for row in data["memories"]),
+                     tuple((row["id"], row["messages"], row["ended"]) for row in sessions))
+        self.day_label.setText(formatting.day_heading(self._day))
+        if not force and signature == self._signature:
+            return
+        same_day = self._signature is not None and self._signature[0] == self._day
+        self._signature = signature
+        scrollbar = self.scroll.verticalScrollBar()
+        position = scrollbar.value() if same_day else 0
+        at_bottom = same_day and scrollbar.value() >= scrollbar.maximum() - 20
+        if same_day:
+            for card in self.findChildren(ConversationCard):
+                (self._expanded.add if card.is_open else self._expanded.discard)(card.session_id)
+        else:
+            self._expanded.clear()
+        while self._rows.count() > 1:
+            widget = self._rows.takeAt(0).widget()
+            widget.setParent(None)
+            widget.deleteLater()
         if entries:
             self._heading(tr("nova.diary.agenda"))
-            now = datetime.now()
             for entry in entries:
                 row = EntryRow(entry, now)
                 row.activated.connect(self.entry_activated)
@@ -284,18 +346,19 @@ class DiaryView(QWidget):
             self._heading(tr("nova.diary.learned"))
             for memory in data["memories"]:
                 self._add(MemoryCard(memory))
-        if data["sessions"]:
+        if sessions:
             self._heading(tr("nova.diary.conversations"))
-            for session in data["sessions"]:
-                self._add(ConversationCard(session, self._loader(service)))
+            for session in sessions:
+                card = ConversationCard(session, loader, self._log_path())
+                self._add(card)
+                if session["id"] in self._expanded:
+                    card.set_open(True)
         if error is not None:
             self._add(_label(tr("nova.diary.error", error=error), "novaDiaryNote"))
-        elif service is None:
-            self._add(_label(tr("nova.diary.disabled"), "novaDiaryNote"))
-        elif not (entries or data["memories"] or data["sessions"]):
-            self._add(_label(tr("nova.diary.empty"), "novaDiaryNote"))
-        scrollbar = self.scroll.verticalScrollBar()
-        QTimer.singleShot(0, lambda: scrollbar.setValue(position))
+        elif not (entries or data["memories"] or sessions):
+            self._add(_label(tr("nova.diary.disabled" if service is None else "nova.diary.empty"),
+                             "novaDiaryNote"))
+        QTimer.singleShot(0, lambda: scrollbar.setValue(scrollbar.maximum() if at_bottom else position))
 
     def _toggle_reminder(self, entry: Entry, done: bool) -> None:
         if isinstance(entry, Reminder):
@@ -304,3 +367,8 @@ class DiaryView(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self.refresh()
+        self.clock.start()
+
+    def hideEvent(self, event):
+        self.clock.stop()
+        super().hideEvent(event)

@@ -358,11 +358,10 @@ class MemoryService:
             sessions = []
             for row in db.execute("""SELECT session_id,MIN(created_at) AS started_at,MAX(created_at) AS ended_at,
                 COUNT(*) AS messages FROM messages WHERE created_at>=? AND created_at<?
-                AND status='completed' AND role IN ('user','assistant')
                 GROUP BY session_id ORDER BY started_at""", (since, until)):
                 first = db.execute("""SELECT content FROM messages WHERE session_id=? AND role='user'
-                    AND status='completed' AND created_at>=? AND created_at<?
-                    ORDER BY sequence LIMIT 1""", (row["session_id"], since, until)).fetchone()
+                    AND created_at>=? AND created_at<? ORDER BY sequence LIMIT 1""",
+                                   (row["session_id"], since, until)).fetchone()
                 sessions.append({**dict(row), "topic": first["content"][:400] if first else ""})
             memories = [dict(row) for row in db.execute("""SELECT id,content,category,memory_key,created_at,
                 modified_at FROM memories WHERE status='active' AND modified_at>=? AND modified_at<?
@@ -370,22 +369,20 @@ class MemoryService:
                                                         (since, until, timestamp()))]
         return {"sessions": sessions, "memories": memories}
 
-    def diary_messages(self, session_id, since, until, *, limit=200):
-        """The completed dialogue of one conversation inside [since, until), in order."""
+    def diary_messages(self, session_id, since, until):
+        """Every message of one conversation inside [since, until), whatever its role or status."""
         since, until = valid_time(since), valid_time(until)
         with self.db.connect() as db:
-            return [dict(row) for row in db.execute("""SELECT id,role,content,created_at FROM messages
-                WHERE session_id=? AND created_at>=? AND created_at<? AND status='completed'
-                AND role IN ('user','assistant') ORDER BY sequence LIMIT ?""",
-                                                    (session_id, since, until, min(max(1, limit), 500)))]
+            return [dict(row) for row in db.execute("""SELECT id,role,content,created_at,status FROM messages
+                WHERE session_id=? AND created_at>=? AND created_at<? ORDER BY sequence""",
+                                                    (session_id, since, until))]
 
     def adjacent_activity(self, boundary, *, earlier):
-        """The timestamp of the nearest completed message before (or at or after) a boundary."""
+        """The timestamp of the nearest message before (or at or after) a boundary."""
         boundary = valid_time(boundary)
         comparison, order = ("<", "DESC") if earlier else (">=", "ASC")
         with self.db.connect() as db:
             row = db.execute(f"""SELECT created_at FROM messages WHERE created_at {comparison} ?
-                AND status='completed' AND role IN ('user','assistant')
                 ORDER BY created_at {order} LIMIT 1""", (boundary,)).fetchone()
         return row["created_at"] if row else None
 

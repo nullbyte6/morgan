@@ -1398,24 +1398,6 @@ QLabel#novaDiaryDay {
     background: transparent;
 }
 
-QLabel#novaDiaryRole {
-    color: @text_subtle;
-    font-size: 12px;
-    background: transparent;
-    border: none;
-}
-
-QLabel#novaDiaryRole[role="assistant"] {
-    color: @accent;
-}
-
-QLabel#novaDiaryMessage {
-    color: @text;
-    font-size: 14px;
-    background: transparent;
-    border: none;
-}
-
 QLabel#novaDiaryNote {
     color: @text_muted;
     font-size: 14px;

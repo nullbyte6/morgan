@@ -306,14 +306,20 @@ memories require a database backup or explicit recreation.
 
 ## Diary
 
-Nova's **Diary** section presents the same database one day at a time, using local
-time. For the selected day it shows what was on the agenda, the memories written or
-updated that day, and each conversation with its time span and message count. Click a
-conversation to unfold what was said. The arrows move one day, **Previous entry**
-jumps to the closest earlier day with a conversation, and **Today** returns to the
-present. The diary only reads: private conversations are never in it, nothing is sent
-anywhere, and removing a memory still goes through a request to Arlo. With
-`memory.enabled=false` the diary says that memory is off.
+Nova's **Diary** section presents one day at a time, using local time. For the
+selected day it shows what was on the agenda, the memories written or updated that
+day, and each conversation with its time span and message count. Click a conversation
+header to unfold every message, including system and interrupted ones, as a log card
+with Markdown, highlighted code and a copy button that copies only the message
+content. The arrows move one day, **Previous entry** jumps to the closest earlier day
+with a conversation, and **Today** returns to the present. A day shown for today
+updates while it is open and keeps unfolded conversations and your scroll position.
+
+Conversations come from the database. When it holds none for the selected day, for
+example with `memory.enabled=false`, `memory.store_history=false` or days before
+persistence existed, the diary shows that day's Markdown log from `~/.arlo/.log`
+instead. The diary only reads: private conversations are never in it, nothing is sent
+anywhere, and removing a memory still goes through a request to Arlo.
 
 Tests use temporary databases and logs, including migration rollback, FTS,
 concurrent writes, CRUD, supersession, deletion, imports, privacy, Pydantic AI tool
