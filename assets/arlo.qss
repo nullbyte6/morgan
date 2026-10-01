@@ -208,7 +208,6 @@ QWidget#windowContainer {
 }
 
 QPushButton#settingsNav,
-QPushButton#chatNav,
 QPushButton#editorNav,
 QPushButton#terminalNav,
 QPushButton#browserNav,
@@ -234,7 +233,6 @@ QPushButton#logCopyNav {
 }
 
 QPushButton#settingsNav:hover,
-QPushButton#chatNav:hover,
 QPushButton#editorNav:hover,
 QPushButton#terminalNav:hover,
 QPushButton#browserNav:hover,

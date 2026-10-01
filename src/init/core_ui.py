@@ -548,9 +548,8 @@ class AssistantWindow(DesktopWindow):
         navigation.setSpacing(8)
         tray_buttons = []
 
-        buttons = [("󰭹", "chatNav", get_assistant_name(), None)]
-        buttons.extend((options["icon"], f"{view_key}Nav", options["title"], view_key)
-                       for view_key, options in WORKSPACE_VIEW_CONFIG.items() if view_key != "nova")
+        buttons = [(options["icon"], f"{view_key}Nav", options["title"], view_key)
+                   for view_key, options in WORKSPACE_VIEW_CONFIG.items() if view_key != "nova"]
 
         for icon, object_name, tooltip, view_key in buttons:
             button = QPushButton(icon, content)
@@ -558,12 +557,9 @@ class AssistantWindow(DesktopWindow):
             button.setFixedSize(48, 48)
             button.setToolTip(tooltip)
             button.setCursor(Qt.PointingHandCursor)
-            if view_key is None:
-                button.clicked.connect(self.focus_main_workspace)
-            else:
-                button.clicked.connect(
-                    lambda checked=False, key=view_key, source=button:
-                    self.open_workspace_view(key, source))
+            button.clicked.connect(
+                lambda checked=False, key=view_key, source=button:
+                self.open_workspace_view(key, source))
             tray_buttons.append(button)
 
         workspace_navigation = WorkspaceNavigation(tray_buttons, content)
@@ -1231,9 +1227,6 @@ class AssistantWindow(DesktopWindow):
             actions[1].setText(tr("tray.quit"))
         for orb in (self.mascot, *(session.ui.orb for session in self._views())):
             orb.setToolTip(name)
-        chat = self.findChild(QPushButton, "chatNav")
-        if chat is not None:
-            chat.setToolTip(name)
         if hasattr(self, "command_palette"):
             self.command_palette.refresh_language()
         for session in self._views():
