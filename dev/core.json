@@ -1,5 +1,5 @@
 {
-  "version": "1.4.44-beta",
+  "version": "1.4.45-beta",
   "base_model_name": "gemma4:e4b",
   "context_length": 32768,
   "audio_model": "gemma4:e4b"
