@@ -76,7 +76,7 @@ A new workspace shows a single Nova star in place of the row of buttons. Press i
 slide out the workspace buttons (Arlo, Logs, Browser, Editor, Settings and Terminal) and
 press it again to fold them. `Ctrl + click` on the star opens Nova in that panel instead.
 
-Its sidebar is part of the panel: it holds Agenda, Reminders, Events and Calendar,
+Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar and Diary,
 and folds to an icon strip with a slide when you click the Nova star. In narrow
 panels it folds by itself.
 
@@ -84,6 +84,8 @@ panels it folds by itself.
   something on it.
 - **Reminders** keeps pending and completed reminders. Tick the circle to complete one.
 - **Events** lists upcoming and past events, with a time or all day.
+- **Diary** is Arlo's memory one day at a time, with that day's agenda, what Arlo
+  remembers and the conversations held (see [MEMORY.md](MEMORY.md)).
 - **Calendar** shows a week, month or year. Click a day in the month or year to drill
   into its week, click a month name in the year to open that month, and double-click a
   slot in the week to create an event there.

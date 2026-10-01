@@ -352,6 +352,46 @@ class MemoryService:
         return (UNTRUSTED + "\n" + json.dumps(payload, ensure_ascii=False)
                 if selected or conversations else "")
 
+    def diary(self, since, until):
+        """Conversations and memories from [since, until), with timezone-aware ISO timestamps."""
+        since, until = valid_time(since), valid_time(until)
+        if since >= until:
+            raise ValueError("since must precede until")
+        with self.db.connect() as db:
+            sessions = []
+            for row in db.execute("""SELECT session_id,MIN(created_at) AS started_at,MAX(created_at) AS ended_at,
+                COUNT(*) AS messages FROM messages WHERE created_at>=? AND created_at<?
+                AND status='completed' AND role IN ('user','assistant')
+                GROUP BY session_id ORDER BY started_at""", (since, until)):
+                first = db.execute("""SELECT content FROM messages WHERE session_id=? AND role='user'
+                    AND status='completed' AND created_at>=? AND created_at<?
+                    ORDER BY sequence LIMIT 1""", (row["session_id"], since, until)).fetchone()
+                sessions.append({**dict(row), "topic": first["content"][:400] if first else ""})
+            memories = [dict(row) for row in db.execute("""SELECT id,content,category,memory_key,created_at,
+                modified_at FROM memories WHERE status='active' AND modified_at>=? AND modified_at<?
+                AND (expires_at IS NULL OR expires_at>?) ORDER BY modified_at,id""",
+                                                        (since, until, timestamp()))]
+        return {"sessions": sessions, "memories": memories}
+
+    def diary_messages(self, session_id, since, until, *, limit=200):
+        """The completed dialogue of one conversation inside [since, until), in order."""
+        since, until = valid_time(since), valid_time(until)
+        with self.db.connect() as db:
+            return [dict(row) for row in db.execute("""SELECT id,role,content,created_at FROM messages
+                WHERE session_id=? AND created_at>=? AND created_at<? AND status='completed'
+                AND role IN ('user','assistant') ORDER BY sequence LIMIT ?""",
+                                                    (session_id, since, until, min(max(1, limit), 500)))]
+
+    def adjacent_activity(self, boundary, *, earlier):
+        """The timestamp of the nearest completed message before (or at or after) a boundary."""
+        boundary = valid_time(boundary)
+        comparison, order = ("<", "DESC") if earlier else (">=", "ASC")
+        with self.db.connect() as db:
+            row = db.execute(f"""SELECT created_at FROM messages WHERE created_at {comparison} ?
+                AND status='completed' AND role IN ('user','assistant')
+                ORDER BY created_at {order} LIMIT 1""", (boundary,)).fetchone()
+        return row["created_at"] if row else None
+
     def delete_message(self, message_id):
         with self.db.connect(write=True) as db:
             row = db.execute("SELECT source_ref FROM messages WHERE id=?", (message_id,)).fetchone()

@@ -1387,3 +1387,38 @@ QPushButton#novaNav:hover {
 QPushButton#novaNav[expanded="true"] {
     background-color: @surface_selected;
 }
+
+QWidget#novaDiary {
+    background: transparent;
+}
+
+QLabel#novaDiaryDay {
+    color: @text;
+    font-size: 18px;
+    background: transparent;
+}
+
+QLabel#novaDiaryRole {
+    color: @text_subtle;
+    font-size: 12px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#novaDiaryRole[role="assistant"] {
+    color: @accent;
+}
+
+QLabel#novaDiaryMessage {
+    color: @text;
+    font-size: 14px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#novaDiaryNote {
+    color: @text_muted;
+    font-size: 14px;
+    background: transparent;
+    padding: 24px 8px;
+}

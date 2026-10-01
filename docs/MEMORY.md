@@ -303,6 +303,17 @@ Do not overwrite an open database or manually edit migration records. Missing
 history can be recovered from original Markdown using the importer; consolidated
 memories require a database backup or explicit recreation.
 
+## Diary
+
+Nova's **Diary** section presents the same database one day at a time, using local
+time. For the selected day it shows what was on the agenda, the memories written or
+updated that day, and each conversation with its time span and message count. Click a
+conversation to unfold what was said. The arrows move one day, **Previous entry**
+jumps to the closest earlier day with a conversation, and **Today** returns to the
+present. The diary only reads: private conversations are never in it, nothing is sent
+anywhere, and removing a memory still goes through a request to Arlo. With
+`memory.enabled=false` the diary says that memory is off.
+
 Tests use temporary databases and logs, including migration rollback, FTS,
 concurrent writes, CRUD, supersession, deletion, imports, privacy, Pydantic AI tool
 execution and the existing streamed agent lifecycle with a local test model.
