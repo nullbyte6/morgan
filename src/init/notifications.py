@@ -112,6 +112,7 @@ def schedule_notification(delay_seconds: int, message: str, title: str | None = 
     Returns an ID for list_timers/cancel_timer. Timers survive reload, not exit.
     Displays a message only; does not execute commands or shut down the PC.
     Use shutdown_computer for a scheduled Windows shutdown.
+    Use add_reminder instead for reminders at a date or time.
     """
     try:
         if os.name != "nt":

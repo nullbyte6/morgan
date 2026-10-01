@@ -60,6 +60,7 @@ from src.init.nova import formatting as nova_formatting
 from src.init.nova.navigation import WorkspaceNavigation
 from src.init.nova.sections import Section
 from src.init.nova.store import NovaStore
+from src.init.nova.tools import use_store as use_nova_store
 from src.init.nova.view import NovaView
 from src.init.notifications import send_notification
 
@@ -983,6 +984,7 @@ class AssistantWindow(DesktopWindow):
         """Open Nova's databases on first use and keep one store for every Nova view."""
         if self.nova_store is None:
             self.nova_store = NovaStore(parent=self)
+            use_nova_store(self.nova_store)
         return self.nova_store
 
     def start_nova(self) -> None:
