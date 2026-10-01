@@ -19,6 +19,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix command confirmation crashing with an undefined sys module when no confirmation dialog is attached, instead of declining the command
 - Fix directory change and module reload commands being stored as conversations, and remove the ones already stored
 - Fix due Nova reminders being marked as announced without a notification when they came due more than a day earlier while Arlo was closed, and group more than three due reminders into one notification
+- Fix installer failing to replace a CPU PyTorch with the CUDA build on NVIDIA GPUs, because pip treated the pinned version as already installed
 - Fix installer setting up CPU PyTorch on AMD Radeon RX 9000 GPUs by installing the ROCm build for them, and reinstalling PyTorch when an existing runtime does not match the GPU
 - Fix log pruning that deleted unrelated YYYY-MM-DD.md files because its header check never matched and failed on unreadable files
 - Fix memory updates failing with a database constraint error when the new content or key already belonged to another active memory

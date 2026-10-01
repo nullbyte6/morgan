@@ -671,7 +671,13 @@ function Ensure-VoiceRuntime {
 
         Write-Host "Voice runtime found, but PyTorch does not match the GPU. Reinstalling PyTorch..."
 
-        if ((Invoke-Native -File $VenvPython -Arguments ($Pip + (Get-TorchInstallArguments $Backend))) -ne 0) {
+        $Reinstall = $Pip
+
+        if ($Backend.Name -eq "cuda") {
+            $Reinstall += "--force-reinstall"
+        }
+
+        if ((Invoke-Native -File $VenvPython -Arguments ($Reinstall + (Get-TorchInstallArguments $Backend))) -ne 0) {
             throw "Failed to install PyTorch."
         }
 
