@@ -23,7 +23,8 @@ from functools import lru_cache
 from pathlib import Path
 
 LOCALES = Path(__file__).with_name("locales")
-LANGUAGES = {"english": "en", "spanish": "es"}
+LANGUAGES = {"english": "en", "spanish": "es", "chinese": "ch"}
+SPEECH_LANGUAGES = {"english": "en", "spanish": "es", "chinese": "zh"}
 
 
 def get_language() -> str:
@@ -46,7 +47,7 @@ def set_language(language: str) -> None:
     save_config(config)
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def catalog(language: str) -> dict[str, str]:
     return json.loads((LOCALES / f"lang_{LANGUAGES[language]}.json").read_text(
         encoding="utf-8"))

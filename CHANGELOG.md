@@ -5,6 +5,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 ## 26.10.1-beta (2026-10-01)
 
 - Add ARLO Home, the 26th built-in color theme, in blues and whites
+- Add Chinese (Simplified) as an interface language, selectable in Settings and the terminal version, with Chinese dates in Nova and wake word detection
 - Add Ctrl+L shortcut and Open diary command that open Nova on the Diary, reusing an open Nova panel
 - Add Nova as a workspace view, with a sidebar folded into the panel, agenda, reminder and event lists, and an overlay to create, edit and delete entries, opened with Ctrl+Alt+N or the command palette
 - Add Nova calendar widgets with week, month and year views, drill-down between them, a date picker and Spanish and English day and month names

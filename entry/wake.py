@@ -34,7 +34,7 @@ from pathlib import Path
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.init.lang import LANGUAGES, get_language, tr
+from src.init.lang import SPEECH_LANGUAGES, get_language, tr
 from src.init.voice import transcribe_voice
 from src.init.voice_ipc import (
     WAKE_RECORD_REQUEST,
@@ -135,7 +135,7 @@ class Recognizer:
             try:
                 text, _ = transcribe_voice(
                     snapshot.pcm, sample_rate, model=self.model,
-                    language=None if snapshot.final else LANGUAGES[get_language()],
+                    language=None if snapshot.final else SPEECH_LANGUAGES[get_language()],
                     beam_size=5 if snapshot.final else 1,
                     vad_filter=snapshot.final)
                 future.set_result(text)

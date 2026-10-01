@@ -872,7 +872,7 @@ class TuiApp:
                     lambda: t("tui.cmd_hide_steps" if session.steps_enabled else "tui.cmd_show_steps"),
                     session.toggle_steps, ("steps", "pasos", "ephemeral")),
             Command("ui.language", lambda: t("tui.cmd_language"), session.toggle_language,
-                    ("language", "idioma", "english", "spanish", "español")),
+                    ("language", "idioma", "english", "spanish", "español", "chinese", "中文")),
             Command("ui.permissions",
                     lambda: t("tui.cmd_permissions", mode=session.permission_mode.upper()),
                     session.toggle_permission_mode, ("permissions", "permisos", "ask", "auto")),

@@ -229,6 +229,7 @@ class SettingsView(QWidget):
         self.language_dropdown.setView(language_options)
         self.language_dropdown.addItem("English", "english")
         self.language_dropdown.addItem("Español", "spanish")
+        self.language_dropdown.addItem("中文", "chinese")
         self.language_dropdown.setMinimumWidth(90)
         self.language_label.setBuddy(self.language_dropdown)
         language_row = QHBoxLayout()

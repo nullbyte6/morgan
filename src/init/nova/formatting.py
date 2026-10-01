@@ -25,7 +25,7 @@ from PySide6.QtCore import QDate, QLocale, QTime
 
 from src.init.lang import get_language, tr
 
-LOCALES = {"english": "en_GB", "spanish": "es_ES"}
+LOCALES = {"english": "en_GB", "spanish": "es_ES", "chinese": "zh_CN"}
 NAME_STYLES = {"long": QLocale.FormatType.LongFormat, "short": QLocale.FormatType.ShortFormat,
                "narrow": QLocale.FormatType.NarrowFormat}
 

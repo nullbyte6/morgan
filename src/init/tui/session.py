@@ -30,7 +30,7 @@ from src.init.config import load_config, save_config
 from src.init.core import Assistant
 from src.init.events import Emitter
 from src.init.identity import register_assistant
-from src.init.lang import set_language
+from src.init.lang import LANGUAGES, set_language
 from src.init.session_runner import SessionRunner
 from src.init.task_view import TaskProjection
 from src.init.tui import i18n
@@ -944,7 +944,8 @@ class TuiSession:
         self.show_trail()
 
     def toggle_language(self):
-        target = "english" if i18n.language() == "spanish" else "spanish"
+        languages = list(LANGUAGES)
+        target = languages[(languages.index(i18n.language()) + 1) % len(languages)]
         try:
             set_language(target)
         except (OSError, ValueError) as error:

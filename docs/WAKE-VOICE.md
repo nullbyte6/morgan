@@ -46,7 +46,7 @@ queues a recording request, and launches the desktop when necessary. The desktop
 then acquires the microphone through its normal voice-input path.
 
 The wake listener reuses `transcribe_voice` with one multilingual Whisper model.
-Short detection passes use the configured interface language (Spanish/English).
+Short detection passes use the configured interface language (Spanish/English/Chinese).
 After activation, normal desktop recording performs command transcription and
 retains its existing lazily loaded
 `WHISPER_MODEL` (default `small`). As before, Whisper weights must be available

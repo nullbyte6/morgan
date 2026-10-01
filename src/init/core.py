@@ -160,7 +160,7 @@ class Assistant:
         from src.init.brain import OLLAMA_KEEP_ALIVE
         from src.init.lang import get_language
 
-        language = {"english": "English", "spanish": "European Spanish"}.get(get_language(), "English")
+        language = {"english": "English", "spanish": "European Spanish", "chinese": "Simplified Chinese"}.get(get_language(), "English")
         prompt = (f"You are {self.name}, a personal desktop assistant that has just started. "
                   f"Write one short, natural greeting of at most twelve words in {language} for the user, "
                   f"{self.username}, offering your help. Infer your grammatical gender from your name "

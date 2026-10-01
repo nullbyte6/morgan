@@ -203,7 +203,7 @@ def validate_config(config):
         result["permission_mode"] = "ask"
     if not isinstance(result["theme"], str) or not result["theme"].strip():
         result["theme"] = DEFAULTS["theme"]
-    if result["lang"] not in ("english", "spanish"):
+    if result["lang"] not in ("english", "spanish", "chinese"):
         raise ValueError(tr('config.lang_must_be_english_or_spanish'))
     for key in ("model", "message_service", "whatsapp_phone_number_id",
                 "whatsapp_api_version", "twilio_account_sid",
