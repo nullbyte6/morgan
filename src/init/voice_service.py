@@ -49,6 +49,29 @@ from .identity import get_assistant_identifier
 
 logger = logging.getLogger(f"{get_assistant_identifier()}.tts")
 
+RESUME_LEAD_SECONDS = 1.5
+RESUME_MAX_WAIT_SECONDS = 2.5
+
+
+def _raise_priority(*, process: bool) -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        if process:
+            kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+            kernel32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), 0x00008000)
+        else:
+            kernel32.GetCurrentThread.restype = ctypes.c_void_p
+            kernel32.SetThreadPriority.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            kernel32.SetThreadPriority(kernel32.GetCurrentThread(), 2)
+    except Exception:
+        logger.exception("Unable to raise the voice priority")
+
+
 def _silence_tts_loggers():
     prefixes = (
         "cosyvoice",
@@ -119,6 +142,7 @@ class SpeechBatch:
         self.done.set()
         self.pending = 0
         self.speaking = False
+        self.played = False
         self.subtitle = ""
         self.error = None
 
@@ -135,6 +159,7 @@ class VoiceService:
                  speed=1.0,
                  audio_callback=None, speaking_callback=None,
                  subtitle_callback=None):
+        _raise_priority(process=True)
         self.model_path = Path(model_path)
         self.voice_reference = selected_voice() or Path(voice_reference)
         reference_text = reference_text.strip()
@@ -154,6 +179,8 @@ class VoiceService:
 
         self._text_queue = queue.Queue()
         self._audio_queue = queue.Queue(maxsize=4)
+        self._buffered_samples = 0
+        self._synthesizing = False
 
         self.speaking = False
         self.audio_callback = audio_callback
@@ -295,6 +322,7 @@ class VoiceService:
                         idle_trimmed = True
                 continue
             idle_trimmed = False
+            self._synthesizing = True
             generator = None
             timeline = StreamingWordTimeline(subtitle, self.sample_rate)
             sample_offset = 0
@@ -323,6 +351,7 @@ class VoiceService:
                                 pass
                             else:
                                 batch.pending += 1
+                                self._buffered_samples += len(samples)
                                 sample_offset += len(samples)
                                 break
                         batch.cancelled.wait(0.05)
@@ -339,6 +368,7 @@ class VoiceService:
                     batch.error = error
                     logger.exception(tr('voice_service.tts_generator_cleanup_failed'))
                 finally:
+                    self._synthesizing = False
                     self._text_queue.task_done()
                     self._complete(batch)
                     generator = chunk = audio = samples = timeline = None
@@ -362,14 +392,34 @@ class VoiceService:
         except Exception:
             logger.exception("Unable to release idle voice memory")
 
+    def _await_lead(self, batch) -> None:
+        deadline = time.monotonic() + RESUME_MAX_WAIT_SECONDS
+        while not batch.cancelled.is_set() and time.monotonic() < deadline:
+            with self._state_lock:
+                lead = self._buffered_samples / self.sample_rate
+                busy = self._synthesizing or not self._text_queue.empty()
+            if lead >= RESUME_LEAD_SECONDS or not busy:
+                return
+            batch.cancelled.wait(0.02)
+
     def _play_loop(self) -> None:
+        _raise_priority(process=False)
         frame_size = max(1, int(self.sample_rate * 0.04))
         stream = None
         while True:
-            batch, samples, timeline, sample_offset = self._audio_queue.get()
+            try:
+                item = self._audio_queue.get_nowait()
+                starved = False
+            except queue.Empty:
+                item = self._audio_queue.get()
+                starved = True
+            batch, samples, timeline, sample_offset = item
+            length = len(samples)
             try:
                 if batch.cancelled.is_set():
                     continue
+                if starved and batch.played:
+                    self._await_lead(batch)
                 if stream is None:
                     stream = sd.OutputStream(samplerate=self.sample_rate, channels=1,
                                              dtype="float32", latency="low", blocksize=0)
@@ -380,6 +430,7 @@ class VoiceService:
                         if batch.cancelled.is_set():
                             stream.abort()
                             break
+                        batch.played = True
                         self._set_speaking(batch, True)
                         self._set_subtitle(
                             batch, timeline.text_at(sample_offset + start))
@@ -401,6 +452,8 @@ class VoiceService:
                     stream = None
             finally:
                 self._audio_queue.task_done()
+                with self._state_lock:
+                    self._buffered_samples -= length
                 self._complete(batch)
                 samples = frame = timeline = None
 
