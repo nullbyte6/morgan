@@ -604,6 +604,7 @@
   "nova.group.upcoming": "即将到来",
   "nova.group.past": "已过去",
   "nova.reminder": "提醒",
+  "nova.due_reminders": "{count} 个提醒已到期 · {titles}",
   "nova.event": "事件",
   "nova.format.date": "yyyy年M月d日",
   "nova.dialog.new_reminder": "新建提醒",

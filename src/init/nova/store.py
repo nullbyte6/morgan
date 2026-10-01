@@ -127,17 +127,15 @@ class NovaStore(QObject):
     def overdue(self, now: datetime | None = None) -> list[Reminder]:
         return self.reminders(end=now or datetime.now(), completed=False)
 
-    def pop_due(self, now: datetime | None = None,
-                window: timedelta = timedelta(days=1)) -> list[Reminder]:
-        """Mark every pending reminder due by now as notified and return those due within window."""
-        now = now or datetime.now()
-        limit, oldest = to_local(now), to_local(now - window)
+    def pop_due(self, now: datetime | None = None) -> list[Reminder]:
+        """Mark every pending reminder due by now as notified and return them, including missed ones."""
+        limit = to_local(now or datetime.now())
         with self.reminder_db.connect(write=True) as db:
             rows = db.execute("""SELECT * FROM reminders WHERE completed_at IS NULL
                 AND notified_at IS NULL AND remind_at <= ? ORDER BY remind_at,id""", (limit,)).fetchall()
             db.execute("""UPDATE reminders SET notified_at=? WHERE completed_at IS NULL
                 AND notified_at IS NULL AND remind_at <= ?""", (timestamp(), limit))
-        return [Reminder.from_row(row) for row in rows if row["remind_at"] > oldest]
+        return [Reminder.from_row(row) for row in rows]
 
     def add_event(self, title: str, starts_at: datetime, ends_at: datetime, *,
                   all_day: bool = False, notes: str = "") -> Event:

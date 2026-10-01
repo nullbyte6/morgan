@@ -26,6 +26,7 @@ import re
 import sys
 import threading
 import tempfile
+from datetime import datetime
 from getpass import getuser
 from types import SimpleNamespace
 
@@ -1007,9 +1008,16 @@ class AssistantWindow(DesktopWindow):
             logging.getLogger("assistant.nova").exception("Unable to read due reminders")
             return
         title = f"{get_assistant_name()} · {tr('nova.reminder')}"[:63]
-        for reminder in due:
-            message = f"{nova_formatting.time_text(reminder.remind_at)} · {reminder.title}"[:255]
-            threading.Thread(target=send_notification, args=(message, title), daemon=True).start()
+        today = datetime.now().date()
+        messages = [f"{nova_formatting.time_text(reminder.remind_at)} · {reminder.title}"
+                    if reminder.remind_at.date() == today else
+                    f"{nova_formatting.date_time_text(reminder.remind_at)} · {reminder.title}"
+                    for reminder in due]
+        if len(messages) > 3:
+            messages = [tr('nova.due_reminders', count=len(due),
+                           titles=", ".join(reminder.title for reminder in due))]
+        for message in messages:
+            threading.Thread(target=send_notification, args=(message[:255], title), daemon=True).start()
 
     def open_terminal_command(self, command: str) -> None:
         from src.init.terminal import TerminalView

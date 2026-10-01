@@ -604,6 +604,7 @@
   "nova.group.upcoming": "Próximos",
   "nova.group.past": "Pasados",
   "nova.reminder": "Recordatorio",
+  "nova.due_reminders": "{count} recordatorios pendientes · {titles}",
   "nova.event": "Evento",
   "nova.format.date": "d MMM yyyy",
   "nova.dialog.new_reminder": "Nuevo recordatorio",
