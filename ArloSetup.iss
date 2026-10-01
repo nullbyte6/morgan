@@ -24,7 +24,7 @@ ChangesEnvironment=yes
 SetupLogging=yes
 OutputDir=build\installer
 OutputBaseFilename=ArloSetup
-Compression=lzma2/fast
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=assets\arlo.ico
@@ -40,8 +40,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 [Files]
 Source: "{#ArloSourceDir}\Arlo.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ArloSourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#ArloSourceDir}\tui\ArloTUI.exe"; DestDir: "{app}\tui"; Flags: ignoreversion
-Source: "{#ArloSourceDir}\tui\_internal\*"; DestDir: "{app}\tui\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#ArloSourceDir}\ArloTUI.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "scripts\arlo-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
@@ -60,15 +59,17 @@ Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvir
 Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "AssistantName"; ValueData: "{code:GetAssistantName}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\tui"
+
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.venv"
 Type: filesandordirs; Name: "{app}\src"
-Type: filesandordirs; Name: "{app}\tui"
 
 [Icons]
 Name: "{autoprograms}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{autoprograms}\{code:GetAssistantName} Terminal"; Filename: "{app}\tui\ArloTUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Arlo.exe"
+Name: "{autoprograms}\{code:GetAssistantName} Terminal"; Filename: "{app}\ArloTUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Arlo.exe"
 
 [Code]
 var

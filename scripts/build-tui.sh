@@ -93,7 +93,9 @@ command=("$python" -B -m PyInstaller.utils.cliutils.makespec
     --exclude-module PyQt5 --exclude-module PyQt6 --exclude-module PySide2
     --exclude-module PySide6 --exclude-module shiboken6
     --exclude-module torch --exclude-module torchaudio --exclude-module transformers
-    --exclude-module tensorflow --exclude-module src.init.voice_service
+    --exclude-module tensorflow --exclude-module numba --exclude-module llvmlite
+    --exclude-module pandas --exclude-module pyarrow --exclude-module matplotlib
+    --exclude-module src.init.voice_service
     --exclude-module src.init.tts_server
     "${hidden[@]}" "$root/entry/tui.py")
 
@@ -120,14 +122,19 @@ collection = collection.replace("name='ArloTUI',", "name='tui',", 1)
 text = head + separator + collection
 path.write_text(text, encoding='utf-8')
 PY
-run_python -B -m PyInstaller --noconfirm --distpath "$arlo" --workpath "$build/work" "$build/ArloTUI.spec" "$@"
+rm -rf -- "$build/dist"
+run_python -B -m PyInstaller --noconfirm --distpath "$build/dist" --workpath "$build/work" "$build/ArloTUI.spec" "$@"
+
+mkdir -p -- "$arlo/_internal"
+cp -f -- "$build/dist/tui/ArloTUI.exe" "$arlo/ArloTUI.exe"
+cp -rn -- "$build/dist/tui/_internal/." "$arlo/_internal/"
 
 system32="${SYSTEMROOT:-C:\\Windows}"
 system32="${system32//\\//}/System32"
 for runtime in vcruntime140 vcruntime140_1 msvcp140 msvcp140_1 msvcp140_2 \
         msvcp140_atomic_wait msvcp140_codecvt_ids concrt140 vcomp140; do
     if [[ -f "$system32/$runtime.dll" ]]; then
-        cp -f -- "$system32/$runtime.dll" "$arlo/tui/_internal/"
+        cp -f -- "$system32/$runtime.dll" "$arlo/_internal/"
     fi
 done
-printf '\nExecutable: %s/tui/ArloTUI.exe\n' "$arlo"
+printf '\nExecutable: %s/ArloTUI.exe\n' "$arlo"

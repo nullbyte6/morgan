@@ -13,7 +13,7 @@ Run `ArloSetup.exe` (Windows 10 or later, 64-bit). No administrator rights are
 required. The installer:
 
 - installs `Arlo.exe` to `C:\Arlo` by default, with a Start menu entry and an
-  optional desktop shortcut, and the terminal version `tui\ArloTUI.exe` with its
+  optional desktop shortcut, and the terminal version `ArloTUI.exe` with its
   own Start menu entry;
 - asks for the assistant name (default `Arlo`) and sets the `ARLO` environment
   variable (or `<NAME>` for a custom name) to the installation folder;

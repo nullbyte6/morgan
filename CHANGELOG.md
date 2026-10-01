@@ -9,6 +9,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add previous message history with Alt + Up/Down to the terminal chat input
 - Fix Gemma 4 task_finish parse failures that looped without delivering an answer
 - Fix response workspace font size
+- Update installer to share one runtime between Arlo and the terminal version and use stronger compression, shrinking ArloSetup from 1.1 GB to about 440 MB
 - Update voice playback to rebuffer after an underrun and raise the audio thread and process priority
 - Update voice service to use the MIOpen fast find mode for a quicker first synthesis
 
