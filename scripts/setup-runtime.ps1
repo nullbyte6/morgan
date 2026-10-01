@@ -65,6 +65,9 @@ $VenvDir = Join-Path $InstallDir ".venv"
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 $TorchVersion = "2.8.0"
 $TorchCudaIndex = "https://download.pytorch.org/whl/cu128"
+$TorchRocmVersion = "2.12.0+rocm7.14.1"
+$TorchaudioRocmVersion = "2.11.0+rocm7.14.1"
+$TorchRocmIndex = "https://repo.amd.com/rocm/whl-multi-arch/"
 $VoicePackages = @(
     "antlr4-python3-runtime==4.9.3",
     "attrs==26.1.0",
@@ -572,19 +575,64 @@ function Test-VoiceRuntime {
     }
 }
 
-function Get-TorchIndexArguments {
+function Get-TorchBackend {
     $Adapters = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
         ForEach-Object { $_.Name })
 
     if ($Adapters -match "NVIDIA") {
-        Write-Host "NVIDIA GPU detected. Using CUDA PyTorch."
-
-        return @("--index-url", $TorchCudaIndex)
+        return @{ Name = "cuda"; Target = $null }
     }
 
-    Write-Host "No NVIDIA GPU detected. Using CPU PyTorch."
+    if ($Adapters -match "Radeon.*RX\s*907\d") {
+        return @{ Name = "rocm"; Target = "gfx1201" }
+    }
 
-    return @()
+    if ($Adapters -match "Radeon.*RX\s*906\d") {
+        return @{ Name = "rocm"; Target = "gfx1200" }
+    }
+
+    return @{ Name = "cpu"; Target = $null }
+}
+
+function Get-TorchInstallArguments {
+    param([hashtable]$Backend)
+
+    switch ($Backend.Name) {
+        "cuda" {
+            Write-Host "NVIDIA GPU detected. Using CUDA PyTorch."
+
+            return @("torch==$TorchVersion", "torchaudio==$TorchVersion", "--index-url", $TorchCudaIndex)
+        }
+        "rocm" {
+            Write-Host "AMD Radeon GPU detected ($($Backend.Target)). Using ROCm PyTorch."
+
+            return @("torch[device-$($Backend.Target)]==$TorchRocmVersion", "torchaudio==$TorchaudioRocmVersion", "--index-url", $TorchRocmIndex)
+        }
+    }
+
+    Write-Host "No supported GPU detected. Using CPU PyTorch."
+
+    return @("torch==$TorchVersion", "torchaudio==$TorchVersion")
+}
+
+function Test-TorchBackend {
+    param([hashtable]$Backend)
+
+    if ($Backend.Name -eq "cpu") {
+        return $true
+    }
+
+    $Attribute = if ($Backend.Name -eq "rocm") { "hip" } else { "cuda" }
+    $Check = "import sys, torch; sys.exit(0 if torch.version.$Attribute else 1)"
+
+    try {
+        & $VenvPython -c $Check *> $null
+
+        return ($LASTEXITCODE -eq 0)
+    }
+    catch {
+        return $false
+    }
 }
 
 function Ensure-Ffmpeg {
@@ -611,9 +659,27 @@ function Ensure-Ffmpeg {
 function Ensure-VoiceRuntime {
     Write-Step "Checking the voice runtime..."
 
+    $Backend = Get-TorchBackend
+    $Pip = @("-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--progress-bar", "off")
+
     if (Test-VoiceRuntime) {
-        Write-Host "Voice runtime found:"
-        Write-Host "  $VenvDir"
+        if (Test-TorchBackend $Backend) {
+            Write-Host "Voice runtime found:"
+            Write-Host "  $VenvDir"
+            return
+        }
+
+        Write-Host "Voice runtime found, but PyTorch does not match the GPU. Reinstalling PyTorch..."
+
+        if ((Invoke-Native -File $VenvPython -Arguments ($Pip + (Get-TorchInstallArguments $Backend))) -ne 0) {
+            throw "Failed to install PyTorch."
+        }
+
+        if (-not (Test-TorchBackend $Backend)) {
+            throw "PyTorch was reinstalled but does not support the GPU."
+        }
+
+        Write-Host "PyTorch updated successfully."
         return
     }
 
@@ -642,11 +708,9 @@ function Ensure-VoiceRuntime {
         }
     }
 
-    $Pip = @("-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--progress-bar", "off")
-
     Write-Host "Installing PyTorch..."
 
-    $Arguments = $Pip + @("torch==$TorchVersion", "torchaudio==$TorchVersion") + (Get-TorchIndexArguments)
+    $Arguments = $Pip + (Get-TorchInstallArguments $Backend)
 
     if ((Invoke-Native -File $VenvPython -Arguments $Arguments) -ne 0) {
         throw "Failed to install PyTorch."
