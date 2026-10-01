@@ -5,6 +5,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 ## Unreleased
 
 - Add CHANGELOG.md with the full version history
+- Add previous message history with Alt + Up/Down to the desktop chat input
 
 ## 1.4.45-beta (2026-10-01)
 

@@ -73,6 +73,9 @@ class ChatInput(QTextEdit):
         self.file_tag_popup.itemClicked.connect(self.accept_file_tag)
         self.file_tag_start = -1
         self.file_tag_directory = self.directory()
+        self.history = []
+        self.history_index = None
+        self.history_draft = ""
 
         # Conectar señales de cambio de contenido para ajustar altura
         self.textChanged.connect(self.adjust_height)
@@ -172,11 +175,45 @@ class ChatInput(QTextEdit):
         self.setTextCursor(cursor)
         self.setFocus()
 
+    def remember(self):
+        text = self.toPlainText().strip()
+        self.history_index = None
+        if text and (not self.history or self.history[-1] != text):
+            self.history.append(text)
+
+    def browse_history(self, step):
+        if not self.history:
+            return
+        if self.history_index is None:
+            if step > 0:
+                return
+            self.history_draft = self.toPlainText()
+            index = len(self.history) - 1
+        else:
+            index = self.history_index + step
+            if index < 0:
+                return
+        if index >= len(self.history):
+            self.history_index = None
+            text = self.history_draft
+        else:
+            self.history_index = index
+            text = self.history[index]
+        self.setPlainText(text)
+        self.moveCursor(QTextCursor.End)
+        self.hide_file_tags()
+
     def focusOutEvent(self, event):
         self.hide_file_tags()
         super().focusOutEvent(event)
 
     def keyPressEvent(self, event):
+        if (event.modifiers() & Qt.AltModifier and event.key() in (Qt.Key_Up, Qt.Key_Down)
+                and not event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier)):
+            event.accept()
+            self.browse_history(-1 if event.key() == Qt.Key_Up else 1)
+            return
+
         popup = self.file_tag_popup
         if popup.isVisible():
             key = event.key()

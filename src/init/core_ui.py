@@ -1439,6 +1439,7 @@ class AssistantWindow(DesktopWindow):
         if turn_id != session.turn_id or session.submitting is None:
             return
 
+        session.ui.input.remember()
         session.ui.input.clear()
         session.ui.attachment_tray.clear()
         session.submitting = None
