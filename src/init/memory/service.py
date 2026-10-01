@@ -18,10 +18,12 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import hashlib
 import json
+import os
 import re
 import unicodedata
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from .database import Database, timestamp
 from . import lexical
@@ -395,6 +397,74 @@ class MemoryService:
                 db.execute("INSERT OR IGNORE INTO deleted_sources VALUES(?,?)", (row[0], timestamp()))
             db.execute("DELETE FROM messages WHERE id=?", (message_id,))
             return True
+
+    def forget_messages(self, message_ids):
+        """Delete messages together with their entries in the daily Markdown log, so nothing keeps them."""
+        with self.db.connect(write=True) as db:
+            rows = [row for row in (db.execute("SELECT id,source_ref FROM messages WHERE id=?", (message_id,)).fetchone()
+                                    for message_id in dict.fromkeys(message_ids)) if row is not None]
+            logs = {}
+            for row in rows:
+                db.execute("DELETE FROM messages WHERE id=?", (row["id"],))
+                path, separator, offset = (row["source_ref"] or "").rpartition("#byte=")
+                if separator and offset.isdigit():
+                    logs.setdefault(path, set()).add(int(offset))
+            for path, offsets in logs.items():
+                self._cut_log(db, path, offsets)
+        return len(rows)
+
+    @staticmethod
+    def _cut_log(db, path, offsets):
+        prefix = path + "#byte="
+
+        def located(table, column):
+            found = {}
+            for (source_ref,) in db.execute(f"SELECT {column} FROM {table} WHERE substr({column},1,?)=?",
+                                            (len(prefix), prefix)):
+                offset = source_ref[len(prefix):]
+                if offset.isdigit():
+                    found[int(offset)] = source_ref
+            return found
+
+        def retain():
+            for offset in offsets:
+                db.execute("INSERT OR IGNORE INTO deleted_sources VALUES(?,?)", (prefix + str(offset), timestamp()))
+
+        log = Path(path)
+        try:
+            data = log.read_bytes() if not db.execute("SELECT 1 FROM imports WHERE path=?", (path,)).fetchone() else None
+        except OSError:
+            data = None
+        def gap(offset):
+            return next((len(separator) for separator in (b"\r\n\r\n", b"\n\n")
+                         if data[max(0, offset - len(separator)):offset + 1] == separator + b"["), 0)
+
+        if data is None or not all(gap(offset) for offset in offsets):
+            retain()
+            return
+        remaining = located("messages", "source_ref")
+        starts = sorted(set(remaining) | offsets)
+        spans = [(offset - gap(offset), next((start - gap(start) for start in starts if start > offset), len(data)))
+                 for offset in sorted(offsets)]
+        kept, position = bytearray(), 0
+        for start, end in spans:
+            kept += data[position:start]
+            position = end
+        kept += data[position:]
+
+        def shifted(offset):
+            return offset - sum(end - start for start, end in spans if start < offset)
+
+        for table in ("messages", "deleted_sources"):
+            for offset, source_ref in sorted(located(table, "source_ref").items()):
+                if any(start < offset < end for start, end in spans):
+                    db.execute(f"DELETE FROM {table} WHERE source_ref=?", (source_ref,))
+                elif shifted(offset) != offset:
+                    db.execute(f"UPDATE {table} SET source_ref=? WHERE source_ref=?",
+                               (prefix + str(shifted(offset)), source_ref))
+        draft = log.with_name(log.name + ".tmp")
+        draft.write_bytes(bytes(kept))
+        os.replace(draft, log)
 
     def prune_exchanges(self, is_command):
         """Delete user commands matching is_command together with the reply that followed each."""
