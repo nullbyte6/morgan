@@ -66,6 +66,35 @@ reading and citation. Web links in conversation logs, YouTube selections and the
 repository link also use this browser. If the embedded browser is unavailable,
 Arlo reports an error instead of launching the system browser.
 
+## Nova
+
+Nova is Arlo's reminders, events and agenda workspace. Open it from the command
+palette (`Ctrl + K`, then "Nova") or with `Ctrl + Alt + N`. It lives inside a
+workspace panel and uses Arlo's theme, fonts and animations.
+
+Its sidebar is part of the panel: it holds Agenda, Reminders, Events and Calendar,
+and folds to an icon strip with a slide when you click the Nova star. In narrow
+panels it folds by itself.
+
+- **Agenda** lists overdue reminders, then each of the next 14 days that has
+  something on it.
+- **Reminders** keeps pending and completed reminders. Tick the circle to complete one.
+- **Events** lists upcoming and past events, with a time or all day.
+- **Calendar** shows a week, month or year. Click a day in the month or year to drill
+  into its week, click a month name in the year to open that month, and double-click a
+  slot in the week to create an event there.
+
+The **+** button, or clicking any entry, opens an overlay to create, edit or delete a
+reminder or an event. Reminders take a date and an `HH:mm` time; events take a start
+and an end, or last all day. Dates are picked from a month picker.
+
+Reminders live in `~/.arlo/nova/reminders.sqlite3` and events in
+`~/.arlo/nova/events.sqlite3`, two independent SQLite databases that use only Python's
+standard library. Times are stored as local wall-clock times. While Arlo runs, a due
+reminder is announced as a Windows notification within about 30 seconds; reminders
+that were already more than a day overdue when Arlo started are not announced, but stay
+marked as overdue.
+
 ## How tiling works
 Arlo uses a binary tiling layout built with Qt splitters. Each new panel divides an existing workspace into two regions, alternating between horizontal and vertical splits.
 Panels automatically share the available space. You can drag the separators between them to resize individual regions without affecting their content.

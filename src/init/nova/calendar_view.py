@@ -21,8 +21,8 @@ from datetime import date, datetime, time
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import (QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
-                               QStackedWidget, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+                               QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
 from src.init.lang import tr
 from src.init.theme import on_theme_changed
@@ -36,6 +36,7 @@ from .entries import Entry
 from .store import NovaStore
 
 MONTH_HEADER = 30
+NARROW_WIDTH = 620
 CHIP_HEIGHT = 19
 CHIP_STEP = 21
 
@@ -277,6 +278,8 @@ class CalendarView(QWidget):
 
         self.title = QLabel()
         self.title.setObjectName("novaCalendarTitle")
+        self.title.setMinimumWidth(0)
+        self.title.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.previous = self._arrow(CHEVRON_LEFT)
         self.next = self._arrow(CHEVRON_RIGHT)
         self.today_button = QPushButton()
@@ -286,14 +289,13 @@ class CalendarView(QWidget):
         self.segments.setExclusive(True)
         self._segment_buttons: dict[str, QPushButton] = {}
 
-        header = QHBoxLayout()
-        header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(6)
-        header.addWidget(self.title, 1)
-        header.addWidget(self.previous)
-        header.addWidget(self.today_button)
-        header.addWidget(self.next)
-        header.addSpacing(10)
+        navigation = QHBoxLayout()
+        navigation.setSpacing(6)
+        navigation.addWidget(self.previous)
+        navigation.addWidget(self.today_button)
+        navigation.addWidget(self.next)
+        segments = QHBoxLayout()
+        segments.setSpacing(6)
         for mode in MODES:
             button = QPushButton()
             button.setObjectName("novaSegment")
@@ -302,7 +304,17 @@ class CalendarView(QWidget):
             button.clicked.connect(lambda _checked=False, mode=mode: self.set_mode(mode))
             self.segments.addButton(button)
             self._segment_buttons[mode] = button
-            header.addWidget(button)
+            segments.addWidget(button)
+        self._navigation, self._segments = QWidget(), QWidget()
+        for holder, row in ((self._navigation, navigation), (self._segments, segments)):
+            row.setContentsMargins(0, 0, 0, 0)
+            holder.setLayout(row)
+        self._header = QGridLayout()
+        self._header.setContentsMargins(0, 0, 0, 0)
+        self._header.setHorizontalSpacing(16)
+        self._header.setVerticalSpacing(8)
+        self._narrow: bool | None = None
+        self._arrange_header(False)
 
         self.week = WeekPage()
         self.month = MonthGrid()
@@ -315,7 +327,7 @@ class CalendarView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        layout.addLayout(header)
+        layout.addLayout(self._header)
         layout.addWidget(self.stack, 1)
 
         self.previous.clicked.connect(lambda: self.step(-1))
@@ -354,6 +366,31 @@ class CalendarView(QWidget):
         button.setFixedSize(34, 34)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         return button
+
+    def _arrange_header(self, narrow: bool) -> None:
+        """Put the period title above the controls when the view is too narrow for one row."""
+        if narrow == self._narrow:
+            return
+        self._narrow = narrow
+        for widget in (self.title, self._navigation, self._segments):
+            self._header.removeWidget(widget)
+        self._header.setColumnStretch(0, 0)
+        self._header.setColumnStretch(1, 0)
+        self._header.setColumnStretch(2, 0)
+        if narrow:
+            self._header.addWidget(self.title, 0, 0, 1, 2)
+            self._header.addWidget(self._navigation, 1, 0)
+            self._header.addWidget(self._segments, 1, 1, Qt.AlignmentFlag.AlignRight)
+            self._header.setColumnStretch(1, 1)
+        else:
+            self._header.addWidget(self.title, 0, 0)
+            self._header.addWidget(self._navigation, 0, 1)
+            self._header.addWidget(self._segments, 0, 2)
+            self._header.setColumnStretch(0, 1)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._arrange_header(self.width() < NARROW_WIDTH)
 
     @property
     def mode(self) -> str:

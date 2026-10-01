@@ -212,7 +212,8 @@ QPushButton#chatNav,
 QPushButton#logsNav,
 QPushButton#editorNav,
 QPushButton#terminalNav,
-QPushButton#browserNav {
+QPushButton#browserNav,
+QPushButton#novaNav {
     background-color: transparent;
     color: @text_muted;
     border: 2px solid transparent;
@@ -238,7 +239,8 @@ QPushButton#chatNav:hover,
 QPushButton#logsNav:hover,
 QPushButton#editorNav:hover,
 QPushButton#terminalNav:hover,
-QPushButton#browserNav:hover {
+QPushButton#browserNav:hover,
+QPushButton#novaNav:hover {
     background-color: @surface_raised;
     color: @text;
 }
@@ -1133,4 +1135,238 @@ QScrollArea#novaScroll QScrollBar:horizontal {
     background: transparent;
     height: 0px;
     margin: 0;
+}
+
+QWidget#novaView,
+QWidget#novaSidebar,
+QWidget#novaEntryList,
+QWidget#novaEntryBody,
+QWidget#novaWelcome {
+    background: transparent;
+}
+
+QFrame#novaDivider {
+    background-color: @border;
+    border: none;
+}
+
+QPushButton#novaStar {
+    background-color: transparent;
+    color: @accent;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 24px;
+    padding: 0;
+}
+
+QPushButton#novaStar:hover {
+    background-color: @surface_raised;
+    color: @accent_hover;
+}
+
+QLabel#novaTitle {
+    color: @text;
+    font-size: 24px;
+    background: transparent;
+}
+
+QLabel#novaTagline {
+    color: @text_muted;
+    font-size: 14px;
+    background: transparent;
+}
+
+QPushButton#novaAdd {
+    background-color: @accent;
+    color: @on_accent;
+    border: 2px solid @border;
+    border-radius: 21px;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 18px;
+    padding: 0;
+}
+
+QPushButton#novaAdd:hover {
+    background-color: @accent_hover;
+}
+
+QLabel#novaGroup {
+    color: @text_subtle;
+    font-size: 13px;
+    background: transparent;
+    padding: 8px 2px 0 2px;
+}
+
+QFrame#novaRow {
+    background-color: transparent;
+    border: 2px solid @border;
+    border-radius: 12px;
+}
+
+QFrame#novaRow:hover {
+    background-color: @surface_raised;
+    border-color: @border_strong;
+}
+
+QLabel#novaRowTitle {
+    color: @text;
+    font-size: 16px;
+    background: transparent;
+    border: none;
+}
+
+QFrame#novaRow[completed="true"] QLabel#novaRowTitle {
+    color: @text_subtle;
+}
+
+QLabel#novaRowNotes {
+    color: @text_muted;
+    font-size: 14px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#novaRowCaption {
+    color: @text_subtle;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+}
+
+QFrame#novaRow[overdue="true"] QLabel#novaRowCaption {
+    color: @error;
+}
+
+QLabel#novaRowMarker {
+    color: @accent;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 20px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#novaWelcomeMark {
+    color: @accent;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 44px;
+    background: transparent;
+}
+
+QLabel#novaWelcomeTitle {
+    color: @text;
+    font-size: 18px;
+    background: transparent;
+}
+
+QLabel#novaWelcomeText {
+    color: @text_muted;
+    font-size: 14px;
+    background: transparent;
+}
+
+QWidget#novaScrim {
+    background-color: @surface/205;
+}
+
+QFrame#novaCard,
+QFrame#novaPicker {
+    background-color: @surface;
+    border: 2px solid @border;
+    border-radius: 16px;
+}
+
+QFrame#novaPicker {
+    border-radius: 14px;
+}
+
+QLabel#novaDialogTitle {
+    color: @text;
+    font-size: 20px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#novaFieldLabel {
+    color: @text_muted;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#novaError {
+    color: @error;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+}
+
+QLineEdit#novaInput,
+QPlainTextEdit#novaInput,
+QPushButton#novaDateButton {
+    background-color: @surface_sunken;
+    color: @text;
+    border: 1px solid @border;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 15px;
+    selection-background-color: @selection;
+    selection-color: @text;
+}
+
+QPushButton#novaDateButton {
+    text-align: left;
+}
+
+QLineEdit#novaInput:hover,
+QPlainTextEdit#novaInput:hover,
+QPushButton#novaDateButton:hover {
+    border-color: @border_strong;
+}
+
+QLineEdit#novaInput:focus,
+QPlainTextEdit#novaInput:focus {
+    border-color: @accent;
+}
+
+QPushButton#novaPrimaryButton,
+QPushButton#novaSecondaryButton,
+QPushButton#novaDangerButton {
+    border-radius: 10px;
+    padding: 8px 18px;
+    font-size: 15px;
+    border: 2px solid transparent;
+}
+
+QPushButton#novaPrimaryButton {
+    background-color: @accent;
+    color: @on_accent;
+}
+
+QPushButton#novaPrimaryButton:hover {
+    background-color: @accent_hover;
+}
+
+QPushButton#novaPrimaryButton:disabled {
+    background-color: @surface_selected;
+    color: @text_disabled;
+}
+
+QPushButton#novaSecondaryButton {
+    background-color: transparent;
+    color: @text;
+    border-color: @border;
+}
+
+QPushButton#novaSecondaryButton:hover {
+    background-color: @surface_raised;
+}
+
+QPushButton#novaDangerButton {
+    background-color: transparent;
+    color: @error;
+}
+
+QPushButton#novaDangerButton:hover {
+    background-color: @error/30;
 }

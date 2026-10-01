@@ -5,10 +5,12 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 ## 26.10.1-beta (2026-10-01)
 
 - Add ARLO Home, the 26th built-in color theme, in blues and whites
+- Add Nova as a workspace view, with a sidebar folded into the panel, agenda, reminder and event lists, and an overlay to create, edit and delete entries, opened with Ctrl+Alt+N or the command palette
 - Add Nova calendar widgets with week, month and year views, drill-down between them, a date picker and Spanish and English day and month names
 - Add Nova persistence with one SQLite database for reminders and another for events, stored in the Arlo user folder, with due-reminder tracking
 - Fix log pruning that deleted unrelated YYYY-MM-DD.md files because its header check never matched and failed on unreadable files
 - Fix memory updates failing with a database constraint error when the new content or key already belonged to another active memory
+- Update due Nova reminders to be announced as Windows notifications while Arlo runs
 - Update theme folder seeding to deliver new built-in themes to existing installs without overwriting edited themes or restoring deleted ones
 - Update versioning to the current date in YY.M.D form, starting at 26.10.1-beta
 

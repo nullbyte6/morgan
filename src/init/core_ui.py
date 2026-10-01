@@ -57,6 +57,10 @@ from src.init.indicators import (GitBranchIndicator, ModelSelector, PermissionSe
                                  PrivacyIndicator, WorkingDirectory)
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
+from src.init.nova import formatting as nova_formatting
+from src.init.nova.store import NovaStore
+from src.init.nova.view import NovaView
+from src.init.notifications import send_notification
 
 
 WORKSPACE_VIEW_CONFIG = {
@@ -84,6 +88,11 @@ WORKSPACE_VIEW_CONFIG = {
         "title": "Terminal",
         "shortcut": "Ctrl+T",
         "icon": "",
+    },
+    "nova": {
+        "title": "Nova",
+        "shortcut": "Ctrl+Alt+N",
+        "icon": "󰫢",
     },
 }
 
@@ -209,9 +218,11 @@ class AssistantWindow(DesktopWindow):
         self._workspace_hiding = False
         self._workspace_exit_ready = False
         self.wake_inbox = None
+        self.nova_store = None
 
         self.build_ui()
         self.build_command_palette()
+        self.start_nova()
 
         self._workspace_shortcut_map = {
             options["shortcut"].rsplit("+", 1)[-1]: view_key
@@ -914,6 +925,8 @@ class AssistantWindow(DesktopWindow):
         if view_key == "browser":
             from src.init.visuals.browser import BrowserView
             return BrowserView()
+        if view_key == "nova":
+            return NovaView(self.get_nova_store())
         if view_key == "settings":
             view = SettingsView(
                 self.subtitles_enabled,
@@ -965,6 +978,36 @@ class AssistantWindow(DesktopWindow):
             logging.getLogger("assistant.workspace").exception(
                 "Failed to open workspace view %s", view_key)
             return
+
+    def get_nova_store(self) -> NovaStore:
+        """Open Nova's databases on first use and keep one store for every Nova view."""
+        if self.nova_store is None:
+            self.nova_store = NovaStore(parent=self)
+        return self.nova_store
+
+    def start_nova(self) -> None:
+        """Open Nova's storage and start announcing reminders as they become due."""
+        try:
+            self.get_nova_store()
+        except Exception:
+            logging.getLogger("assistant.nova").exception("Nova storage is unavailable")
+            return
+        self.nova_timer = QTimer(self)
+        self.nova_timer.setInterval(30_000)
+        self.nova_timer.timeout.connect(self.notify_due_reminders)
+        self.nova_timer.start()
+        QTimer.singleShot(3_000, self.notify_due_reminders)
+
+    def notify_due_reminders(self) -> None:
+        try:
+            due = self.nova_store.pop_due()
+        except Exception:
+            logging.getLogger("assistant.nova").exception("Unable to read due reminders")
+            return
+        title = f"{get_assistant_name()} · {tr('nova.reminder')}"[:63]
+        for reminder in due:
+            message = f"{nova_formatting.time_text(reminder.remind_at)} · {reminder.title}"[:255]
+            threading.Thread(target=send_notification, args=(message, title), daemon=True).start()
 
     def open_terminal_command(self, command: str) -> None:
         from src.init.terminal import TerminalView
@@ -1177,6 +1220,8 @@ class AssistantWindow(DesktopWindow):
         for session in self._views():
             self._refresh_view_language(session)
         self.refresh_settings_workspaces()
+        for view in self.workspace.findChildren(NovaView):
+            view.refresh_language()
         self.update_send_button()
         if self.showing_greeting:
             self.update_subtitles(self.startup_greeting, self.sessions[0])
