@@ -4,9 +4,9 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 1.4.45-beta (2026-10-01)
 
-- Fix response workspace font size
 - Add previous message history with Alt + Up/Down to the desktop chat input
 - Add previous message history with Alt + Up/Down to the terminal chat input
+- Fix response workspace font size
 
 ## 1.4.44-beta (2026-10-01)
 
