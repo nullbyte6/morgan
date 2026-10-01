@@ -396,6 +396,26 @@ class MemoryService:
             db.execute("DELETE FROM messages WHERE id=?", (message_id,))
             return True
 
+    def prune_exchanges(self, is_command):
+        """Delete user commands matching is_command together with the reply that followed each."""
+        with self.db.connect(write=True) as db:
+            commands = [row for row in db.execute("""SELECT id,session_id,sequence,content FROM messages
+                WHERE role='user' AND length(content)<=300""") if is_command(row["content"])]
+            for row in commands:
+                db.execute("DELETE FROM messages WHERE session_id=? AND sequence=? AND role='assistant'",
+                           (row["session_id"], row["sequence"] + 1))
+                db.execute("DELETE FROM messages WHERE id=?", (row["id"],))
+            if commands:
+                db.execute("DELETE FROM sessions WHERE NOT EXISTS (SELECT 1 FROM messages WHERE session_id=sessions.id)")
+        return len(commands)
+
+    def clear(self):
+        """Delete every conversation and memory, then return the freed space to the disk."""
+        with self.db.connect(write=True) as db:
+            for table in ("memory_sources", "memories", "messages", "sessions", "imports", "deleted_sources"):
+                db.execute(f"DELETE FROM {table}")
+        self.db.compact()
+
     def backup(self, destination):
         self.db.backup(destination)
 

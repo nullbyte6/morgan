@@ -36,7 +36,7 @@ from src.init.core import Assistant
 from src.init.events import Event
 from src.init.file_tags import expand_file_tags
 from src.init.lang import tr
-from src.init.session_log import SessionLog
+from src.init.session_log import SessionLog, is_local_command
 from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
 
@@ -221,14 +221,16 @@ class SessionRunner:
                 if not prompt:
                     raise RuntimeError(tr("voice.not_transcribed"))
                 message = replace(message, transcript=prompt)
-            self.session.write(self.assistant.username, message.log_text())
+            local_command = (not voice_input and not message.attachments
+                             and is_local_command(prompt))
+            if not local_command:
+                self.session.write(self.assistant.username, message.log_text())
 
             from src.init.hot_reload import is_reload_command
             if (not voice_input and not message.attachments
                     and is_reload_command(prompt)):
                 reply = self.assistant.reload_source()
                 self.session.context.add_exchange(prompt, reply)
-                self.session.write(self.assistant.name, reply)
                 self.finished.emit(reply)
                 return
             task_title = ""
@@ -276,7 +278,7 @@ class SessionRunner:
             if not self.cancel_event.is_set() and audio_lease is not None:
                 audio_lease.reclaim()
 
-            if reply:
+            if reply and not local_command:
                 from .session_log import message_status
                 task_state = self.session.context.task_state
                 self.session.write(self.assistant.name, reply,

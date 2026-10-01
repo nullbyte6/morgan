@@ -42,17 +42,36 @@ active_memory = ContextVar("arlo_memory_turn", default=MemoryTurn())
 
 @lru_cache(maxsize=4)
 def _service(path, max_results, context_chars, recall_chars):
-    return MemoryService(path, max_results=max_results, context_chars=context_chars, recall_chars=recall_chars)
+    from ..session_log import is_local_command
+    service = MemoryService(path, max_results=max_results, context_chars=context_chars, recall_chars=recall_chars)
+    try:
+        service.prune_exchanges(is_local_command)
+    except Exception:
+        logging.getLogger("assistant.memory").exception("Local command exchanges could not be pruned")
+    return service
 
 
-def configured_service():
-    from ..config import HOME_PATH, load_config
-    settings = load_config()["memory"]
-    if not settings["enabled"]:
-        return None
+def _settings_service(settings):
+    from ..config import HOME_PATH
     path = Path(settings["database"]).expanduser()
     path = path if path.is_absolute() else HOME_PATH / path
     return _service(str(path.resolve()), settings["max_results"], settings["context_chars"], settings["recall_chars"])
+
+
+def configured_service():
+    from ..config import load_config
+    settings = load_config()["memory"]
+    if not settings["enabled"]:
+        return None
+    return _settings_service(settings)
+
+
+def clear_memories():
+    """Delete every stored conversation, memory and daily log, keeping settings and the Nova agenda."""
+    from ..config import load_config
+    from ..session_log import clear_logs
+    _settings_service(load_config()["memory"]).clear()
+    clear_logs()
 
 
 def memory_instructions():

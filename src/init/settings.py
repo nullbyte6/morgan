@@ -311,6 +311,15 @@ class SettingsView(QWidget):
         layout.addLayout(themes_folder_row)
         layout.addStretch()
 
+        self.remove_memories_button = QPushButton()
+        self.remove_memories_button.setObjectName("removeMemoriesButton")
+        self.remove_memories_button.setCursor(Qt.PointingHandCursor)
+        remove_memories_row = QHBoxLayout()
+        remove_memories_row.addStretch()
+        remove_memories_row.addWidget(self.remove_memories_button)
+        layout.addLayout(remove_memories_row)
+        self.remove_memories_button.clicked.connect(self.remove_memories)
+
         self.theme_dropdown.popup_requested.connect(self.refresh_themes)
         self.theme_dropdown.activated.connect(self.change_theme)
         self.themes_folder_button.clicked.connect(self.open_themes_folder)
@@ -353,6 +362,20 @@ class SettingsView(QWidget):
 
     def open_themes_folder(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(seed_user_themes())))
+
+    def remove_memories(self):
+        from .memory.integration import clear_memories
+        answer = QMessageBox.warning(
+            self, tr("ui.remove_memories"), tr("ui.remove_memories_confirm"),
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            clear_memories()
+        except Exception as error:
+            QMessageBox.warning(self, tr("ui.remove_memories"), tr("ui.error", error=error))
+            return
+        QMessageBox.information(self, tr("ui.remove_memories"), tr("ui.remove_memories_done"))
 
     def refresh_voices(self):
         voices = available_voices()
@@ -414,3 +437,6 @@ class SettingsView(QWidget):
             self.theme_dropdown.setAccessibleName(tr("ui.theme"))
             self.theme_dropdown.setToolTip(tr("ui.theme_hint"))
             self.themes_folder_button.setText(tr("ui.open_themes_folder"))
+        if hasattr(self, "remove_memories_button"):
+            self.remove_memories_button.setText(tr("ui.remove_memories"))
+            self.remove_memories_button.setToolTip(tr("ui.remove_memories_hint"))

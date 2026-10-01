@@ -352,6 +352,22 @@ QPushButton#themesFolderButton:pressed {
     color: @on_accent;
 }
 
+QPushButton#removeMemoriesButton {
+    background-color: @error/30;
+    color: @error;
+    border: 2px solid @error;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+QPushButton#removeMemoriesButton:hover,
+QPushButton#removeMemoriesButton:focus {
+    background-color: @error;
+    color: @surface;
+}
+
 QComboBox#languageDropdown::drop-down,
 QComboBox#modelDropdown::drop-down,
 QComboBox#themeDropdown::drop-down,

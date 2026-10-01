@@ -141,6 +141,14 @@ class Database:
         finally:
             connection.close()
 
+    def compact(self):
+        connection = sqlite3.connect(self.path, timeout=0.5)
+        try:
+            connection.execute("VACUUM")
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            connection.close()
+
     def backup(self, destination):
         destination = Path(destination).expanduser().resolve()
         if destination == self.path or destination.exists():

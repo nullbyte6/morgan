@@ -39,8 +39,38 @@ from .lang import tr
 from .output import markdown_text
 
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}\.md")
+DIRECTORY_COMMAND = re.compile(r"cd(?:\s+.*)?", re.IGNORECASE | re.DOTALL)
 MAX_DAYS = 24
 _current_session_path: Path | None = None
+
+
+def is_local_command(text: str) -> bool:
+    """Whether text is a directory change or module reload handled without the model."""
+    from .hot_reload import is_reload_command
+    return DIRECTORY_COMMAND.fullmatch(text.strip()) is not None or is_reload_command(text)
+
+
+def _session_logs(directory: Path) -> list[Path]:
+    logs = []
+    for path in directory.iterdir():
+        if (SESSION_NAME.fullmatch(path.name) and not path.is_symlink()
+                and path.is_file()):
+            try:
+                with path.open(encoding="utf-8-sig") as log:
+                    first_line = log.readline().strip()
+            except (OSError, UnicodeError):
+                continue
+            if re.fullmatch(r".+ Log — " + re.escape(path.stem), first_line):
+                logs.append(path)
+    return logs
+
+
+def clear_logs(directory: Path | None = None) -> None:
+    """Delete every daily Markdown conversation log."""
+    directory = (Path(directory) if directory is not None else HOME_PATH / ".log").resolve()
+    if directory.is_dir():
+        for path in _session_logs(directory):
+            path.unlink(missing_ok=True)
 
 
 def open_current_session_log() -> str:
@@ -305,17 +335,7 @@ class SessionLog:
         _current_session_path = self.path
 
     def _prune(self):
-        logs = []
-        for path in self.directory.iterdir():
-            if (SESSION_NAME.fullmatch(path.name) and not path.is_symlink()
-                    and path.is_file()):
-                try:
-                    with path.open(encoding="utf-8-sig") as log:
-                        first_line = log.readline().strip()
-                except (OSError, UnicodeError):
-                    continue
-                if re.fullmatch(r".+ Log — " + re.escape(path.stem), first_line):
-                    logs.append(path)
+        logs = _session_logs(self.directory)
         oldest = sorted((path for path in logs if path != self.path),
                         key=lambda path: path.name)
         for path in oldest[:max(0, len(logs) - MAX_DAYS)]:
@@ -335,7 +355,7 @@ class SessionLog:
 
         role = " ".join(str(role).splitlines()).strip()
         now = datetime.now().astimezone()
-        if self.path.name != f"{now:%Y-%m-%d}.md":
+        if self.path.name != f"{now:%Y-%m-%d}.md" or not self.path.exists():
             self._start_day(now)
 
         original = text
