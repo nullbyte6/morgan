@@ -88,6 +88,8 @@ MIGRATIONS = (
 
 
 class Database:
+    migrations = MIGRATIONS
+
     def __init__(self, path):
         if str(path).startswith(("\\\\", "//")):
             raise ValueError("Memory database must be on a local disk")
@@ -119,9 +121,9 @@ class Database:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)")
             versions = [row[0] for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version")]
-            if versions != list(range(1, len(versions) + 1)) or len(versions) > len(MIGRATIONS):
-                raise RuntimeError(f"Unsupported memory schema; upgrade {get_assistant_name()} or restore a compatible backup")
-            for version, statements in enumerate(MIGRATIONS, 1):
+            if versions != list(range(1, len(versions) + 1)) or len(versions) > len(self.migrations):
+                raise RuntimeError(f"Unsupported database schema in {self.path.name}; upgrade {get_assistant_name()} or restore a compatible backup")
+            for version, statements in enumerate(self.migrations, 1):
                 if version <= len(versions):
                     continue
                 for statement in statements:

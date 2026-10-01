@@ -1,0 +1,206 @@
+#  Copyright (c) 2026 Diego.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+#
+#  This file is part of arlo.
+#
+#  This program is free software: you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation, either version 3
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty
+#  of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/>.
+"""Persistent reminders and events with change notification for the interface."""
+from __future__ import annotations
+
+import uuid
+from datetime import date, datetime, time, timedelta
+from pathlib import Path
+
+from PySide6.QtCore import QObject, Signal
+
+from src.init.config import HOME_PATH
+from src.init.memory.database import timestamp
+
+from .database import EventDatabase, ReminderDatabase
+from .entries import Entry, Event, NOTES_LIMIT, Reminder, TITLE_LIMIT, day_start, to_local
+
+
+def _text(title: str, notes: str) -> tuple[str, str]:
+    title = " ".join(str(title).split())
+    notes = str(notes).strip()
+    if not 1 <= len(title) <= TITLE_LIMIT:
+        raise ValueError(f"The title must contain 1-{TITLE_LIMIT} characters")
+    if len(notes) > NOTES_LIMIT:
+        raise ValueError(f"The notes must not exceed {NOTES_LIMIT} characters")
+    return title, notes
+
+
+def _span(starts_at: datetime, ends_at: datetime, all_day: bool) -> tuple[str, str]:
+    if all_day:
+        starts_at = day_start(starts_at.date())
+        ends_at = datetime.combine(ends_at.date(), time(23, 59))
+    if ends_at < starts_at:
+        raise ValueError("The event cannot end before it starts")
+    return to_local(starts_at), to_local(ends_at)
+
+
+class NovaStore(QObject):
+    """Reminders and events in two separate SQLite databases, used from the interface thread."""
+
+    changed = Signal()
+
+    def __init__(self, directory: Path | str | None = None, parent: QObject | None = None):
+        super().__init__(parent)
+        directory = Path(directory) if directory is not None else HOME_PATH / "nova"
+        self.reminder_db = ReminderDatabase(directory / "reminders.sqlite3")
+        self.event_db = EventDatabase(directory / "events.sqlite3")
+
+    def add_reminder(self, title: str, remind_at: datetime, notes: str = "") -> Reminder:
+        title, notes = _text(title, notes)
+        reminder_id = uuid.uuid4().hex
+        with self.reminder_db.connect(write=True) as db:
+            db.execute("INSERT INTO reminders(id,title,notes,remind_at,created_at) VALUES(?,?,?,?,?)",
+                       (reminder_id, title, notes, to_local(remind_at), timestamp()))
+        self.changed.emit()
+        return self.reminder(reminder_id)
+
+    def update_reminder(self, reminder_id: str, title: str, remind_at: datetime,
+                        notes: str = "") -> Reminder:
+        title, notes = _text(title, notes)
+        moment = to_local(remind_at)
+        with self.reminder_db.connect(write=True) as db:
+            updated = db.execute(
+                """UPDATE reminders SET title=?,notes=?,
+                notified_at=CASE WHEN remind_at<>? THEN NULL ELSE notified_at END,
+                remind_at=? WHERE id=?""",
+                (title, notes, moment, moment, reminder_id)).rowcount
+        if not updated:
+            raise ValueError("The reminder no longer exists")
+        self.changed.emit()
+        return self.reminder(reminder_id)
+
+    def set_reminder_completed(self, reminder_id: str, completed: bool) -> Reminder:
+        with self.reminder_db.connect(write=True) as db:
+            updated = db.execute("UPDATE reminders SET completed_at=? WHERE id=?",
+                                 (timestamp() if completed else None, reminder_id)).rowcount
+        if not updated:
+            raise ValueError("The reminder no longer exists")
+        self.changed.emit()
+        return self.reminder(reminder_id)
+
+    def delete_reminder(self, reminder_id: str) -> bool:
+        with self.reminder_db.connect(write=True) as db:
+            deleted = db.execute("DELETE FROM reminders WHERE id=?", (reminder_id,)).rowcount == 1
+        if deleted:
+            self.changed.emit()
+        return deleted
+
+    def reminder(self, reminder_id: str) -> Reminder | None:
+        with self.reminder_db.connect() as db:
+            row = db.execute("SELECT * FROM reminders WHERE id=?", (reminder_id,)).fetchone()
+        return Reminder.from_row(row) if row else None
+
+    def reminders(self, start: datetime | None = None, end: datetime | None = None,
+                  completed: bool | None = None) -> list[Reminder]:
+        """Reminders due in [start, end), optionally only completed or only pending ones."""
+        clauses, values = [], []
+        if start is not None:
+            clauses.append("remind_at >= ?")
+            values.append(to_local(start))
+        if end is not None:
+            clauses.append("remind_at < ?")
+            values.append(to_local(end))
+        if completed is not None:
+            clauses.append("completed_at IS NOT NULL" if completed else "completed_at IS NULL")
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        with self.reminder_db.connect() as db:
+            rows = db.execute(f"SELECT * FROM reminders{where} ORDER BY remind_at,created_at,id", values)
+            return [Reminder.from_row(row) for row in rows]
+
+    def overdue(self, now: datetime | None = None) -> list[Reminder]:
+        return self.reminders(end=now or datetime.now(), completed=False)
+
+    def pop_due(self, now: datetime | None = None,
+                window: timedelta = timedelta(days=1)) -> list[Reminder]:
+        """Mark every pending reminder due by now as notified and return those due within window."""
+        now = now or datetime.now()
+        limit, oldest = to_local(now), to_local(now - window)
+        with self.reminder_db.connect(write=True) as db:
+            rows = db.execute("""SELECT * FROM reminders WHERE completed_at IS NULL
+                AND notified_at IS NULL AND remind_at <= ? ORDER BY remind_at,id""", (limit,)).fetchall()
+            db.execute("""UPDATE reminders SET notified_at=? WHERE completed_at IS NULL
+                AND notified_at IS NULL AND remind_at <= ?""", (timestamp(), limit))
+        return [Reminder.from_row(row) for row in rows if row["remind_at"] > oldest]
+
+    def add_event(self, title: str, starts_at: datetime, ends_at: datetime, *,
+                  all_day: bool = False, notes: str = "") -> Event:
+        title, notes = _text(title, notes)
+        starts, ends = _span(starts_at, ends_at, all_day)
+        event_id = uuid.uuid4().hex
+        with self.event_db.connect(write=True) as db:
+            db.execute("""INSERT INTO events(id,title,notes,starts_at,ends_at,all_day,created_at)
+                VALUES(?,?,?,?,?,?,?)""", (event_id, title, notes, starts, ends, int(all_day), timestamp()))
+        self.changed.emit()
+        return self.event(event_id)
+
+    def update_event(self, event_id: str, title: str, starts_at: datetime, ends_at: datetime, *,
+                     all_day: bool = False, notes: str = "") -> Event:
+        title, notes = _text(title, notes)
+        starts, ends = _span(starts_at, ends_at, all_day)
+        with self.event_db.connect(write=True) as db:
+            updated = db.execute("""UPDATE events SET title=?,notes=?,starts_at=?,ends_at=?,all_day=?
+                WHERE id=?""", (title, notes, starts, ends, int(all_day), event_id)).rowcount
+        if not updated:
+            raise ValueError("The event no longer exists")
+        self.changed.emit()
+        return self.event(event_id)
+
+    def delete_event(self, event_id: str) -> bool:
+        with self.event_db.connect(write=True) as db:
+            deleted = db.execute("DELETE FROM events WHERE id=?", (event_id,)).rowcount == 1
+        if deleted:
+            self.changed.emit()
+        return deleted
+
+    def event(self, event_id: str) -> Event | None:
+        with self.event_db.connect() as db:
+            row = db.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone()
+        return Event.from_row(row) if row else None
+
+    def events(self, first: date | None = None, last: date | None = None) -> list[Event]:
+        """Events touching any day from first to last, both inclusive."""
+        clauses, values = [], []
+        if last is not None:
+            clauses.append("starts_at < ?")
+            values.append(to_local(day_start(last + timedelta(days=1))))
+        if first is not None:
+            clauses.append("ends_at >= ?")
+            values.append(to_local(day_start(first)))
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        with self.event_db.connect() as db:
+            rows = db.execute(f"SELECT * FROM events{where} ORDER BY starts_at,ends_at,id", values)
+            events = [Event.from_row(row) for row in rows]
+        return [event for event in events if first is None or event.last_day >= first]
+
+    def entries(self, first: date, last: date) -> list[Entry]:
+        """Reminders and events touching any day from first to last, in chronological order."""
+        reminders = self.reminders(day_start(first), day_start(last + timedelta(days=1)))
+        entries = [*self.events(first, last), *reminders]
+        return sorted(entries, key=lambda entry: (entry.moment, isinstance(entry, Reminder),
+                                                  entry.title.casefold()))
+
+    def busy_days(self, first: date, last: date) -> dict[date, int]:
+        """Number of entries on each day from first to last that has at least one."""
+        counts: dict[date, int] = {}
+        for entry in self.entries(first, last):
+            for day in entry.days():
+                if first <= day <= last:
+                    counts[day] = counts.get(day, 0) + 1
+        return counts
