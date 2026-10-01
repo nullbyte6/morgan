@@ -39,7 +39,6 @@ from .lang import tr
 from .output import markdown_text
 
 SESSION_NAME = re.compile(r"\d{4}-\d{2}-\d{2}\.md")
-session_header = ""
 MAX_DAYS = 24
 _current_session_path: Path | None = None
 
@@ -310,9 +309,13 @@ class SessionLog:
         for path in self.directory.iterdir():
             if (SESSION_NAME.fullmatch(path.name) and not path.is_symlink()
                     and path.is_file()):
-                with path.open(encoding="utf-8") as log:
-                    if log.read(256).lstrip().startswith(session_header):
-                        logs.append(path)
+                try:
+                    with path.open(encoding="utf-8-sig") as log:
+                        first_line = log.readline().strip()
+                except (OSError, UnicodeError):
+                    continue
+                if re.fullmatch(r".+ Log — " + re.escape(path.stem), first_line):
+                    logs.append(path)
         oldest = sorted((path for path in logs if path != self.path),
                         key=lambda path: path.name)
         for path in oldest[:max(0, len(logs) - MAX_DAYS)]:

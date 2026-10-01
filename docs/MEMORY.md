@@ -61,7 +61,7 @@ should result in a clarification rather than guessing.
 `other`), optional semantic key, optional existing memory ID, and optional
 timezone-aware ISO expiration. Reuse keys such as `response_language`: replacing
 the content under that key atomically supersedes its previous active value.
-Updating an exact ID keeps that ID. Normalized duplicate content is reused.
+Updating an exact ID keeps that ID. If the new content or key already belongs to another active memory, that memory is superseded by the updated one. Normalized duplicate content is reused.
 Different paraphrases without a shared key are not semantically deduplicated.
 
 ### Recovering conversations and word occurrences

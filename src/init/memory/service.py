@@ -210,9 +210,13 @@ class MemoryService:
             current = db.execute("SELECT * FROM memories WHERE id=?", (memory_id,)).fetchone()
             if current is None or current["status"] not in ("active", "candidate"):
                 raise ValueError("Memory is missing or no longer current")
+            key = key or current["memory_key"]
+            db.execute("""UPDATE memories SET status='superseded',superseded_by=?,modified_at=?
+                WHERE id<>? AND status='active' AND (normalized=? OR (? IS NOT NULL AND memory_key=?))""",
+                       (memory_id, timestamp(), memory_id, normalize(content), key, key))
             db.execute("""UPDATE memories SET content=?,normalized=?,category=?,memory_key=?,expires_at=?,
                 modified_at=?,status='active',origin='explicit',confidence=1 WHERE id=?""",
-                       (content, normalize(content), category, key or current["memory_key"], expires_at, timestamp(), memory_id))
+                       (content, normalize(content), category, key, expires_at, timestamp(), memory_id))
             self._source(db, memory_id, source_message_id, None)
         return self.get_memory(memory_id)
 
