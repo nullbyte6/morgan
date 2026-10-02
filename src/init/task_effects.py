@@ -38,6 +38,7 @@ class ToolSpec:
     source: bool = False
     text_observation: bool = False
     ancillary: bool = False
+    incidental: bool = False
     verification_capable: bool = False
     requires_followup: bool = False
     followup_policy: Callable[[ActionResult], bool] | None = None
@@ -99,7 +100,8 @@ def quick_command_followup(result: ActionResult) -> bool:
     return False
 
 
-register("get_version get_current_time calculate get_city_distance get_weather "
+register("get_current_time calculate", ToolSpec(False, incidental=True))
+register("get_version get_city_distance get_weather "
          "search_youtube_songs search_spotify_songs search_spotify_playlists search_spotify_albums "
          "list_spotify_playlists get_spotify_playlist_tracks read_clipboard analyze_image analyze_screen "
          "find_directories list_quick_commands read_attachment", ToolSpec(False))

@@ -1634,6 +1634,8 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
                                   or result.outcome == Outcome.FAILED and changed)
 
     def context_read(self, spec, arguments):
+        if spec.incidental:
+            return True
         if spec.effectful or spec.source or not spec.path_argument:
             return False
         try:
