@@ -283,10 +283,12 @@ wheel==0.48.0
 win32_setctime==1.2.0
 winrt-runtime==3.2.1
 winrt-Windows.Foundation==3.2.1
+winrt-Windows.Data.Xml.Dom==3.2.1
 winrt-Windows.Foundation.Collections==3.2.1
 winrt-Windows.Media==3.2.1
 winrt-Windows.Media.Control==3.2.1
 winrt-Windows.Storage.Streams==3.2.1
+winrt-Windows.UI.Notifications==3.2.1
 winshell==0.6
 wrapt==2.4.1
 x-transformers==2.28.8

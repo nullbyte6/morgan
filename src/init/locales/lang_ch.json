@@ -648,5 +648,8 @@
   "nova.repeat.none": "从不",
   "nova.repeat.daily": "每天",
   "nova.repeat.weekly": "每周",
-  "nova.repeat.monthly": "每月"
+  "nova.repeat.monthly": "每月",
+  "nova.toast.snooze": "10 分钟后",
+  "nova.toast.tomorrow": "明天",
+  "nova.toast.done": "完成"
 }

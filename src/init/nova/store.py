@@ -113,6 +113,19 @@ class NovaStore(QObject):
         self.changed.emit()
         return self.reminder(reminder_id)
 
+    def snooze_reminder(self, reminder_id: str, until: datetime) -> Reminder:
+        """Remind again at until: a one-off reminder moves there, a repeating one gets a one-off copy."""
+        current = self.reminder(reminder_id)
+        if current is None:
+            raise ValueError("The reminder no longer exists")
+        if current.is_recurring:
+            return self.add_reminder(current.title, until, current.notes)
+        with self.reminder_db.connect(write=True) as db:
+            db.execute("UPDATE reminders SET remind_at=?,notified_at=NULL,completed_at=NULL WHERE id=?",
+                       (to_local(until), reminder_id))
+        self.changed.emit()
+        return self.reminder(reminder_id)
+
     def delete_reminder(self, reminder_id: str) -> bool:
         with self.reminder_db.connect(write=True) as db:
             deleted = db.execute("DELETE FROM reminders WHERE id=?", (reminder_id,)).rowcount == 1

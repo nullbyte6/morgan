@@ -648,5 +648,8 @@
   "nova.repeat.none": "Never",
   "nova.repeat.daily": "Daily",
   "nova.repeat.weekly": "Weekly",
-  "nova.repeat.monthly": "Monthly"
+  "nova.repeat.monthly": "Monthly",
+  "nova.toast.snooze": "In 10 min",
+  "nova.toast.tomorrow": "Tomorrow",
+  "nova.toast.done": "Done"
 }

@@ -26,7 +26,7 @@ import re
 import sys
 import threading
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from getpass import getuser
 from types import SimpleNamespace
 
@@ -63,7 +63,7 @@ from src.init.nova.sections import Section
 from src.init.nova.store import NovaStore
 from src.init.nova.tools import use_store as use_nova_store
 from src.init.nova.view import NovaView
-from src.init.notifications import send_notification
+from src.init.notifications import ask_notification, send_notification
 
 
 WORKSPACE_VIEW_CONFIG = {
@@ -133,6 +133,7 @@ class AssistantWindow(DesktopWindow):
     """Assistant window class, not its brain, which is somewhere else"""
     MAX_SESSIONS = 2
     model_request = Signal(str)
+    reminder_answered = Signal(object, str)
     username = getuser().capitalize()
 
     def __init__(self):
@@ -957,6 +958,10 @@ class AssistantWindow(DesktopWindow):
 
     def open_nova_diary(self) -> None:
         """Show the Nova diary, reusing an open Nova panel when there is one."""
+        self.open_nova_section(Section.DIARY)
+
+    def open_nova_section(self, section: Section) -> None:
+        """Show one section of Nova, reusing an open Nova panel when there is one."""
         view = next(iter(self.workspace.findChildren(NovaView)), None)
         if view is None:
             self.open_workspace_view("nova")
@@ -969,7 +974,7 @@ class AssistantWindow(DesktopWindow):
             if panel is not None:
                 self.workspace.focus_panel(panel.panel_id)
         if isinstance(view, NovaView):
-            view.show_section(Section.DIARY)
+            view.show_section(section)
 
     def get_nova_store(self) -> NovaStore:
         """Open Nova's databases on first use and keep one store for every Nova view."""
@@ -985,6 +990,7 @@ class AssistantWindow(DesktopWindow):
         except Exception:
             logging.getLogger("assistant.nova").exception("Nova storage is unavailable")
             return
+        self.reminder_answered.connect(self.answer_reminder, Qt.ConnectionType.QueuedConnection)
         self.nova_timer = QTimer(self)
         self.nova_timer.setInterval(30_000)
         self.nova_timer.timeout.connect(self.notify_due_reminders)
@@ -1004,10 +1010,43 @@ class AssistantWindow(DesktopWindow):
                     f"{nova_formatting.date_time_text(reminder.remind_at)} · {reminder.title}"
                     for reminder in due]
         if len(messages) > 3:
-            messages = [tr('nova.due_reminders', count=len(due),
-                           titles=", ".join(reminder.title for reminder in due))]
-        for message in messages:
+            message = tr('nova.due_reminders', count=len(due), titles=", ".join(reminder.title for reminder in due))
             threading.Thread(target=send_notification, args=(message[:255], title), daemon=True).start()
+            return
+        actions = [(action, tr(f"nova.toast.{action}")) for action in ("snooze", "tomorrow", "done")]
+        for reminder, message in zip(due, messages):
+            threading.Thread(target=self.ask_reminder, args=(reminder, message[:255], title, actions),
+                             daemon=True).start()
+
+    def ask_reminder(self, reminder, message: str, title: str, actions: list[tuple[str, str]]) -> None:
+        try:
+            choice = ask_notification(title, message, actions)
+        except Exception:
+            logging.getLogger("assistant.nova").exception("Unable to show the reminder notification")
+            return
+        if choice:
+            self.reminder_answered.emit(reminder, choice)
+
+    @Slot(object, str)
+    def answer_reminder(self, reminder, choice: str) -> None:
+        """Apply the button pressed on a due reminder's notification."""
+        now = datetime.now().replace(second=0, microsecond=0)
+        try:
+            if choice == "snooze":
+                self.nova_store.snooze_reminder(reminder.id, now + timedelta(minutes=10))
+            elif choice == "tomorrow":
+                tomorrow = (now + timedelta(days=1)).date()
+                self.nova_store.snooze_reminder(reminder.id, datetime.combine(tomorrow, reminder.remind_at.time()))
+            elif choice == "done":
+                if not reminder.is_recurring:
+                    self.nova_store.set_reminder_completed(reminder.id, True)
+            elif choice == "open":
+                self.showNormal()
+                self.raise_()
+                self.activateWindow()
+                self.open_nova_section(Section.AGENDA)
+        except (ValueError, OSError):
+            logging.getLogger("assistant.nova").exception("Unable to apply the reminder action %s", choice)
 
     def open_terminal_command(self, command: str) -> None:
         from src.init.terminal import TerminalView
