@@ -27,7 +27,7 @@ $env:PYTHONUNBUFFERED = "1"
 Set-Location -LiteralPath $root
 
 if (-not (Test-Path -LiteralPath $python)) {
-    throw "Python environment not found: $python"
+    throw "Python environment not found: $python. The runtime setup did not finish; run the installer again to complete it."
 }
 
 $assistantMetadata = & $python -X utf8 -B -c "import json; from src.init.config import load_config; from src.init.identity import get_assistant_identifier, get_assistant_name; from src.init.lang import tr; print(json.dumps(dict(identifier=get_assistant_identifier(), name=get_assistant_name(), console_title=tr('console.console_title'), context_length=load_config()['context_length'])))"
@@ -96,6 +96,27 @@ function Wait-TcpPort {
     }
 
     return $false
+}
+
+function Write-LogTail {
+    param(
+        [string]$Path,
+        [int]$Lines = 12
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return
+    }
+
+    $tail = (Get-Content -LiteralPath $Path -Tail $Lines -Encoding utf8 -ErrorAction SilentlyContinue) -join "`n"
+    if ($tail.Length -gt 1200) {
+        $tail = $tail.Substring($tail.Length - 1200)
+    }
+
+    if ($tail.Trim()) {
+        Write-Host "Last lines of ${Path}:"
+        Write-Host $tail
+    }
 }
 
 Write-Host "$($assistantName.ToUpper()) SERVICES" -ForegroundColor Cyan
@@ -275,6 +296,7 @@ if ($ttsProcess) {
         }
 
         if ($ttsProcess.HasExited) {
+            Write-LogTail -Path $ttsLog
             throw "TTS process exited. Check $ttsLog"
         }
 
@@ -282,6 +304,7 @@ if ($ttsProcess) {
     }
 
     if (-not $ready) {
+        Write-LogTail -Path $ttsLog
         throw "CosyVoice startup timed out. Check $ttsLog"
     }
 

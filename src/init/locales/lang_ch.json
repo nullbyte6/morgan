@@ -441,6 +441,7 @@
   "tts_server.voice_client_ready": "语音客户端已就绪",
   "tts_server.unknown_message_s": "未知消息：%s",
   "voice_service.ffmpeg_is_required_by_cosyvoice_but_was_not_found_in_path": "CosyVoice 需要 FFmpeg，但在 PATH 中未找到。",
+  "voice_service.voice_model_not_found": "在 {path} 未找到 CosyVoice 模型。请重新运行安装程序以下载。",
   "voice_service.tts_inference_failed": "TTS 推理失败",
   "voice_service.audio_playback_failed": "音频播放失败",
   "voice_service.tts_generator_cleanup_failed": "TTS 生成器清理失败",

@@ -177,6 +177,9 @@ class VoiceService:
         self.reference_text = reference_text
         self.speed = speed
 
+        if not (self.model_path / "cosyvoice3.yaml").is_file():
+            raise RuntimeError(tr('voice_service.voice_model_not_found', path=self.model_path))
+
         self.voice = AutoModel(model_dir=str(self.model_path), fp16=True, text_frontend=False)
         self.sample_rate = self.voice.sample_rate
         self._reference_key = None
