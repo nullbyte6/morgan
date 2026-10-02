@@ -215,6 +215,7 @@
   "brain.error_at_refresh_attempt": "Error al intentar recargar: {error}",
   "brain.error_directory_path_is_empty": "Error: la ruta del directorio está vacía",
   "brain.error_timezone_dependencies_missing_run_pip_install_r_requiremen": "Error: faltan dependencias de zonas horarias; ejecuta pip install -r requirements.txt",
+  "brain.error_timezone_data_missing": "Error: faltan los datos de zonas horarias; ejecuta de nuevo el instalador para descargarlos",
   "brain.error_getting_current_time_for": "Error al obtener la hora actual de {region}: {error}",
   "brain.directory_does_not_exist": "El directorio no existe: {folder}",
   "brain.not_a_directory": "No es un directorio: {folder}",

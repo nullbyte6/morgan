@@ -117,6 +117,7 @@ text = text.replace('pyz = PYZ(a.pure)',
     "for package in ('pydantic', 'logfire'):\n"
     "    directory = importlib.util.find_spec(package).submodule_search_locations[0]\n"
     "    a.datas += Tree(directory, prefix=package, excludes=['__pycache__', '*.pyc'])\n"
+    "a.datas = [entry for entry in a.datas if not entry[0].replace('\\\\', '/').startswith('timezonefinder_data/data/')]\n"
     "pyz = PYZ(a.pure)")
 unused_qt = r'''import re
 unused = re.compile(r'^PySide6/(qml/|plugins/qmltooling/|Qt6?(3D|Charts|DataVisualization|Graphs|Location|MultimediaQuick|Quick3D|QuickShapes|QuickTest|QuickVectorImage|RemoteObjects|Scxml|Sensors|SpatialAudio|Test)[^/]*$|resources/.*\.debug\.|translations/)')

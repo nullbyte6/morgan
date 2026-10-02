@@ -118,6 +118,7 @@ text = text.replace('pyz = PYZ(a.pure)',
     "for package in ('pydantic', 'logfire'):\n"
     "    directory = importlib.util.find_spec(package).submodule_search_locations[0]\n"
     "    a.datas += Tree(directory, prefix=package, excludes=['__pycache__', '*.pyc'])\n"
+    "a.datas = [entry for entry in a.datas if not entry[0].replace('\\\\', '/').startswith('timezonefinder_data/data/')]\n"
     "pyz = PYZ(a.pure)")
 head, separator, collection = text.rpartition('coll = COLLECT(')
 collection = collection.replace("name='ArloTUI',", "name='tui',", 1)

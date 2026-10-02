@@ -215,6 +215,7 @@
   "brain.error_at_refresh_attempt": "Error at refresh attempt: {error}",
   "brain.error_directory_path_is_empty": "Error: directory path is empty",
   "brain.error_timezone_dependencies_missing_run_pip_install_r_requiremen": "Error: timezone dependencies missing; run pip install -r requirements.txt",
+  "brain.error_timezone_data_missing": "Error: timezone data is missing; run the installer again to download it",
   "brain.error_getting_current_time_for": "Error getting current time for {region}: {error}",
   "brain.directory_does_not_exist": "Directory does not exist: {folder}",
   "brain.not_a_directory": "Not a directory: {folder}",

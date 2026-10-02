@@ -40,6 +40,8 @@ $ConfigFile = Join-Path $DataDir "json\config.json"
 $ModelsDir = Join-Path $DataDir "models"
 $CosyVoiceDir = Join-Path $ModelsDir "Fun-CosyVoice3-0.5B"
 $CosyVoiceRepo = "FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+$TimezoneDataVersion = "1.2026.3"
+$TimezoneDataDir = Join-Path $ModelsDir "timezonefinder-data"
 $CosyVoiceRequired = @(
     "cosyvoice3.yaml",
     "campplus.onnx",
@@ -457,6 +459,100 @@ function Ensure-CosyVoice {
     Write-Host "CosyVoice model installed successfully."
 }
 
+function Ensure-TimezoneData {
+    Write-Step "Checking timezone data..."
+
+    if (Test-Path (Join-Path $TimezoneDataDir "data_version.txt") -PathType Leaf) {
+        Write-Host "Timezone data found:"
+        Write-Host "  $TimezoneDataDir"
+        return
+    }
+
+    $Curl = Get-Command "curl.exe" -ErrorAction SilentlyContinue
+
+    if (-not $Curl) {
+        throw "curl.exe is required to download the timezone data."
+    }
+
+    Write-Host "Timezone data is missing. Downloading..."
+
+    $Release = Invoke-RestMethod -Uri "https://pypi.org/pypi/timezonefinder-data/$TimezoneDataVersion/json"
+    $Wheel = @($Release.urls | Where-Object { $_.packagetype -eq "bdist_wheel" })[0]
+
+    if (-not $Wheel) {
+        throw "timezonefinder-data $TimezoneDataVersion has no wheel on PyPI."
+    }
+
+    $Archive = Join-Path ([IO.Path]::GetTempPath()) $Wheel.filename
+
+    Write-Host "Source: $($Wheel.url)"
+    Write-Host "Size: $([math]::Round($Wheel.size / 1MB, 1)) MB"
+
+    & $Curl.Source `
+        --location `
+        --fail `
+        --retry 5 `
+        --retry-delay 3 `
+        --output $Archive `
+        $Wheel.url
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to download the timezone data (curl exit code $LASTEXITCODE)."
+    }
+
+    try {
+        if ((Get-FileHash $Archive -Algorithm SHA256).Hash -ne $Wheel.digests.sha256.ToUpperInvariant()) {
+            throw "The timezone data download is corrupt."
+        }
+
+        $Staging = "$TimezoneDataDir.part"
+        $Prefix = "timezonefinder_data/data/"
+
+        if (Test-Path $Staging) {
+            Remove-Item $Staging -Recurse -Force
+        }
+
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+        $Zip = [IO.Compression.ZipFile]::OpenRead($Archive)
+
+        try {
+            foreach ($Entry in $Zip.Entries) {
+                if ((-not $Entry.FullName.StartsWith($Prefix)) -or (-not $Entry.Name)) {
+                    continue
+                }
+
+                $Target = Join-Path $Staging ($Entry.FullName.Substring($Prefix.Length) -replace "/", "\")
+
+                New-Item `
+                    -ItemType Directory `
+                    -Path (Split-Path $Target) `
+                    -Force | Out-Null
+
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($Entry, $Target, $true)
+            }
+        }
+        finally {
+            $Zip.Dispose()
+        }
+
+        if (Test-Path $TimezoneDataDir) {
+            Remove-Item $TimezoneDataDir -Recurse -Force
+        }
+
+        Move-Item -Path $Staging -Destination $TimezoneDataDir
+    }
+    finally {
+        Remove-Item $Archive -Force -ErrorAction SilentlyContinue
+    }
+
+    if (-not (Test-Path (Join-Path $TimezoneDataDir "data_version.txt") -PathType Leaf)) {
+        throw "The timezone data was downloaded but could not be verified."
+    }
+
+    Write-Host "Timezone data installed successfully."
+}
+
 function Invoke-Native {
     param(
         [Parameter(Mandatory = $true)]
@@ -847,6 +943,13 @@ try {
         -Model $MainModel
 
     Ensure-CosyVoice
+
+    try {
+        Ensure-TimezoneData
+    }
+    catch {
+        Write-Warning "Timezone data was not installed: $($_.Exception.Message)"
+    }
 
     if (-not $SkipVoiceRuntime) {
         Ensure-Ffmpeg

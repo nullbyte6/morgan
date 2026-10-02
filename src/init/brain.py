@@ -255,11 +255,20 @@ def change_directory(path: str = "") -> str:
         return f"Error: {error}"
 
 
-@lru_cache(maxsize=1)
-def _timezone_finder():
+def _timezone_data_directory():
+    from timezonefinder.configs import DEFAULT_DATA_DIR
+
+    for directory in (HOME_PATH / "models" / "timezonefinder-data", Path(DEFAULT_DATA_DIR)):
+        if (directory / "data_version.txt").is_file():
+            return directory
+    return None
+
+
+@lru_cache(maxsize=2)
+def _timezone_finder(directory):
     from timezonefinder import TimezoneFinder
 
-    return TimezoneFinder()
+    return TimezoneFinder(bin_file_location=directory)
 
 
 def get_current_time(region: str = "") -> str:
@@ -284,7 +293,10 @@ def get_current_time(region: str = "") -> str:
             place = geocode_city(region)
             if place is None:
                 return tr('brain.error_location_not_found_87fb59', region=region)
-            zone_name = _timezone_finder().timezone_at(
+            data_directory = _timezone_data_directory()
+            if data_directory is None:
+                return tr('brain.error_timezone_data_missing')
+            zone_name = _timezone_finder(data_directory).timezone_at(
                 lat=place["latitude"], lng=place["longitude"])
             if zone_name is None:
                 return tr('brain.error_timezone_not_found_for', region=region)
