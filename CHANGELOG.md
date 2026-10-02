@@ -21,6 +21,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
 - Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
 - Fix Arlo staying open after being asked to close itself during a reply, because the shutdown waited on a quit request that had already been marked as handled
+- Fix snoozing a due Nova reminder giving no sign of its new time, by confirming it in a notification or saying the reminder no longer exists, and Tomorrow on a daily reminder adding a duplicate at the time it already repeats
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update Nova sidebar icons and star to be 15% larger
 - Update services launcher to read the bundled core.json when the dev folder is not installed

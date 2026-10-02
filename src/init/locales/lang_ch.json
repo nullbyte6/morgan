@@ -659,6 +659,8 @@
   "nova.toast.snooze": "10 分钟后",
   "nova.toast.tomorrow": "明天",
   "nova.toast.done": "完成",
+  "nova.snoozed": "已推迟到 {when}：{title}",
+  "nova.snoozed_missing": "无法推迟 {title}，因为它已不存在",
   "nova.section.search": "搜索",
   "nova.section.search.tagline": "查找提醒、事件和日记中的日子。",
   "nova.search.placeholder": "搜索提醒、事件和对话",

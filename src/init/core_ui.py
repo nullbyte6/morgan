@@ -1076,11 +1076,17 @@ class AssistantWindow(DesktopWindow):
         """Apply the button pressed on a due reminder's notification."""
         now = datetime.now().replace(second=0, microsecond=0)
         try:
-            if choice == "snooze":
-                self.nova_store.snooze_reminder(reminder.id, now + timedelta(minutes=10))
-            elif choice == "tomorrow":
-                tomorrow = (now + timedelta(days=1)).date()
-                self.nova_store.snooze_reminder(reminder.id, datetime.combine(tomorrow, reminder.remind_at.time()))
+            if choice in ("snooze", "tomorrow"):
+                until = (now + timedelta(minutes=10) if choice == "snooze" else
+                         datetime.combine((now + timedelta(days=1)).date(), reminder.remind_at.time()))
+                try:
+                    self.nova_store.snooze_reminder(reminder.id, until)
+                except ValueError:
+                    self.confirm_reminder(tr("nova.snoozed_missing", title=reminder.title))
+                    raise
+                when = (nova_formatting.time_text(until) if until.date() == now.date()
+                        else nova_formatting.date_time_text(until))
+                self.confirm_reminder(tr("nova.snoozed", title=reminder.title, when=when))
             elif choice == "done":
                 if not reminder.is_recurring:
                     self.nova_store.set_reminder_completed(reminder.id, True)
@@ -1091,6 +1097,10 @@ class AssistantWindow(DesktopWindow):
                 self.open_nova_section(Section.AGENDA)
         except (ValueError, OSError):
             logging.getLogger("assistant.nova").exception("Unable to apply the reminder action %s", choice)
+
+    def confirm_reminder(self, message: str) -> None:
+        title = f"{get_assistant_name()} · {tr('nova.reminder')}"[:63]
+        threading.Thread(target=send_notification, args=(message[:255], title), daemon=True).start()
 
     def open_terminal_command(self, command: str) -> None:
         from src.init.terminal import TerminalView

@@ -659,6 +659,8 @@
   "nova.toast.snooze": "In 10 min",
   "nova.toast.tomorrow": "Tomorrow",
   "nova.toast.done": "Done",
+  "nova.snoozed": "Snoozed until {when}: {title}",
+  "nova.snoozed_missing": "{title} could not be snoozed because it no longer exists",
   "nova.section.search": "Search",
   "nova.section.search.tagline": "Find reminders, events and diary days.",
   "nova.search.placeholder": "Search reminders, events and conversations",

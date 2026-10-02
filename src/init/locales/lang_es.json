@@ -659,6 +659,8 @@
   "nova.toast.snooze": "En 10 min",
   "nova.toast.tomorrow": "Mañana",
   "nova.toast.done": "Hecho",
+  "nova.snoozed": "Pospuesto hasta {when}: {title}",
+  "nova.snoozed_missing": "No se ha podido posponer {title} porque ya no existe",
   "nova.section.search": "Buscar",
   "nova.section.search.tagline": "Encuentra recordatorios, eventos y días del diario.",
   "nova.search.placeholder": "Busca en recordatorios, eventos y conversaciones",
