@@ -150,6 +150,10 @@ class ModelSelector(QComboBox):
     def showPopup(self):
         self.refresh(self.currentData())
         super().showPopup()
+        popup = self.view().window()
+        top = self.mapToGlobal(QPoint(0, 0)).y() - popup.height()
+        if top >= self.screen().availableGeometry().top():
+            popup.move(popup.x(), top)
 
 
 class PrivacyIndicator(QPushButton):
