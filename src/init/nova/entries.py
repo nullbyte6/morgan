@@ -30,6 +30,7 @@ MAX_SPAN_DAYS = 366
 RECURRENCES = ("none", "daily", "weekly", "monthly")
 FLAGS = ("none", "green", "yellow", "red")
 FLAG_ROLES = {"green": "success", "yellow": "warning", "red": "error"}
+FLAG_RANKS = {"red": 0, "yellow": 1, "green": 2, "none": 3}
 STEP_DAYS = {"daily": 1, "weekly": 7}
 
 
@@ -44,6 +45,11 @@ def from_local(value: str) -> datetime:
 
 def day_start(day: date) -> datetime:
     return datetime.combine(day, time.min)
+
+
+def flagged_first(entries) -> list:
+    """The entries with red flags first, then yellow, green and unflagged, each keeping its order."""
+    return sorted(entries, key=lambda entry: FLAG_RANKS[entry.flag])
 
 
 def shift(moment: datetime, recurrence: str, count: int) -> datetime:

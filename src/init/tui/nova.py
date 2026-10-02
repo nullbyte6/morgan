@@ -26,7 +26,7 @@ from pathlib import Path
 
 from src.init.memory.integration import configured_service
 from src.init.nova.agenda import agenda_groups, event_groups, reminder_groups
-from src.init.nova.entries import FLAG_ROLES, FLAGS, RECURRENCES, Event, Reminder
+from src.init.nova.entries import FLAG_ROLES, FLAGS, RECURRENCES, Event, Reminder, flagged_first
 from src.init.nova.journal import clipped, day_bounds, describe_week, local_moment, message_count, summarize
 from src.init.nova.sections import Section
 from src.init.tui import nova_text as fmt
@@ -562,7 +562,7 @@ class NovaOverlay(Overlay):
                 cells.append((tone, text, clicked(lambda day=day: self.pick_day(day))))
             rows.append(Row(cells))
         rows += [Row([("", "")]), self.heading(P, fmt.day_heading(chosen, today))]
-        entries = self.store.entries(chosen, chosen)
+        entries = flagged_first(self.store.entries(chosen, chosen))
         for entry in entries:
             rows += self.entry_rows(P, entry, width, now, dated=False)
         if not entries:
@@ -601,7 +601,7 @@ class NovaOverlay(Overlay):
         now = datetime.now()
         rows = [self.heading(P, fmt.day_heading(self.diary_day, now.date()))]
         service, data, error = self.diary_data()
-        entries = self.store.entries(self.diary_day, self.diary_day)
+        entries = flagged_first(self.store.entries(self.diary_day, self.diary_day))
         if entries:
             rows.append(Row([(style(P["text_secondary"], bold=True), " " + t("nova.diary.agenda"))]))
             for entry in entries:

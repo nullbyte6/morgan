@@ -32,7 +32,7 @@ from src.init.memory.integration import configured_service
 
 from . import formatting
 from .calendar_paint import CHEVRON_LEFT, CHEVRON_RIGHT
-from .entries import Entry, Reminder
+from .entries import Entry, Reminder, flagged_first
 from .journal import clipped, day_bounds, local_moment, message_count
 from .messages import LogMessage, LogMessageCard, RemoveButton, code_font_family, parse_log
 from .rows import EntryRow
@@ -391,7 +391,7 @@ class DiaryView(QWidget):
             except Exception as failure:
                 error = str(failure)
         sessions, loader = self._sessions(service, data)
-        entries = self._store.entries(self._day, self._day)
+        entries = flagged_first(self._store.entries(self._day, self._day))
         self._contents = (entries, data["memories"], sessions, loader)
         signature = (self._day, error, service is None, tuple(entries),
                      tuple(entry.id for entry in entries if isinstance(entry, Reminder)

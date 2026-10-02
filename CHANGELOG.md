@@ -34,6 +34,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix snoozing a due Nova reminder giving no sign of its new time, by confirming it in a notification or saying the reminder no longer exists, and Tomorrow on a daily reminder adding a duplicate at the time it already repeats
 - Remove the /exit, /private and /reload slash commands in favour of the command palette, which gains Toggle private mode in the desktop and terminal versions and Reload modules in the desktop, while reload and ref still work as messages
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
+- Update Nova lists to show flagged entries first, red then yellow then green, in the agenda days, overdue and pending reminders, upcoming events and the day lists of the diary and the terminal version
 - Update Nova sidebar icons and star to be 15% larger
 - Update Nova storage, agenda grouping and the diary and week helpers to work without Qt, so the terminal version can read and write Nova and Arlo's Nova tools and agenda greeting work there too
 - Update services launcher to read the bundled core.json when the dev folder is not installed
