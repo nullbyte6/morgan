@@ -19,19 +19,29 @@
 """Reminders and events as immutable records with local wall-clock times."""
 from __future__ import annotations
 
+import re
 from calendar import monthrange
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
+from functools import lru_cache
 
 LOCAL_FORMAT = "%Y-%m-%dT%H:%M"
 TITLE_LIMIT = 200
 NOTES_LIMIT = 4000
 MAX_SPAN_DAYS = 366
+MAX_OCCURRENCES = 2000
+MAX_REPEAT_COUNT = 999
 RECURRENCES = ("none", "daily", "weekly", "monthly")
+REPEAT_UNITS = ("hours", "days", "weeks", "months", "years")
 FLAGS = ("none", "green", "yellow", "red")
 FLAG_ROLES = {"green": "success", "yellow": "warning", "red": "error"}
 FLAG_RANKS = {"red": 0, "yellow": 1, "green": 2, "none": 3}
-STEP_DAYS = {"daily": 1, "weekly": 7}
+STEP_DELTAS = {"hours": timedelta(hours=1), "days": timedelta(days=1), "weeks": timedelta(weeks=1)}
+STEP_MONTHS = {"months": 1, "years": 12}
+SINGLE_NAMES = {"hours": "hourly", "days": "daily", "weeks": "weekly", "months": "monthly", "years": "yearly"}
+ALIASES = {"hourly": (1, "hours"), "daily": (1, "days"), "weekly": (1, "weeks"), "monthly": (1, "months"),
+           "yearly": (1, "years")}
+REPEAT_TEXT = re.compile(r"(?:every\s+)?(?:(\d+)\s*:?\s*)?(hour|day|week|month|year)s?")
 
 
 def to_local(moment: datetime) -> str:
@@ -52,26 +62,70 @@ def flagged_first(entries) -> list:
     return sorted(entries, key=lambda entry: FLAG_RANKS[entry.flag])
 
 
+@lru_cache(maxsize=64)
+def parse_recurrence(value: str) -> tuple[int, str] | None:
+    """The repeat as (interval, unit) such as (2, "weeks"), or None for none. Accepts none, daily,
+    weekly, monthly, hourly, yearly, "every 3 days" and the stored form "3:days"."""
+    text = str(value or "none").strip().casefold()
+    if text == "none":
+        return None
+    if text in ALIASES:
+        return ALIASES[text]
+    match = REPEAT_TEXT.fullmatch(text)
+    if match is None:
+        raise ValueError("The repetition must be none, daily, weekly, monthly or every N hours, days, "
+                         "weeks, months or years")
+    count = int(match[1] or 1)
+    if not 1 <= count <= MAX_REPEAT_COUNT:
+        raise ValueError(f"The repetition interval must be between 1 and {MAX_REPEAT_COUNT}")
+    return count, match[2] + "s"
+
+
+def normalize_recurrence(value: str) -> str:
+    """The stored form of a repeat: none, daily, weekly or monthly, else interval and unit as "3:days"."""
+    parsed = parse_recurrence(value)
+    if parsed is None:
+        return "none"
+    count, unit = parsed
+    if count == 1 and unit in ("days", "weeks", "months"):
+        return SINGLE_NAMES[unit]
+    return f"{count}:{unit}"
+
+
+def recurrence_label(recurrence: str, translate) -> str:
+    """The repeat in words through translate, e.g. "Daily" or "Every 2 weeks"."""
+    parsed = parse_recurrence(recurrence)
+    if parsed is None:
+        return translate("nova.repeat.none")
+    count, unit = parsed
+    if count == 1:
+        return translate(f"nova.repeat.{SINGLE_NAMES[unit]}")
+    return translate(f"nova.repeat.every_{unit}", count=count)
+
+
 def shift(moment: datetime, recurrence: str, count: int) -> datetime:
     """The moment count repetitions later, keeping the day of the month where the month allows it."""
-    if recurrence in STEP_DAYS:
-        return moment + timedelta(days=STEP_DAYS[recurrence] * count)
-    if recurrence == "monthly":
-        months = moment.month - 1 + count
-        year, month = moment.year + months // 12, months % 12 + 1
-        return moment.replace(year=year, month=month, day=min(moment.day, monthrange(year, month)[1]))
-    return moment
+    parsed = parse_recurrence(recurrence)
+    if parsed is None:
+        return moment
+    every, unit = parsed
+    if unit in STEP_DELTAS:
+        return moment + STEP_DELTAS[unit] * (every * count)
+    months = moment.month - 1 + STEP_MONTHS[unit] * every * count
+    year, month = moment.year + months // 12, months % 12 + 1
+    return moment.replace(year=year, month=month, day=min(moment.day, monthrange(year, month)[1]))
 
 
 def steps_before(moment: datetime, recurrence: str, target: datetime) -> int:
     """A number of repetitions that never takes moment past target."""
-    if target <= moment:
+    parsed = parse_recurrence(recurrence)
+    if target <= moment or parsed is None:
         return 0
-    if recurrence in STEP_DAYS:
-        return (target - moment).days // STEP_DAYS[recurrence]
-    if recurrence == "monthly":
-        return max(0, (target.year - moment.year) * 12 + target.month - moment.month - 1)
-    return 0
+    every, unit = parsed
+    if unit in STEP_DELTAS:
+        return (target - moment) // (STEP_DELTAS[unit] * every)
+    months = (target.year - moment.year) * 12 + target.month - moment.month - 1
+    return max(0, months // (STEP_MONTHS[unit] * every))
 
 
 def next_occurrence(moment: datetime, recurrence: str, after: datetime) -> datetime:
@@ -161,28 +215,29 @@ class Event:
         count = min((self.last_day - self.first_day).days + 1, MAX_SPAN_DAYS)
         return [self.first_day + timedelta(days=offset) for offset in range(count)]
 
-    def occurrences(self, first: date, last: date) -> list[Event]:
-        """The repetitions of this event touching any day from first to last, both inclusive."""
-        if not self.is_recurring:
-            return [self] if self.first_day <= last and self.last_day >= first else []
+    def _walk(self, first: date, last: date):
         span = self.ends_at - self.starts_at
         reach = (self.last_day - self.first_day).days + 1
         count = steps_before(self.starts_at, self.recurrence, day_start(first - timedelta(days=reach)))
-        found = []
-        for count in range(count, count + MAX_SPAN_DAYS * 2):
+        for count in range(count, count + MAX_OCCURRENCES):
             starts_at = shift(self.starts_at, self.recurrence, count)
             if starts_at.date() > last:
                 break
             occurrence = replace(self, starts_at=starts_at, ends_at=starts_at + span)
             if occurrence.last_day >= first:
-                found.append(occurrence)
-        return found
+                yield occurrence
+
+    def occurrences(self, first: date, last: date) -> list[Event]:
+        """The repetitions of this event touching any day from first to last, both inclusive."""
+        if not self.is_recurring:
+            return [self] if self.first_day <= last and self.last_day >= first else []
+        return list(self._walk(first, last))
 
     def next_from(self, day: date) -> Event:
         """This event, or its first repetition that has not ended before day."""
         if not self.is_recurring or self.last_day >= day:
             return self
-        return next(iter(self.occurrences(day, day + timedelta(days=MAX_SPAN_DAYS * 2))), self)
+        return next(self._walk(day, day + timedelta(days=MAX_SPAN_DAYS * 2)), self)
 
     @classmethod
     def from_row(cls, row) -> Event:

@@ -27,8 +27,8 @@ from src.init.config import HOME_PATH
 from src.init.memory.database import timestamp
 
 from .database import EventDatabase, ReminderDatabase
-from .entries import (Entry, Event, FLAGS, NOTES_LIMIT, RECURRENCES, Reminder, TITLE_LIMIT, day_start,
-                      next_occurrence, to_local)
+from .entries import (Entry, Event, FLAGS, NOTES_LIMIT, Reminder, TITLE_LIMIT, day_start,
+                      next_occurrence, normalize_recurrence, parse_recurrence, to_local)
 
 
 def _text(title: str, notes: str) -> tuple[str, str]:
@@ -41,10 +41,11 @@ def _text(title: str, notes: str) -> tuple[str, str]:
     return title, notes
 
 
-def _recurrence(value: str) -> str:
-    value = str(value or "none").strip().casefold()
-    if value not in RECURRENCES:
-        raise ValueError("The repetition must be none, daily, weekly or monthly")
+def _recurrence(value: str, all_day: bool = False) -> str:
+    value = normalize_recurrence(value)
+    parsed = parse_recurrence(value)
+    if all_day and parsed is not None and parsed[1] == "hours":
+        raise ValueError("An all-day event cannot repeat by the hour")
     return value
 
 
@@ -201,7 +202,7 @@ class NovaRecords:
                   flag: str = "none") -> Event:
         title, notes = _text(title, notes)
         starts, ends = _span(starts_at, ends_at, all_day)
-        recurrence, flag = _recurrence(recurrence), _flag(flag)
+        recurrence, flag = _recurrence(recurrence, all_day), _flag(flag)
         event_id = uuid.uuid4().hex
         with self.event_db.connect(write=True) as db:
             db.execute("""INSERT INTO events(id,title,notes,starts_at,ends_at,all_day,created_at,recurrence,flag)
@@ -215,7 +216,7 @@ class NovaRecords:
                      flag: str = "none") -> Event:
         title, notes = _text(title, notes)
         starts, ends = _span(starts_at, ends_at, all_day)
-        recurrence, flag = _recurrence(recurrence), _flag(flag)
+        recurrence, flag = _recurrence(recurrence, all_day), _flag(flag)
         with self.event_db.connect(write=True) as db:
             updated = db.execute("""UPDATE events SET title=?,notes=?,starts_at=?,ends_at=?,all_day=?,
                 recurrence=?,flag=? WHERE id=?""",

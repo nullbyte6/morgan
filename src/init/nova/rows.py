@@ -29,7 +29,7 @@ from src.init.theme import on_theme_changed
 
 from . import formatting
 from .calendar_paint import ALIGN_CENTER, color, draw_text, glyph_font
-from .entries import Entry, Reminder
+from .entries import Entry, Reminder, recurrence_label
 
 CHECK = "\U000f012c"
 STAR = "\U000f0ae2"
@@ -76,7 +76,7 @@ class CircleCheck(QAbstractButton):
 
 
 def caption(entry: Entry) -> str:
-    repeat = f" · {REPEAT} {tr(f'nova.repeat.{entry.recurrence}')}" if entry.is_recurring else ""
+    repeat = f" · {REPEAT} {recurrence_label(entry.recurrence, tr)}" if entry.is_recurring else ""
     if isinstance(entry, Reminder):
         return f"{tr('nova.reminder')} · {formatting.date_time_text(entry.remind_at)}{repeat}"
     span = formatting.event_time_text(entry)

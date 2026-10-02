@@ -92,7 +92,9 @@ def add_reminder(title: str, remind_at: str, notes: str = "", repeat: str = "non
     remind_at is local wall-clock time as ISO, e.g. 2026-10-02T09:30; check get_current_time
     for relative requests. Persists across restarts. Prefer this over schedule_notification
     for anything the user asks to be reminded of at a date or time.
-    repeat is none, daily, weekly or monthly; a repeating reminder comes back at the same time.
+    repeat is none, daily, weekly, monthly, hourly, yearly or a custom interval such as "every 2 weeks",
+    "every 15 days" or "every 3 hours" (units hours, days, weeks, months, years; 1 to 999); a repeating
+    reminder comes back at the same time.
     flag is none, green (unimportant), yellow (important) or red (high priority), like the flags
     of the iOS Reminders app.
     """
@@ -109,7 +111,9 @@ def add_event(title: str, starts_at: str, ends_at: str | None = None,
               all_day: bool = False, notes: str = "", repeat: str = "none", flag: str = "none") -> dict:
     """Save an event in Nova's calendar. Times are local ISO, e.g. 2026-10-02T18:00.
     ends_at defaults to one hour after starts_at, or the same day when all_day.
-    repeat is none, daily, weekly or monthly for events that happen again, e.g. a weekly class.
+    repeat is none, daily, weekly, monthly, hourly, yearly or a custom interval such as "every 2 weeks"
+    or "every 15 days" for events that happen again, e.g. a weekly class; hours (e.g. "every 3 hours")
+    are not allowed for all_day events.
     flag is none, green (unimportant), yellow (important) or red (high priority), like the flags
     of the iOS Reminders app.
     """
@@ -207,8 +211,8 @@ def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str 
     Pass only the fields to change; times are local ISO, e.g. 2026-10-02T17:00.
     remind_at applies to reminders; starts_at, ends_at and all_day to events. Moving an event's
     start without ends_at keeps its duration. Changing a repeating entry changes the whole series.
-    repeat is none, daily, weekly or monthly. flag is none, green (unimportant), yellow (important)
-    or red (high priority); none removes the flag.
+    repeat is none, daily, weekly, monthly, hourly, yearly or "every N hours|days|weeks|months|years".
+    flag is none, green (unimportant), yellow (important) or red (high priority); none removes the flag.
     """
     try:
         store = _shared()
