@@ -16,12 +16,36 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
+import functools
+import inspect
+import json
+import logging
 from typing import Literal
 
 from .integration import active_memory
 from .service import CATEGORIES
 
 Category = Literal[CATEGORIES]
+logger = logging.getLogger("assistant.memory")
+
+
+def _logged(function):
+    signature = inspect.signature(function)
+
+    @functools.wraps(function)
+    def wrapper(*args, **values):
+        result = function(*args, **values)
+        arguments = {} if active_memory.get().private else {
+            name: value[:120] + "…" if isinstance(value, str) and len(value) > 120 else value
+            for name, value in signature.bind(*args, **values).arguments.items()}
+        succeeded = isinstance(result, dict) and bool(result.get("ok"))
+        logger.log(logging.INFO if succeeded else logging.WARNING, "Memory tool %s %s: %s%s",
+                   function.__name__, "succeeded" if succeeded else "failed",
+                   json.dumps(arguments, ensure_ascii=False, default=str),
+                   "" if succeeded or not isinstance(result, dict) or not result.get("error")
+                   else " | " + str(result["error"]))
+        return result
+    return wrapper
 
 
 def _turn():
@@ -33,6 +57,7 @@ def _turn():
     return turn
 
 
+@_logged
 def remember(content: str, category: Category = "fact", key: str | None = None,
              memory_id: str | None = None, expires_at: str | None = None, pinned: bool = False) -> dict:
     """Store explicitly requested durable information. Reuse key to supersede a preference;
@@ -55,6 +80,7 @@ def remember(content: str, category: Category = "fact", key: str | None = None,
         return {"ok": False, "error": str(error)}
 
 
+@_logged
 def recall(query: str, include_history: bool = True, limit: int = 8,
            mode: Literal["any", "all", "phrase"] = "any",
            session_id: str | None = None, role: Literal["user", "assistant"] | None = None,
@@ -74,6 +100,7 @@ def recall(query: str, include_history: bool = True, limit: int = 8,
         return {"ok": False, "error": str(error)}
 
 
+@_logged
 def forget(memory_id: str) -> dict:
     """Delete one consolidated memory by exact ID on explicit user request.
     This does not delete original conversation messages or Markdown logs.
@@ -85,6 +112,7 @@ def forget(memory_id: str) -> dict:
         return {"ok": False, "error": str(error)}
 
 
+@_logged
 def pin_memory(memory_id: str, pinned: bool = True) -> dict:
     """Pin one memory by exact ID so it is always in context, or unpin it with pinned false,
     on explicit user request. Use list_memories or recall to find the ID first.
@@ -98,6 +126,7 @@ def pin_memory(memory_id: str, pinned: bool = True) -> dict:
         return {"ok": False, "error": str(error)}
 
 
+@_logged
 def list_memories(category: str | None = None, limit: int = 8, offset: int = 0) -> dict:
     """List current confirmed memories and IDs, pinned ones marked, with bounded pagination."""
     try:
@@ -106,6 +135,7 @@ def list_memories(category: str | None = None, limit: int = 8, offset: int = 0) 
         return {"ok": False, "error": str(error)}
 
 
+@_logged
 def search_words(prefix: str = "", scope: Literal["history", "memories", "all"] = "history",
                  limit: int = 8, offset: int = 0, session_id: str | None = None,
                  role: Literal["user", "assistant"] | None = None,
@@ -124,6 +154,7 @@ def search_words(prefix: str = "", scope: Literal["history", "memories", "all"] 
         return {"ok": False, "error": str(error)}
 
 
+@_logged
 def word_instances(word: str, scope: Literal["history", "memories", "all"] = "history",
                    limit: int = 8, offset: int = 0, session_id: str | None = None,
                    role: Literal["user", "assistant"] | None = None,
@@ -141,6 +172,7 @@ def word_instances(word: str, scope: Literal["history", "memories", "all"] = "hi
         return {"ok": False, "error": str(error)}
 
 
+@_logged
 def read_conversation(session_id: str, after: int = 0, limit: int = 8) -> dict:
     """Read completed user/assistant messages in a known session chronologically.
     Pass next_after as after for the next page. Truncated messages can be read in
@@ -152,6 +184,7 @@ def read_conversation(session_id: str, after: int = 0, limit: int = 8) -> dict:
         return {"ok": False, "error": str(error)}
 
 
+@_logged
 def read_memory_message(message_id: str, offset: int = 0) -> dict:
     """Read a completed historical message by ID, with its original provenance.
     Follow next_offset to retrieve remaining characters without losing long text.
