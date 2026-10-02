@@ -21,8 +21,8 @@ from datetime import datetime
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QPen
-from PySide6.QtWidgets import (QAbstractButton, QFrame, QHBoxLayout, QLabel, QScrollArea, QStackedLayout,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractButton, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+                               QStackedLayout, QVBoxLayout, QWidget)
 
 from src.init.lang import tr
 from src.init.theme import on_theme_changed
@@ -35,6 +35,7 @@ CHECK = "\U000f012c"
 STAR = "\U000f0ae2"
 EVENT_GLYPH = "\U000f09d2"
 REPEAT = "\u21bb"
+PENCIL = "\U000f03eb"
 
 
 class CircleCheck(QAbstractButton):
@@ -133,6 +134,15 @@ class EntryRow(QFrame):
         row.setSpacing(14)
         row.addWidget(marker, 0, Qt.AlignmentFlag.AlignTop)
         row.addLayout(details, 1)
+
+        edit = QPushButton(PENCIL)
+        edit.setObjectName("novaRowEdit")
+        edit.setFixedSize(30, 30)
+        edit.setCursor(Qt.CursorShape.PointingHandCursor)
+        edit.setToolTip(tr("nova.row.edit"))
+        edit.setAccessibleName(tr("nova.row.edit"))
+        edit.clicked.connect(lambda: self.activated.emit(self.entry))
+        row.addWidget(edit, 0, Qt.AlignmentFlag.AlignTop)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):

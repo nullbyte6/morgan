@@ -12,6 +12,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen
 - Add due Nova reminder notifications to the terminal version, shown as Windows toasts with In 10 min, Tomorrow and Done buttons and a notice in the status line, sharing its Nova records with Arlo's tools
 - Add Exit Arlo command in the command palette that stops any running reply and closes Arlo gracefully, so the session end time is recorded without ending the process from the Task Manager
+- Add edit button to the reminder and event rows of the Nova agenda, reminders, events, diary and search, opening the overlay to change the title, time, notes and repeat
 - Add health check on the first start of each new version, run once the services had time to start, that opens the health view with the results when a check fails
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda
 - Add Nova search, a sidebar section with one box that finds reminders, events and the diary days whose conversations mention the words typed, opening the day in the diary when clicked

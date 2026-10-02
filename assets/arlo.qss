@@ -1122,6 +1122,21 @@ QLabel#novaWelcomeMark {
     background: transparent;
 }
 
+QPushButton#novaRowEdit {
+    color: @text_subtle;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 15px;
+    padding: 0;
+}
+
+QPushButton#novaRowEdit:hover {
+    background-color: @surface_selected;
+    color: @accent;
+}
+
 QLabel#novaWelcomeTitle {
     color: @text;
     font-size: 18px;
