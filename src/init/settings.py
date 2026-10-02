@@ -351,10 +351,12 @@ class SettingsView(QWidget):
         self.backup_button = self.add_action_button("themesFolderButton")
         self.restore_button = self.add_action_button("themesFolderButton")
         self.remove_memories_button = self.add_action_button("removeMemoriesButton")
+        self.remove_markdowns_button = self.add_action_button("removeMemoriesButton")
         self.update_button.clicked.connect(self.update_requested.emit)
         self.backup_button.clicked.connect(self.backup_data)
         self.restore_button.clicked.connect(self.restore_data)
         self.remove_memories_button.clicked.connect(self.remove_memories)
+        self.remove_markdowns_button.clicked.connect(self.remove_markdowns)
 
         for dropdown in (self.language_dropdown, self.model_dropdown, self.theme_dropdown):
             dropdown.installEventFilter(self)
@@ -484,6 +486,20 @@ class SettingsView(QWidget):
             return
         QMessageBox.information(self, tr("ui.remove_memories"), tr("ui.remove_memories_done"))
 
+    def remove_markdowns(self):
+        from .session_log import clear_logs
+        answer = QMessageBox.warning(
+            self, tr("ui.remove_markdowns"), tr("ui.remove_markdowns_confirm"),
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            clear_logs()
+        except Exception as error:
+            QMessageBox.warning(self, tr("ui.remove_markdowns"), tr("ui.error", error=error))
+            return
+        QMessageBox.information(self, tr("ui.remove_markdowns"), tr("ui.remove_markdowns_done"))
+
     def refresh_voices(self):
         voices = available_voices()
         names = [path.name for path in voices]
@@ -561,3 +577,6 @@ class SettingsView(QWidget):
         if hasattr(self, "remove_memories_button"):
             self.remove_memories_button.setText(tr("ui.remove_memories"))
             self.remove_memories_button.setToolTip(tr("ui.remove_memories_hint"))
+        if hasattr(self, "remove_markdowns_button"):
+            self.remove_markdowns_button.setText(tr("ui.remove_markdowns"))
+            self.remove_markdowns_button.setToolTip(tr("ui.remove_markdowns_hint"))

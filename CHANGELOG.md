@@ -27,6 +27,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add Nova Week, a weekly review section that shows the reminders done, pending and missed, the events, conversations and new memories of each week, the days with activity opening in the diary, and a Summarize button that asks the main model for a short review of the week
 - Add pin_memory tool and a pinned option on remember, so Arlo can pin or unpin a memory when asked or store one already pinned for requests like "always remember that ...", with list_memories showing which are pinned
 - Add pinned memories that are always placed first in the model's context, and a Nova Memories section to review every stored memory and pin, edit or remove it
+- Add Remove Markdowns button to Settings, next to Remove Memories and in the same red, that deletes every daily log and session artifact after confirmation, keeping the memories, conversations, settings, themes and the Nova agenda
 - Add scrolling to the model selector list of the desktop version, showing four models at a time
 - Add search_agenda tool that lets Arlo find Nova reminders and events by the words in their title or notes, past or upcoming, when their date is unknown
 - Add update checks to the terminal version, from a Check for updates palette action that lists the newer releases, downloads the chosen one with a progress box above the composer, installs it and starts the terminal version again
