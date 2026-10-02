@@ -59,7 +59,9 @@ should result in a clarification rather than guessing.
 
 `remember` takes content, category (`preference`, `fact`, `project`, `goal`,
 `other`), optional semantic key, optional existing memory ID, and optional
-timezone-aware ISO expiration. Reuse keys such as `response_language`: replacing
+ISO expiration, read as local time when it has no timezone. Keys are normalized
+to letters, numbers, dots, hyphens and underscores, and an empty key or expiration
+is ignored. Reuse keys such as `response_language`: replacing
 the content under that key atomically supersedes its previous active value.
 Updating an exact ID keeps that ID. If the new content or key already belongs to another active memory, that memory is superseded by the updated one. Normalized duplicate content is reused.
 Different paraphrases without a shared key are not semantically deduplicated.

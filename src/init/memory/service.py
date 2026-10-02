@@ -29,7 +29,7 @@ from .database import Database, timestamp
 from . import lexical
 from .retrieval import UNTRUSTED, bounded, search_history, search_memories
 
-CATEGORIES = {"preference", "fact", "project", "goal", "other"}
+CATEGORIES = ("preference", "fact", "project", "goal", "other")
 SECRET = re.compile(
     r"(?i)(?:password|passwd|contrase[nñ]a|api[_ -]?key|access[_ -]?token|"
     r"refresh[_ -]?token|client[_ -]?secret|private[_ -]?key|bearer)\s*(?:[:=]|is\b|es\b)"
@@ -46,6 +46,10 @@ def valid_time(value):
     if parsed.tzinfo is None:
         raise ValueError("Timestamps must include a timezone")
     return parsed.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
+def expiry_time(value):
+    return datetime.fromisoformat(value).astimezone(timezone.utc).isoformat(timespec="microseconds")
 
 
 class MemoryService:
@@ -127,12 +131,12 @@ class MemoryService:
         if category not in CATEGORIES:
             raise ValueError("Unsupported memory category")
         if key is not None:
-            key = normalize(key)
-            if not re.fullmatch(r"[\w.-]{1,100}", key):
-                raise ValueError("Memory key must contain 1–100 letters, numbers, dots, hyphens or underscores")
+            key = re.sub(r"[^\w.-]+", "_", normalize(key)).strip("_") or None
+        if key is not None and not re.fullmatch(r"[\w.-]{1,100}", key):
+            raise ValueError("Memory key must contain 1–100 letters, numbers, dots, hyphens or underscores")
         if not 0 <= confidence <= 1:
             raise ValueError("Confidence must be between zero and one")
-        expires_at = valid_time(expires_at) if expires_at else None
+        expires_at = expiry_time(expires_at) if expires_at else None
         if expires_at is not None and expires_at <= timestamp():
             raise ValueError("Expiration must be in the future")
         return content, key, expires_at

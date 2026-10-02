@@ -19,6 +19,9 @@
 from typing import Literal
 
 from .integration import active_memory, explicit_intent
+from .service import CATEGORIES
+
+Category = Literal[CATEGORIES]
 
 
 def _turn(action=None):
@@ -32,7 +35,7 @@ def _turn(action=None):
     return turn
 
 
-def remember(content: str, category: str = "fact", key: str | None = None,
+def remember(content: str, category: Category = "fact", key: str | None = None,
              memory_id: str | None = None, expires_at: str | None = None, pinned: bool = False) -> dict:
     """Store explicitly requested durable information. Reuse key to supersede a preference;
     pass memory_id to update that exact memory. Never store credentials or inferred facts.
