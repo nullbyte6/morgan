@@ -1025,7 +1025,7 @@ QPushButton#novaStar {
     border: 2px solid transparent;
     border-radius: 12px;
     font-family: "JetBrainsMonoNL NFM";
-    font-size: 24px;
+    font-size: 28px;
     padding: 0;
 }
 

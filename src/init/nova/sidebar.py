@@ -61,7 +61,7 @@ class NavItem(QPushButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(color("surface_selected" if active else "surface_raised"))
             painter.drawRoundedRect(QRectF(self.rect()), 10, 10)
-        draw_text(painter, QRect(0, 0, ICON_WIDTH + 4, self.height()), self.section.glyph, glyph_font(20),
+        draw_text(painter, QRect(0, 0, ICON_WIDTH + 4, self.height()), self.section.glyph, glyph_font(23),
                   "accent" if active else ("text" if hover else "text_muted"), ALIGN_CENTER)
         label = QRect(ICON_WIDTH + 6, 0, max(0, self.width() - ICON_WIDTH - 14), self.height())
         if label.width() > 12:
