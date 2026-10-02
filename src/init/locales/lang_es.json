@@ -716,6 +716,7 @@
   "palette.private": "Activar o desactivar el modo privado",
   "palette.reload": "Recargar módulos",
   "palette.update": "Buscar actualizaciones",
+  "palette.button": "Paleta de comandos (Ctrl+K)",
   "update.title": "Actualización",
   "update.checking": "Buscando actualizaciones…",
   "update.check_failed": "No se pudieron consultar las publicaciones: {error}",

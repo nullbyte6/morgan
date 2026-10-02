@@ -653,6 +653,21 @@ QMessageBox QLabel {
     color: @error;
 }
 
+#workspacePanelPalette {
+    color: @text_muted;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 16px;
+    padding: 0;
+}
+
+#workspacePanelPalette:hover {
+    background-color: transparent;
+    color: @accent;
+}
+
 #workspaceDropPreview {
     background-color: @accent/72;
     border: 2px solid @accent/210;
@@ -1107,21 +1122,6 @@ QFrame#novaRow[overdue="true"] QLabel#novaRowCaption {
     color: @error;
 }
 
-QLabel#novaRowMarker {
-    color: @accent;
-    font-family: "JetBrainsMonoNL NFM";
-    font-size: 20px;
-    background: transparent;
-    border: none;
-}
-
-QLabel#novaWelcomeMark {
-    color: @accent;
-    font-family: "JetBrainsMonoNL NFM";
-    font-size: 44px;
-    background: transparent;
-}
-
 QPushButton#novaRowEdit {
     color: @text_subtle;
     background: transparent;
@@ -1135,6 +1135,21 @@ QPushButton#novaRowEdit {
 QPushButton#novaRowEdit:hover {
     background-color: @surface_selected;
     color: @accent;
+}
+
+QLabel#novaRowMarker {
+    color: @accent;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 20px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#novaWelcomeMark {
+    color: @accent;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 44px;
+    background: transparent;
 }
 
 QLabel#novaWelcomeTitle {

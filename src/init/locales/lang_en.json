@@ -716,6 +716,7 @@
   "palette.private": "Toggle private mode",
   "palette.reload": "Reload modules",
   "palette.update": "Check for updates",
+  "palette.button": "Command palette (Ctrl+K)",
   "update.title": "Update",
   "update.checking": "Checking for updates…",
   "update.check_failed": "The releases could not be checked: {error}",

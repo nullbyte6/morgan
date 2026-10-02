@@ -679,6 +679,7 @@ class AssistantWindow(DesktopWindow):
             lambda _panel_id: self.command_palette.dismiss(restore_focus=False))
         self.workspace.panel_closed.connect(
             lambda _panel_id: self.command_palette.dismiss(restore_focus=False))
+        self.workspace.palette_requested.connect(self.open_command_palette_from_panel)
 
     def open_command_palette(self):
         if self.quitting or self._workspace_hiding or not self.isVisible():
@@ -688,6 +689,10 @@ class AssistantWindow(DesktopWindow):
             self._workspace_chord_timer.stop()
             self._workspace_chord_pending = False
             self.command_palette.open(panel.content_host)
+
+    def open_command_palette_from_panel(self, panel_id):
+        self.workspace.focus_panel(panel_id)
+        self.open_command_palette()
 
     def eventFilter(self, watched, event):
         if event.type() == QEvent.WindowDeactivate and watched is self:
@@ -1392,6 +1397,8 @@ class AssistantWindow(DesktopWindow):
             orb.setToolTip(name)
         if hasattr(self, "command_palette"):
             self.command_palette.refresh_language()
+        for panel in self.workspace.findChildren(WorkspacePanel):
+            panel.refresh_language()
         for session in self._views():
             self._refresh_view_language(session)
         self.refresh_settings_workspaces()

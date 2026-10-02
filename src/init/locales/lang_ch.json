@@ -716,6 +716,7 @@
   "palette.private": "切换隐私模式",
   "palette.reload": "重新加载模块",
   "palette.update": "检查更新",
+  "palette.button": "命令面板 (Ctrl+K)",
   "update.title": "更新",
   "update.checking": "正在检查更新…",
   "update.check_failed": "无法检查发布版本：{error}",

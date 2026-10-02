@@ -26,6 +26,8 @@ from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 from shiboken6 import isValid
 
+from src.init.lang import tr
+
 
 class WorkspacePanel(QFrame):
     """An independently closable and draggable embedded panel."""
@@ -34,6 +36,7 @@ class WorkspacePanel(QFrame):
     focus_requested = Signal(str)
     move_requested = Signal(str, str)
     title_changed = Signal(str, str)
+    palette_requested = Signal(str)
     MIME_TYPE = "application/x-arlo-workspace-panel"
 
     def __init__(
@@ -91,6 +94,14 @@ class WorkspacePanel(QFrame):
         self.title_edit.hide()
         self.title_edit.editingFinished.connect(self._finish_rename)
 
+        self.palette_button = QPushButton("\U000f0349", self.header)
+        self.palette_button.setObjectName("workspacePanelPalette")
+        self.palette_button.setFixedSize(28, 28)
+        self.palette_button.setCursor(Qt.PointingHandCursor)
+        self.palette_button.setFocusPolicy(Qt.NoFocus)
+        self.palette_button.clicked.connect(
+            lambda: self.palette_requested.emit(self.panel_id))
+
         self.close_button = QPushButton("×", self.header)
         self.close_button.setObjectName("workspacePanelClose")
         self.close_button.setFixedSize(28, 28)
@@ -100,6 +111,7 @@ class WorkspacePanel(QFrame):
 
         header_layout.addWidget(self.title_label, 1)
         header_layout.addWidget(self.title_edit, 1)
+        header_layout.addWidget(self.palette_button)
         header_layout.addWidget(self.close_button)
 
         self._layout.addWidget(self.header)
@@ -124,6 +136,11 @@ class WorkspacePanel(QFrame):
         self.close_button.clicked.connect(
             lambda: self.close_requested.emit(self.panel_id)
         )
+        self.refresh_language()
+
+    def refresh_language(self) -> None:
+        self.palette_button.setToolTip(tr("palette.button"))
+        self.palette_button.setAccessibleName(tr("palette.button"))
 
     def minimumSizeHint(self) -> QSize:
         return QSize(0, 0)
@@ -472,6 +489,7 @@ class Workspace(QWidget):
     panel_opened = Signal(str)
     panel_closed = Signal(str)
     panel_focused = Signal(str)
+    palette_requested = Signal(str)
     layout_changed = Signal()
 
     def __init__(self, parent: QWidget | None = None):
@@ -624,6 +642,7 @@ class Workspace(QWidget):
         panel.close_requested.connect(self.close_panel)
         panel.focus_requested.connect(self.focus_panel)
         panel.move_requested.connect(self.swap_panels)
+        panel.palette_requested.connect(self.palette_requested)
 
         if self._root is None:
             self._root = panel
