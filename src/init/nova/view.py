@@ -31,6 +31,7 @@ from .dialog import EVENT, REMINDER, NovaEntryDialog
 from .diary import DiaryView
 from .entries import Entry, Reminder
 from .rows import EntryList
+from .search import SearchView
 from .sections import Section
 from .sidebar import NovaSidebar
 from .store import NovaStore
@@ -80,10 +81,11 @@ class NovaView(QWidget):
         self.lists = {section: EntryList() for section in (Section.AGENDA, Section.REMINDERS, Section.EVENTS)}
         self.calendar = CalendarView(store)
         self.diary = DiaryView(store)
+        self.search = SearchView(store)
+        pages = {Section.CALENDAR: self.calendar, Section.DIARY: self.diary, Section.SEARCH: self.search}
         self.pages = QStackedWidget()
         for section in Section:
-            self.pages.addWidget(self.calendar if section is Section.CALENDAR
-                                 else self.diary if section is Section.DIARY else self.lists[section])
+            self.pages.addWidget(pages.get(section) or self.lists[section])
 
         content = QVBoxLayout()
         content.setContentsMargins(28, 22, 28, 22)
@@ -108,6 +110,8 @@ class NovaView(QWidget):
             entries.toggled.connect(self._toggle_reminder)
         self.calendar.entry_activated.connect(self.dialog.open_edit)
         self.diary.entry_activated.connect(self.dialog.open_edit)
+        self.search.entry_activated.connect(self.dialog.open_edit)
+        self.search.day_selected.connect(self._open_day)
         self.calendar.create_requested.connect(lambda moment: self.dialog.open_new(EVENT, moment))
         store.changed.connect(self._refresh)
 
@@ -126,15 +130,22 @@ class NovaView(QWidget):
     def show_section(self, section: Section) -> None:
         self._section = section
         self.sidebar.select(section)
-        self.add_button.setVisible(section is not Section.DIARY)
+        self.add_button.setVisible(section not in (Section.DIARY, Section.SEARCH))
         self.pages.setCurrentIndex(list(Section).index(section))
         self._refresh()
+        if section is Section.SEARCH:
+            self.search.focus()
+
+    def _open_day(self, day) -> None:
+        self.diary.set_day(day)
+        self.show_section(Section.DIARY)
 
     def refresh_language(self) -> None:
         self.sidebar.refresh_language()
         self.dialog.refresh_language()
         self.calendar.refresh_language()
         self.diary.refresh_language()
+        self.search.refresh_language()
         self.add_button.setToolTip(tr("nova.add"))
         self._refresh()
 

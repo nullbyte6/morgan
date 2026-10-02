@@ -236,6 +236,18 @@ class NovaStore(QObject):
                             key=lambda event: (event.starts_at, event.ends_at, event.id))
         return [event for event in events if first is None or event.is_recurring or event.last_day >= first]
 
+    def search(self, query: str, limit: int = 100) -> list[Entry]:
+        """Reminders and events whose title or notes contain every word of query, ignoring case."""
+        words = str(query).casefold().split()
+        if not words:
+            return []
+        with self.reminder_db.connect() as db:
+            reminders = [Reminder.from_row(row) for row in db.execute("SELECT * FROM reminders")]
+        found = [entry for entry in [*reminders, *self.events()]
+                 if all(word in f"{entry.title}\n{entry.notes}".casefold() for word in words)]
+        found.sort(key=lambda entry: entry.moment, reverse=True)
+        return found[:limit]
+
     def entries(self, first: date, last: date) -> list[Entry]:
         """Reminders and events touching any day from first to last, in chronological order."""
         reminders = self.reminders(day_start(first), day_start(last + timedelta(days=1)))

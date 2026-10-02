@@ -651,5 +651,11 @@
   "nova.repeat.monthly": "Monthly",
   "nova.toast.snooze": "In 10 min",
   "nova.toast.tomorrow": "Tomorrow",
-  "nova.toast.done": "Done"
+  "nova.toast.done": "Done",
+  "nova.section.search": "Search",
+  "nova.section.search.tagline": "Find reminders, events and diary days.",
+  "nova.search.placeholder": "Search reminders, events and conversations",
+  "nova.search.hint": "Type a word to search your reminders, events and the days of your diary.",
+  "nova.search.days": "Diary days",
+  "nova.search.empty": "Nothing matches “{query}”."
 }

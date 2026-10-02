@@ -1253,7 +1253,8 @@ QPushButton#novaNav[expanded="true"] {
     background-color: @surface_selected;
 }
 
-QWidget#novaDiary {
+QWidget#novaDiary,
+QWidget#novaSearch {
     background: transparent;
 }
 

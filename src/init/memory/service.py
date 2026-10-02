@@ -371,6 +371,19 @@ class MemoryService:
                                                         (since, until, timestamp()))]
         return {"sessions": sessions, "memories": memories}
 
+    def search_messages(self, query, *, limit=200):
+        """Messages containing every word of query, or words starting with them, newest first."""
+        words = list(dict.fromkeys(re.findall(r"[^\W_]+", query, re.UNICODE)))[:32]
+        if not words:
+            return []
+        expression = " AND ".join('"' + word + '"*' for word in words)
+        with self.db.connect() as db:
+            return [dict(row) for row in db.execute("""SELECT m.id,m.session_id,m.role,m.created_at,
+                snippet(message_fts,0,'','','…',16) AS excerpt
+                FROM message_fts JOIN messages m ON m.rowid=message_fts.rowid
+                WHERE message_fts MATCH ? ORDER BY m.created_at DESC LIMIT ?""",
+                                                    (expression, min(max(1, limit), 1000)))]
+
     def diary_messages(self, session_id, since, until):
         """Every message of one conversation inside [since, until), whatever its role or status."""
         since, until = valid_time(since), valid_time(until)
