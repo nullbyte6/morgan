@@ -194,13 +194,6 @@ class SessionRunner:
             if cancel_event.is_set():
                 self.finished.emit("")
                 return
-            privacy_result = (self.session.handle_command(prompt)
-                              if not voice_input and not message.attachments
-                              else None)
-            if privacy_result is not None:
-                self.finished.emit(str(privacy_result))
-                return
-
             if voice_input and not prompt:
                 try:
                     from src.init.voice import transcribe_voice

@@ -33,7 +33,7 @@ selects another database; it does not move or merge existing data.
 `enabled=false` disables new memory writes, memory tools and injected memory
 context, without deleting anything. `store_history=false` stops new SQLite
 conversation persistence while leaving explicit memories available. Markdown
-logging remains governed by the existing logger and `/private` setting.
+logging remains governed by the existing logger and private mode.
 
 Limits are characters, not model tokens. `max_results` accepts 1–50;
 `context_chars` accepts 512–32000; `recall_chars` accepts 1024–64000. Invalid
@@ -258,8 +258,8 @@ are distinct sources. Re-importing the same path is idempotent.
 
 ## Privacy and deletion
 
-`/private on` disables new Markdown and SQLite conversation writes, memory tools,
-and injected memory context for private turns. It does not erase earlier logs,
+Private mode, toggled with the Toggle private mode command in the command
+palette, disables new Markdown and SQLite conversation writes, memory tools, and injected memory context for private turns. It does not erase earlier logs,
 backups or the current in-process conversation history. Turning it off resumes
 normal behavior. Explicit memory writes reject common credential labels and
 recognizable token/private-key formats. This heuristic is not a complete secret

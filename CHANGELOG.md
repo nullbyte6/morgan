@@ -4,12 +4,12 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.2-beta (2026-10-02)
 
-- Add /exit in the input box and an Exit Arlo command in the command palette that stop any running reply and close Arlo gracefully, so the session end time is recorded without ending the process from the Task Manager
 - Add a health view, opened from the command palette, that checks Ollama, how much of the main model sits on the GPU and how long it took to load, the graphics adapters against the installed CUDA or ROCm PyTorch build, and the voice service device and CosyVoice load time
 - Add Back Up and Restore buttons to Settings, next to Remove Memories, that save the memory database, Nova's reminders and events and the daily logs to one zip file and bring them back from it, migrating older backups to the current schema
 - Add Copy day and Export buttons to the Nova diary that copy the day as Markdown or save it to a Markdown file, with its agenda, remembered facts and every conversation message
 - Add Copy report button to the health view that copies the results with the version, system and check time as Markdown for bug reports
 - Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen
+- Add Exit Arlo command in the command palette that stops any running reply and closes Arlo gracefully, so the session end time is recorded without ending the process from the Task Manager
 - Add health check on the first start of each new version, run once the services had time to start, that opens the health view with the results when a check fails
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda
 - Add Nova search, a sidebar section with one box that finds reminders, events and the diary days whose conversations mention the words typed, opening the day in the diary when clicked
@@ -22,6 +22,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
 - Fix Arlo staying open after being asked to close itself during a reply, because the shutdown waited on a quit request that had already been marked as handled
 - Fix snoozing a due Nova reminder giving no sign of its new time, by confirming it in a notification or saying the reminder no longer exists, and Tomorrow on a daily reminder adding a duplicate at the time it already repeats
+- Remove the /exit, /private and /reload slash commands in favour of the command palette, which gains Toggle private mode in the desktop and terminal versions and Reload modules in the desktop, while reload and ref still work as messages
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update Nova sidebar icons and star to be 15% larger
 - Update services launcher to read the bundled core.json when the dev folder is not installed

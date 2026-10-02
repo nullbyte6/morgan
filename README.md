@@ -91,8 +91,8 @@ restart
 the desktop and the `ARLO_WAKE` task. Wake regression checks:
 `.venv/Scripts/python.exe -B -m unittest discover -s tests -v`.
 
-With the desktop open, `reload`, `ref`, or `/reload` hot-reloads Arlo's loaded
-source/tool modules and rebuilds the model tool registry for the following turn.
+With the desktop open, `reload`, `ref`, or the Reload modules command in the
+command palette hot-reloads Arlo's loaded source/tool modules and rebuilds the model tool registry for the following turn.
 Live process infrastructure (Qt bridges, locks, timers, sessions, and memory) is
 preserved so reloading does not require restarting the application.
 

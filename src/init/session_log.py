@@ -310,20 +310,6 @@ class SessionLog:
         self.directory.mkdir(parents=True, exist_ok=True)
         self._start_day(datetime.now().astimezone())
 
-    def handle_command(self, command):
-        """Handle local privacy controls before recording or sending input."""
-        parts = command.strip().casefold().split()
-        if not parts or parts[0] not in ("/private", "/private"):
-            return None
-        action = parts[1] if len(parts) == 2 else "toggle" if len(parts) == 1 else ""
-        if action == "toggle":
-            self.private = not self.private
-        elif action in ("on", "off"):
-            self.private = action == "on"
-        elif action != "status":
-            return tr("privacy.usage")
-        return tr("privacy.on" if self.private else "privacy.off")
-
     def _start_day(self, started):
         self.path = self.directory / f"{started:%Y-%m-%d}.md"
         try:

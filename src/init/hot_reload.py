@@ -62,8 +62,7 @@ def is_reload_command(text: str) -> bool:
             "NFKD", str(text).casefold())
         if not unicodedata.combining(character))
     normalized = re.sub(r"\s+", " ", normalized.strip(" \t\r\n.!?"))
-    if normalized in {"ref", "reload", "/reload", "recarga", "/recarga",
-                      "recargar", "/recargar", "hot reload",
+    if normalized in {"ref", "reload", "recarga", "recargar", "hot reload",
                       "actualiza modulos", "actualizar modulos",
                       "actualiza los modulos", "actualizar los modulos",
                       "actualiza todos los modulos",

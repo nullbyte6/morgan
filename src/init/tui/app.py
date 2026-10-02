@@ -876,6 +876,8 @@ class TuiApp:
             Command("ui.permissions",
                     lambda: t("tui.cmd_permissions", mode=session.permission_mode.upper()),
                     session.toggle_permission_mode, ("permissions", "permisos", "ask", "auto")),
+            Command("session.private", lambda: t("palette.private"), session.toggle_private,
+                    ("private", "privacy", "privado", "privacidad", "incognito", "隐私")),
             Command("ui.model", lambda: t("tui.cmd_model"), self.open_models, ("model", "modelo"),
                     lambda: session.ready and not session.busy),
             Command("app.quit", lambda: t("tray.quit"), self.request_exit,

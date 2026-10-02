@@ -30,7 +30,6 @@ from math import gcd
 from .colors import RESET_COLOR, USER_COLOR
 from .lang import tr
 
-VOICE_COMMANDS = {"/voice", "voice"}
 VOICE_MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
 VOICE_BLOCK_SECONDS = 0.1
 VOICE_MAX_SECONDS = 30

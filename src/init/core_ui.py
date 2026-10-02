@@ -657,6 +657,12 @@ class AssistantWindow(DesktopWindow):
                                 ("diary", "diario")))
         commands.append(Command("workspace.health", "palette.health", self.open_health_view,
                                 ("health", "diagnostics", "salud", "diagnóstico", "estado")))
+        commands.append(Command("session.private", "palette.private", self.toggle_private_mode,
+                                ("private", "privacy", "privado", "privacidad", "incognito", "隐私")))
+        commands.append(Command("app.reload", "palette.reload", self.reload_modules,
+                                ("reload", "refresh", "modules", "recargar", "recarga", "modulos", "módulos", "重新加载"),
+                                lambda: self.session.ready and not self.session.busy
+                                and self.session.submitting is None))
         commands.append(Command("app.exit", "palette.exit", self.exit_app,
                                 ("exit", "quit", "salir", "cerrar arlo", "退出")))
         self.command_palette = CommandPalette(CommandRegistry(commands), self)
@@ -1547,13 +1553,15 @@ class AssistantWindow(DesktopWindow):
                        r"<b>\1</b>", escaped, flags=re.DOTALL, )
                 .replace("\n", "<br>"))
 
-    def consume_exit_command(self, session):
-        ui = session.ui
-        if ui is None or ui.input.toPlainText().strip().casefold() != "/exit":
-            return False
-        ui.input.clear()
-        self.exit_app()
-        return True
+    def toggle_private_mode(self):
+        session = self.session.worker.session
+        session.private = not session.private
+        self.refresh_privacy_indicator(self.session)
+
+    def reload_modules(self):
+        session = self.session
+        if session.ready and not session.busy and session.submitting is None:
+            self.start_prompt(DesktopMessage("reload"), session)
 
     def exit_app(self):
         if self.quitting:
@@ -1565,8 +1573,6 @@ class AssistantWindow(DesktopWindow):
 
     def send_message(self, session=None):
         session = session or self.session
-        if self.consume_exit_command(session):
-            return
         ui = session.ui
         if ui is None or not session.ready or (
                 self.voice_thread is not None and self.voice_session is session):
@@ -1714,8 +1720,6 @@ class AssistantWindow(DesktopWindow):
 
     def on_send_clicked(self, session=None):
         session = session or self.session
-        if self.consume_exit_command(session):
-            return
         if self.voice_thread is not None and self.voice_thread.live and self.voice_session in (session, None):
             voice_session = self.voice_session or session
             self.voice_thread.stop_event.set()

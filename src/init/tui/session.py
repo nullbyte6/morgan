@@ -955,7 +955,7 @@ class TuiSession:
         self.notify()
 
     def toggle_private(self):
-        self.runner.session.private = False
+        self.runner.session.private = not self.runner.session.private
         self.notify()
 
     def on_exit(self):
