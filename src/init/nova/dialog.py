@@ -23,7 +23,7 @@ from datetime import date, datetime, time, timedelta
 from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QLineEdit,
-                               QPlainTextEdit, QPushButton, QVBoxLayout, QWidget)
+                               QPlainTextEdit, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 from src.init.lang import tr
 from src.init.settings import ToggleSwitch
@@ -161,21 +161,28 @@ class NovaEntryDialog(QWidget):
         self.flag = QButtonGroup(self)
         self.flag.setExclusive(True)
         self._flag_buttons: dict[str, QPushButton] = {}
-        flag_line = QHBoxLayout()
-        flag_line.setContentsMargins(0, 0, 0, 0)
-        flag_line.setSpacing(6)
+        flag_track = QFrame()
+        flag_track.setObjectName("novaFlagTrack")
+        flag_track.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        flag_line = QHBoxLayout(flag_track)
+        flag_line.setContentsMargins(3, 3, 3, 3)
+        flag_line.setSpacing(2)
         for flag in FLAGS:
             button = QPushButton()
-            button.setObjectName("novaSegment")
+            button.setObjectName("novaFlagOption")
             button.setProperty("flag", flag)
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             self.flag.addButton(button)
             self._flag_buttons[flag] = button
             flag_line.addWidget(button)
-        flag_line.addStretch(1)
+        flag_row = QHBoxLayout()
+        flag_row.setContentsMargins(0, 0, 0, 0)
+        flag_row.addWidget(flag_track)
+        flag_row.addStretch(1)
         flag_bar = QWidget()
-        flag_bar.setLayout(flag_line)
+        flag_bar.setLayout(flag_row)
 
         self.labels = {name: self._label() for name in ("title", "notes", "start", "end", "repeat", "flag")}
         all_day_row = QWidget()

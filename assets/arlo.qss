@@ -1004,18 +1004,49 @@ QPushButton#novaSegment:checked {
     color: @text;
 }
 
-QPushButton#novaSegment[flag="green"]:checked {
+QFrame#novaFlagTrack {
+    background-color: @surface;
+    border: 2px solid @border;
+    border-radius: 16px;
+}
+
+QPushButton#novaFlagOption {
+    background-color: transparent;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    color: @text_muted;
+    padding: 4px 12px;
+    font-size: 14px;
+}
+
+QPushButton#novaFlagOption:hover {
+    background-color: @surface_raised;
+    color: @text;
+}
+
+QPushButton#novaFlagOption:checked {
+    background-color: @surface_selected;
+    color: @text;
+}
+
+QPushButton#novaFlagOption[flag="green"]:checked {
     background-color: @success;
+    border: 2px solid transparent;
+    border-radius: 12px;
     color: @on_accent;
 }
 
-QPushButton#novaSegment[flag="yellow"]:checked {
+QPushButton#novaFlagOption[flag="yellow"]:checked {
     background-color: @warning;
+    border: 2px solid transparent;
+    border-radius: 12px;
     color: @on_accent;
 }
 
-QPushButton#novaSegment[flag="red"]:checked {
+QPushButton#novaFlagOption[flag="red"]:checked {
     background-color: @error;
+    border: 2px solid transparent;
+    border-radius: 12px;
     color: @on_accent;
 }
 
