@@ -26,7 +26,7 @@ from pathlib import Path
 
 from src.init.memory.integration import configured_service
 from src.init.nova.agenda import agenda_groups, event_groups, reminder_groups
-from src.init.nova.entries import RECURRENCES, Event, Reminder
+from src.init.nova.entries import FLAG_ROLES, FLAGS, RECURRENCES, Event, Reminder
 from src.init.nova.journal import clipped, day_bounds, describe_week, local_moment, message_count, summarize
 from src.init.nova.sections import Section
 from src.init.tui import nova_text as fmt
@@ -77,15 +77,15 @@ class EntryForm:
         now = datetime.now().replace(second=0, microsecond=0)
         start = datetime.combine(day, now.time()) if day is not None and day != now.date() else now
         start = start.replace(minute=0) + timedelta(hours=1)
-        self.values = {"title": "", "notes": "", "repeat": "none", "all_day": False,
+        self.values = {"title": "", "notes": "", "repeat": "none", "flag": "none", "all_day": False,
                        "when": start.strftime(MOMENT_FORMAT), "starts": start.strftime(MOMENT_FORMAT),
                        "ends": (start + timedelta(hours=1)).strftime(MOMENT_FORMAT)}
         if isinstance(entry, Reminder):
-            self.values.update(title=entry.title, notes=entry.notes, repeat=entry.recurrence,
+            self.values.update(title=entry.title, notes=entry.notes, repeat=entry.recurrence, flag=entry.flag,
                                when=entry.remind_at.strftime(MOMENT_FORMAT))
         elif isinstance(entry, Event):
             moment = DATE_FORMAT if entry.all_day else MOMENT_FORMAT
-            self.values.update(title=entry.title, notes=entry.notes, repeat=entry.recurrence,
+            self.values.update(title=entry.title, notes=entry.notes, repeat=entry.recurrence, flag=entry.flag,
                                all_day=entry.all_day, starts=entry.starts_at.strftime(moment),
                                ends=entry.ends_at.strftime(moment))
 
@@ -100,6 +100,7 @@ class EntryForm:
             fields += [Field("all_day", t("nova.dialog.all_day"), "toggle"),
                        Field("starts", t("nova.dialog.starts")), Field("ends", t("nova.dialog.ends"))]
         fields += [Field("repeat", t("nova.dialog.repeat"), "choice", RECURRENCES),
+                   Field("flag", t("nova.dialog.flag"), "choice", FLAGS),
                    Field("notes", t("nova.dialog.notes")), Field("save", t("nova.dialog.save"), "button")]
         if self.editing is not None:
             fields.append(Field("delete", t("nova.dialog.delete"), "button"))
@@ -117,6 +118,8 @@ class EntryForm:
             return t("nova.reminder" if self.kind == REMINDER else "nova.event")
         if item.key == "repeat":
             return t(f"nova.repeat.{value}")
+        if item.key == "flag":
+            return t(f"nova.flag.{value}")
         if item.kind == "toggle":
             return "[x]" if value else "[ ]"
         return str(value).replace("\n", " ⏎ ")
@@ -178,6 +181,8 @@ class EntryForm:
         elif item.key == "repeat":
             options = list(RECURRENCES)
             self.values["repeat"] = options[(options.index(self.values["repeat"]) + step) % len(options)]
+        elif item.key == "flag":
+            self.values["flag"] = FLAGS[(FLAGS.index(self.values["flag"]) + step) % len(FLAGS)]
         elif item.key == "all_day":
             self.set_all_day(not self.values["all_day"])
 
@@ -201,19 +206,19 @@ class EntryForm:
         if not title:
             self.error = t("nova.dialog.title_placeholder")
             return
-        notes, recurrence = self.values["notes"], self.values["repeat"]
+        notes, recurrence, flag = self.values["notes"], self.values["repeat"], self.values["flag"]
         try:
             if self.kind == REMINDER:
                 when = self.moment("when")
                 if self.editing is None:
-                    self.store.add_reminder(title, when, notes, recurrence)
+                    self.store.add_reminder(title, when, notes, recurrence, flag)
                 else:
-                    self.store.update_reminder(self.editing.id, title, when, notes, recurrence)
+                    self.store.update_reminder(self.editing.id, title, when, notes, recurrence, flag)
             else:
                 starts, ends = self.moment("starts"), self.moment("ends")
                 if ends < starts:
                     raise ValueError(t("nova.error.order"))
-                options = dict(all_day=self.values["all_day"], notes=notes, recurrence=recurrence)
+                options = dict(all_day=self.values["all_day"], notes=notes, recurrence=recurrence, flag=flag)
                 if self.editing is None:
                     self.store.add_event(title, starts, ends, **options)
                 else:
@@ -488,9 +493,12 @@ class NovaOverlay(Overlay):
             when = fmt.entry_when(entry, today)
         else:
             when = fmt.time_text(entry.remind_at) if isinstance(entry, Reminder) else fmt.event_time_text(entry)
-        rows = [Row([(style(P["accent"]), f"  {mark} "), (style(P["text_secondary"]), pad(when, 16) + " "),
+        flagged = entry.flag != "none"
+        flag = [(style(P[FLAG_ROLES[entry.flag]], bold=True), f"{fmt.FLAG} ")] if flagged else []
+        rows = [Row([(style(P["accent"]), f"  {mark} "), (style(P["text_secondary"]), pad(when, 16) + " "), *flag,
                      (style(P[tone], bold=not isinstance(entry, Reminder) or not entry.is_completed),
-                      elide(entry.title + repeat, max(4, width - 22 - width_of(when))))], ("entry", entry))]
+                      elide(entry.title + repeat, max(4, width - 22 - width_of(when) - 2 * flagged)))],
+                    ("entry", entry))]
         notes = " ".join(entry.notes.split())
         if notes:
             rows.append(Row([(style(P["text_muted"]), "      " + elide(notes, width - 7))]))
