@@ -50,6 +50,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update installer to download the 62 MB timezone data from PyPI during runtime setup into the models folder instead of bundling it in the desktop and terminal builds, with get_current_time reading it from there or from the installed package when running from source, and reporting a missing download clearly
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update model selector list of the desktop version to open upward, above the selector, when there is room on the screen
+- Update Nova agenda tools and instructions to take a date alone, loose date and time formats, a time zone suffix read as local time and null optional arguments, and to write the reminder or event at once with the date and time Arlo is already given instead of calling get_current_time or asking for a second confirmation
 - Update Nova diary header to place the copy, export, previous entry and today buttons in a row below the day and the previous and next day arrows
 - Update Nova flag and custom repeat choices of the overlay and form to symbols, with one, two or three flags for unimportant, important and high priority and a pencil for Custom, and remove the translated flag names and Custom label
 - Update Nova flag symbols in the desktop overlay to have a space between them

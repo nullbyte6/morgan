@@ -19,8 +19,9 @@
 """Assistant tools that read and write Nova's reminders and events."""
 from __future__ import annotations
 
+import re
 import threading
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 _lock = threading.Lock()
 _store = None
@@ -52,14 +53,46 @@ def refresh_store() -> None:
         store.changed.emit()
 
 
-def _moment(value: str, name: str) -> datetime:
+_LOOSE_MOMENT = re.compile(
+    r"(?:(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})[/.](\d{1,2})[/.](\d{4}))"
+    r"(?:[t\s,]+(\d{1,2})(?:[:.h](\d{2}))?(?::\d{2}(?:\.\d+)?)?\s*(a\.?m\.?|p\.?m\.?)?)?\s*(?:z|utc)?")
+_FORMAT_HINT = "a local ISO date and time such as 2026-10-02T09:30, or just a date such as 2026-10-02"
+
+
+def _stamp(value, name: str, fallback: time) -> tuple[datetime, bool]:
+    """The local moment of a date or date and time, and whether the value carried a time."""
+    text = str(value if value is not None else "").strip()
+    if not text:
+        raise ValueError(f"{name} is required: pass {_FORMAT_HINT}")
+    if re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", text):
+        parts = [int(part) for part in text.split("-")]
+        try:
+            return datetime.combine(date(*parts), fallback), False
+        except ValueError as error:
+            raise ValueError(f"{name} is not a real date: {error}") from error
     try:
-        moment = datetime.fromisoformat(str(value).strip())
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        moment = None
+    if moment is not None:
+        return moment.replace(tzinfo=None), True
+    match = _LOOSE_MOMENT.fullmatch(text.lower())
+    if match is None:
+        raise ValueError(f"{name} must be {_FORMAT_HINT}")
+    year, month, day = ((int(match[1]), int(match[2]), int(match[3])) if match[1]
+                        else (int(match[6]), int(match[5]), int(match[4])))
+    timed = match[7] is not None
+    hour, minute = (int(match[7]), int(match[8] or 0)) if timed else (fallback.hour, fallback.minute)
+    if match[9]:
+        hour = hour % 12 + (12 if match[9][0] == "p" else 0)
+    try:
+        return datetime(year, month, day, hour, minute), timed
     except ValueError as error:
-        raise ValueError(f"{name} must be a local ISO date and time such as 2026-10-02T09:30") from error
-    if moment.tzinfo is not None:
-        moment = moment.astimezone().replace(tzinfo=None)
-    return moment
+        raise ValueError(f"{name} is not a real date and time: {error}") from error
+
+
+def _moment(value, name: str, fallback: time = time(9, 0)) -> datetime:
+    return _stamp(value, name, fallback)[0]
 
 
 def _day(value: str, name: str) -> date:
@@ -86,12 +119,13 @@ def _entry(entry) -> dict:
     return _event(entry) if hasattr(entry, "starts_at") else _reminder(entry)
 
 
-def add_reminder(title: str, remind_at: str, notes: str = "", repeat: str = "none",
-                 flag: str = "none") -> dict:
+def add_reminder(title: str, remind_at: str, notes: str | None = "", repeat: str | None = "none",
+                 flag: str | None = "none") -> dict:
     """Save a reminder in Nova, the user's agenda, announced as a Windows notification when due.
-    remind_at is local wall-clock time as ISO, e.g. 2026-10-02T09:30; check get_current_time
-    for relative requests. Persists across restarts. Prefer this over schedule_notification
-    for anything the user asks to be reminded of at a date or time.
+    remind_at is local wall-clock time as ISO, e.g. 2026-10-02T09:30; a date alone such as 2026-10-02
+    means 09:00. Work out relative dates from the current date and time already given to you.
+    Persists across restarts. Prefer this over schedule_notification
+    for anything the user asks to be reminded of at a date or time. Leave out parameters that do not apply.
     repeat is none, daily, weekly, monthly, hourly, yearly or a custom interval such as "every 2 weeks",
     "every 15 days" or "every 3 hours" (units hours, days, weeks, months, years; 1 to 999); a repeating
     reminder comes back at the same time.
@@ -101,16 +135,21 @@ def add_reminder(title: str, remind_at: str, notes: str = "", repeat: str = "non
     try:
         moment = _moment(remind_at, "remind_at")
         if moment < datetime.now() - timedelta(minutes=1):
-            raise ValueError("remind_at is in the past")
-        return {"ok": True, "reminder": _reminder(_shared().add_reminder(title, moment, notes, repeat, flag))}
+            raise ValueError(f"remind_at {moment.isoformat(timespec='minutes')} is in the past; "
+                             f"it is now {datetime.now().isoformat(timespec='minutes')}")
+        return {"ok": True, "reminder": _reminder(_shared().add_reminder(
+            title, moment, notes or "", repeat or "none", flag or "none"))}
     except Exception as error:
         return {"ok": False, "error": str(error)}
 
 
 def add_event(title: str, starts_at: str, ends_at: str | None = None,
-              all_day: bool = False, notes: str = "", repeat: str = "none", flag: str = "none") -> dict:
-    """Save an event in Nova's calendar. Times are local ISO, e.g. 2026-10-02T18:00.
-    ends_at defaults to one hour after starts_at, or the same day when all_day.
+              all_day: bool | None = False, notes: str | None = "", repeat: str | None = "none",
+              flag: str | None = "none") -> dict:
+    """Save an event or appointment in Nova's calendar. Times are local ISO, e.g. 2026-10-02T18:00.
+    A date alone such as 2026-10-02 makes it an all-day event.
+    ends_at defaults to one hour after starts_at, or the same day when all_day. Leave out parameters
+    that do not apply.
     repeat is none, daily, weekly, monthly, hourly, yearly or a custom interval such as "every 2 weeks"
     or "every 15 days" for events that happen again, e.g. a weekly class; hours (e.g. "every 3 hours")
     are not allowed for all_day events.
@@ -118,14 +157,15 @@ def add_event(title: str, starts_at: str, ends_at: str | None = None,
     of the iOS Reminders app.
     """
     try:
-        starts = _moment(starts_at, "starts_at")
-        if ends_at:
-            ends = _moment(ends_at, "ends_at")
-        else:
+        starts, timed = _stamp(starts_at, "starts_at", time(0, 0))
+        ends, ends_timed = _stamp(ends_at, "ends_at", time(23, 59)) if ends_at else (None, False)
+        all_day = bool(all_day) or not (timed or ends_timed)
+        if ends is None:
             ends = starts if all_day else starts + timedelta(hours=1)
         return {"ok": True, "event": _event(_shared().add_event(title, starts, ends, all_day=all_day,
-                                                               notes=notes, recurrence=repeat,
-                                                               flag=flag))}
+                                                               notes=notes or "",
+                                                               recurrence=repeat or "none",
+                                                               flag=flag or "none"))}
     except Exception as error:
         return {"ok": False, "error": str(error)}
 
@@ -220,7 +260,8 @@ def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str 
         if reminder is not None:
             if starts_at or ends_at or all_day is not None:
                 raise ValueError("Reminders only take remind_at; starts_at, ends_at and all_day are for events")
-            moment = _moment(remind_at, "remind_at") if remind_at else reminder.remind_at
+            moment = (_moment(remind_at, "remind_at", reminder.remind_at.time())
+                      if remind_at else reminder.remind_at)
             return {"ok": True, "reminder": _reminder(store.update_reminder(
                 entry_id, reminder.title if title is None else title, moment,
                 reminder.notes if notes is None else notes,
@@ -231,8 +272,9 @@ def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str 
             raise ValueError("No reminder or event has that ID; use list_agenda or search_agenda to find it")
         if remind_at:
             raise ValueError("Events take starts_at and ends_at instead of remind_at")
-        starts = _moment(starts_at, "starts_at") if starts_at else event.starts_at
-        ends = _moment(ends_at, "ends_at") if ends_at else starts + (event.ends_at - event.starts_at)
+        starts = _moment(starts_at, "starts_at", event.starts_at.time()) if starts_at else event.starts_at
+        ends = (_moment(ends_at, "ends_at", event.ends_at.time()) if ends_at
+                else starts + (event.ends_at - event.starts_at))
         return {"ok": True, "event": _event(store.update_event(
             entry_id, event.title if title is None else title, starts, ends,
             all_day=event.all_day if all_day is None else all_day,
