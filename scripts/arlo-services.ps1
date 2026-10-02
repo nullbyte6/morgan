@@ -102,6 +102,9 @@ Write-Host "$($assistantName.ToUpper()) SERVICES" -ForegroundColor Cyan
 Write-Host "-------------"
 $corePath = Join-Path $root "dev\core.json"
 if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
+    $corePath = Join-Path $root "_internal\dev\core.json"
+}
+if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
     throw "$assistantName model configuration not found: $corePath"
 }
 
