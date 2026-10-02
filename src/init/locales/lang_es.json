@@ -657,5 +657,11 @@
   "nova.search.placeholder": "Busca en recordatorios, eventos y conversaciones",
   "nova.search.hint": "Escribe una palabra para buscar en tus recordatorios, eventos y los días de tu diario.",
   "nova.search.days": "Días del diario",
-  "nova.search.empty": "Nada coincide con «{query}»."
+  "nova.search.empty": "Nada coincide con «{query}».",
+  "nova.diary.copy_day": "Copiar día",
+  "nova.diary.copy_day_tooltip": "Copia el día entero en Markdown",
+  "nova.diary.copied": "Copiado",
+  "nova.diary.export_day": "Exportar",
+  "nova.diary.export_day_tooltip": "Guarda el día como archivo Markdown",
+  "nova.diary.export_error": "No se pudo guardar el día: {error}"
 }

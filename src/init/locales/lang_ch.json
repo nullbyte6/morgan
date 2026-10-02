@@ -657,5 +657,11 @@
   "nova.search.placeholder": "搜索提醒、事件和对话",
   "nova.search.hint": "输入一个词，搜索你的提醒、事件和日记中的日子。",
   "nova.search.days": "日记中的日子",
-  "nova.search.empty": "没有与“{query}”匹配的内容。"
+  "nova.search.empty": "没有与“{query}”匹配的内容。",
+  "nova.diary.copy_day": "复制这一天",
+  "nova.diary.copy_day_tooltip": "以 Markdown 复制整天内容",
+  "nova.diary.copied": "已复制",
+  "nova.diary.export_day": "导出",
+  "nova.diary.export_day_tooltip": "将这一天保存为 Markdown 文件",
+  "nova.diary.export_error": "无法保存这一天：{error}"
 }

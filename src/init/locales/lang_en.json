@@ -657,5 +657,11 @@
   "nova.search.placeholder": "Search reminders, events and conversations",
   "nova.search.hint": "Type a word to search your reminders, events and the days of your diary.",
   "nova.search.days": "Diary days",
-  "nova.search.empty": "Nothing matches “{query}”."
+  "nova.search.empty": "Nothing matches “{query}”.",
+  "nova.diary.copy_day": "Copy day",
+  "nova.diary.copy_day_tooltip": "Copy the whole day as Markdown",
+  "nova.diary.copied": "Copied",
+  "nova.diary.export_day": "Export",
+  "nova.diary.export_day_tooltip": "Save the day as a Markdown file",
+  "nova.diary.export_error": "The day could not be saved: {error}"
 }

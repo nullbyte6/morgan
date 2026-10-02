@@ -22,7 +22,8 @@ from getpass import getuser
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+                               QVBoxLayout, QWidget)
 
 from src.init.config import HOME_PATH
 from src.init.identity import get_assistant_name
@@ -39,6 +40,7 @@ from .store import NovaStore
 CHEVRON_DOWN = "\U000f0140"
 TOPIC_LIMIT = 140
 REFRESH_MS = 2000
+COPIED_MS = 1200
 MARKDOWN_SESSION = "markdown"
 
 
@@ -68,6 +70,33 @@ def stored_messages(rows: list[dict]) -> list[LogMessage]:
     return [LogMessage(timestamp=local_moment(row["created_at"]).strftime("%H:%M:%S"),
                        author=authors.get(row["role"], row["role"]), content=row["content"].strip("\n"),
                        role=row["role"], id=row["id"]) for row in rows]
+
+
+def entry_markdown(entry: Entry) -> str:
+    if isinstance(entry, Reminder):
+        mark = "[x]" if entry.is_completed else "[ ]"
+        line = f"- {mark} {formatting.time_text(entry.remind_at)} {entry.title}"
+    else:
+        line = f"- {formatting.event_time_text(entry)} {entry.title}"
+    notes = "\n".join(f"  {text}" for text in entry.notes.splitlines() if text.strip())
+    return f"{line}\n{notes}" if notes else line
+
+
+def day_markdown(day: date, entries: list, memories: list[dict], conversations: list[tuple[dict, list]]) -> str:
+    """One diary day as Markdown: the agenda, what was remembered and every message of each conversation."""
+    parts = [f"# {formatting.day_heading(day)}"]
+    if entries:
+        parts.append(f"## {tr('nova.diary.agenda')}\n\n" + "\n".join(entry_markdown(entry) for entry in entries))
+    if memories:
+        parts.append(f"## {tr('nova.diary.learned')}\n\n"
+                     + "\n".join(f"- {' '.join(memory['content'].split())}" for memory in memories))
+    if conversations:
+        parts.append(f"## {tr('nova.diary.conversations')}")
+        for session, messages in conversations:
+            topic = clipped(session["topic"]) or tr("nova.diary.untitled")
+            parts.append(f"### {formatting.time_text(session['started'])} · {topic}")
+            parts.extend(f"**{message.author}** · {message.timestamp}\n\n{message.content}" for message in messages)
+    return "\n\n".join(parts) + "\n"
 
 
 def _label(text: str, name: str, wrap: bool = True) -> QLabel:
@@ -186,6 +215,7 @@ class DiaryView(QWidget):
         self._day = date.today()
         self._signature = None
         self._expanded: set[str] = set()
+        self._contents = ([], [], [], None)
 
         self.previous = self._arrow(CHEVRON_LEFT)
         self.next = self._arrow(CHEVRON_RIGHT)
@@ -198,12 +228,24 @@ class DiaryView(QWidget):
         self.today_button = QPushButton()
         self.today_button.setObjectName("novaTodayButton")
         self.today_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_button = QPushButton()
+        self.copy_button.setObjectName("novaTodayButton")
+        self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.export_button = QPushButton()
+        self.export_button.setObjectName("novaTodayButton")
+        self.export_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_reset = QTimer(self)
+        self.copy_reset.setSingleShot(True)
+        self.copy_reset.setInterval(COPIED_MS)
+        self.copy_reset.timeout.connect(lambda: self.copy_button.setText(tr("nova.diary.copy_day")))
         header = QHBoxLayout()
         header.setSpacing(6)
         header.addWidget(self.previous)
         header.addWidget(self.next)
         header.addSpacing(8)
         header.addWidget(self.day_label, 1)
+        header.addWidget(self.copy_button)
+        header.addWidget(self.export_button)
         header.addWidget(self.earlier_button)
         header.addWidget(self.today_button)
 
@@ -233,6 +275,8 @@ class DiaryView(QWidget):
         self.next.clicked.connect(lambda: self.set_day(self._day + timedelta(days=1)))
         self.today_button.clicked.connect(lambda: self.set_day(date.today()))
         self.earlier_button.clicked.connect(self._jump_earlier)
+        self.copy_button.clicked.connect(self._copy_day)
+        self.export_button.clicked.connect(self._export_day)
         store.changed.connect(self._store_changed)
         self.clock = QTimer(self)
         self.clock.setInterval(REFRESH_MS)
@@ -260,6 +304,10 @@ class DiaryView(QWidget):
         self.next.setToolTip(tr("nova.calendar.next"))
         self.earlier_button.setText(tr("nova.diary.previous_entry"))
         self.today_button.setText(tr("nova.calendar.today"))
+        self.copy_button.setText(tr("nova.diary.copy_day"))
+        self.copy_button.setToolTip(tr("nova.diary.copy_day_tooltip"))
+        self.export_button.setText(tr("nova.diary.export_day"))
+        self.export_button.setToolTip(tr("nova.diary.export_day_tooltip"))
         self.refresh()
 
     def _store_changed(self) -> None:
@@ -314,6 +362,27 @@ class DiaryView(QWidget):
                   "messages": len(messages), "topic": topic}],
                 lambda _session_id: self._markdown_messages())
 
+    def markdown(self) -> str:
+        entries, memories, sessions, loader = self._contents
+        conversations = [(session, loader(session["id"])) for session in sessions] if loader else []
+        return day_markdown(self._day, entries, memories, conversations)
+
+    def _copy_day(self) -> None:
+        QApplication.clipboard().setText(self.markdown())
+        self.copy_button.setText(tr("nova.diary.copied"))
+        self.copy_reset.start()
+
+    def _export_day(self) -> None:
+        path, _filter = QFileDialog.getSaveFileName(self, tr("nova.diary.export_day_tooltip"),
+                                                    str(Path.home() / f"{self._day:%Y-%m-%d}.md"),
+                                                    "Markdown (*.md)")
+        if not path:
+            return
+        try:
+            Path(path).write_text(self.markdown(), encoding="utf-8")
+        except OSError as error:
+            self._add(_label(tr("nova.diary.export_error", error=error), "novaDiaryNote"))
+
     def _forget(self, message_ids: list[str]) -> None:
         service, _error = self._service()
         if service is None:
@@ -343,6 +412,7 @@ class DiaryView(QWidget):
                 error = str(failure)
         sessions, loader = self._sessions(service, data)
         entries = self._store.entries(self._day, self._day)
+        self._contents = (entries, data["memories"], sessions, loader)
         signature = (self._day, error, service is None, tuple(entries),
                      tuple(entry.id for entry in entries if isinstance(entry, Reminder)
                            and not entry.is_completed and entry.remind_at < now),
