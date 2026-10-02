@@ -10,13 +10,14 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda
 - Add Nova search, a sidebar section with one box that finds reminders, events and the diary days whose conversations mention the words typed, opening the day in the diary when clicked
 - Add pinned memories that are always placed first in the model's context, and a Nova Memories section to review every stored memory and pin, edit or remove it
-- Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
 - Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
-- Update startup greeting to open with a plain salutation and the user's name, without Arlo introducing itself each time
+- Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
+- Fix Arlo staying open after being asked to close itself during a reply, because the shutdown waited on a quit request that had already been marked as handled
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update Nova sidebar icons and star to be 15% larger
 - Update services launcher to read the bundled core.json when the dev folder is not installed
 - Update startup greeting to briefly mention today's Nova reminders, events and overdue reminders when there are any
+- Update startup greeting to open with a plain salutation and the user's name, without Arlo introducing itself each time
 
 ## 26.10.1-beta (2026-10-01)
 

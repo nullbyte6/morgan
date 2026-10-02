@@ -1980,7 +1980,7 @@ class AssistantWindow(DesktopWindow):
 
         if self.assistant.shutdown_requested.is_set():
             self.quitting = True
-            QTimer.singleShot(0, self.request_quit)
+            QTimer.singleShot(0, self.close)
             return
 
         snapshot, session.completed_git_diff = session.completed_git_diff, None
