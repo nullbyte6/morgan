@@ -47,6 +47,8 @@
   "ui.remove_markdowns_hint": "Elimina para siempre todos los registros diarios y artefactos que {assistant_name} ha guardado, conservando los recuerdos",
   "ui.remove_markdowns_confirm": "Se eliminarán para siempre todos los registros diarios y artefactos que {assistant_name} ha guardado. Se conservan los recuerdos, las conversaciones, los ajustes, los temas y los recordatorios y eventos de Nova. ¿Continuar?",
   "ui.remove_markdowns_done": "Se han eliminado los registros diarios y artefactos de {assistant_name}.",
+  "ui.cancel": "Cancelar",
+  "ui.ok": "Aceptar",
   "ui.backup_data": "Copia de Seguridad",
   "ui.backup_data_hint": "Guarda en un archivo zip todas las conversaciones, recuerdos, registros diarios y recordatorios y eventos de Nova que {assistant_name} ha guardado",
   "ui.backup_data_done": "Copia de seguridad guardada en {path}, con {databases} bases de datos y {logs} registros diarios.",

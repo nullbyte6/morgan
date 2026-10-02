@@ -47,6 +47,8 @@
   "ui.remove_markdowns_hint": "永久删除 {assistant_name} 保存的所有每日日志和工件，保留记忆",
   "ui.remove_markdowns_confirm": "这将永久删除 {assistant_name} 保存的所有每日日志和工件。记忆、对话、设置、主题以及 Nova 的提醒和事件会保留。是否继续？",
   "ui.remove_markdowns_done": "{assistant_name} 的每日日志和工件已删除。",
+  "ui.cancel": "取消",
+  "ui.ok": "确定",
   "ui.backup_data": "备份",
   "ui.backup_data_hint": "将 {assistant_name} 保存的所有对话、记忆、每日日志以及 Nova 的提醒和事件保存为 zip 文件",
   "ui.backup_data_done": "备份已保存到 {path}，包含 {databases} 个数据库和 {logs} 个每日日志。",

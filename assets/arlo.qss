@@ -1255,7 +1255,8 @@ QLabel#novaWelcomeText {
     background: transparent;
 }
 
-QWidget#novaScrim {
+QWidget#novaScrim,
+QWidget#choiceScrim {
     background-color: @surface/205;
 }
 
@@ -1273,6 +1274,13 @@ QFrame#novaPicker {
 QLabel#novaDialogTitle {
     color: @text;
     font-size: 20px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#choiceMessage {
+    color: @text_muted;
+    font-size: 15px;
     background: transparent;
     border: none;
 }

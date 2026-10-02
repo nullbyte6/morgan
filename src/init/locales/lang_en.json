@@ -47,6 +47,8 @@
   "ui.remove_markdowns_hint": "Permanently delete every daily log and artifact {assistant_name} has stored, keeping the memories",
   "ui.remove_markdowns_confirm": "This permanently deletes every daily log and artifact {assistant_name} has stored. Memories, conversations, settings, themes and Nova reminders and events are kept. Continue?",
   "ui.remove_markdowns_done": "{assistant_name}'s daily logs and artifacts have been deleted.",
+  "ui.cancel": "Cancel",
+  "ui.ok": "OK",
   "ui.backup_data": "Back Up",
   "ui.backup_data_hint": "Save every conversation, memory, daily log and Nova reminder and event {assistant_name} has stored to a zip file",
   "ui.backup_data_done": "Backup saved to {path}, with {databases} databases and {logs} daily logs.",

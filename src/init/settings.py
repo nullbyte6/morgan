@@ -24,8 +24,9 @@ from PySide6.QtCore import QEvent, Qt, Signal, Property, QPropertyAnimation, QTi
 from PySide6.QtGui import QColor, QDesktopServices, QIntValidator, QPainter
 from PySide6.QtWidgets import (
     QAbstractButton, QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
-    QLineEdit, QListView, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
+    QLineEdit, QListView, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
+from .choice_dialog import ChoiceDialog
 from .config import CONTEXT_LENGTH_RANGE, load_config, save_config
 from .identity import get_assistant_name
 from .lang import get_language, tr
@@ -357,6 +358,7 @@ class SettingsView(QWidget):
         self.restore_button.clicked.connect(self.restore_data)
         self.remove_memories_button.clicked.connect(self.remove_memories)
         self.remove_markdowns_button.clicked.connect(self.remove_markdowns)
+        self.dialog = ChoiceDialog(self)
 
         for dropdown in (self.language_dropdown, self.model_dropdown, self.theme_dropdown):
             dropdown.installEventFilter(self)
@@ -427,12 +429,12 @@ class SettingsView(QWidget):
                 try:
                     save_config({**config, "context_length": value})
                 except (OSError, ValueError) as error:
-                    QMessageBox.warning(self, tr("ui.context_length"), tr("ui.error", error=error))
+                    self.dialog.notify(tr("ui.context_length"), tr("ui.error", error=error))
                     value = config["context_length"]
         else:
             value = config["context_length"]
-            QMessageBox.warning(
-                self, tr("ui.context_length"),
+            self.dialog.notify(
+                tr("ui.context_length"),
                 tr("ui.context_length_hint", minimum=minimum, maximum=maximum, name=get_assistant_name()))
         self.context_input.setText(str(value))
 
@@ -449,56 +451,51 @@ class SettingsView(QWidget):
         try:
             counts = backup_data(path)
         except Exception as error:
-            QMessageBox.warning(self, tr("ui.backup_data"), tr("ui.error", error=error))
+            self.dialog.notify(tr("ui.backup_data"), tr("ui.error", error=error))
             return
-        QMessageBox.information(self, tr("ui.backup_data"), tr("ui.backup_data_done", path=path, **counts))
+        self.dialog.notify(tr("ui.backup_data"), tr("ui.backup_data_done", path=path, **counts))
 
     def restore_data(self):
-        from .memory.integration import restore_data
-        from .nova.tools import refresh_store
         path, _filter = QFileDialog.getOpenFileName(self, tr("ui.restore_data"), str(Path.home()), "Zip (*.zip)")
         if not path:
             return
-        answer = QMessageBox.warning(
-            self, tr("ui.restore_data"), tr("ui.restore_data_confirm"),
-            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-        if answer != QMessageBox.Yes:
-            return
+        self.dialog.confirm(
+            tr("ui.restore_data"), tr("ui.restore_data_confirm"), lambda: self.run_restore(path))
+
+    def run_restore(self, path):
+        from .memory.integration import restore_data
+        from .nova.tools import refresh_store
         try:
             counts = restore_data(path)
         except Exception as error:
-            QMessageBox.warning(self, tr("ui.restore_data"), tr("ui.error", error=error))
+            self.dialog.notify(tr("ui.restore_data"), tr("ui.error", error=error))
             return
         refresh_store()
-        QMessageBox.information(self, tr("ui.restore_data"), tr("ui.restore_data_done", **counts))
+        self.dialog.notify(tr("ui.restore_data"), tr("ui.restore_data_done", **counts))
 
     def remove_memories(self):
+        self.dialog.confirm(tr("ui.remove_memories"), tr("ui.remove_memories_confirm"), self.run_remove_memories)
+
+    def run_remove_memories(self):
         from .memory.integration import clear_memories
-        answer = QMessageBox.warning(
-            self, tr("ui.remove_memories"), tr("ui.remove_memories_confirm"),
-            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-        if answer != QMessageBox.Yes:
-            return
         try:
             clear_memories()
         except Exception as error:
-            QMessageBox.warning(self, tr("ui.remove_memories"), tr("ui.error", error=error))
+            self.dialog.notify(tr("ui.remove_memories"), tr("ui.error", error=error))
             return
-        QMessageBox.information(self, tr("ui.remove_memories"), tr("ui.remove_memories_done"))
+        self.dialog.notify(tr("ui.remove_memories"), tr("ui.remove_memories_done"))
 
     def remove_markdowns(self):
+        self.dialog.confirm(tr("ui.remove_markdowns"), tr("ui.remove_markdowns_confirm"), self.run_remove_markdowns)
+
+    def run_remove_markdowns(self):
         from .session_log import clear_logs
-        answer = QMessageBox.warning(
-            self, tr("ui.remove_markdowns"), tr("ui.remove_markdowns_confirm"),
-            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-        if answer != QMessageBox.Yes:
-            return
         try:
             clear_logs()
         except Exception as error:
-            QMessageBox.warning(self, tr("ui.remove_markdowns"), tr("ui.error", error=error))
+            self.dialog.notify(tr("ui.remove_markdowns"), tr("ui.error", error=error))
             return
-        QMessageBox.information(self, tr("ui.remove_markdowns"), tr("ui.remove_markdowns_done"))
+        self.dialog.notify(tr("ui.remove_markdowns"), tr("ui.remove_markdowns_done"))
 
     def refresh_voices(self):
         voices = available_voices()
@@ -526,7 +523,7 @@ class SettingsView(QWidget):
         try:
             select_voice(name)
         except (OSError, ValueError) as error:
-            QMessageBox.warning(self, tr("ui.voice"), str(error))
+            self.dialog.notify(tr("ui.voice"), str(error))
             self.refresh_voices()
             return
         self.model_changed.emit(name)
