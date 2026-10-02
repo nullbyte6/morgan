@@ -98,6 +98,7 @@ class ModelSelector(QComboBox):
         options = QListView(self)
         options.setMouseTracking(True)
         self.setView(options)
+        self.setMaxVisibleItems(4)
         options.setAutoFillBackground(True)
         options.viewport().setAutoFillBackground(True)
         arrow = QLabel("", self)
