@@ -53,7 +53,8 @@ def reminder_groups(store: NovaStore) -> Groups:
 
 def event_groups(store: NovaStore, now: datetime) -> Groups:
     today = now.date()
-    events = store.events()
-    upcoming = [event for event in events if event.last_day >= today]
+    events = [event.next_from(today) for event in store.events()]
+    upcoming = sorted((event for event in events if event.last_day >= today),
+                      key=lambda event: (event.starts_at, event.ends_at, event.id))
     past = [event for event in events if event.last_day < today][::-1][:HISTORY_LIMIT]
     return [(tr("nova.group.upcoming"), upcoming), (tr("nova.group.past"), past)]

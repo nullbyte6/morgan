@@ -643,5 +643,10 @@
   "nova.diary.category.project": "项目",
   "nova.diary.category.goal": "目标",
   "nova.diary.category.other": "其他",
-  "palette.diary": "打开日记"
+  "palette.diary": "打开日记",
+  "nova.dialog.repeat": "重复",
+  "nova.repeat.none": "从不",
+  "nova.repeat.daily": "每天",
+  "nova.repeat.weekly": "每周",
+  "nova.repeat.monthly": "每月"
 }

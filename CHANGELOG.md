@@ -4,6 +4,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.2-beta (2026-10-02)
 
+- Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen
 - Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update services launcher to read the bundled core.json when the dev folder is not installed

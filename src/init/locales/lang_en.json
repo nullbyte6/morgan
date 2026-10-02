@@ -643,5 +643,10 @@
   "nova.diary.category.project": "Project",
   "nova.diary.category.goal": "Goal",
   "nova.diary.category.other": "Other",
-  "palette.diary": "Open diary"
+  "palette.diary": "Open diary",
+  "nova.dialog.repeat": "Repeat",
+  "nova.repeat.none": "Never",
+  "nova.repeat.daily": "Daily",
+  "nova.repeat.weekly": "Weekly",
+  "nova.repeat.monthly": "Monthly"
 }

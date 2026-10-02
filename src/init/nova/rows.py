@@ -34,6 +34,7 @@ from .entries import Entry, Reminder
 CHECK = "\U000f012c"
 STAR = "\U000f0ae2"
 EVENT_GLYPH = "\U000f09d2"
+REPEAT = "\u21bb"
 
 
 class CircleCheck(QAbstractButton):
@@ -73,12 +74,14 @@ class CircleCheck(QAbstractButton):
 
 
 def caption(entry: Entry) -> str:
+    repeat = f" · {REPEAT} {tr(f'nova.repeat.{entry.recurrence}')}" if entry.is_recurring else ""
     if isinstance(entry, Reminder):
-        return f"{tr('nova.reminder')} · {formatting.date_time_text(entry.remind_at)}"
+        return f"{tr('nova.reminder')} · {formatting.date_time_text(entry.remind_at)}{repeat}"
     span = formatting.event_time_text(entry)
     if entry.starts_at.date() == entry.ends_at.date() or (entry.all_day and entry.first_day == entry.last_day):
-        return f"{tr('nova.event')} · {formatting.format_day(entry.first_day, 'nova.format.short_day')} · {span}"
-    return f"{tr('nova.event')} · {span}"
+        return (f"{tr('nova.event')} · {formatting.format_day(entry.first_day, 'nova.format.short_day')}"
+                f" · {span}{repeat}")
+    return f"{tr('nova.event')} · {span}{repeat}"
 
 
 class EntryRow(QFrame):

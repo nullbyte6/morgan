@@ -20,6 +20,7 @@
 from src.init.memory.database import Database
 
 LOCAL_TIME = "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]'"
+RECURRENCE = "recurrence TEXT NOT NULL DEFAULT 'none' CHECK(recurrence IN ('none','daily','weekly','monthly'))"
 
 REMINDER_MIGRATIONS = (
     (
@@ -32,6 +33,7 @@ REMINDER_MIGRATIONS = (
         "CREATE INDEX reminders_time ON reminders(remind_at)",
         "CREATE INDEX reminders_pending ON reminders(completed_at, notified_at, remind_at)",
     ),
+    (f"ALTER TABLE reminders ADD COLUMN {RECURRENCE}",),
 )
 
 EVENT_MIGRATIONS = (
@@ -46,6 +48,7 @@ EVENT_MIGRATIONS = (
             created_at TEXT NOT NULL, CHECK(ends_at >= starts_at))""",
         "CREATE INDEX events_time ON events(starts_at, ends_at)",
     ),
+    (f"ALTER TABLE events ADD COLUMN {RECURRENCE}",),
 )
 
 

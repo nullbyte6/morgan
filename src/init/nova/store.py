@@ -29,7 +29,8 @@ from src.init.config import HOME_PATH
 from src.init.memory.database import timestamp
 
 from .database import EventDatabase, ReminderDatabase
-from .entries import Entry, Event, NOTES_LIMIT, Reminder, TITLE_LIMIT, day_start, to_local
+from .entries import (Entry, Event, NOTES_LIMIT, RECURRENCES, Reminder, TITLE_LIMIT, day_start,
+                      next_occurrence, to_local)
 
 
 def _text(title: str, notes: str) -> tuple[str, str]:
@@ -40,6 +41,13 @@ def _text(title: str, notes: str) -> tuple[str, str]:
     if len(notes) > NOTES_LIMIT:
         raise ValueError(f"The notes must not exceed {NOTES_LIMIT} characters")
     return title, notes
+
+
+def _recurrence(value: str) -> str:
+    value = str(value or "none").strip().casefold()
+    if value not in RECURRENCES:
+        raise ValueError("The repetition must be none, daily, weekly or monthly")
+    return value
 
 
 def _span(starts_at: datetime, ends_at: datetime, all_day: bool) -> tuple[str, str]:
@@ -62,36 +70,46 @@ class NovaStore(QObject):
         self.reminder_db = ReminderDatabase(directory / "reminders.sqlite3")
         self.event_db = EventDatabase(directory / "events.sqlite3")
 
-    def add_reminder(self, title: str, remind_at: datetime, notes: str = "") -> Reminder:
+    def add_reminder(self, title: str, remind_at: datetime, notes: str = "",
+                     recurrence: str = "none") -> Reminder:
         title, notes = _text(title, notes)
+        recurrence = _recurrence(recurrence)
         reminder_id = uuid.uuid4().hex
         with self.reminder_db.connect(write=True) as db:
-            db.execute("INSERT INTO reminders(id,title,notes,remind_at,created_at) VALUES(?,?,?,?,?)",
-                       (reminder_id, title, notes, to_local(remind_at), timestamp()))
+            db.execute("""INSERT INTO reminders(id,title,notes,remind_at,created_at,recurrence)
+                VALUES(?,?,?,?,?,?)""", (reminder_id, title, notes, to_local(remind_at), timestamp(), recurrence))
         self.changed.emit()
         return self.reminder(reminder_id)
 
     def update_reminder(self, reminder_id: str, title: str, remind_at: datetime,
-                        notes: str = "") -> Reminder:
+                        notes: str = "", recurrence: str = "none") -> Reminder:
         title, notes = _text(title, notes)
+        recurrence = _recurrence(recurrence)
         moment = to_local(remind_at)
         with self.reminder_db.connect(write=True) as db:
             updated = db.execute(
-                """UPDATE reminders SET title=?,notes=?,
+                """UPDATE reminders SET title=?,notes=?,recurrence=?,
                 notified_at=CASE WHEN remind_at<>? THEN NULL ELSE notified_at END,
                 remind_at=? WHERE id=?""",
-                (title, notes, moment, moment, reminder_id)).rowcount
+                (title, notes, recurrence, moment, moment, reminder_id)).rowcount
         if not updated:
             raise ValueError("The reminder no longer exists")
         self.changed.emit()
         return self.reminder(reminder_id)
 
     def set_reminder_completed(self, reminder_id: str, completed: bool) -> Reminder:
-        with self.reminder_db.connect(write=True) as db:
-            updated = db.execute("UPDATE reminders SET completed_at=? WHERE id=?",
-                                 (timestamp() if completed else None, reminder_id)).rowcount
-        if not updated:
+        """Complete or reopen a reminder; completing a repeating one moves it to its next time instead."""
+        current = self.reminder(reminder_id)
+        if current is None:
             raise ValueError("The reminder no longer exists")
+        with self.reminder_db.connect(write=True) as db:
+            if completed and current.is_recurring:
+                after = max(current.remind_at, datetime.now())
+                db.execute("UPDATE reminders SET remind_at=?,notified_at=NULL,completed_at=NULL WHERE id=?",
+                           (to_local(next_occurrence(current.remind_at, current.recurrence, after)), reminder_id))
+            else:
+                db.execute("UPDATE reminders SET completed_at=? WHERE id=?",
+                           (timestamp() if completed else None, reminder_id))
         self.changed.emit()
         return self.reminder(reminder_id)
 
@@ -128,33 +146,47 @@ class NovaStore(QObject):
         return self.reminders(end=now or datetime.now(), completed=False)
 
     def pop_due(self, now: datetime | None = None) -> list[Reminder]:
-        """Mark every pending reminder due by now as notified and return them, including missed ones."""
-        limit = to_local(now or datetime.now())
+        """Return every pending reminder due by now, including missed ones, marking one-off reminders
+        as notified and moving repeating ones to their next time."""
+        now = now or datetime.now()
+        limit = to_local(now)
         with self.reminder_db.connect(write=True) as db:
             rows = db.execute("""SELECT * FROM reminders WHERE completed_at IS NULL
                 AND notified_at IS NULL AND remind_at <= ? ORDER BY remind_at,id""", (limit,)).fetchall()
-            db.execute("""UPDATE reminders SET notified_at=? WHERE completed_at IS NULL
-                AND notified_at IS NULL AND remind_at <= ?""", (timestamp(), limit))
-        return [Reminder.from_row(row) for row in rows]
+            due = [Reminder.from_row(row) for row in rows]
+            for reminder in due:
+                if reminder.is_recurring:
+                    db.execute("UPDATE reminders SET remind_at=? WHERE id=?",
+                               (to_local(next_occurrence(reminder.remind_at, reminder.recurrence, now)),
+                                reminder.id))
+                else:
+                    db.execute("UPDATE reminders SET notified_at=? WHERE id=?", (timestamp(), reminder.id))
+        if any(reminder.is_recurring for reminder in due):
+            self.changed.emit()
+        return due
 
     def add_event(self, title: str, starts_at: datetime, ends_at: datetime, *,
-                  all_day: bool = False, notes: str = "") -> Event:
+                  all_day: bool = False, notes: str = "", recurrence: str = "none") -> Event:
         title, notes = _text(title, notes)
         starts, ends = _span(starts_at, ends_at, all_day)
+        recurrence = _recurrence(recurrence)
         event_id = uuid.uuid4().hex
         with self.event_db.connect(write=True) as db:
-            db.execute("""INSERT INTO events(id,title,notes,starts_at,ends_at,all_day,created_at)
-                VALUES(?,?,?,?,?,?,?)""", (event_id, title, notes, starts, ends, int(all_day), timestamp()))
+            db.execute("""INSERT INTO events(id,title,notes,starts_at,ends_at,all_day,created_at,recurrence)
+                VALUES(?,?,?,?,?,?,?,?)""",
+                       (event_id, title, notes, starts, ends, int(all_day), timestamp(), recurrence))
         self.changed.emit()
         return self.event(event_id)
 
     def update_event(self, event_id: str, title: str, starts_at: datetime, ends_at: datetime, *,
-                     all_day: bool = False, notes: str = "") -> Event:
+                     all_day: bool = False, notes: str = "", recurrence: str = "none") -> Event:
         title, notes = _text(title, notes)
         starts, ends = _span(starts_at, ends_at, all_day)
+        recurrence = _recurrence(recurrence)
         with self.event_db.connect(write=True) as db:
-            updated = db.execute("""UPDATE events SET title=?,notes=?,starts_at=?,ends_at=?,all_day=?
-                WHERE id=?""", (title, notes, starts, ends, int(all_day), event_id)).rowcount
+            updated = db.execute("""UPDATE events SET title=?,notes=?,starts_at=?,ends_at=?,all_day=?,
+                recurrence=? WHERE id=?""",
+                                 (title, notes, starts, ends, int(all_day), recurrence, event_id)).rowcount
         if not updated:
             raise ValueError("The event no longer exists")
         self.changed.emit()
@@ -173,19 +205,23 @@ class NovaStore(QObject):
         return Event.from_row(row) if row else None
 
     def events(self, first: date | None = None, last: date | None = None) -> list[Event]:
-        """Events touching any day from first to last, both inclusive."""
+        """Events touching any day from first to last, both inclusive, with repeating events
+        expanded into each repetition when both days are given."""
         clauses, values = [], []
         if last is not None:
             clauses.append("starts_at < ?")
             values.append(to_local(day_start(last + timedelta(days=1))))
         if first is not None:
-            clauses.append("ends_at >= ?")
+            clauses.append("(ends_at >= ? OR recurrence <> 'none')")
             values.append(to_local(day_start(first)))
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         with self.event_db.connect() as db:
             rows = db.execute(f"SELECT * FROM events{where} ORDER BY starts_at,ends_at,id", values)
             events = [Event.from_row(row) for row in rows]
-        return [event for event in events if first is None or event.last_day >= first]
+        if first is not None and last is not None:
+            events = sorted((occurrence for event in events for occurrence in event.occurrences(first, last)),
+                            key=lambda event: (event.starts_at, event.ends_at, event.id))
+        return [event for event in events if first is None or event.is_recurring or event.last_day >= first]
 
     def entries(self, first: date, last: date) -> list[Entry]:
         """Reminders and events touching any day from first to last, in chronological order."""

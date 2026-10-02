@@ -643,5 +643,10 @@
   "nova.diary.category.project": "Proyecto",
   "nova.diary.category.goal": "Objetivo",
   "nova.diary.category.other": "Otro",
-  "palette.diary": "Abrir diario"
+  "palette.diary": "Abrir diario",
+  "nova.dialog.repeat": "Repetir",
+  "nova.repeat.none": "Nunca",
+  "nova.repeat.daily": "Cada día",
+  "nova.repeat.weekly": "Cada semana",
+  "nova.repeat.monthly": "Cada mes"
 }

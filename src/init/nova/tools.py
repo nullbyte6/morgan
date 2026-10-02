@@ -64,38 +64,41 @@ def _day(value: str, name: str) -> date:
 def _reminder(reminder) -> dict:
     return {"id": reminder.id, "kind": "reminder", "title": reminder.title, "notes": reminder.notes,
             "remind_at": reminder.remind_at.isoformat(timespec="minutes"),
-            "completed": reminder.is_completed}
+            "completed": reminder.is_completed, "repeat": reminder.recurrence}
 
 
 def _event(event) -> dict:
     return {"id": event.id, "kind": "event", "title": event.title, "notes": event.notes,
             "starts_at": event.starts_at.isoformat(timespec="minutes"),
-            "ends_at": event.ends_at.isoformat(timespec="minutes"), "all_day": event.all_day}
+            "ends_at": event.ends_at.isoformat(timespec="minutes"), "all_day": event.all_day,
+            "repeat": event.recurrence}
 
 
 def _entry(entry) -> dict:
     return _event(entry) if hasattr(entry, "starts_at") else _reminder(entry)
 
 
-def add_reminder(title: str, remind_at: str, notes: str = "") -> dict:
+def add_reminder(title: str, remind_at: str, notes: str = "", repeat: str = "none") -> dict:
     """Save a reminder in Nova, the user's agenda, announced as a Windows notification when due.
     remind_at is local wall-clock time as ISO, e.g. 2026-10-02T09:30; check get_current_time
     for relative requests. Persists across restarts. Prefer this over schedule_notification
     for anything the user asks to be reminded of at a date or time.
+    repeat is none, daily, weekly or monthly; a repeating reminder comes back at the same time.
     """
     try:
         moment = _moment(remind_at, "remind_at")
         if moment < datetime.now() - timedelta(minutes=1):
             raise ValueError("remind_at is in the past")
-        return {"ok": True, "reminder": _reminder(_shared().add_reminder(title, moment, notes))}
+        return {"ok": True, "reminder": _reminder(_shared().add_reminder(title, moment, notes, repeat))}
     except Exception as error:
         return {"ok": False, "error": str(error)}
 
 
 def add_event(title: str, starts_at: str, ends_at: str | None = None,
-              all_day: bool = False, notes: str = "") -> dict:
+              all_day: bool = False, notes: str = "", repeat: str = "none") -> dict:
     """Save an event in Nova's calendar. Times are local ISO, e.g. 2026-10-02T18:00.
     ends_at defaults to one hour after starts_at, or the same day when all_day.
+    repeat is none, daily, weekly or monthly for events that happen again, e.g. a weekly class.
     """
     try:
         starts = _moment(starts_at, "starts_at")
@@ -103,8 +106,8 @@ def add_event(title: str, starts_at: str, ends_at: str | None = None,
             ends = _moment(ends_at, "ends_at")
         else:
             ends = starts if all_day else starts + timedelta(hours=1)
-        return {"ok": True, "event": _event(_shared().add_event(title, starts, ends,
-                                                               all_day=all_day, notes=notes))}
+        return {"ok": True, "event": _event(_shared().add_event(title, starts, ends, all_day=all_day,
+                                                               notes=notes, recurrence=repeat))}
     except Exception as error:
         return {"ok": False, "error": str(error)}
 
@@ -130,7 +133,8 @@ def list_agenda(first_day: str | None = None, last_day: str | None = None) -> di
 
 
 def complete_reminder(reminder_id: str, completed: bool = True) -> dict:
-    """Mark a Nova reminder as done, or pending again with completed false. Use IDs from list_agenda."""
+    """Mark a Nova reminder as done, or pending again with completed false. Use IDs from list_agenda.
+    Completing a repeating reminder moves it to its next time."""
     try:
         return {"ok": True, "reminder": _reminder(_shared().set_reminder_completed(reminder_id, completed))}
     except Exception as error:
