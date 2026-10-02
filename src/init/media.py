@@ -108,6 +108,14 @@ def spotify_is_configured() -> bool:
     return _spotify_settings() is not None
 
 
+def spotify_authorized_client():
+    """Return the player client only when the user already authorized it, so polling never opens the browser."""
+    if not spotify_is_configured():
+        return None
+    client = _spotify_player_client()
+    return client if client.auth_manager.get_cached_token() else None
+
+
 def _spotify_error(action: str, error: Exception) -> str:
     return (tr('media.error_in_spotify_ensure_the_redirect_uri_in_config_json_is_regis', action=action, error=error))
 
@@ -279,6 +287,50 @@ def control_media(action: Literal["play", "pause", "next", "previous"],
         if result is None and not source and spotify_is_configured():
             return _spotify_control(action)
         return result or tr('media.error_no_active_media_session')
+    except Exception as error:
+        return tr('media.error_controlling_media', value0=error or type(error).__name__)
+
+
+def seek_media(seconds: float, source: str = "") -> str:
+    """Move the playback position of the active Windows media session, an exact source ID or Spotify."""
+    if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or seconds < 0:
+        return tr('media.error_this_media_session_does_not_support', action="seek")
+    if source.strip().casefold() == "spotify":
+        try:
+            client = _spotify_player_client()
+            client.seek_track(round(seconds * 1000), device_id=_spotify_target_device(client))
+            return json.dumps({"action": "seek", "accepted": True, "source": "spotify"})
+        except Exception as error:
+            return _spotify_error("seek", error)
+    if os.name != "nt":
+        return tr('media.error_media_control_requires_windows')
+
+    async def apply():
+        from winrt.windows.media.control import (
+            GlobalSystemMediaTransportControlsSessionManager as Manager,
+        )
+        manager = await Manager.request_async()
+        if source:
+            matches = [session for session in manager.get_sessions()
+                       if session.source_app_user_model_id == source]
+            if len(matches) != 1:
+                return tr('media.error_source_is_absent_or_matches_multiple_sessions_list_media_s')
+            session = matches[0]
+        else:
+            session = manager.get_current_session()
+        if session is None:
+            return tr('media.error_no_active_media_session')
+        if not session.get_playback_info().controls.is_playback_position_enabled:
+            return tr('media.error_this_media_session_does_not_support', action="seek")
+        accepted = await session.try_change_playback_position_async(round(seconds * 10_000_000))
+        return json.dumps({"action": "seek", "accepted": bool(accepted),
+                           "source": session.source_app_user_model_id})
+
+    async def bounded():
+        return await asyncio.wait_for(apply(), timeout=10)
+
+    try:
+        return asyncio.run(bounded())
     except Exception as error:
         return tr('media.error_controlling_media', value0=error or type(error).__name__)
 

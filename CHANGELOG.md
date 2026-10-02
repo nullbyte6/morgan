@@ -35,6 +35,8 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add Remove Markdowns button to Settings, next to Remove Memories and in the same red, that deletes every daily log and session artifact after confirmation, keeping the memories, conversations, settings, themes and the Nova agenda
 - Add scrolling to the model selector list of the desktop version, showing four models at a time
 - Add search_agenda tool that lets Arlo find Nova reminders and events by the words in their title or notes, past or upcoming, when their date is unknown
+- Add seek_media to the media controls, moving the playback position of a Windows media session or of Spotify
+- Add song detection that finds the song playing on Spotify or in a browser through the Windows media sessions, leaving out videos, podcasts and ads, confirms it as a track and takes its album art through the Spotify Web API when Spotify is already authorized, and follows songs playing on other Spotify devices without ever opening the browser to authorize
 - Add update checks to the terminal version, from a Check for updates palette action that lists the newer releases, downloads the chosen one with a progress box above the composer, installs it and starts the terminal version again
 - Add update_agenda_entry tool that lets Arlo rename, move or reschedule a Nova reminder or event from chat while keeping its ID and repeat, instead of deleting and adding it again
 - Fix Arlo apologizing for a failed tool call and asking for a second confirmation when saving a reminder or event, because reading the clock first counted as a first action and moved the second one, the Nova entry, into supervision, which rejected it until a task contract existed
