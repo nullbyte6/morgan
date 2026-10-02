@@ -5,6 +5,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 ## 26.10.2-beta (2026-10-02)
 
 - Add a health view, opened from the command palette, that checks Ollama, how much of the main model sits on the GPU and how long it took to load, the graphics adapters against the installed CUDA or ROCm PyTorch build, and the voice service device and CosyVoice load time
+- Add automatic opening of a Now playing panel to the right of the active panel when a song starts playing, once per song so that closing it is respected, with the song detection running in the background while Arlo is open
 - Add Back Up and Restore buttons to Settings, next to Remove Memories, that save the memory database, Nova's reminders and events and the daily logs to one zip file and bring them back from it, migrating older backups to the current schema
 - Add Check for Updates button in Settings, above Remove Memories, and a command palette action that look for newer versions in the repository's GitHub releases, let the user choose one, download ArloSetup.exe to the Downloads folder with a progress bar docked at the bottom of the current workspace, install it, delete the installer and start Arlo again
 - Add command palette button to the header of every desktop workspace panel, running the same palette as Ctrl+K so it can be opened with a click, with Ctrl+K kept

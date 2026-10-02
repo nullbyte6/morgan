@@ -64,6 +64,8 @@ from src.init.nova.store import NovaStore
 from src.init.nova.tools import use_store as use_nova_store
 from src.init.nova.view import NovaView
 from src.init.notifications import ask_notification, send_notification
+from src.init.song.monitor import SongMonitor
+from src.init.song.view import SongView
 
 
 WORKSPACE_VIEW_CONFIG = {
@@ -134,6 +136,7 @@ from src.init.visuals.bridge import FlowchartBridge
 from src.init.terminal import TerminalBridge
 
 HEALTH_CHECK_DELAY_MS = 45_000
+SONG_PANEL_WIDTH = 440
 
 # noinspection PyBroadException
 class AssistantWindow(DesktopWindow):
@@ -221,6 +224,7 @@ class AssistantWindow(DesktopWindow):
         self.build_ui()
         self.build_command_palette()
         self.start_nova()
+        self.start_song_monitor()
         self.check_health_after_update()
 
         self._workspace_shortcut_map = {
@@ -1089,6 +1093,32 @@ class AssistantWindow(DesktopWindow):
             return
         QTimer.singleShot(800, self.exit_app)
 
+    def start_song_monitor(self) -> None:
+        """Watch for songs in the background and open the song panel when one starts playing."""
+        self.song_monitor = SongMonitor(self)
+        self.song_panel_key = None
+        self.song_monitor.updated.connect(self.on_song_update, Qt.ConnectionType.QueuedConnection)
+        self.song_monitor.start()
+
+    @Slot(object)
+    def on_song_update(self, song) -> None:
+        """Open the song panel once for each song that plays, unless the user closed it for that song."""
+        if song is None:
+            self.song_panel_key = None
+            return
+        if (not song.playing or song.key == self.song_panel_key or self.quitting or not self.isVisible()
+                or self.workspace.findChildren(SongView)):
+            return
+        self.song_panel_key = song.key
+        view = SongView(self.song_monitor)
+        view.setProperty("workspaceViewKey", "song")
+        try:
+            self.workspace.open_panel(title=tr("song.title"), content=view, direction=Qt.Key_Right,
+                                      size=SONG_PANEL_WIDTH)
+        except Exception:
+            view.deleteLater()
+            logging.getLogger("assistant.workspace").exception("Failed to open the song view")
+
     def open_nova_diary(self) -> None:
         """Show the Nova diary, reusing an open Nova panel when there is one."""
         self.open_nova_section(Section.DIARY)
@@ -1397,6 +1427,8 @@ class AssistantWindow(DesktopWindow):
         for view in self.workspace.findChildren(NovaView):
             view.refresh_language()
         for view in self.workspace.findChildren(HealthView):
+            view.refresh_language()
+        for view in self.workspace.findChildren(SongView):
             view.refresh_language()
         for navigation in self.workspace.findChildren(WorkspaceNavigation):
             navigation.refresh_language()
@@ -2220,6 +2252,7 @@ class AssistantWindow(DesktopWindow):
         self.flowchart_bridge.shutdown()
         self.terminal_bridge.shutdown()
         self.response_bridge.shutdown()
+        self.song_monitor.stop()
         if self.voice_thread is not None:
             self.closing_after_voice = True
             self.voice_thread.requestInterruption()

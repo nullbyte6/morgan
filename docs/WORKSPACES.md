@@ -74,6 +74,37 @@ reminder is announced as a Windows notification within about 30 seconds; reminde
 that were already more than a day overdue when Arlo started are not announced, but stay
 marked as overdue.
 
+## Song
+
+When a song starts playing, a Now playing panel opens by itself to the right of the
+active panel. It is shown once per song: if you close it, it stays closed until a
+different song starts or the player is closed and opened again.
+
+Only songs count, not videos or podcasts. Arlo reads the Windows media session of
+Spotify, or of a browser playing YouTube Music or an auto-generated "Topic" track, and
+ignores entries that carry no album, such as ordinary YouTube videos, plus Spotify ads.
+When Spotify is authorized (see the Spotify settings in `~/.arlo/json/config.json`), Arlo
+also asks the Spotify Web API once per song to confirm that it is a track rather than a
+podcast episode, to take its exact album art, and it follows songs that play on another
+Spotify device, such as a phone. Arlo never opens the browser to authorize Spotify for
+this; it only uses an authorization that already exists, which any Spotify action
+requested from the assistant creates.
+
+The panel shows the album cover, the song, artist and album, the time elapsed and the
+duration, and a progress bar. Click or drag the bar to seek. The previous, play or
+pause and next buttons control the player that is playing the song, with Spotify's
+Web API for songs on another device.
+
+- **Song**, **Album** and **Artist** copy that name to the clipboard.
+- **Summarize this song** asks the main model for a summary of at most 500 words, in the
+  interface language, with the song's lyrics, themes and fun facts such as interviews
+  with the singer or band and the history of the album. It reads web search results and
+  one page about the song, and never quotes the lyrics beyond a few words. Summaries are
+  kept for the songs of the open panel.
+
+Song detection runs in the background while Arlo is open, once per second on this
+computer, and queries the Spotify Web API only when it is authorized.
+
 ## How tiling works
 Arlo uses a binary tiling layout built with Qt splitters. Each new panel divides an existing workspace into two regions, alternating between horizontal and vertical splits.
 Panels automatically share the available space. You can drag the separators between them to resize individual regions without affecting their content.
