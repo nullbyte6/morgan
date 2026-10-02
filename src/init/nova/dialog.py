@@ -30,7 +30,7 @@ from src.init.settings import ToggleSwitch
 
 from . import formatting
 from .calendar_paint import MiniMonth
-from .entries import RECURRENCES, Entry, Reminder
+from .entries import FLAGS, RECURRENCES, Entry, Reminder
 from .store import NovaStore
 
 REMINDER, EVENT = "reminder", "event"
@@ -158,7 +158,26 @@ class NovaEntryDialog(QWidget):
         repeat_bar = QWidget()
         repeat_bar.setLayout(repeat_line)
 
-        self.labels = {name: self._label() for name in ("title", "notes", "start", "end", "repeat")}
+        self.flag = QButtonGroup(self)
+        self.flag.setExclusive(True)
+        self._flag_buttons: dict[str, QPushButton] = {}
+        flag_line = QHBoxLayout()
+        flag_line.setContentsMargins(0, 0, 0, 0)
+        flag_line.setSpacing(6)
+        for flag in FLAGS:
+            button = QPushButton()
+            button.setObjectName("novaSegment")
+            button.setProperty("flag", flag)
+            button.setCheckable(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.flag.addButton(button)
+            self._flag_buttons[flag] = button
+            flag_line.addWidget(button)
+        flag_line.addStretch(1)
+        flag_bar = QWidget()
+        flag_bar.setLayout(flag_line)
+
+        self.labels = {name: self._label() for name in ("title", "notes", "start", "end", "repeat", "flag")}
         all_day_row = QWidget()
         toggle_line = QHBoxLayout(all_day_row)
         toggle_line.setContentsMargins(0, 0, 0, 0)
@@ -169,6 +188,7 @@ class NovaEntryDialog(QWidget):
         self.start_field = _field(self.labels["start"], _moment_row(self.start_day, self.start_time))
         self.end_field = _field(self.labels["end"], _moment_row(self.end_day, self.end_time))
         self.repeat_field = _field(self.labels["repeat"], repeat_bar)
+        self.flag_field = _field(self.labels["flag"], flag_bar)
 
         self.error = QLabel()
         self.error.setObjectName("novaError")
@@ -199,6 +219,7 @@ class NovaEntryDialog(QWidget):
         card.addWidget(self.start_field)
         card.addWidget(self.end_field)
         card.addWidget(self.repeat_field)
+        card.addWidget(self.flag_field)
         card.addWidget(self.error)
         card.addLayout(actions)
 
@@ -260,6 +281,9 @@ class NovaEntryDialog(QWidget):
         self.all_day_label.setText(tr("nova.dialog.all_day"))
         self.labels["end"].setText(tr("nova.dialog.ends"))
         self.labels["repeat"].setText(tr("nova.dialog.repeat"))
+        self.labels["flag"].setText(tr("nova.dialog.flag"))
+        for flag, button in self._flag_buttons.items():
+            button.setText(tr(f"nova.flag.{flag}"))
         for recurrence, button in self._repeat_buttons.items():
             button.setText(tr(f"nova.repeat.{recurrence}"))
         self.cancel_button.setText(tr("nova.dialog.cancel"))
@@ -281,6 +305,7 @@ class NovaEntryDialog(QWidget):
         moment = moment or next_full_hour()
         self._fill(moment, moment + timedelta(hours=1), False)
         self._repeat_buttons["none"].setChecked(True)
+        self._flag_buttons["none"].setChecked(True)
         self.title_input.clear()
         self.notes_input.clear()
         self.segment_bar.show()
@@ -295,6 +320,7 @@ class NovaEntryDialog(QWidget):
         self._editing = entry
         self._begin()
         self._repeat_buttons[entry.recurrence].setChecked(True)
+        self._flag_buttons[entry.flag].setChecked(True)
         if isinstance(entry, Reminder):
             self._fill(entry.remind_at, entry.remind_at + timedelta(hours=1), False)
             kind = REMINDER
@@ -401,12 +427,13 @@ class NovaEntryDialog(QWidget):
         if start is None:
             return
         recurrence = next((name for name, button in self._repeat_buttons.items() if button.isChecked()), "none")
+        flag = next((name for name, button in self._flag_buttons.items() if button.isChecked()), "none")
         try:
             if self._kind == REMINDER:
                 if self._editing is None:
-                    self._store.add_reminder(title, start, notes, recurrence)
+                    self._store.add_reminder(title, start, notes, recurrence, flag)
                 else:
-                    self._store.update_reminder(self._editing.id, title, start, notes, recurrence)
+                    self._store.update_reminder(self._editing.id, title, start, notes, recurrence, flag)
             else:
                 end = self._moment(self.end_day, self.end_time)
                 if end is None:
@@ -416,10 +443,11 @@ class NovaEntryDialog(QWidget):
                     return
                 all_day = self.all_day.isChecked()
                 if self._editing is None:
-                    self._store.add_event(title, start, end, all_day=all_day, notes=notes, recurrence=recurrence)
+                    self._store.add_event(title, start, end, all_day=all_day, notes=notes, recurrence=recurrence,
+                                          flag=flag)
                 else:
                     self._store.update_event(self._editing.id, title, start, end, all_day=all_day, notes=notes,
-                                             recurrence=recurrence)
+                                             recurrence=recurrence, flag=flag)
         except (ValueError, OSError) as error:
             self._set_error(str(error))
             return

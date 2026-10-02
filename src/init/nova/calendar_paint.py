@@ -27,9 +27,10 @@ from src.init.theme import current_theme, on_theme_changed
 
 from . import formatting
 from .calendar_math import month_grid, shift_month
-from .entries import Event
+from .entries import FLAG_ROLES, Event
 
 BELL = "\U000f009a"
+FLAG = "\U000f023b"
 CHEVRON_LEFT = "\U000f0141"
 CHEVRON_RIGHT = "\U000f0142"
 ALIGN_LEFT = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -88,6 +89,11 @@ def draw_chip(painter: QPainter, rect: QRect, entry, base: QFont, *, hovered: bo
         icon = glyph_font(pixels)
         draw_text(painter, QRect(inner.left(), inner.top(), pixels + 2, inner.height()), BELL, icon, role)
         inner = inner.adjusted(pixels + 6, 0, 0, 0)
+    if entry.flag != "none" and inner.width() > 3 * pixels:
+        flag_width = pixels + 4
+        draw_text(painter, QRect(inner.right() - flag_width + 1, inner.top(), flag_width, inner.height()),
+                  FLAG, glyph_font(pixels), "text_subtle" if completed else FLAG_ROLES[entry.flag], ALIGN_RIGHT)
+        inner = inner.adjusted(0, 0, -flag_width, 0)
     font.setStrikeOut(completed)
     draw_text(painter, inner, entry.title, font, "text_subtle" if completed else "text")
 

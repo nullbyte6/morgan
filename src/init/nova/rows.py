@@ -36,6 +36,7 @@ STAR = "\U000f0ae2"
 EVENT_GLYPH = "\U000f09d2"
 REPEAT = "\u21bb"
 PENCIL = "\U000f03eb"
+FLAG = "\U000f023b"
 
 
 class CircleCheck(QAbstractButton):
@@ -142,6 +143,14 @@ class EntryRow(QFrame):
         edit.setToolTip(tr("nova.row.edit"))
         edit.setAccessibleName(tr("nova.row.edit"))
         edit.clicked.connect(lambda: self.activated.emit(self.entry))
+        if entry.flag != "none":
+            flag = QLabel(FLAG)
+            flag.setObjectName("novaRowFlag")
+            flag.setProperty("flag", entry.flag)
+            flag.setToolTip(tr(f"nova.flag.{entry.flag}"))
+            flag.setFixedSize(CircleCheck.SIZE, 30)
+            flag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            row.addWidget(flag, 0, Qt.AlignmentFlag.AlignTop)
         row.addWidget(edit, 0, Qt.AlignmentFlag.AlignTop)
 
     def mouseReleaseEvent(self, event):

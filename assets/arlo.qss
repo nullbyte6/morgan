@@ -1004,6 +1004,21 @@ QPushButton#novaSegment:checked {
     color: @text;
 }
 
+QPushButton#novaSegment[flag="green"]:checked {
+    background-color: @success;
+    color: @on_accent;
+}
+
+QPushButton#novaSegment[flag="yellow"]:checked {
+    background-color: @warning;
+    color: @on_accent;
+}
+
+QPushButton#novaSegment[flag="red"]:checked {
+    background-color: @error;
+    color: @on_accent;
+}
+
 QScrollArea#novaScroll {
     background: transparent;
     border: none;
@@ -1143,6 +1158,25 @@ QLabel#novaRowMarker {
     font-size: 20px;
     background: transparent;
     border: none;
+}
+
+QLabel#novaRowFlag {
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 17px;
+    background: transparent;
+    border: none;
+}
+
+QLabel#novaRowFlag[flag="green"] {
+    color: @success;
+}
+
+QLabel#novaRowFlag[flag="yellow"] {
+    color: @warning;
+}
+
+QLabel#novaRowFlag[flag="red"] {
+    color: @error;
 }
 
 QLabel#novaWelcomeMark {
