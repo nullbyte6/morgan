@@ -339,7 +339,7 @@ class NovaEntryDialog(QWidget):
         self.labels["repeat"].setText(tr("nova.dialog.repeat"))
         self.labels["flag"].setText(tr("nova.dialog.flag"))
         for flag, button in self._flag_buttons.items():
-            button.setText(FLAG * FLAG_COUNTS[flag] if flag in FLAG_COUNTS else tr("nova.flag.none"))
+            button.setText(" ".join([FLAG] * FLAG_COUNTS[flag]) if flag in FLAG_COUNTS else tr("nova.flag.none"))
         for recurrence, button in self._repeat_buttons.items():
             button.setText(PENCIL if recurrence == CUSTOM else tr(f"nova.repeat.{recurrence}"))
         self.every_label.setText(tr("nova.dialog.every"))
