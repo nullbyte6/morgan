@@ -20,7 +20,9 @@
 import logging
 import os
 import re
+import threading
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from prompt_toolkit.application import Application
@@ -44,12 +46,13 @@ from src.init.tui.i18n import t
 from src.init.tui.markdown import render_markdown
 from src.init.nova.sections import Section
 from src.init.tui.nova import NovaOverlay
-from src.init.tui.overlays import Command, FileOverlay, ModelOverlay, PaletteOverlay
+from src.init.tui.overlays import Command, FileOverlay, ModelOverlay, PaletteOverlay, UpdateOverlay
 from src.init.tui.palette import mix
 from src.init.tui.session import TuiSession
 from src.init.tui.shell import shell_command_text
 from src.init.tui.text import banner, bold_fragments, elide, pad, subtitle_lines, width_of, wrap
 from src.init.tui.widgets import ScrollControl, clicked, exact, rounded_box, style
+from src.init.updates import Release, UpdateCancelled, available_releases, download, install, relaunch_command
 
 log = logging.getLogger("assistant.tui")
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -58,6 +61,16 @@ FADE_SECONDS = 0.18
 REVEAL_SECONDS = 0.26
 CONTENT_WIDTH = 100
 _QUOTED_PATH = re.compile(r'"([^"\r\n]+)"|\'([^\'\r\n]+)\'|(\S+)')
+
+
+@dataclass
+class UpdateState:
+    release: Release
+    phase: str = "downloading"
+    received: int = 0
+    total: int = 0
+    message: str = ""
+    cancel: threading.Event = field(default_factory=threading.Event)
 
 
 def ease_out(progress: float) -> float:
@@ -183,6 +196,8 @@ class TuiApp:
         self.version = load_dev_file()["version"]
         i18n.refresh()
         self.overlay = None
+        self.update = None
+        self.update_checking = False
         self.confirm_choice = 1
         self.panel = Scroll()
         self.output = Scroll()
@@ -631,6 +646,128 @@ class TuiApp:
         self.session.progress_dismissed = True
         self.session.notify()
 
+    def update_fragments(self):
+        update, palette = self.update, self.palette
+        if update is None:
+            return []
+        width = self.update_width()
+        inner = width - 4
+        tone = {"downloading": "accent", "installing": "success", "failed": "error"}[update.phase]
+        if update.phase == "downloading":
+            title = t("update.downloading", version=update.release.version)
+            if update.total:
+                filled = min(inner, inner * update.received // update.total)
+                detail = t("update.progress", received=f"{update.received / 1024 ** 2:.1f}",
+                           total=f"{update.total / 1024 ** 2:.1f}", percent=update.received * 100 // update.total)
+            else:
+                filled = 0
+                detail = t("update.progress_unknown", received=f"{update.received / 1024 ** 2:.1f}")
+        elif update.phase == "installing":
+            title = t("update.installing", version=update.release.version)
+            filled, detail = inner, t("update.restarting")
+        else:
+            title = t("update.failed", version=update.release.version)
+            filled, detail = inner, update.message
+        border = style(palette[tone])
+        close = ((style(palette["text_muted"], bold=True), "×", clicked(self.dismiss_update))
+                 if update.phase != "installing" else (border, "─"))
+        lines = [[(border, "╭"), (style(palette[tone], bold=True), " " + pad(elide(title, inner - 2), inner - 2)),
+                  close, (border, " ╮")],
+                 [(border, "│ "), (style(palette[tone]), "█" * filled),
+                  (style(palette["border"]), "░" * (inner - filled)), (border, " │")],
+                 [(border, "│ "), (style(palette["text_muted"]), pad(elide(detail, inner), inner)), (border, " │")],
+                 [(border, "╰" + "─" * (inner + 2) + "╯")]]
+        fragments = []
+        for position, line in enumerate(lines):
+            fragments.extend(line)
+            if position < len(lines) - 1:
+                fragments.append(("", "\n"))
+        return fragments
+
+    def update_width(self):
+        return max(24, min(64, self.columns() - 4))
+
+    def dismiss_update(self):
+        update = self.update
+        if update is None or update.phase == "installing":
+            return
+        update.cancel.set()
+        self.update = None
+        self.application.invalidate()
+
+    def check_updates(self):
+        if self.update_checking or self.update is not None:
+            return
+        self.update_checking = True
+        self.session.flash(t("update.checking"), 30)
+
+        def run():
+            try:
+                result, error = available_releases(self.version), None
+            except Exception as failure:
+                log.exception("The releases could not be read")
+                result, error = [], failure
+            self.scheduler.post(self.show_updates, result, error)
+
+        threading.Thread(target=run, name="update-check", daemon=True).start()
+
+    def show_updates(self, releases, error):
+        self.update_checking = False
+        if error is not None:
+            self.session.flash(t("update.check_failed", error=error))
+        elif not releases:
+            self.session.flash(t("update.up_to_date", version=self.version))
+        else:
+            self.session.notice_until = 0
+            self.tag_popup.hide()
+            self.overlay = UpdateOverlay(releases)
+            self.application.invalidate()
+
+    def start_update(self, release):
+        update = self.update = UpdateState(release)
+        self.application.invalidate()
+
+        def progress(received, total):
+            self.scheduler.post(self.on_update_progress, update, received, total)
+
+        def run():
+            try:
+                path = download(release, progress, update.cancel)
+            except UpdateCancelled:
+                return
+            except Exception as error:
+                log.exception("The update could not be downloaded")
+                self.scheduler.post(self.on_update_failed, update, t("ui.error", error=error))
+                return
+            self.scheduler.post(self.on_update_downloaded, update, path)
+
+        threading.Thread(target=run, name="update-download", daemon=True).start()
+
+    def on_update_progress(self, update, received, total):
+        if update is self.update and update.phase == "downloading":
+            update.received, update.total = received, total
+            self.application.invalidate()
+
+    def on_update_failed(self, update, message):
+        if update is self.update:
+            update.phase, update.message = "failed", message
+            self.application.invalidate()
+
+    def on_update_downloaded(self, update, path):
+        if update is not self.update:
+            return
+        update.phase = "installing"
+        self.application.invalidate()
+        try:
+            install(path, *relaunch_command(terminal=True))
+        except Exception as error:
+            log.exception("The installer could not be started")
+            self.on_update_failed(update, t("ui.error", error=error))
+            return
+        if self.session.busy and not self.session.stopping:
+            self.session.stop_response()
+        self.scheduler.later(0.8, self.exit)
+
     def overlay_rows(self):
         overlay = self.overlay
         tall, margin = (overlay.tall, overlay.margin) if overlay is not None else (12, 10)
@@ -779,6 +916,13 @@ class TuiApp:
                 Condition(lambda: self.session.progress_visible())),
             left=1, top=0)
 
+        update = Float(
+            content=ConditionalContainer(
+                Window(FormattedTextControl(self.update_fragments),
+                       width=lambda: exact(self.update_width()), height=4),
+                Condition(lambda: self.update is not None)),
+            bottom=6)
+
         self.tag_float = tag_popup = Float(
             content=ConditionalContainer(
                 Window(FormattedTextControl(self.tag_fragments), height=lambda: exact(self.tag_height()),
@@ -805,7 +949,7 @@ class TuiApp:
                 Condition(lambda: self.session.confirmation is not None)),
             width=lambda: self.confirm_width(), height=lambda: self.confirm_height() + 2)
 
-        return FloatContainer(content=body, floats=[progress, tag_popup, overlay, confirm])
+        return FloatContainer(content=body, floats=[progress, update, tag_popup, overlay, confirm])
 
     def center_height(self):
         if self.panel_visible():
@@ -896,6 +1040,9 @@ class TuiApp:
             Command("nova.memories", lambda: t("nova.section.memories"),
                     lambda: self.open_nova(Section.MEMORIES),
                     ("memories", "pin", "recuerdos", "记忆"), lambda: self.session.nova is not None),
+            Command("app.update", lambda: t("palette.update"), self.check_updates,
+                    ("update", "upgrade", "version", "release", "actualizar", "actualización", "versión", "更新"),
+                    lambda: not self.update_checking and self.update is None),
             Command("app.quit", lambda: t("tray.quit"), self.request_exit,
                     ("quit", "exit", "salir", "cerrar")),
         ]

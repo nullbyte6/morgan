@@ -20,6 +20,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add pin_memory tool and a pinned option on remember, so Arlo can pin or unpin a memory when asked or store one already pinned for requests like "always remember that ...", with list_memories showing which are pinned
 - Add pinned memories that are always placed first in the model's context, and a Nova Memories section to review every stored memory and pin, edit or remove it
 - Add search_agenda tool that lets Arlo find Nova reminders and events by the words in their title or notes, past or upcoming, when their date is unknown
+- Add update checks to the terminal version, from a Check for updates palette action that lists the newer releases, downloads the chosen one with a progress box above the composer, installs it and starts the terminal version again
 - Add update_agenda_entry tool that lets Arlo rename, move or reschedule a Nova reminder or event from chat while keeping its ID and repeat, instead of deleting and adding it again
 - Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
 - Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."

@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Modal panels of the terminal interface: actions, files and models."""
+"""Modal panels of the terminal interface: actions, files, models and updates."""
 import os
 import string
 from dataclasses import dataclass
@@ -223,6 +223,48 @@ class ModelOverlay(Overlay):
             self.index = (self.index + 1) % len(models)
         elif key == "enter" and models:
             self.choose(app, models[self.index])
+
+
+class UpdateOverlay(Overlay):
+    """Choose the release to download and install."""
+    wide = 64
+
+    def __init__(self, releases):
+        self.releases = releases
+        self.index = 0
+
+    def title(self):
+        return t("update.title")
+
+    def hint(self):
+        return t("tui.update_hint")
+
+    def lines(self, app, width, rows):
+        P = app.palette
+        lines = [[(style(P["text_muted"]), " " + elide(t("update.choose", version=app.version), width - 2))]]
+        room = max(1, rows - len(lines))
+        first = scroll_window(len(self.releases), self.index, room)
+        for position, release in enumerate(self.releases[first:first + room], first):
+            selected = position == self.index
+            label = t("update.choice", version=release.version, date=release.published or "?",
+                      size=f"{release.size / 1024 ** 2:.0f}")
+            text = " " + elide(label, width - 2)
+            row_style = style(P["on_accent"], P["accent"], bold=True) if selected else style(P["text"])
+            lines.append([(row_style, pad(text, width) if selected else text,
+                           clicked(lambda position=position: self.choose(app, position)))])
+        return lines
+
+    def choose(self, app, position):
+        app.close_overlay()
+        app.start_update(self.releases[position])
+
+    def on_key(self, app, key):
+        if key == "up":
+            self.index = (self.index - 1) % len(self.releases)
+        elif key == "down":
+            self.index = (self.index + 1) % len(self.releases)
+        elif key == "enter":
+            self.choose(app, self.index)
 
 
 class FileOverlay(Overlay):
