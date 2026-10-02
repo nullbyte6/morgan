@@ -121,6 +121,7 @@ from src.init.desktop.task_progress import TaskProgressPill
 from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
 from src.init.desktop.activity_trail import ActivityTrail
+from src.init.desktop.health_view import HealthView
 from src.init.desktop.session import DesktopSession
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
@@ -649,6 +650,8 @@ class AssistantWindow(DesktopWindow):
             for key in WORKSPACE_VIEW_CONFIG)
         commands.append(Command("workspace.diary", "palette.diary", self.open_nova_diary,
                                 ("diary", "diario")))
+        commands.append(Command("workspace.health", "palette.health", self.open_health_view,
+                                ("health", "diagnostics", "salud", "diagnóstico", "estado")))
         self.command_palette = CommandPalette(CommandRegistry(commands), self)
         self.workspace.panel_focused.connect(
             lambda _panel_id: self.command_palette.dismiss(restore_focus=False))
@@ -956,6 +959,13 @@ class AssistantWindow(DesktopWindow):
                 "Failed to open workspace view %s", view_key)
             return
 
+    def open_health_view(self) -> None:
+        """Open the health view, which checks Ollama, the model, the GPU and the voice service."""
+        try:
+            self.workspace.open_registered_panel("health", tr("health.title"), HealthView)
+        except Exception:
+            logging.getLogger("assistant.workspace").exception("Failed to open the health view")
+
     def open_nova_diary(self) -> None:
         """Show the Nova diary, reusing an open Nova panel when there is one."""
         self.open_nova_section(Section.DIARY)
@@ -1257,6 +1267,8 @@ class AssistantWindow(DesktopWindow):
             self._refresh_view_language(session)
         self.refresh_settings_workspaces()
         for view in self.workspace.findChildren(NovaView):
+            view.refresh_language()
+        for view in self.workspace.findChildren(HealthView):
             view.refresh_language()
         for navigation in self.workspace.findChildren(WorkspaceNavigation):
             navigation.refresh_language()

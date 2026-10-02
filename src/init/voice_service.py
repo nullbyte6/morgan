@@ -115,6 +115,14 @@ if shutil.which("ffmpeg") is None:
     raise RuntimeError(tr('voice_service.ffmpeg_is_required_by_cosyvoice_but_was_not_found_in_path'))
 
 
+def device_info() -> dict:
+    """Where speech is synthesized: the PyTorch backend, the device name and the PyTorch version."""
+    if torch.cuda.is_available():
+        backend = "ROCm" if getattr(torch.version, "hip", None) else "CUDA"
+        return {"backend": backend, "name": torch.cuda.get_device_name(0), "torch": torch.__version__}
+    return {"backend": "CPU", "name": "", "torch": torch.__version__}
+
+
 def _clean_for_speech(text: str) -> str:
     """Remove Markdown/formatting that should not be spoken."""
     text = re.sub(r"```[\s\S]*?```", " ", text)

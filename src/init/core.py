@@ -159,6 +159,7 @@ class Assistant:
         """Ask the main model for a short startup greeting in the interface language."""
         import urllib.request
         from src.init.brain import OLLAMA_KEEP_ALIVE
+        from src.init.health import record_model_load
         from src.init.lang import get_language
 
         language = {"english": "English", "spanish": "European Spanish", "chinese": "Simplified Chinese"}.get(get_language(), "English")
@@ -191,7 +192,9 @@ class Assistant:
             headers={"Content-Type": "application/json"}, method="POST")
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
-                text = json.loads(response.read())["response"]
+                reply = json.loads(response.read())
+            record_model_load(self.MODEL_NAME, reply)
+            text = reply["response"]
         except (OSError, ValueError, KeyError, TypeError):
             logging.getLogger("assistant.model").exception("Startup greeting could not be generated")
             return ""

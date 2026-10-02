@@ -152,6 +152,12 @@ $last = $history | Where-Object { $_.Operation -eq 1 -and $_.ResultCode -eq 2 } 
 }
 """
 
+GRAPHICS = r"""
+@(Get-CimInstance Win32_VideoController -ErrorAction Stop | ForEach-Object {
+    [pscustomobject]@{ name = [string]$_.Name; driver_version = [string]$_.DriverVersion; status = [string]$_.Status }
+})
+"""
+
 SCRIPTS = {
     "defender": DEFENDER,
     "antivirus": "@(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntivirusProduct -ErrorAction Stop | Select-Object -ExpandProperty displayName)",
@@ -162,6 +168,7 @@ SCRIPTS = {
     "devices": DEVICES,
     "services": SERVICES,
     "updates": UPDATES,
+    "graphics": GRAPHICS,
 }
 
 

@@ -197,10 +197,12 @@ def keep_model_loaded() -> None:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=5):
-            pass
-    except (OSError, TimeoutError):
-        pass
+        with urllib.request.urlopen(request, timeout=5) as response:
+            reply = json.loads(response.read())
+    except (OSError, TimeoutError, ValueError):
+        return
+    from src.init.health import record_model_load
+    record_model_load(model, reply)
 
 
 def refresh_model_keep_alive() -> None:

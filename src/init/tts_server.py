@@ -35,7 +35,7 @@ from .voice_profiles import (
     VOICE_REFERENCE,
     VOICE_REFERENCE_TEXT)
 
-from .voice_service import VoiceService
+from .voice_service import VoiceService, device_info
 
 
 HOST = "127.0.0.1"
@@ -56,6 +56,7 @@ class TTSServer:
         self._playback_reference = False
         self._last_audio_update = 0.0
         logger.info(tr('tts_server.loading_cosyvoice'))
+        started = time.monotonic()
 
         self.voice = VoiceService(
             model_path=VOICE_MODEL,
@@ -65,6 +66,8 @@ class TTSServer:
             audio_callback=self._on_audio,
             speaking_callback=self._on_speaking,
             subtitle_callback=self._on_subtitle)
+        self._load_seconds = round(time.monotonic() - started, 1)
+        self._device = device_info()
         logger.info(tr('tts_server.cosyvoice_ready'))
 
     def _send(self, message: dict, client=None) -> None:
@@ -147,7 +150,9 @@ class TTSServer:
                         logger.info(tr('tts_server.voice_client_ready'))
                         self._send({"type": "hello", "interruptible": True,
                                     "voice_selection": True,
-                                    "playback_reference": True}, client)
+                                    "playback_reference": True,
+                                    "device": self._device,
+                                    "load_seconds": self._load_seconds}, client)
 
                     elif kind == "playback_reference":
                         with self._client_lock:

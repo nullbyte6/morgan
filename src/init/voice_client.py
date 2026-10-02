@@ -46,6 +46,7 @@ class VoiceClient:
         self.supports_interruptions = False
         self.supports_voice_selection = False
         self.supports_playback_reference = False
+        self.service_info = {}
         self._hello = threading.Event()
         self._socket = self._connect(host, port)
         self._socket.settimeout(None)
@@ -106,6 +107,8 @@ class VoiceClient:
                     self.supports_interruptions = bool(message.get("interruptible"))
                     self.supports_voice_selection = bool(message.get("voice_selection"))
                     self.supports_playback_reference = bool(message.get("playback_reference"))
+                    self.service_info = {"device": message.get("device"),
+                                         "load_seconds": message.get("load_seconds")}
                     self._hello.set()
                     continue
                 if (message.get("turn_id") != self._turn_id and

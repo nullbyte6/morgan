@@ -1259,7 +1259,8 @@ QPushButton#novaNav[expanded="true"] {
 
 QWidget#novaDiary,
 QWidget#novaSearch,
-QWidget#novaMemories {
+QWidget#novaMemories,
+QWidget#healthView {
     background: transparent;
 }
 
@@ -1267,6 +1268,24 @@ QLabel#novaDiaryDay {
     color: @text;
     font-size: 18px;
     background: transparent;
+}
+
+QLabel#healthStatus {
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 18px;
+    background: transparent;
+}
+
+QLabel#healthStatus[status="ok"] {
+    color: @success;
+}
+
+QLabel#healthStatus[status="warning"] {
+    color: @warning;
+}
+
+QLabel#healthStatus[status="error"] {
+    color: @error;
 }
 
 QLabel#novaDiaryNote {
