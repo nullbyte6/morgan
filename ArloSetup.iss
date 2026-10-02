@@ -302,6 +302,27 @@ begin
     Result := '';
 end;
 
+procedure PrepareRuntime;
+var
+  Parameters: String;
+  ResultCode: Integer;
+begin
+  WizardForm.StatusLabel.Caption := 'Preparing ' + GetAssistantName('') + ' runtime...';
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\setup-runtime.ps1') +
+    '" -InstallDir "' + ExpandConstant('{app}') + '" -AssistantName "' + GetAssistantName('') + '"' +
+    GetRuntimeSwitches('');
+  if not Exec('powershell.exe', Parameters, '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then begin
+    Log('Could not start the runtime setup: ' + SysErrorMessage(ResultCode));
+    MsgBox('The ' + GetAssistantName('') + ' runtime could not be prepared: ' + SysErrorMessage(ResultCode) +
+      #13#10#13#10 + 'Run this installer again to retry.', mbError, MB_OK);
+  end else if ResultCode <> 0 then begin
+    Log('The runtime setup failed with exit code ' + IntToStr(ResultCode) + '.');
+    MsgBox('The ' + GetAssistantName('') + ' runtime setup did not finish (exit code ' + IntToStr(ResultCode) + ').' +
+      #13#10#13#10 + GetAssistantName('') + ' will not start its local services until it completes. ' +
+      'Check your internet connection and run this installer again to resume.', mbError, MB_OK);
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
@@ -318,6 +339,8 @@ begin
     DeleteEnvironmentIfMatching(Uppercase(PreviousAssistantName), PreviousInstallPath);
     DeleteEnvironmentIfMatching(Uppercase(PreviousAssistantName) + '_HOME', AddBackslash(PreviousInstallPath) + 'scripts');
   end;
+  if CurStep = ssPostInstall then
+    PrepareRuntime;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -336,9 +359,3 @@ begin
     DeleteEnvironmentIfMatching(UninstallPrefix + '_HOME', AddBackslash(UninstallPath) + 'scripts');
   end;
 end;
-
-[Run]
-Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\setup-runtime.ps1"" -InstallDir ""{app}"" -AssistantName ""{code:GetAssistantName}""{code:GetRuntimeSwitches}"; \
-    StatusMsg: "Preparing {code:GetAssistantName} runtime..."; \
-    Flags: waituntilterminated
