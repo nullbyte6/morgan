@@ -178,6 +178,39 @@ def voice_check() -> Check:
 CHECKS = (ollama_check, model_check, gpu_check, voice_check)
 
 
+def report(checks: list[Check], checked_at: datetime) -> str:
+    """The checks as Markdown with the version and system, ready to paste into a bug report."""
+    import platform
+    from src.init.brain import get_version
+    from src.init.identity import get_assistant_name
+    lines = [f"# {get_assistant_name()} · {tr('health.title')}", "",
+             f"{get_version()} · {platform.platform()} · Python {platform.python_version()} · "
+             f"{checked_at:%Y-%m-%d %H:%M:%S}"]
+    for check in checks:
+        lines += ["", f"## {tr(f'health.area.{check.area}')} · {check.status}", "", check.summary]
+        lines += [f"- {detail}" for detail in check.details]
+    return "\n".join(lines) + "\n"
+
+
+def new_version_seen() -> bool:
+    """Whether this is the first start of the running version, remembering it for the next start."""
+    from src.init.brain import get_version
+    from src.init.config import HOME_PATH
+    path = HOME_PATH / "last_version"
+    version = get_version()
+    try:
+        previous = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        previous = ""
+    if previous == version:
+        return False
+    try:
+        path.write_text(version, encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
 def collect() -> list[Check]:
     """Run every check, turning an unexpected failure into an error result instead of raising."""
     results = []

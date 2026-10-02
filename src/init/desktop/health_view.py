@@ -20,13 +20,14 @@
 import threading
 from datetime import datetime
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
-                               QVBoxLayout, QWidget)
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+                               QSizePolicy, QVBoxLayout, QWidget)
 
-from src.init.health import Check, collect
+from src.init.health import Check, collect, report
 from src.init.lang import tr
 
+COPIED_MS = 1200
 GLYPHS = {"ok": "\U000f05e0", "warning": "\U000f0026", "error": "\U000f0159"}
 
 
@@ -65,11 +66,13 @@ class HealthView(QWidget):
 
     collected = Signal(object)
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, checks: list[Check] | None = None):
         super().__init__(parent)
         self.setObjectName("healthView")
         self.setProperty("workspaceEmpty", False)
         self._running = False
+        self._checks: list[Check] = []
+        self._checked_at = datetime.now()
 
         self.title = QLabel()
         self.title.setObjectName("novaTitle")
@@ -85,9 +88,18 @@ class HealthView(QWidget):
         self.refresh_button = QPushButton()
         self.refresh_button.setObjectName("novaTodayButton")
         self.refresh_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_button = QPushButton()
+        self.copy_button.setObjectName("novaTodayButton")
+        self.copy_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.copy_button.setEnabled(False)
+        self.copy_reset = QTimer(self)
+        self.copy_reset.setSingleShot(True)
+        self.copy_reset.setInterval(COPIED_MS)
+        self.copy_reset.timeout.connect(self.refresh_language)
         top = QHBoxLayout()
-        top.setSpacing(16)
+        top.setSpacing(8)
         top.addLayout(heading, 1)
+        top.addWidget(self.copy_button, 0, Qt.AlignmentFlag.AlignTop)
         top.addWidget(self.refresh_button, 0, Qt.AlignmentFlag.AlignTop)
 
         self._rows = QVBoxLayout()
@@ -113,9 +125,13 @@ class HealthView(QWidget):
         layout.addWidget(self.scroll, 1)
 
         self.refresh_button.clicked.connect(self.refresh)
+        self.copy_button.clicked.connect(self._copy)
         self.collected.connect(self._show, Qt.ConnectionType.QueuedConnection)
         self.refresh_language()
-        self.refresh()
+        if checks is None:
+            self.refresh()
+        else:
+            self._show(checks)
 
     def minimumSizeHint(self) -> QSize:
         return QSize(360, 260)
@@ -124,6 +140,14 @@ class HealthView(QWidget):
         self.title.setText(tr("health.title"))
         self.tagline.setText(tr("health.tagline"))
         self.refresh_button.setText(tr("health.checking") if self._running else tr("health.refresh"))
+        if not self.copy_reset.isActive():
+            self.copy_button.setText(tr("health.copy"))
+        self.copy_button.setToolTip(tr("health.copy_tooltip"))
+
+    def _copy(self) -> None:
+        QApplication.clipboard().setText(report(self._checks, self._checked_at))
+        self.copy_button.setText(tr("nova.diary.copied"))
+        self.copy_reset.start()
 
     def refresh(self) -> None:
         if self._running:
@@ -142,7 +166,10 @@ class HealthView(QWidget):
 
     def _show(self, checks: list[Check]) -> None:
         self._running = False
+        self._checks = checks
+        self._checked_at = datetime.now()
         self.refresh_button.setEnabled(True)
+        self.copy_button.setEnabled(True)
         self.refresh_language()
         while self._rows.count() > 1:
             widget = self._rows.takeAt(0).widget()
@@ -151,5 +178,5 @@ class HealthView(QWidget):
         for check in checks:
             self._rows.insertWidget(self._rows.count() - 1, CheckCard(check))
         self._rows.insertWidget(self._rows.count() - 1,
-                                _label(tr("health.checked_at", time=f"{datetime.now():%H:%M:%S}"),
+                                _label(tr("health.checked_at", time=f"{self._checked_at:%H:%M:%S}"),
                                        "novaRowCaption", wrap=False))

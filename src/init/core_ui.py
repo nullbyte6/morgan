@@ -122,6 +122,7 @@ from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
 from src.init.desktop.activity_trail import ActivityTrail
 from src.init.desktop.health_view import HealthView
+from src.init.health import collect as collect_health, new_version_seen
 from src.init.desktop.session import DesktopSession
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
@@ -129,12 +130,15 @@ from src.init.desktop.file_drop import FileDropRouter
 from src.init.visuals.bridge import FlowchartBridge
 from src.init.terminal import TerminalBridge
 
+HEALTH_CHECK_DELAY_MS = 45_000
+
 # noinspection PyBroadException
 class AssistantWindow(DesktopWindow):
     """Assistant window class, not its brain, which is somewhere else"""
     MAX_SESSIONS = 2
     model_request = Signal(str)
     reminder_answered = Signal(object, str)
+    health_checked = Signal(object)
     username = getuser().capitalize()
 
     def __init__(self):
@@ -211,6 +215,7 @@ class AssistantWindow(DesktopWindow):
         self.build_ui()
         self.build_command_palette()
         self.start_nova()
+        self.check_health_after_update()
 
         self._workspace_shortcut_map = {
             options["shortcut"].rsplit("+", 1)[-1]: view_key
@@ -961,12 +966,39 @@ class AssistantWindow(DesktopWindow):
                 "Failed to open workspace view %s", view_key)
             return
 
-    def open_health_view(self) -> None:
+    def open_health_view(self, checks=None) -> None:
         """Open the health view, which checks Ollama, the model, the GPU and the voice service."""
         try:
-            self.workspace.open_registered_panel("health", tr("health.title"), HealthView)
+            self.workspace.open_registered_panel("health", tr("health.title"),
+                                                 lambda: HealthView(checks=checks))
         except Exception:
             logging.getLogger("assistant.workspace").exception("Failed to open the health view")
+
+    def check_health_after_update(self) -> None:
+        """On the first start of a new version, run the health checks once the services had time
+        to start, and open the health view when one of them fails."""
+        try:
+            if not new_version_seen():
+                return
+        except Exception:
+            logging.getLogger("assistant.health").exception("The running version could not be recorded")
+            return
+        self.health_checked.connect(self.show_failed_health, Qt.ConnectionType.QueuedConnection)
+
+        def run():
+            checks = collect_health()
+            try:
+                self.health_checked.emit(checks)
+            except RuntimeError:
+                pass
+
+        QTimer.singleShot(HEALTH_CHECK_DELAY_MS,
+                          lambda: threading.Thread(target=run, name="health-after-update", daemon=True).start())
+
+    @Slot(object)
+    def show_failed_health(self, checks) -> None:
+        if not self.quitting and any(check.status == "error" for check in checks):
+            self.open_health_view(checks)
 
     def open_nova_diary(self) -> None:
         """Show the Nova diary, reusing an open Nova panel when there is one."""

@@ -702,6 +702,8 @@
   "health.refresh": "Check again",
   "health.checking": "Checking…",
   "health.checked_at": "Checked at {time}",
+  "health.copy": "Copy report",
+  "health.copy_tooltip": "Copy the results, the version and the system as Markdown for a bug report",
   "health.failed": "This check could not run",
   "health.area.ollama": "Ollama",
   "health.area.model": "Model",

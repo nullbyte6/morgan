@@ -702,6 +702,8 @@
   "health.refresh": "重新检查",
   "health.checking": "正在检查…",
   "health.checked_at": "检查于 {time}",
+  "health.copy": "复制报告",
+  "health.copy_tooltip": "以 Markdown 复制检查结果、版本和系统信息，用于错误报告",
   "health.failed": "无法执行此项检查",
   "health.area.ollama": "Ollama",
   "health.area.model": "模型",

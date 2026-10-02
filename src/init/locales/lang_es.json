@@ -702,6 +702,8 @@
   "health.refresh": "Comprobar de nuevo",
   "health.checking": "Comprobando…",
   "health.checked_at": "Comprobado a las {time}",
+  "health.copy": "Copiar informe",
+  "health.copy_tooltip": "Copia los resultados, la versión y el sistema en Markdown para un informe de errores",
   "health.failed": "No se pudo realizar esta comprobación",
   "health.area.ollama": "Ollama",
   "health.area.model": "Modelo",
