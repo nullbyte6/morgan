@@ -36,6 +36,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix small blank windows flashing on screen when a Nova list is rebuilt, as when opening the diary with Ctrl+L, because the old rows were detached while still visible
 - Fix snoozing a due Nova reminder giving no sign of its new time, by confirming it in a notification or saying the reminder no longer exists, and Tomorrow on a daily reminder adding a duplicate at the time it already repeats
 - Remove the /exit, /private and /reload slash commands in favour of the command palette, which gains Toggle private mode in the desktop and terminal versions and Reload modules in the desktop, while reload and ref still work as messages
+- Update desktop and terminal builds to leave out lingua, babel, num2words and the speech text module, which only the voice service uses and which the voice runtime already installs, so ArloSetup.exe no longer bundles the 290 MB language detector
 - Update flag selector of the Nova overlay to a horizontal track with a colored pill for the chosen flag, like the permissions selector
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update Nova diary header to place the copy, export, previous entry and today buttons in a row below the day and the previous and next day arrows

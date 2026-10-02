@@ -62,7 +62,7 @@ while IFS= read -r module; do
 done < <(run_python -B - <<'PY'
 from pathlib import Path
 for path in sorted(Path('src/init').rglob('*.py')):
-    if path.stem in {'tts_server', 'voice_service'} or '__pycache__' in path.parts:
+    if path.stem in {'tts_server', 'voice_service', 'speech_text'} or '__pycache__' in path.parts:
         continue
     source = path.read_text(encoding='utf-8', errors='replace')
     if 'PySide6' in source or 'shiboken6' in source:
@@ -97,6 +97,8 @@ command=("$python" -B -m PyInstaller.utils.cliutils.makespec
     --exclude-module pandas --exclude-module pyarrow --exclude-module matplotlib
     --exclude-module src.init.voice_service
     --exclude-module src.init.tts_server
+    --exclude-module src.init.speech_text
+    --exclude-module lingua --exclude-module babel --exclude-module num2words
     "${hidden[@]}" "$root/entry/tui.py")
 
 printf 'Executing:'
