@@ -70,7 +70,10 @@ voice. The composer supports `@file` references, file attachments (button,
 `Ctrl+O`, or pasting/dropping file paths), live voice input (button or `Ctrl+R`)
 and direct shell commands when the text starts with `>`. `Ctrl+K` opens the action
 palette, `F2` shows the last response, `Ctrl+J` inserts a new line, `Esc` or
-`Ctrl+C` stops a response, and `Ctrl+D` exits. Pass `--no-voice` (or
+`Ctrl+C` stops a response, and `Ctrl+D` exits. Nova opens from the palette,
+with `Ctrl+Alt+N`, or on its diary with `Ctrl+L`, and offers the same agenda,
+reminders, events, calendar, diary, week review, memories and search as the
+desktop, with due reminders announced as Windows notifications. Pass `--no-voice` (or
 `arlo-tui.bat -NoVoice`) to skip the TTS service entirely and show text only.
 
 ## Usage

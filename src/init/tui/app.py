@@ -42,6 +42,8 @@ from src.init.file_tags import FILE_TAG_LIMIT, FILE_TAG_QUERY, find_file_tags
 from src.init.tui import i18n
 from src.init.tui.i18n import t
 from src.init.tui.markdown import render_markdown
+from src.init.nova.sections import Section
+from src.init.tui.nova import NovaOverlay
 from src.init.tui.overlays import Command, FileOverlay, ModelOverlay, PaletteOverlay
 from src.init.tui.palette import mix
 from src.init.tui.session import TuiSession
@@ -207,6 +209,8 @@ class TuiApp:
         self.session.changed.connect(self.on_changed)
         self.session.draft_accepted.connect(self.on_draft_accepted)
         self.session.exit_requested.connect(self.exit)
+        self.session.nova_changed.connect(self.on_nova_changed)
+        self.session.nova_requested.connect(lambda: self.open_nova(Section.AGENDA))
 
     def build_style(self):
         return Style.from_dict({"": f"bg:{self.palette['surface']} fg:{self.palette['text']}"})
@@ -628,7 +632,9 @@ class TuiApp:
         self.session.notify()
 
     def overlay_rows(self):
-        return max(3, min(12, self.size().rows - 10))
+        overlay = self.overlay
+        tall, margin = (overlay.tall, overlay.margin) if overlay is not None else (12, 10)
+        return max(3, min(tall, self.size().rows - margin))
 
     def overlay_width(self):
         wide = self.overlay.wide if self.overlay is not None else 72
@@ -880,6 +886,16 @@ class TuiApp:
                     ("private", "privacy", "privado", "privacidad", "incognito", "隐私")),
             Command("ui.model", lambda: t("tui.cmd_model"), self.open_models, ("model", "modelo"),
                     lambda: session.ready and not session.busy),
+            Command("nova.open", lambda: t("palette.nova"), lambda: self.open_nova(Section.AGENDA),
+                    ("nova", "agenda", "reminders", "events", "calendar", "recordatorios", "eventos",
+                     "calendario", "日程"), lambda: self.session.nova is not None),
+            Command("nova.diary", lambda: t("palette.diary"), lambda: self.open_nova(Section.DIARY),
+                    ("diary", "diario", "日记"), lambda: self.session.nova is not None),
+            Command("nova.week", lambda: t("nova.section.review"), lambda: self.open_nova(Section.REVIEW),
+                    ("week", "review", "semana", "resumen", "本周"), lambda: self.session.nova is not None),
+            Command("nova.memories", lambda: t("nova.section.memories"),
+                    lambda: self.open_nova(Section.MEMORIES),
+                    ("memories", "pin", "recuerdos", "记忆"), lambda: self.session.nova is not None),
             Command("app.quit", lambda: t("tray.quit"), self.request_exit,
                     ("quit", "exit", "salir", "cerrar")),
         ]
@@ -908,6 +924,21 @@ class TuiApp:
         if session.model in session.models:
             overlay.index = session.models.index(session.model)
         self.overlay = overlay
+        self.application.invalidate()
+
+    def open_nova(self, section):
+        if self.session.nova is None or self.session.confirmation is not None:
+            return
+        self.tag_popup.hide()
+        if isinstance(self.overlay, NovaOverlay):
+            self.overlay.show_section(section)
+        else:
+            self.overlay = NovaOverlay(self, section)
+        self.application.invalidate()
+
+    def on_nova_changed(self):
+        if isinstance(self.overlay, NovaOverlay):
+            self.overlay.changed()
         self.application.invalidate()
 
     def close_overlay(self):
@@ -997,7 +1028,9 @@ class TuiApp:
         if session.confirmation is not None:
             session.answer_confirmation(False)
         elif self.overlay is not None:
-            self.close_overlay()
+            if not self.overlay.back(self):
+                self.close_overlay()
+            self.application.invalidate()
         elif self.tag_popup.visible:
             self.tag_popup.hide()
             self.application.invalidate()
@@ -1045,7 +1078,8 @@ class TuiApp:
             else:
                 event.current_buffer.insert_text(data)
 
-        for name in ("up", "down", "pageup", "pagedown", "home", "end", "tab", "left", "backspace"):
+        for name in ("up", "down", "pageup", "pagedown", "home", "end", "tab", "s-tab", "left", "right",
+                     "backspace", "delete"):
             @kb.add(name, filter=overlay_open)
             def _(event, name=name):
                 self.overlay.on_key(self, name)
@@ -1131,6 +1165,14 @@ class TuiApp:
                 self.close_overlay()
             else:
                 self.open_palette()
+
+        @kb.add("c-l", filter=normal)
+        def _(event):
+            self.open_nova(Section.DIARY)
+
+        @kb.add("escape", "c-n", filter=normal)
+        def _(event):
+            self.open_nova(Section.AGENDA)
 
         @kb.add("c-o", filter=normal)
         def _(event):

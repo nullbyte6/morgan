@@ -47,6 +47,8 @@ def scroll_window(count: int, index: int, rows: int) -> int:
 
 class Overlay:
     wide = 72
+    tall = 12
+    margin = 10
 
     def title(self) -> str:
         return ""
@@ -62,6 +64,9 @@ class Overlay:
 
     def on_text(self, app, text: str) -> None:
         pass
+
+    def back(self, app) -> bool:
+        return False
 
 
 class PaletteOverlay(Overlay):
