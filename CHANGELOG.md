@@ -8,6 +8,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda
 - Add Nova search, a sidebar section with one box that finds reminders, events and the diary days whose conversations mention the words typed, opening the day in the diary when clicked
+- Add pinned memories that are always placed first in the model's context, and a Nova Memories section to review every stored memory and pin, edit or remove it
 - Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update services launcher to read the bundled core.json when the dev folder is not installed

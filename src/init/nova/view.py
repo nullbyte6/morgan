@@ -30,6 +30,7 @@ from .calendar_view import CalendarView
 from .dialog import EVENT, REMINDER, NovaEntryDialog
 from .diary import DiaryView
 from .entries import Entry, Reminder
+from .memories import MemoriesView
 from .rows import EntryList
 from .search import SearchView
 from .sections import Section
@@ -82,7 +83,9 @@ class NovaView(QWidget):
         self.calendar = CalendarView(store)
         self.diary = DiaryView(store)
         self.search = SearchView(store)
-        pages = {Section.CALENDAR: self.calendar, Section.DIARY: self.diary, Section.SEARCH: self.search}
+        self.memories = MemoriesView()
+        pages = {Section.CALENDAR: self.calendar, Section.DIARY: self.diary, Section.MEMORIES: self.memories,
+                 Section.SEARCH: self.search}
         self.pages = QStackedWidget()
         for section in Section:
             self.pages.addWidget(pages.get(section) or self.lists[section])
@@ -130,7 +133,7 @@ class NovaView(QWidget):
     def show_section(self, section: Section) -> None:
         self._section = section
         self.sidebar.select(section)
-        self.add_button.setVisible(section not in (Section.DIARY, Section.SEARCH))
+        self.add_button.setVisible(section not in (Section.DIARY, Section.MEMORIES, Section.SEARCH))
         self.pages.setCurrentIndex(list(Section).index(section))
         self._refresh()
         if section is Section.SEARCH:
@@ -146,6 +149,7 @@ class NovaView(QWidget):
         self.calendar.refresh_language()
         self.diary.refresh_language()
         self.search.refresh_language()
+        self.memories.refresh_language()
         self.add_button.setToolTip(tr("nova.add"))
         self._refresh()
 

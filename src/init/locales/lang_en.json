@@ -663,5 +663,14 @@
   "nova.diary.copied": "Copied",
   "nova.diary.export_day": "Export",
   "nova.diary.export_day_tooltip": "Save the day as a Markdown file",
-  "nova.diary.export_error": "The day could not be saved: {error}"
+  "nova.diary.export_error": "The day could not be saved: {error}",
+  "nova.section.memories": "Memories",
+  "nova.section.memories.tagline": "What {assistant_name} knows about you. Pinned memories are always in mind.",
+  "nova.memories.pinned": "Pinned",
+  "nova.memories.stored": "Remembered",
+  "nova.memories.pinned_mark": "Always in context",
+  "nova.memories.pin": "Pin: always keep this in context",
+  "nova.memories.unpin": "Unpin",
+  "nova.memories.edit": "Edit",
+  "nova.memories.empty": "Nothing is remembered yet. Ask {assistant_name} to remember something."
 }

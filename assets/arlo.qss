@@ -246,6 +246,10 @@ QPushButton#logRemoveNav:hover {
     color: @text;
 }
 
+QPushButton#logCopyNav[pinned="true"] {
+    color: @accent;
+}
+
 QPushButton#logRemoveNav[armed="true"] {
     background-color: @error/30;
     color: @error;
@@ -1254,7 +1258,8 @@ QPushButton#novaNav[expanded="true"] {
 }
 
 QWidget#novaDiary,
-QWidget#novaSearch {
+QWidget#novaSearch,
+QWidget#novaMemories {
     background: transparent;
 }
 

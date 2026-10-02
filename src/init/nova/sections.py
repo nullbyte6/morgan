@@ -28,6 +28,7 @@ class Section(Enum):
     EVENTS = ("events", "\U000f09d2")
     CALENDAR = ("calendar", "\U000f0e17")
     DIARY = ("diary", "\U000f082e")
+    MEMORIES = ("memories", "\U000f09d1")
     SEARCH = ("search", "\U000f0349")
 
     def __init__(self, key: str, glyph: str):

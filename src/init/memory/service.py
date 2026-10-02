@@ -188,6 +188,8 @@ class MemoryService:
                            (key, category, timestamp(), memory_id))
             for previous_id in previous_ids:
                 db.execute("UPDATE memories SET superseded_by=? WHERE id=?", (memory_id, previous_id))
+            if any(row["pinned"] for row in (previous, keyed) if row is not None and row["id"] in previous_ids):
+                db.execute("UPDATE memories SET pinned=1 WHERE id=?", (memory_id,))
             self._source(db, memory_id, source_message_id, source_ref)
         return self.get_memory(memory_id)
 
@@ -221,6 +223,20 @@ class MemoryService:
                        (content, normalize(content), category, key, expires_at, timestamp(), memory_id))
             self._source(db, memory_id, source_message_id, None)
         return self.get_memory(memory_id)
+
+    def pin_memory(self, memory_id, pinned=True):
+        """Pin a memory so it is always part of the model's context, or unpin it."""
+        with self.db.connect(write=True) as db:
+            return db.execute("UPDATE memories SET pinned=? WHERE id=? AND status='active'",
+                              (int(bool(pinned)), memory_id)).rowcount == 1
+
+    def stored_memories(self):
+        """Every confirmed, unexpired memory, pinned ones first and then the most recently changed."""
+        with self.db.connect() as db:
+            return [dict(row) for row in db.execute("""SELECT id,content,category,memory_key,pinned,created_at,
+                modified_at,expires_at FROM memories WHERE status='active' AND origin='explicit'
+                AND (expires_at IS NULL OR expires_at > ?) ORDER BY pinned DESC,modified_at DESC,id""",
+                                                    (timestamp(),))]
 
     def delete_memory(self, memory_id):
         with self.db.connect(write=True) as db:
@@ -335,18 +351,19 @@ class MemoryService:
         return result
 
     def context(self, query=""):
-        """Confirmed memories for the model, the ones matching query first, within the character budget."""
+        """Confirmed memories for the model, pinned ones first, then the ones matching query,
+        within the character budget."""
         try:
             with self.db.connect() as db:
                 relevant = search_memories(db, query, self.max_results) if query.strip() else []
         except ValueError:
             relevant = []
         with self.db.connect() as db:
-            stored = [dict(row) for row in db.execute("""SELECT id,content,category,memory_key FROM memories
+            stored = [dict(row) for row in db.execute("""SELECT id,content,category,memory_key,pinned FROM memories
                 WHERE status='active' AND origin='explicit' AND (expires_at IS NULL OR expires_at > ?)
                 ORDER BY modified_at DESC,id""", (timestamp(),))]
         order = {memory["id"]: position for position, memory in enumerate(relevant)}
-        stored.sort(key=lambda memory: order.get(memory["id"], len(order)))
+        stored.sort(key=lambda memory: (not memory.pop("pinned"), order.get(memory["id"], len(order))))
         selected = bounded(stored, self.context_chars - len(UNTRUSTED) - 100)
         return (UNTRUSTED + "\n" + json.dumps({"memories": selected}, ensure_ascii=False)
                 if selected else "")

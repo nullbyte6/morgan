@@ -84,6 +84,7 @@ MIGRATIONS = (
             INSERT INTO memory_fts(rowid,content) VALUES(new.rowid,new.content); END""",
         "INSERT INTO memory_fts(memory_fts) VALUES('rebuild')",
     ),
+    ("ALTER TABLE memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN (0, 1))",),
 )
 
 

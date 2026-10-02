@@ -663,5 +663,14 @@
   "nova.diary.copied": "Copiado",
   "nova.diary.export_day": "Exportar",
   "nova.diary.export_day_tooltip": "Guarda el día como archivo Markdown",
-  "nova.diary.export_error": "No se pudo guardar el día: {error}"
+  "nova.diary.export_error": "No se pudo guardar el día: {error}",
+  "nova.section.memories": "Recuerdos",
+  "nova.section.memories.tagline": "Lo que {assistant_name} sabe de ti. Los recuerdos fijados siempre están presentes.",
+  "nova.memories.pinned": "Fijados",
+  "nova.memories.stored": "Recordados",
+  "nova.memories.pinned_mark": "Siempre en contexto",
+  "nova.memories.pin": "Fijar: mantenerlo siempre en contexto",
+  "nova.memories.unpin": "Dejar de fijar",
+  "nova.memories.edit": "Editar",
+  "nova.memories.empty": "Aún no hay nada recordado. Pide a {assistant_name} que recuerde algo."
 }

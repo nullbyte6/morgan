@@ -663,5 +663,14 @@
   "nova.diary.copied": "已复制",
   "nova.diary.export_day": "导出",
   "nova.diary.export_day_tooltip": "将这一天保存为 Markdown 文件",
-  "nova.diary.export_error": "无法保存这一天：{error}"
+  "nova.diary.export_error": "无法保存这一天：{error}",
+  "nova.section.memories": "记忆",
+  "nova.section.memories.tagline": "{assistant_name} 对你的了解。置顶的记忆始终在上下文中。",
+  "nova.memories.pinned": "已置顶",
+  "nova.memories.stored": "已记住",
+  "nova.memories.pinned_mark": "始终在上下文中",
+  "nova.memories.pin": "置顶：始终保留在上下文中",
+  "nova.memories.unpin": "取消置顶",
+  "nova.memories.edit": "编辑",
+  "nova.memories.empty": "还没有任何记忆。请让 {assistant_name} 记住一些事情。"
 }
