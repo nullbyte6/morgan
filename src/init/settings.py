@@ -21,11 +21,12 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QPainter
+from PySide6.QtGui import QColor, QDesktopServices, QIntValidator, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QComboBox, QFileDialog, QHBoxLayout, QLabel, QListView, QMessageBox, QPushButton,
-    QVBoxLayout, QWidget)
+    QAbstractButton, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListView, QMessageBox,
+    QPushButton, QVBoxLayout, QWidget)
 
+from .config import CONTEXT_LENGTH_RANGE, load_config, save_config
 from .identity import get_assistant_name
 from .lang import get_language, tr
 from .theme import current_theme, discover_themes, on_theme_changed, seed_user_themes, select_theme
@@ -308,6 +309,22 @@ class SettingsView(QWidget):
         theme_row.addWidget(self.theme_dropdown)
         layout.addLayout(theme_row)
 
+        self.context_label = QLabel()
+        self.context_label.setObjectName("muted")
+        self.context_input = QLineEdit()
+        self.context_input.setObjectName("contextLengthInput")
+        self.context_input.setValidator(QIntValidator(0, CONTEXT_LENGTH_RANGE[1], self.context_input))
+        self.context_input.setAlignment(Qt.AlignRight)
+        self.context_input.setFixedWidth(180)
+        self.context_input.setText(str(load_config()["context_length"]))
+        self.context_label.setBuddy(self.context_input)
+        context_row = QHBoxLayout()
+        context_row.addWidget(self.context_label)
+        context_row.addStretch()
+        context_row.addWidget(self.context_input)
+        layout.addLayout(context_row)
+        self.context_input.editingFinished.connect(self.change_context_length)
+
         self.themes_folder_button = QPushButton()
         self.themes_folder_button.setObjectName("themesFolderButton")
         self.themes_folder_button.setCursor(Qt.PointingHandCursor)
@@ -384,6 +401,25 @@ class SettingsView(QWidget):
 
     def apply_theme(self, theme):
         self.refresh_themes()
+
+    def change_context_length(self):
+        minimum, maximum = CONTEXT_LENGTH_RANGE
+        config = load_config()
+        text = self.context_input.text().strip()
+        if text.isdigit() and minimum <= int(text) <= maximum:
+            value = int(text)
+            if value != config["context_length"]:
+                try:
+                    save_config({**config, "context_length": value})
+                except (OSError, ValueError) as error:
+                    QMessageBox.warning(self, tr("ui.context_length"), tr("ui.error", error=error))
+                    value = config["context_length"]
+        else:
+            value = config["context_length"]
+            QMessageBox.warning(
+                self, tr("ui.context_length"),
+                tr("ui.context_length_hint", minimum=minimum, maximum=maximum, name=get_assistant_name()))
+        self.context_input.setText(str(value))
 
     def open_themes_folder(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(seed_user_themes())))
@@ -495,6 +531,12 @@ class SettingsView(QWidget):
             self.theme_dropdown.setAccessibleName(tr("ui.theme"))
             self.theme_dropdown.setToolTip(tr("ui.theme_hint"))
             self.themes_folder_button.setText(tr("ui.open_themes_folder"))
+        if hasattr(self, "context_label"):
+            self.context_label.setText(tr("ui.context_length"))
+            self.context_input.setAccessibleName(tr("ui.context_length"))
+            self.context_input.setToolTip(tr(
+                "ui.context_length_hint", minimum=CONTEXT_LENGTH_RANGE[0],
+                maximum=CONTEXT_LENGTH_RANGE[1], name=get_assistant_name()))
         if hasattr(self, "update_button"):
             self.update_button.setText(tr("ui.check_updates"))
             self.update_button.setToolTip(tr("ui.check_updates_hint"))

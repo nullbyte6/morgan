@@ -831,8 +831,8 @@ class Assistant:
             if session is None:
                 self.task_state = state
 
-        from src.init.config import load_dev_file
-        request_config = load_dev_file()
+        from src.init.config import load_config
+        request_config = load_config()
         from src.init.attachments import ollama_capabilities
         active_model = (turn_model or session_model).model_name
         _, provider_context = ollama_capabilities(active_model)

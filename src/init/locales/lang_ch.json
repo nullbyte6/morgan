@@ -34,6 +34,8 @@
   "ui.language_hint": "选择界面语言",
   "ui.theme": "主题",
   "ui.theme_hint": "选择界面配色主题",
+  "ui.context_length": "上下文长度",
+  "ui.context_length_hint": "主模型的上下文令牌数，范围 {minimum} 到 {maximum}。如果模型无法放入显存，请调低。下次 {name} 启动 Ollama 时生效；如果 Ollama 已在运行，请重启它。",
   "ui.open_themes_folder": "打开主题文件夹",
   "ui.check_updates": "检查更新",
   "ui.check_updates_hint": "在仓库的发布版本中查找更新的 {assistant_name} 版本并安装",

@@ -30,7 +30,7 @@ if (-not (Test-Path -LiteralPath $python)) {
     throw "Python environment not found: $python"
 }
 
-$assistantMetadata = & $python -X utf8 -B -c "import json; from src.init.identity import get_assistant_identifier, get_assistant_name; from src.init.lang import tr; print(json.dumps(dict(identifier=get_assistant_identifier(), name=get_assistant_name(), console_title=tr('console.console_title'))))"
+$assistantMetadata = & $python -X utf8 -B -c "import json; from src.init.config import load_config; from src.init.identity import get_assistant_identifier, get_assistant_name; from src.init.lang import tr; print(json.dumps(dict(identifier=get_assistant_identifier(), name=get_assistant_name(), console_title=tr('console.console_title'), context_length=load_config()['context_length'])))"
 if ($LASTEXITCODE -ne 0 -or -not $assistantMetadata) {
     throw "Could not resolve the assistant service namespace."
 }
@@ -109,7 +109,7 @@ if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
 }
 
 $core = Get-Content -LiteralPath $corePath -Raw -Encoding utf8 | ConvertFrom-Json
-$modelContext = $core.context_length
+$modelContext = $assistantMetadata.context_length
 if (($modelContext -isnot [int] -and $modelContext -isnot [long]) -or
     $modelContext -lt 4096) {
     throw "Model context is invalid in $corePath."

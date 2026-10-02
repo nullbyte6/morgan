@@ -34,6 +34,8 @@
   "ui.language_hint": "Seleccionar el idioma de la interfaz",
   "ui.theme": "Tema",
   "ui.theme_hint": "Selecciona el tema de colores de la interfaz",
+  "ui.context_length": "Longitud de contexto",
+  "ui.context_length_hint": "Tokens de contexto del modelo principal, de {minimum} a {maximum}. Redúcela si el modelo no cabe en tu GPU. Se aplica la próxima vez que {name} inicie Ollama; reinicia Ollama si ya está en marcha.",
   "ui.open_themes_folder": "Abrir carpeta de temas",
   "ui.check_updates": "Buscar Actualizaciones",
   "ui.check_updates_hint": "Buscar versiones más recientes de {assistant_name} en las publicaciones del repositorio e instalar una",

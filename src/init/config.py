@@ -35,6 +35,7 @@ from src.init.attachments import DEFAULT_LIMITS
 
 DEV_FILE = Path(__file__).resolve().parents[2] / "dev" / "core.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
+CONTEXT_LENGTH_RANGE = (4096, 1048576)
 
 
 class PermissionMode(StrEnum):
@@ -56,6 +57,7 @@ DEFAULTS = {
     "lang": "spanish",
     "model": "",
     "keep_alive": "24h",
+    "context_length": 32768,
     "temperature": 0.2,
     "voice_reference": "voice-01.wav",
     "permission_mode": "ask",
@@ -265,6 +267,11 @@ def validate_config(config):
                 "email_imap_use_ssl", "email_imap_starttls"):
         if not isinstance(result[key], bool):
             raise ValueError(tr('config.must_be_boolean', key=key))
+    context_length = result["context_length"]
+    if (isinstance(context_length, bool) or not isinstance(context_length, int)
+            or not CONTEXT_LENGTH_RANGE[0] <= context_length <= CONTEXT_LENGTH_RANGE[1]):
+        raise ValueError(f"context_length must be an integer between "
+                         f"{CONTEXT_LENGTH_RANGE[0]} and {CONTEXT_LENGTH_RANGE[1]}")
     if not isinstance(result["weather_location"], str):
         raise ValueError(tr('config.weather_location_must_be_text'))
     temperature = result["temperature"]
@@ -397,7 +404,7 @@ def update_config(updates: dict) -> str:
         for key, value in updates.items():
             if key not in DEFAULTS:
                 return tr('config.error_updating_configuration_unknown_setting', key=key)
-            if key in ("permission_mode", "theme"):
+            if key in ("permission_mode", "theme", "context_length"):
                 return tr('config.error_updating_configuration_user_only_setting', key=key)
             if isinstance(current.get(key), dict) and isinstance(value, dict):
                 current[key] = {**current[key], **value}

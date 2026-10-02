@@ -59,5 +59,6 @@ Gemma 4 E4B provides native text, image and audio processing, so Arlo does not
 require a separate vision-language or audio model when multimodal input is
 routed directly to the primary model. Arlo does not create derived Ollama
 models; when it starts Ollama it sets `OLLAMA_CONTEXT_LENGTH` to the
-`context_length` in `dev\core.json`. An Ollama service that was already running
+`context_length` of the user configuration, which Settings edits (32,768 by
+default). An Ollama service that was already running
 keeps its own context length, and Arlo budgets against the context Ollama reports.

@@ -340,6 +340,20 @@ QComboBox#themeDropdown:focus {
     border-color: @accent;
 }
 
+QLineEdit#contextLengthInput {
+    background-color: @surface;
+    color: @text;
+    border: 2px solid @border;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 16px;
+}
+
+QLineEdit#contextLengthInput:hover,
+QLineEdit#contextLengthInput:focus {
+    border-color: @accent;
+}
+
 QPushButton#themesFolderButton {
     background-color: @surface;
     color: @text;
