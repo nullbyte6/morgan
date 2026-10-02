@@ -2,6 +2,10 @@
 
 All notable changes to Arlo, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.2-beta (2026-10-02)
+
+- Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
+
 ## 26.10.1-beta (2026-10-01)
 
 - Add ARLO Home, the 26th built-in color theme, in blues and whites
