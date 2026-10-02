@@ -21,7 +21,7 @@ import re
 from datetime import date, datetime, time, timedelta
 
 from PySide6.QtCore import QEvent, QPoint, Qt
-from PySide6.QtGui import QKeyEvent, QMouseEvent
+from PySide6.QtGui import QIntValidator, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QLineEdit,
                                QPlainTextEdit, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
@@ -30,10 +30,12 @@ from src.init.settings import ToggleSwitch
 
 from . import formatting
 from .calendar_paint import MiniMonth
-from .entries import FLAGS, RECURRENCES, Entry, Reminder
+from .entries import (FLAGS, MAX_REPEAT_COUNT, RECURRENCES, REPEAT_UNITS, Entry, Reminder, normalize_recurrence,
+                      parse_recurrence)
 from .store import NovaStore
 
 REMINDER, EVENT = "reminder", "event"
+CUSTOM = "custom"
 TIME_INPUT = re.compile(r"(\d{1,2}):(\d{2})")
 CARD_WIDTH = 480
 
@@ -146,7 +148,7 @@ class NovaEntryDialog(QWidget):
         repeat_line = QHBoxLayout()
         repeat_line.setContentsMargins(0, 0, 0, 0)
         repeat_line.setSpacing(6)
-        for recurrence in RECURRENCES:
+        for recurrence in (*RECURRENCES, CUSTOM):
             button = QPushButton()
             button.setObjectName("novaSegment")
             button.setCheckable(True)
@@ -157,6 +159,49 @@ class NovaEntryDialog(QWidget):
         repeat_line.addStretch(1)
         repeat_bar = QWidget()
         repeat_bar.setLayout(repeat_line)
+
+        self.every_label = QLabel()
+        self.every_label.setObjectName("novaFieldLabel")
+        self.every_input = QLineEdit()
+        self.every_input.setObjectName("novaInput")
+        self.every_input.setFixedWidth(72)
+        self.every_input.setMaxLength(len(str(MAX_REPEAT_COUNT)))
+        self.every_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.every_input.setValidator(QIntValidator(1, MAX_REPEAT_COUNT, self))
+        self.every_input.returnPressed.connect(self._submit)
+        every_line = QHBoxLayout()
+        every_line.setContentsMargins(0, 0, 0, 0)
+        every_line.setSpacing(8)
+        every_line.addWidget(self.every_label)
+        every_line.addWidget(self.every_input)
+        every_line.addStretch(1)
+        self.unit = QButtonGroup(self)
+        self.unit.setExclusive(True)
+        self._unit_buttons: dict[str, QPushButton] = {}
+        unit_line = QHBoxLayout()
+        unit_line.setContentsMargins(0, 0, 0, 0)
+        unit_line.setSpacing(6)
+        for unit in REPEAT_UNITS:
+            button = QPushButton()
+            button.setObjectName("novaSegment")
+            button.setCheckable(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.unit.addButton(button)
+            self._unit_buttons[unit] = button
+            unit_line.addWidget(button)
+        unit_line.addStretch(1)
+        self.custom_box = QWidget()
+        custom_column = QVBoxLayout(self.custom_box)
+        custom_column.setContentsMargins(0, 0, 0, 0)
+        custom_column.setSpacing(8)
+        custom_column.addLayout(every_line)
+        custom_column.addLayout(unit_line)
+        repeat_content = QWidget()
+        repeat_column = QVBoxLayout(repeat_content)
+        repeat_column.setContentsMargins(0, 0, 0, 0)
+        repeat_column.setSpacing(8)
+        repeat_column.addWidget(repeat_bar)
+        repeat_column.addWidget(self.custom_box)
 
         self.flag = QButtonGroup(self)
         self.flag.setExclusive(True)
@@ -194,7 +239,7 @@ class NovaEntryDialog(QWidget):
         self.all_day_row = all_day_row
         self.start_field = _field(self.labels["start"], _moment_row(self.start_day, self.start_time))
         self.end_field = _field(self.labels["end"], _moment_row(self.end_day, self.end_time))
-        self.repeat_field = _field(self.labels["repeat"], repeat_bar)
+        self.repeat_field = _field(self.labels["repeat"], repeat_content)
         self.flag_field = _field(self.labels["flag"], flag_bar)
 
         self.error = QLabel()
@@ -248,6 +293,7 @@ class NovaEntryDialog(QWidget):
         self.end_day.clicked.connect(lambda: self._show_picker(self.end_day))
         self.picker.day_selected.connect(self._picked)
         self.all_day.toggled.connect(self._update_fields)
+        self.repeat.buttonToggled.connect(lambda *_: self._update_repeat())
         self.title_input.returnPressed.connect(self._submit)
         self.title_input.textChanged.connect(self._update_save)
         self.save_button.clicked.connect(self._submit)
@@ -293,6 +339,9 @@ class NovaEntryDialog(QWidget):
             button.setText(tr(f"nova.flag.{flag}"))
         for recurrence, button in self._repeat_buttons.items():
             button.setText(tr(f"nova.repeat.{recurrence}"))
+        self.every_label.setText(tr("nova.dialog.every"))
+        for unit, button in self._unit_buttons.items():
+            button.setText(tr(f"nova.unit.{unit}"))
         self.cancel_button.setText(tr("nova.dialog.cancel"))
         self.save_button.setText(tr("nova.dialog.save"))
         self.delete_button.setText(tr("nova.dialog.delete"))
@@ -311,7 +360,7 @@ class NovaEntryDialog(QWidget):
         self._begin()
         moment = moment or next_full_hour()
         self._fill(moment, moment + timedelta(hours=1), False)
-        self._repeat_buttons["none"].setChecked(True)
+        self._set_repeat("none")
         self._flag_buttons["none"].setChecked(True)
         self.title_input.clear()
         self.notes_input.clear()
@@ -326,7 +375,7 @@ class NovaEntryDialog(QWidget):
             entry = self._store.find_event(entry.id) or entry
         self._editing = entry
         self._begin()
-        self._repeat_buttons[entry.recurrence].setChecked(True)
+        self._set_repeat(entry.recurrence)
         self._flag_buttons[entry.flag].setChecked(True)
         if isinstance(entry, Reminder):
             self._fill(entry.remind_at, entry.remind_at + timedelta(hours=1), False)
@@ -340,6 +389,28 @@ class NovaEntryDialog(QWidget):
         self.delete_button.show()
         self._select(kind)
         self._reveal()
+
+    def _set_repeat(self, recurrence: str) -> None:
+        recurrence = normalize_recurrence(recurrence)
+        count, unit = parse_recurrence(recurrence) or (2, "days")
+        self.every_input.setText(str(count))
+        self._unit_buttons[unit].setChecked(True)
+        self._repeat_buttons[recurrence if recurrence in RECURRENCES else CUSTOM].setChecked(True)
+        self._update_repeat()
+
+    def _update_repeat(self) -> None:
+        self.custom_box.setVisible(self._repeat_buttons[CUSTOM].isChecked())
+
+    def _recurrence(self) -> str | None:
+        name = next((name for name, button in self._repeat_buttons.items() if button.isChecked()), "none")
+        if name != CUSTOM:
+            return name
+        unit = next((name for name, button in self._unit_buttons.items() if button.isChecked()), "days")
+        count = self.every_input.text().strip()
+        if not count.isdigit() or not 1 <= int(count) <= MAX_REPEAT_COUNT:
+            self._set_error(tr("nova.error.interval"))
+            return None
+        return normalize_recurrence(f"{int(count)}:{unit}")
 
     def _begin(self) -> None:
         self._previous_focus = QApplication.focusWidget()
@@ -433,7 +504,9 @@ class NovaEntryDialog(QWidget):
         start = self._moment(self.start_day, self.start_time)
         if start is None:
             return
-        recurrence = next((name for name, button in self._repeat_buttons.items() if button.isChecked()), "none")
+        recurrence = self._recurrence()
+        if recurrence is None:
+            return
         flag = next((name for name, button in self._flag_buttons.items() if button.isChecked()), "none")
         try:
             if self._kind == REMINDER:

@@ -26,7 +26,8 @@ from pathlib import Path
 
 from src.init.memory.integration import configured_service
 from src.init.nova.agenda import agenda_groups, event_groups, reminder_groups
-from src.init.nova.entries import FLAG_ROLES, FLAGS, RECURRENCES, Event, Reminder, flagged_first
+from src.init.nova.entries import (FLAG_ROLES, FLAGS, MAX_REPEAT_COUNT, RECURRENCES, REPEAT_UNITS, Event, Reminder,
+                                   flagged_first, normalize_recurrence, parse_recurrence)
 from src.init.nova.journal import clipped, day_bounds, describe_week, local_moment, message_count, summarize
 from src.init.nova.sections import Section
 from src.init.tui import nova_text as fmt
@@ -37,6 +38,7 @@ from src.init.tui.widgets import clicked, style
 
 SECTIONS = list(Section)
 REMINDER, EVENT = "reminder", "event"
+CUSTOM = "custom"
 REFRESH_SECONDS = 1.5
 MESSAGE_LIMIT = 300
 DATE_FORMAT, MOMENT_FORMAT = "%Y-%m-%d", "%Y-%m-%d %H:%M"
@@ -77,15 +79,21 @@ class EntryForm:
         now = datetime.now().replace(second=0, microsecond=0)
         start = datetime.combine(day, now.time()) if day is not None and day != now.date() else now
         start = start.replace(minute=0) + timedelta(hours=1)
-        self.values = {"title": "", "notes": "", "repeat": "none", "flag": "none", "all_day": False,
+        self.values = {"title": "", "notes": "", "repeat": "none", "every": "2", "unit": "days", "flag": "none",
+                       "all_day": False,
                        "when": start.strftime(MOMENT_FORMAT), "starts": start.strftime(MOMENT_FORMAT),
                        "ends": (start + timedelta(hours=1)).strftime(MOMENT_FORMAT)}
+        if entry is not None:
+            recurrence = normalize_recurrence(entry.recurrence)
+            count, unit = parse_recurrence(recurrence) or (2, "days")
+            self.values.update(repeat=recurrence if recurrence in RECURRENCES else CUSTOM, every=str(count),
+                               unit=unit)
         if isinstance(entry, Reminder):
-            self.values.update(title=entry.title, notes=entry.notes, repeat=entry.recurrence, flag=entry.flag,
+            self.values.update(title=entry.title, notes=entry.notes, flag=entry.flag,
                                when=entry.remind_at.strftime(MOMENT_FORMAT))
         elif isinstance(entry, Event):
             moment = DATE_FORMAT if entry.all_day else MOMENT_FORMAT
-            self.values.update(title=entry.title, notes=entry.notes, repeat=entry.recurrence, flag=entry.flag,
+            self.values.update(title=entry.title, notes=entry.notes, flag=entry.flag,
                                all_day=entry.all_day, starts=entry.starts_at.strftime(moment),
                                ends=entry.ends_at.strftime(moment))
 
@@ -99,8 +107,10 @@ class EntryForm:
         else:
             fields += [Field("all_day", t("nova.dialog.all_day"), "toggle"),
                        Field("starts", t("nova.dialog.starts")), Field("ends", t("nova.dialog.ends"))]
-        fields += [Field("repeat", t("nova.dialog.repeat"), "choice", RECURRENCES),
-                   Field("flag", t("nova.dialog.flag"), "choice", FLAGS),
+        fields.append(Field("repeat", t("nova.dialog.repeat"), "choice", (*RECURRENCES, CUSTOM)))
+        if self.values["repeat"] == CUSTOM:
+            fields += [Field("every", t("tui.nova.every")), Field("unit", t("tui.nova.unit"), "choice", REPEAT_UNITS)]
+        fields += [Field("flag", t("nova.dialog.flag"), "choice", FLAGS),
                    Field("notes", t("nova.dialog.notes")), Field("save", t("nova.dialog.save"), "button")]
         if self.editing is not None:
             fields.append(Field("delete", t("nova.dialog.delete"), "button"))
@@ -118,6 +128,8 @@ class EntryForm:
             return t("nova.reminder" if self.kind == REMINDER else "nova.event")
         if item.key == "repeat":
             return t(f"nova.repeat.{value}")
+        if item.key == "unit":
+            return t(f"nova.unit.{value}")
         if item.key == "flag":
             return t(f"nova.flag.{value}")
         if item.kind == "toggle":
@@ -178,9 +190,9 @@ class EntryForm:
         item = self.current()
         if item.key == "kind":
             self.kind = EVENT if self.kind == REMINDER else REMINDER
-        elif item.key == "repeat":
-            options = list(RECURRENCES)
-            self.values["repeat"] = options[(options.index(self.values["repeat"]) + step) % len(options)]
+        elif item.key in ("repeat", "unit"):
+            options = list(item.options)
+            self.values[item.key] = options[(options.index(self.values[item.key]) + step) % len(options)]
         elif item.key == "flag":
             self.values["flag"] = FLAGS[(FLAGS.index(self.values["flag"]) + step) % len(FLAGS)]
         elif item.key == "all_day":
@@ -201,13 +213,22 @@ class EntryForm:
         except ValueError:
             raise ValueError(t("tui.nova.error_moment")) from None
 
+    def recurrence(self) -> str:
+        if self.values["repeat"] != CUSTOM:
+            return self.values["repeat"]
+        count = self.values["every"].strip()
+        if not count.isdigit() or not 1 <= int(count) <= MAX_REPEAT_COUNT:
+            raise ValueError(t("nova.error.interval"))
+        return normalize_recurrence(f"{int(count)}:{self.values['unit']}")
+
     def save(self, app) -> None:
         title = self.values["title"].strip()
         if not title:
             self.error = t("nova.dialog.title_placeholder")
             return
-        notes, recurrence, flag = self.values["notes"], self.values["repeat"], self.values["flag"]
+        notes, flag = self.values["notes"], self.values["flag"]
         try:
+            recurrence = self.recurrence()
             if self.kind == REMINDER:
                 when = self.moment("when")
                 if self.editing is None:
@@ -276,6 +297,8 @@ class EntryForm:
     def on_text(self, app, text) -> None:
         item = self.current()
         if item.kind == "text":
+            if item.key == "every":
+                text = "".join(char for char in text if char.isdigit())
             self.values[item.key] += text.replace("\r", "")
             self.error = ""
         elif text == " ":
