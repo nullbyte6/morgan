@@ -49,6 +49,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update startup greeting to briefly mention today's Nova reminders, events and overdue reminders when there are any
 - Update startup greeting to open with a plain salutation and the user's name, without Arlo introducing itself each time
 - Update workspace panel header buttons, the command palette and close buttons, to be 10% larger
+- Update workspaces documentation to name the Nova diary, not the removed conversation logs, as a place whose web links open in the default browser
 
 ## 26.10.1-beta (2026-10-01)
 

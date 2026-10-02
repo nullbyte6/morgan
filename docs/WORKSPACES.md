@@ -34,8 +34,8 @@ the rest of the interface reachable.
 
 ## Web links
 
-Web searches and website requests from the assistant, web links in conversation
-logs, YouTube selections and the repository link open in the operating system's
+Web searches and website requests from the assistant, web links in the Nova
+diary, YouTube selections and the repository link open in the operating system's
 default browser.
 
 ## Nova
