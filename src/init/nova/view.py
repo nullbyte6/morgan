@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QSizePo
 
 from src.init.lang import tr
 
+from . import formatting
 from .agenda import agenda_groups, event_groups, reminder_groups
 from .calendar_view import CalendarView
 from .dialog import EVENT, REMINDER, NovaEntryDialog
@@ -162,7 +163,7 @@ class NovaView(QWidget):
         now = datetime.now()
         self.title.setText(self._section.title)
         self.tagline.setText(self._section.tagline)
-        self.lists[Section.AGENDA].set_groups(agenda_groups(self._store, now), tr("nova.empty.agenda"))
+        self.lists[Section.AGENDA].set_groups(agenda_groups(self._store, now, formatting.day_heading), tr("nova.empty.agenda"))
         self.lists[Section.REMINDERS].set_groups(reminder_groups(self._store), tr("nova.empty.reminders"))
         self.lists[Section.EVENTS].set_groups(event_groups(self._store, now), tr("nova.empty.events"))
 

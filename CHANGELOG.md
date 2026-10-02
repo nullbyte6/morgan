@@ -25,6 +25,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Remove the /exit, /private and /reload slash commands in favour of the command palette, which gains Toggle private mode in the desktop and terminal versions and Reload modules in the desktop, while reload and ref still work as messages
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update Nova sidebar icons and star to be 15% larger
+- Update Nova storage, agenda grouping and the diary and week helpers to work without Qt, so the terminal version can read and write Nova and Arlo's Nova tools and agenda greeting work there too
 - Update services launcher to read the bundled core.json when the dev folder is not installed
 - Update startup greeting to briefly mention today's Nova reminders, events and overdue reminders when there are any
 - Update startup greeting to open with a plain salutation and the user's name, without Arlo introducing itself each time

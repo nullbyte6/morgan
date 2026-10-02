@@ -17,13 +17,13 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """How the agenda, reminder and event lists group what the store holds."""
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from typing import Callable
 
 from src.init.lang import tr
 
-from . import formatting
 from .entries import Entry, day_start
-from .store import NovaStore
+from .records import NovaRecords
 
 AGENDA_DAYS = 14
 HISTORY_LIMIT = 50
@@ -31,8 +31,8 @@ HISTORY_LIMIT = 50
 Groups = list[tuple[str, list[Entry]]]
 
 
-def agenda_groups(store: NovaStore, now: datetime) -> Groups:
-    """Overdue reminders, then each of the next days that has something on it."""
+def agenda_groups(store: NovaRecords, now: datetime, heading: Callable[[date, date], str]) -> Groups:
+    """Overdue reminders, then each of the next days that has something on it, titled by heading."""
     today = now.date()
     groups: Groups = [(tr("nova.group.overdue"), list(store.reminders(end=day_start(today), completed=False)))]
     last = today + timedelta(days=AGENDA_DAYS - 1)
@@ -41,17 +41,17 @@ def agenda_groups(store: NovaStore, now: datetime) -> Groups:
         for day in entry.days():
             if today <= day <= last:
                 by_day.setdefault(day, []).append(entry)
-    groups.extend((formatting.day_heading(day, today), by_day[day]) for day in sorted(by_day))
+    groups.extend((heading(day, today), by_day[day]) for day in sorted(by_day))
     return groups
 
 
-def reminder_groups(store: NovaStore) -> Groups:
+def reminder_groups(store: NovaRecords) -> Groups:
     completed = store.reminders(completed=True)[::-1][:HISTORY_LIMIT]
     return [(tr("nova.group.pending"), store.reminders(completed=False)),
             (tr("nova.group.completed"), completed)]
 
 
-def event_groups(store: NovaStore, now: datetime) -> Groups:
+def event_groups(store: NovaRecords, now: datetime) -> Groups:
     today = now.date()
     events = [event.next_from(today) for event in store.events()]
     upcoming = sorted((event for event in events if event.last_day >= today),

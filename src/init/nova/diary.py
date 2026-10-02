@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Arlo's diary: a day's agenda, memories and conversations, with every message shown as a log card."""
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta
 from getpass import getuser
 from pathlib import Path
 
@@ -33,35 +33,15 @@ from src.init.memory.integration import configured_service
 from . import formatting
 from .calendar_paint import CHEVRON_LEFT, CHEVRON_RIGHT
 from .entries import Entry, Reminder
+from .journal import clipped, day_bounds, local_moment, message_count
 from .messages import LogMessage, LogMessageCard, RemoveButton, code_font_family, parse_log
 from .rows import EntryRow
 from .store import NovaStore
 
 CHEVRON_DOWN = "\U000f0140"
-TOPIC_LIMIT = 140
 REFRESH_MS = 2000
 COPIED_MS = 1200
 MARKDOWN_SESSION = "markdown"
-
-
-def day_bounds(day: date) -> tuple[str, str]:
-    """The local day as UTC ISO timestamps, the form the memory database stores."""
-    start = datetime.combine(day, time.min).astimezone(timezone.utc)
-    end = datetime.combine(day + timedelta(days=1), time.min).astimezone(timezone.utc)
-    return start.isoformat(timespec="microseconds"), end.isoformat(timespec="microseconds")
-
-
-def local_moment(stamp: str) -> datetime:
-    return datetime.fromisoformat(stamp).astimezone().replace(tzinfo=None)
-
-
-def clipped(text: str) -> str:
-    text = " ".join(text.split())
-    return text if len(text) <= TOPIC_LIMIT else text[:TOPIC_LIMIT].rstrip() + "…"
-
-
-def message_count(count: int) -> str:
-    return tr("nova.diary.message_one") if count == 1 else tr("nova.diary.messages", count=count)
 
 
 def stored_messages(rows: list[dict]) -> list[LogMessage]:

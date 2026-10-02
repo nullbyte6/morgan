@@ -37,10 +37,10 @@ def _shared():
     with _lock:
         if _store is None:
             try:
-                from .store import NovaStore
-            except ImportError as error:
-                raise ValueError("Nova is only available in the desktop version") from error
-            _store = NovaStore()
+                from .store import NovaStore as Store
+            except ImportError:
+                from .records import NovaRecords as Store
+            _store = Store()
         return _store
 
 
