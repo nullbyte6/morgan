@@ -210,7 +210,7 @@ def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str 
                 entry_id, reminder.title if title is None else title, moment,
                 reminder.notes if notes is None else notes,
                 reminder.recurrence if repeat is None else repeat))}
-        event = store.event(entry_id)
+        event = store.find_event(entry_id)
         if event is None:
             raise ValueError("No reminder or event has that ID; use list_agenda or search_agenda to find it")
         if remind_at:

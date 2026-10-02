@@ -853,7 +853,7 @@ class NovaOverlay(Overlay):
             return
         kind, value = key
         if kind == "entry":
-            stored = (self.store.reminder(value.id) if isinstance(value, Reminder) else self.store.event(value.id))
+            stored = (self.store.reminder(value.id) if isinstance(value, Reminder) else self.store.find_event(value.id))
             if stored is not None:
                 self.form = EntryForm(self.store, self.close_form, stored)
         elif kind == "session":

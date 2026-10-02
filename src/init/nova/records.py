@@ -199,7 +199,7 @@ class NovaRecords:
                 VALUES(?,?,?,?,?,?,?,?)""",
                        (event_id, title, notes, starts, ends, int(all_day), timestamp(), recurrence))
         self._changed()
-        return self.event(event_id)
+        return self.find_event(event_id)
 
     def update_event(self, event_id: str, title: str, starts_at: datetime, ends_at: datetime, *,
                      all_day: bool = False, notes: str = "", recurrence: str = "none") -> Event:
@@ -213,7 +213,7 @@ class NovaRecords:
         if not updated:
             raise ValueError("The event no longer exists")
         self._changed()
-        return self.event(event_id)
+        return self.find_event(event_id)
 
     def delete_event(self, event_id: str) -> bool:
         with self.event_db.connect(write=True) as db:
@@ -222,7 +222,7 @@ class NovaRecords:
             self._changed()
         return deleted
 
-    def event(self, event_id: str) -> Event | None:
+    def find_event(self, event_id: str) -> Event | None:
         with self.event_db.connect() as db:
             row = db.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone()
         return Event.from_row(row) if row else None

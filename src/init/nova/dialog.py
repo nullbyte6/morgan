@@ -291,7 +291,7 @@ class NovaEntryDialog(QWidget):
 
     def open_edit(self, entry: Entry) -> None:
         if not isinstance(entry, Reminder):
-            entry = self._store.event(entry.id) or entry
+            entry = self._store.find_event(entry.id) or entry
         self._editing = entry
         self._begin()
         self._repeat_buttons[entry.recurrence].setChecked(True)
