@@ -88,6 +88,7 @@ class GitBranchIndicator(QToolButton):
 
 class ModelSelector(QComboBox):
     model_selected = Signal(str)
+    POPUP_GAP = 6
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -151,9 +152,20 @@ class ModelSelector(QComboBox):
         self.refresh(self.currentData())
         super().showPopup()
         popup = self.view().window()
-        top = self.mapToGlobal(QPoint(0, 0)).y() - popup.height()
-        if top >= self.screen().availableGeometry().top():
+        popup.removeEventFilter(self)
+        popup.installEventFilter(self)
+        self._anchor_popup(popup)
+
+    def _anchor_popup(self, popup):
+        top = self.mapToGlobal(QPoint(0, 0)).y() - popup.frameGeometry().height() - self.POPUP_GAP
+        if top >= self.screen().availableGeometry().top() and popup.y() != top:
             popup.move(popup.x(), top)
+
+    def eventFilter(self, watched, event):
+        if (watched is self.view().window() and watched.isVisible()
+                and event.type() in (QEvent.Type.Show, QEvent.Type.Resize, QEvent.Type.Move)):
+            self._anchor_popup(watched)
+        return super().eventFilter(watched, event)
 
 
 class PrivacyIndicator(QPushButton):
