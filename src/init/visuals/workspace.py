@@ -593,7 +593,8 @@ class Workspace(QWidget):
         panel_id: str | None = None,
         target_id: str | None = None,
         orientation: Qt.Orientation | None = None,
-        direction: Qt.Key | None = None) -> str:
+        direction: Qt.Key | None = None,
+        size: int | None = None) -> str:
         """Insert a new panel by splitting an existing workspace leaf."""
 
         if direction is not None:
@@ -635,7 +636,7 @@ class Workspace(QWidget):
                 orientation = self._next_orientation
 
             self._insert_panel(target, panel, orientation,
-                               before=direction in (Qt.Key_Left, Qt.Key_Up))
+                               before=direction in (Qt.Key_Left, Qt.Key_Up), size=size)
 
             self._next_orientation = (
                 Qt.Vertical
@@ -729,7 +730,7 @@ class Workspace(QWidget):
         target: WorkspacePanel,
         panel: WorkspacePanel,
         orientation: Qt.Orientation,
-        *, before: bool = False) -> None:
+        *, before: bool = False, size: int | None = None) -> None:
         """Insert a panel and animate the new binary split."""
         parent = target.parentWidget()
         focus = self.focusWidget()
@@ -763,7 +764,11 @@ class Workspace(QWidget):
         start_sizes = [available, 0]
         if before:
             start_sizes.reverse()
-        end_sizes = [available // 2, available - available // 2]
+        share = (available // 2 if size is None
+                 else min(available // 2, round(available * size / max(1, extent))))
+        end_sizes = [available - share, share]
+        if before:
+            end_sizes.reverse()
 
         split.setSizes(start_sizes)
         split.show()

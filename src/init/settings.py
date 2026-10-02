@@ -157,6 +157,7 @@ class SettingsView(QWidget):
     mute_changed = Signal(bool)
     language_changed = Signal(str)
     model_changed = Signal(str)
+    update_requested = Signal()
 
     def __init__(self, subtitles_enabled: bool,
                  orb_pulse_enabled: bool, parent=None, *, muted=False, ephemeral_steps_enabled=True):
@@ -315,6 +316,15 @@ class SettingsView(QWidget):
         themes_folder_row.addWidget(self.themes_folder_button)
         layout.addLayout(themes_folder_row)
         layout.addStretch()
+
+        self.update_button = QPushButton()
+        self.update_button.setObjectName("themesFolderButton")
+        self.update_button.setCursor(Qt.PointingHandCursor)
+        update_row = QHBoxLayout()
+        update_row.addStretch()
+        update_row.addWidget(self.update_button)
+        layout.addLayout(update_row)
+        self.update_button.clicked.connect(self.update_requested.emit)
 
         self.remove_memories_button = QPushButton()
         self.remove_memories_button.setObjectName("removeMemoriesButton")
@@ -485,6 +495,9 @@ class SettingsView(QWidget):
             self.theme_dropdown.setAccessibleName(tr("ui.theme"))
             self.theme_dropdown.setToolTip(tr("ui.theme_hint"))
             self.themes_folder_button.setText(tr("ui.open_themes_folder"))
+        if hasattr(self, "update_button"):
+            self.update_button.setText(tr("ui.check_updates"))
+            self.update_button.setToolTip(tr("ui.check_updates_hint"))
         if hasattr(self, "backup_button"):
             self.backup_button.setText(tr("ui.backup_data"))
             self.backup_button.setToolTip(tr("ui.backup_data_hint"))

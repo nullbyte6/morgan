@@ -6,6 +6,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 - Add a health view, opened from the command palette, that checks Ollama, how much of the main model sits on the GPU and how long it took to load, the graphics adapters against the installed CUDA or ROCm PyTorch build, and the voice service device and CosyVoice load time
 - Add Back Up and Restore buttons to Settings, next to Remove Memories, that save the memory database, Nova's reminders and events and the daily logs to one zip file and bring them back from it, migrating older backups to the current schema
+- Add Check for Updates button in Settings, above Remove Memories, and a command palette action that look for newer versions in the repository's GitHub releases, let the user choose one, download ArloSetup.exe to the Downloads folder with a progress bar docked at the bottom of the current workspace, install it, delete the installer and start Arlo again
 - Add Copy day and Export buttons to the Nova diary that copy the day as Markdown or save it to a Markdown file, with its agenda, remembered facts and every conversation message
 - Add Copy report button to the health view that copies the results with the version, system and check time as Markdown for bug reports
 - Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen

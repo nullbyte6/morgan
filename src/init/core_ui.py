@@ -91,7 +91,7 @@ WORKSPACE_VIEW_CONFIG = {
 
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
-from src.init.brain import MODEL_OVERRIDE, is_cloud_model, kill_self
+from src.init.brain import MODEL_OVERRIDE, get_version, is_cloud_model, kill_self
 from src.init.config import DEFAULTS, load_dev_file, load_config, save_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
@@ -123,6 +123,8 @@ from src.init.desktop.command_palette import Command, CommandPalette, CommandReg
 from src.init.desktop.activity_trail import ActivityTrail
 from src.init.desktop.health_view import HealthView
 from src.init.health import collect as collect_health, new_version_seen
+from src.init.desktop.update_view import HEIGHT as UPDATE_HEIGHT, UpdateView
+from src.init.updates import available_releases, install as install_update, relaunch_command
 from src.init.desktop.session import DesktopSession
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
@@ -139,6 +141,7 @@ class AssistantWindow(DesktopWindow):
     model_request = Signal(str)
     reminder_answered = Signal(object, str)
     health_checked = Signal(object)
+    updates_checked = Signal(object, object)
     username = getuser().capitalize()
 
     def __init__(self):
@@ -211,6 +214,8 @@ class AssistantWindow(DesktopWindow):
         self._workspace_exit_ready = False
         self.wake_inbox = None
         self.nova_store = None
+        self._update_running = False
+        self.updates_checked.connect(self.show_updates, Qt.ConnectionType.QueuedConnection)
 
         self.build_ui()
         self.build_command_palette()
@@ -657,6 +662,10 @@ class AssistantWindow(DesktopWindow):
                                 ("diary", "diario")))
         commands.append(Command("workspace.health", "palette.health", self.open_health_view,
                                 ("health", "diagnostics", "salud", "diagnóstico", "estado")))
+        commands.append(Command("app.update", "palette.update", self.check_for_updates,
+                                ("update", "upgrade", "version", "release", "actualizar", "actualización",
+                                 "versión", "更新"),
+                                lambda: not self._update_running))
         commands.append(Command("session.private", "palette.private", self.toggle_private_mode,
                                 ("private", "privacy", "privado", "privacidad", "incognito", "隐私")))
         commands.append(Command("app.reload", "palette.reload", self.reload_modules,
@@ -931,6 +940,7 @@ class AssistantWindow(DesktopWindow):
             view.orb_pulse_changed.connect(self.toggle_orb_speech_pulse)
             view.ephemeral_steps_changed.connect(self.toggle_ephemeral_steps)
             view.language_changed.connect(self.change_language)
+            view.update_requested.connect(self.check_for_updates)
             return view
         raise ValueError(f"Unknown workspace view: {view_key}")
 
@@ -1005,6 +1015,75 @@ class AssistantWindow(DesktopWindow):
     def show_failed_health(self, checks) -> None:
         if not self.quitting and any(check.status == "error" for check in checks):
             self.open_health_view(checks)
+
+    def check_for_updates(self) -> None:
+        """Look for newer releases in the repository and offer to install one."""
+        if self._update_running or self.quitting:
+            return
+        self._update_running = True
+
+        def run():
+            try:
+                result, error = available_releases(), None
+            except Exception as failure:
+                logging.getLogger("assistant.update").exception("The releases could not be read")
+                result, error = [], failure
+            try:
+                self.updates_checked.emit(result, error)
+            except RuntimeError:
+                pass
+
+        threading.Thread(target=run, name="update-check", daemon=True).start()
+
+    @Slot(object, object)
+    def show_updates(self, releases, error) -> None:
+        self._update_running = False
+        if self.quitting:
+            return
+        title = tr("update.title")
+        if error is not None:
+            QMessageBox.warning(self, title, tr("update.check_failed", error=error))
+            return
+        if not releases:
+            QMessageBox.information(self, title, tr("update.up_to_date", version=get_version()))
+            return
+        labels = [tr("update.choice", version=release.version, date=release.published or "?",
+                     size=f"{release.size / 1024 ** 2:.0f}") for release in releases]
+        label, accepted = QInputDialog.getItem(
+            self, title, tr("update.choose", version=get_version()), labels, 0, False)
+        if not accepted:
+            return
+        release = releases[labels.index(label)]
+        answer = QMessageBox.question(
+            self, title, tr("update.confirm", version=release.version),
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer == QMessageBox.Yes:
+            self.start_update(release)
+
+    def start_update(self, release) -> None:
+        self._update_running = True
+        view = UpdateView(release)
+        view.setProperty("workspaceViewKey", "update")
+        view.ready.connect(self.install_update)
+        view.failed.connect(lambda _message: setattr(self, "_update_running", False))
+        view.destroyed.connect(lambda: setattr(self, "_update_running", False))
+        try:
+            self.workspace.open_panel(title=tr("update.title"), content=view,
+                                      direction=Qt.Key_Down, size=UPDATE_HEIGHT)
+        except Exception:
+            self._update_running = False
+            logging.getLogger("assistant.workspace").exception("Failed to open the update view")
+
+    @Slot(object)
+    def install_update(self, path) -> None:
+        try:
+            install_update(path, *relaunch_command())
+        except Exception as error:
+            self._update_running = False
+            logging.getLogger("assistant.update").exception("The installer could not be started")
+            QMessageBox.warning(self, tr("update.title"), tr("ui.error", error=error))
+            return
+        QTimer.singleShot(800, self.exit_app)
 
     def open_nova_diary(self) -> None:
         """Show the Nova diary, reusing an open Nova panel when there is one."""
