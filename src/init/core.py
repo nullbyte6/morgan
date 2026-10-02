@@ -178,7 +178,9 @@ class Assistant:
             request_text = (f"Write one short, natural greeting of at most twelve words in {language} for the user, "
                             f"{self.username}, offering your help. ")
         prompt = (f"You are {self.name}, a personal desktop assistant that has just started. "
-                  f"{request_text}Infer your grammatical gender from your name "
+                  f"{request_text}Start with a simple salutation in {language} and the user's name, like \"Hi {self.username}, ...\", "
+                  "and do not introduce yourself or mention your own name, since the user already knows you. "
+                  "Infer your grammatical gender from your name "
                   "and use it consistently. Use a "
                   f"{load_config()['personality']['tone']} tone and vary the wording. "
                   "Reply with the greeting only, without quotes, emojis or Markdown.")

@@ -12,6 +12,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add pinned memories that are always placed first in the model's context, and a Nova Memories section to review every stored memory and pin, edit or remove it
 - Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
 - Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
+- Update startup greeting to open with a plain salutation and the user's name, without Arlo introducing itself each time
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update services launcher to read the bundled core.json when the dev folder is not installed
 - Update startup greeting to briefly mention today's Nova reminders, events and overdue reminders when there are any
