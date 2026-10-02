@@ -38,6 +38,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Remove the /exit, /private and /reload slash commands in favour of the command palette, which gains Toggle private mode in the desktop and terminal versions and Reload modules in the desktop, while reload and ref still work as messages
 - Update flag selector of the Nova overlay to a horizontal track with a colored pill for the chosen flag, like the permissions selector
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
+- Update Nova diary header to place the copy, export, previous entry and today buttons in a row below the day and the previous and next day arrows
 - Update Nova flag and custom repeat choices of the overlay and form to symbols, with one, two or three flags for unimportant, important and high priority and a pencil for Custom, and remove the translated flag names and Custom label
 - Update Nova flag symbols in the desktop overlay to have a space between them
 - Update Nova lists to show flagged entries first, red then yellow then green, in the agenda days, overdue and pending reminders, upcoming events and the day lists of the diary and the terminal version
