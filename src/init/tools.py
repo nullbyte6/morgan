@@ -87,7 +87,7 @@ from src.init.self_code import (get_repo_lnk, get_repo, list_code,
 from src.diagnostics.tools import (check_system_health, check_disk_health,
                                    check_security_health, kill_self)
 from src.init.editor import open_in_editor
-from src.init.memory.tools import (remember, recall, forget, list_memories,
+from src.init.memory.tools import (remember, recall, forget, pin_memory, list_memories,
                                    search_words, word_instances, read_conversation,
                                    read_memory_message)
 from src.init.nova.tools import (add_reminder, add_event, list_agenda, search_agenda,
@@ -100,6 +100,7 @@ TOOLS = [
     remember,
     recall,
     forget,
+    pin_memory,
     list_memories,
     search_words,
     word_instances,

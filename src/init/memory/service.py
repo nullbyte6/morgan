@@ -245,7 +245,7 @@ class MemoryService:
     def list_memories(self, *, category=None, include_inactive=False, limit=None, offset=0):
         limit = min(self.max_results, max(1, limit or self.max_results))
         with self.db.connect() as db:
-            rows = [dict(row) for row in db.execute("""SELECT id,content,category,memory_key,status,
+            rows = [dict(row) for row in db.execute("""SELECT id,content,category,memory_key,status,pinned,
                 created_at,modified_at,expires_at,origin,confidence FROM memories
                 WHERE (? OR (status='active' AND (expires_at IS NULL OR expires_at > ?)))
                   AND (? IS NULL OR category=?) ORDER BY modified_at DESC,id LIMIT ? OFFSET ?""",

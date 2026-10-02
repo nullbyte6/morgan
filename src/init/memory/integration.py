@@ -87,6 +87,8 @@ def memory_instructions():
         "for a preference, or an existing memory_id when updating. Use recall to find facts or conversations "
         "from previous sessions and cite their source. Before saying a fact from a previous session is unavailable, "
         "use recall to verify it. Use list_memories to identify a memory before forget. "
+        "Pinned memories are always in context: use pin_memory to pin or unpin one on explicit request, "
+        "and remember with pinned true when the user asks to always remember something. "
         "Use recall mode=phrase for exact consecutive words or mode=all to require every word; "
         "narrow by session_id, role or timezone-aware since/until when appropriate. "
         "Use search_words to discover indexed words and counts, and word_instances to locate each "
@@ -126,7 +128,9 @@ def explicit_intent(prompt, action):
               r"(?:(?:can you|could you|would you|puedes|podrias)\s+)?"
               r"(?:(?:please|por favor)\s+)?")
     expressions = {
-        "remember": r"(?:remember|memorize|recuerda|recordar|recuerdame|memoriza|memorizar|anota|guarda|guardar|save|store|update|actualiza|actualizar|corrige)\b",
+        "remember": r"(?:remember|always remember|siempre recuerda|memorize|recuerda|recordar|recuerdame|memoriza|memorizar|anota|guarda|guardar|save|store|update|actualiza|actualizar|corrige)\b",
         "forget": r"(?:forget|olvida|olvidar|borra|borrar|elimina|eliminar|delete|remove)\b",
+        "pin": r"(?:pin|unpin|fija|fijar|desfija|desfijar|ancla|anclar|desancla|desanclar|always remember|"
+               r"recuerda siempre|siempre recuerda)\b",
     }
     return re.search(prefix + expressions[action], prompt) is not None

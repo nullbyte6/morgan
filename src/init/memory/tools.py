@@ -33,9 +33,10 @@ def _turn(action=None):
 
 
 def remember(content: str, category: str = "fact", key: str | None = None,
-             memory_id: str | None = None, expires_at: str | None = None) -> dict:
+             memory_id: str | None = None, expires_at: str | None = None, pinned: bool = False) -> dict:
     """Store explicitly requested durable information. Reuse key to supersede a preference;
     pass memory_id to update that exact memory. Never store credentials or inferred facts.
+    pinned true keeps it always in context, for requests such as "always remember that ...".
     """
     try:
         turn = _turn("remember")
@@ -46,6 +47,8 @@ def remember(content: str, category: str = "fact", key: str | None = None,
             memory = turn.service.remember(content, category=category, key=key, expires_at=expires_at,
                                            source_message_id=turn.message_id,
                                            source_ref="session:" + turn.session_id if turn.session_id else None)
+        if pinned and turn.service.pin_memory(memory["id"]):
+            memory = turn.service.get_memory(memory["id"])
         return {"ok": True, "memory": memory}
     except Exception as error:
         return {"ok": False, "error": str(error)}
@@ -81,8 +84,21 @@ def forget(memory_id: str) -> dict:
         return {"ok": False, "error": str(error)}
 
 
+def pin_memory(memory_id: str, pinned: bool = True) -> dict:
+    """Pin one memory by exact ID so it is always in context, or unpin it with pinned false,
+    on explicit user request. Use list_memories or recall to find the ID first.
+    """
+    try:
+        turn = _turn("pin")
+        if not turn.service.pin_memory(memory_id, pinned):
+            raise ValueError("No active memory has that ID")
+        return {"ok": True, "memory": turn.service.get_memory(memory_id)}
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+
+
 def list_memories(category: str | None = None, limit: int = 8, offset: int = 0) -> dict:
-    """List current confirmed memories and IDs, with bounded pagination."""
+    """List current confirmed memories and IDs, pinned ones marked, with bounded pagination."""
     try:
         return {"ok": True, "memories": _turn().service.list_memories(category=category, limit=limit, offset=offset)}
     except Exception as error:

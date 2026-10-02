@@ -106,7 +106,7 @@ register("get_version get_current_time calculate get_city_distance get_weather "
 register("search_web read_web_page", ToolSpec(True, "web", ancillary=True, verification_capable=True))
 register("recall list_memories search_words word_instances read_conversation read_memory_message",
          ToolSpec(False, "memory"))
-register("remember forget", ToolSpec(True, "memory"))
+register("remember forget pin_memory", ToolSpec(True, "memory"))
 register("list_media_sessions identify_playing_song get_current_media", ToolSpec(False, "media"))
 register("control_media play_youtube_song play_spotify_song play_spotify_album play_spotify_playlist",
          ToolSpec(True, "media"))
