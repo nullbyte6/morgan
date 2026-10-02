@@ -72,41 +72,46 @@ def _day(value: str, name: str) -> date:
 def _reminder(reminder) -> dict:
     return {"id": reminder.id, "kind": "reminder", "title": reminder.title, "notes": reminder.notes,
             "remind_at": reminder.remind_at.isoformat(timespec="minutes"),
-            "completed": reminder.is_completed, "repeat": reminder.recurrence}
+            "completed": reminder.is_completed, "repeat": reminder.recurrence, "flag": reminder.flag}
 
 
 def _event(event) -> dict:
     return {"id": event.id, "kind": "event", "title": event.title, "notes": event.notes,
             "starts_at": event.starts_at.isoformat(timespec="minutes"),
             "ends_at": event.ends_at.isoformat(timespec="minutes"), "all_day": event.all_day,
-            "repeat": event.recurrence}
+            "repeat": event.recurrence, "flag": event.flag}
 
 
 def _entry(entry) -> dict:
     return _event(entry) if hasattr(entry, "starts_at") else _reminder(entry)
 
 
-def add_reminder(title: str, remind_at: str, notes: str = "", repeat: str = "none") -> dict:
+def add_reminder(title: str, remind_at: str, notes: str = "", repeat: str = "none",
+                 flag: str = "none") -> dict:
     """Save a reminder in Nova, the user's agenda, announced as a Windows notification when due.
     remind_at is local wall-clock time as ISO, e.g. 2026-10-02T09:30; check get_current_time
     for relative requests. Persists across restarts. Prefer this over schedule_notification
     for anything the user asks to be reminded of at a date or time.
     repeat is none, daily, weekly or monthly; a repeating reminder comes back at the same time.
+    flag is none, green (unimportant), yellow (important) or red (high priority), like the flags
+    of the iOS Reminders app.
     """
     try:
         moment = _moment(remind_at, "remind_at")
         if moment < datetime.now() - timedelta(minutes=1):
             raise ValueError("remind_at is in the past")
-        return {"ok": True, "reminder": _reminder(_shared().add_reminder(title, moment, notes, repeat))}
+        return {"ok": True, "reminder": _reminder(_shared().add_reminder(title, moment, notes, repeat, flag))}
     except Exception as error:
         return {"ok": False, "error": str(error)}
 
 
 def add_event(title: str, starts_at: str, ends_at: str | None = None,
-              all_day: bool = False, notes: str = "", repeat: str = "none") -> dict:
+              all_day: bool = False, notes: str = "", repeat: str = "none", flag: str = "none") -> dict:
     """Save an event in Nova's calendar. Times are local ISO, e.g. 2026-10-02T18:00.
     ends_at defaults to one hour after starts_at, or the same day when all_day.
     repeat is none, daily, weekly or monthly for events that happen again, e.g. a weekly class.
+    flag is none, green (unimportant), yellow (important) or red (high priority), like the flags
+    of the iOS Reminders app.
     """
     try:
         starts = _moment(starts_at, "starts_at")
@@ -115,7 +120,8 @@ def add_event(title: str, starts_at: str, ends_at: str | None = None,
         else:
             ends = starts if all_day else starts + timedelta(hours=1)
         return {"ok": True, "event": _event(_shared().add_event(title, starts, ends, all_day=all_day,
-                                                               notes=notes, recurrence=repeat))}
+                                                               notes=notes, recurrence=repeat,
+                                                               flag=flag))}
     except Exception as error:
         return {"ok": False, "error": str(error)}
 
@@ -155,6 +161,10 @@ def search_agenda(query: str, limit: int = 20) -> dict:
         return {"ok": False, "error": str(error)}
 
 
+def _flag_note(entry) -> str:
+    return {"yellow": ", important", "red": ", high priority"}.get(entry.flag, "")
+
+
 def agenda_brief(now: datetime | None = None, limit: int = 8) -> str:
     """Today's pending reminders and events and the number of overdue reminders, in a few words."""
     now = now or datetime.now()
@@ -169,9 +179,9 @@ def agenda_brief(now: datetime | None = None, limit: int = 8) -> str:
                 when = f"{entry.starts_at:%H:%M}"
             else:
                 when = f"until {entry.ends_at:%H:%M}" if entry.ends_at.date() == today else "all day"
-            parts.append(f"event {entry.title} ({when})")
+            parts.append(f"event {entry.title} ({when}{_flag_note(entry)})")
         elif not entry.is_completed:
-            parts.append(f"reminder {entry.title} ({entry.remind_at:%H:%M})")
+            parts.append(f"reminder {entry.title} ({entry.remind_at:%H:%M}{_flag_note(entry)})")
     overdue = sum(1 for reminder in store.overdue(now) if reminder.remind_at.date() < today)
     if overdue:
         parts.append(f"{overdue} overdue reminder{'s' if overdue > 1 else ''} from earlier days")
@@ -192,12 +202,13 @@ def complete_reminder(reminder_id: str, completed: bool = True) -> dict:
 def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str | None = None,
                         starts_at: str | None = None, ends_at: str | None = None,
                         all_day: bool | None = None, notes: str | None = None,
-                        repeat: str | None = None) -> dict:
+                        repeat: str | None = None, flag: str | None = None) -> dict:
     """Change or reschedule one Nova reminder or event by exact ID from list_agenda, keeping its ID.
     Pass only the fields to change; times are local ISO, e.g. 2026-10-02T17:00.
     remind_at applies to reminders; starts_at, ends_at and all_day to events. Moving an event's
     start without ends_at keeps its duration. Changing a repeating entry changes the whole series.
-    repeat is none, daily, weekly or monthly.
+    repeat is none, daily, weekly or monthly. flag is none, green (unimportant), yellow (important)
+    or red (high priority); none removes the flag.
     """
     try:
         store = _shared()
@@ -209,7 +220,8 @@ def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str 
             return {"ok": True, "reminder": _reminder(store.update_reminder(
                 entry_id, reminder.title if title is None else title, moment,
                 reminder.notes if notes is None else notes,
-                reminder.recurrence if repeat is None else repeat))}
+                reminder.recurrence if repeat is None else repeat,
+                reminder.flag if flag is None else flag))}
         event = store.find_event(entry_id)
         if event is None:
             raise ValueError("No reminder or event has that ID; use list_agenda or search_agenda to find it")
@@ -221,7 +233,8 @@ def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str 
             entry_id, event.title if title is None else title, starts, ends,
             all_day=event.all_day if all_day is None else all_day,
             notes=event.notes if notes is None else notes,
-            recurrence=event.recurrence if repeat is None else repeat))}
+            recurrence=event.recurrence if repeat is None else repeat,
+            flag=event.flag if flag is None else flag))}
     except Exception as error:
         return {"ok": False, "error": str(error)}
 

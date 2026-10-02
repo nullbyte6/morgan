@@ -27,7 +27,7 @@ from src.init.config import HOME_PATH
 from src.init.memory.database import timestamp
 
 from .database import EventDatabase, ReminderDatabase
-from .entries import (Entry, Event, NOTES_LIMIT, RECURRENCES, Reminder, TITLE_LIMIT, day_start,
+from .entries import (Entry, Event, FLAGS, NOTES_LIMIT, RECURRENCES, Reminder, TITLE_LIMIT, day_start,
                       next_occurrence, to_local)
 
 
@@ -45,6 +45,13 @@ def _recurrence(value: str) -> str:
     value = str(value or "none").strip().casefold()
     if value not in RECURRENCES:
         raise ValueError("The repetition must be none, daily, weekly or monthly")
+    return value
+
+
+def _flag(value: str) -> str:
+    value = str(value or "none").strip().casefold()
+    if value not in FLAGS:
+        raise ValueError("The flag must be none, green, yellow or red")
     return value
 
 
@@ -78,27 +85,28 @@ class NovaRecords:
             listener()
 
     def add_reminder(self, title: str, remind_at: datetime, notes: str = "",
-                     recurrence: str = "none") -> Reminder:
+                     recurrence: str = "none", flag: str = "none") -> Reminder:
         title, notes = _text(title, notes)
-        recurrence = _recurrence(recurrence)
+        recurrence, flag = _recurrence(recurrence), _flag(flag)
         reminder_id = uuid.uuid4().hex
         with self.reminder_db.connect(write=True) as db:
-            db.execute("""INSERT INTO reminders(id,title,notes,remind_at,created_at,recurrence)
-                VALUES(?,?,?,?,?,?)""", (reminder_id, title, notes, to_local(remind_at), timestamp(), recurrence))
+            db.execute("""INSERT INTO reminders(id,title,notes,remind_at,created_at,recurrence,flag)
+                VALUES(?,?,?,?,?,?,?)""",
+                       (reminder_id, title, notes, to_local(remind_at), timestamp(), recurrence, flag))
         self._changed()
         return self.reminder(reminder_id)
 
     def update_reminder(self, reminder_id: str, title: str, remind_at: datetime,
-                        notes: str = "", recurrence: str = "none") -> Reminder:
+                        notes: str = "", recurrence: str = "none", flag: str = "none") -> Reminder:
         title, notes = _text(title, notes)
-        recurrence = _recurrence(recurrence)
+        recurrence, flag = _recurrence(recurrence), _flag(flag)
         moment = to_local(remind_at)
         with self.reminder_db.connect(write=True) as db:
             updated = db.execute(
-                """UPDATE reminders SET title=?,notes=?,recurrence=?,
+                """UPDATE reminders SET title=?,notes=?,recurrence=?,flag=?,
                 notified_at=CASE WHEN remind_at<>? THEN NULL ELSE notified_at END,
                 remind_at=? WHERE id=?""",
-                (title, notes, recurrence, moment, moment, reminder_id)).rowcount
+                (title, notes, recurrence, flag, moment, moment, reminder_id)).rowcount
         if not updated:
             raise ValueError("The reminder no longer exists")
         self._changed()
@@ -129,7 +137,7 @@ class NovaRecords:
         if current.is_recurring:
             if current.remind_at <= until:
                 return current
-            return self.add_reminder(current.title, until, current.notes)
+            return self.add_reminder(current.title, until, current.notes, flag=current.flag)
         with self.reminder_db.connect(write=True) as db:
             db.execute("UPDATE reminders SET remind_at=?,notified_at=NULL,completed_at=NULL WHERE id=?",
                        (to_local(until), reminder_id))
@@ -189,27 +197,30 @@ class NovaRecords:
         return due
 
     def add_event(self, title: str, starts_at: datetime, ends_at: datetime, *,
-                  all_day: bool = False, notes: str = "", recurrence: str = "none") -> Event:
+                  all_day: bool = False, notes: str = "", recurrence: str = "none",
+                  flag: str = "none") -> Event:
         title, notes = _text(title, notes)
         starts, ends = _span(starts_at, ends_at, all_day)
-        recurrence = _recurrence(recurrence)
+        recurrence, flag = _recurrence(recurrence), _flag(flag)
         event_id = uuid.uuid4().hex
         with self.event_db.connect(write=True) as db:
-            db.execute("""INSERT INTO events(id,title,notes,starts_at,ends_at,all_day,created_at,recurrence)
-                VALUES(?,?,?,?,?,?,?,?)""",
-                       (event_id, title, notes, starts, ends, int(all_day), timestamp(), recurrence))
+            db.execute("""INSERT INTO events(id,title,notes,starts_at,ends_at,all_day,created_at,recurrence,flag)
+                VALUES(?,?,?,?,?,?,?,?,?)""",
+                       (event_id, title, notes, starts, ends, int(all_day), timestamp(), recurrence, flag))
         self._changed()
         return self.find_event(event_id)
 
     def update_event(self, event_id: str, title: str, starts_at: datetime, ends_at: datetime, *,
-                     all_day: bool = False, notes: str = "", recurrence: str = "none") -> Event:
+                     all_day: bool = False, notes: str = "", recurrence: str = "none",
+                     flag: str = "none") -> Event:
         title, notes = _text(title, notes)
         starts, ends = _span(starts_at, ends_at, all_day)
-        recurrence = _recurrence(recurrence)
+        recurrence, flag = _recurrence(recurrence), _flag(flag)
         with self.event_db.connect(write=True) as db:
             updated = db.execute("""UPDATE events SET title=?,notes=?,starts_at=?,ends_at=?,all_day=?,
-                recurrence=? WHERE id=?""",
-                                 (title, notes, starts, ends, int(all_day), recurrence, event_id)).rowcount
+                recurrence=?,flag=? WHERE id=?""",
+                                 (title, notes, starts, ends, int(all_day), recurrence, flag,
+                                  event_id)).rowcount
         if not updated:
             raise ValueError("The event no longer exists")
         self._changed()

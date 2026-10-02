@@ -28,6 +28,8 @@ TITLE_LIMIT = 200
 NOTES_LIMIT = 4000
 MAX_SPAN_DAYS = 366
 RECURRENCES = ("none", "daily", "weekly", "monthly")
+FLAGS = ("none", "green", "yellow", "red")
+FLAG_ROLES = {"green": "success", "yellow": "warning", "red": "error"}
 STEP_DAYS = {"daily": 1, "weekly": 7}
 
 
@@ -84,6 +86,7 @@ class Reminder:
     completed_at: str | None = None
     notified_at: str | None = None
     recurrence: str = "none"
+    flag: str = "none"
 
     @property
     def is_recurring(self) -> bool:
@@ -111,7 +114,8 @@ class Reminder:
     @classmethod
     def from_row(cls, row) -> Reminder:
         return cls(row["id"], row["title"], row["notes"], from_local(row["remind_at"]),
-                   row["created_at"], row["completed_at"], row["notified_at"], row["recurrence"])
+                   row["created_at"], row["completed_at"], row["notified_at"], row["recurrence"],
+                   row["flag"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +128,7 @@ class Event:
     all_day: bool
     created_at: str
     recurrence: str = "none"
+    flag: str = "none"
 
     @property
     def is_recurring(self) -> bool:
@@ -176,7 +181,8 @@ class Event:
     @classmethod
     def from_row(cls, row) -> Event:
         return cls(row["id"], row["title"], row["notes"], from_local(row["starts_at"]),
-                   from_local(row["ends_at"]), bool(row["all_day"]), row["created_at"], row["recurrence"])
+                   from_local(row["ends_at"]), bool(row["all_day"]), row["created_at"], row["recurrence"],
+                   row["flag"])
 
 
 Entry = Reminder | Event
