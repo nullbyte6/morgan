@@ -23,8 +23,8 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QIntValidator, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QComboBox, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListView, QMessageBox,
-    QPushButton, QVBoxLayout, QWidget)
+    QAbstractButton, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListView,
+    QMessageBox, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 from .config import CONTEXT_LENGTH_RANGE, load_config, save_config
 from .identity import get_assistant_name
@@ -159,6 +159,7 @@ class SettingsView(QWidget):
     language_changed = Signal(str)
     model_changed = Signal(str)
     update_requested = Signal()
+    ACTION_COLUMNS = 3
 
     def __init__(self, subtitles_enabled: bool,
                  orb_pulse_enabled: bool, parent=None, *, muted=False, ephemeral_steps_enabled=True):
@@ -325,39 +326,20 @@ class SettingsView(QWidget):
         layout.addLayout(context_row)
         self.context_input.editingFinished.connect(self.change_context_length)
 
-        self.themes_folder_button = QPushButton()
-        self.themes_folder_button.setObjectName("themesFolderButton")
-        self.themes_folder_button.setCursor(Qt.PointingHandCursor)
-        themes_folder_row = QHBoxLayout()
-        themes_folder_row.addStretch()
-        themes_folder_row.addWidget(self.themes_folder_button)
-        layout.addLayout(themes_folder_row)
         layout.addStretch()
 
-        self.update_button = QPushButton()
-        self.update_button.setObjectName("themesFolderButton")
-        self.update_button.setCursor(Qt.PointingHandCursor)
-        update_row = QHBoxLayout()
-        update_row.addStretch()
-        update_row.addWidget(self.update_button)
-        layout.addLayout(update_row)
-        self.update_button.clicked.connect(self.update_requested.emit)
+        self.action_grid = QGridLayout()
+        self.action_grid.setSpacing(12)
+        for column in range(self.ACTION_COLUMNS):
+            self.action_grid.setColumnStretch(column, 1)
+        layout.addLayout(self.action_grid)
 
-        self.remove_memories_button = QPushButton()
-        self.remove_memories_button.setObjectName("removeMemoriesButton")
-        self.remove_memories_button.setCursor(Qt.PointingHandCursor)
-        self.backup_button = QPushButton()
-        self.backup_button.setObjectName("themesFolderButton")
-        self.backup_button.setCursor(Qt.PointingHandCursor)
-        self.restore_button = QPushButton()
-        self.restore_button.setObjectName("themesFolderButton")
-        self.restore_button.setCursor(Qt.PointingHandCursor)
-        remove_memories_row = QHBoxLayout()
-        remove_memories_row.addStretch()
-        remove_memories_row.addWidget(self.backup_button)
-        remove_memories_row.addWidget(self.restore_button)
-        remove_memories_row.addWidget(self.remove_memories_button)
-        layout.addLayout(remove_memories_row)
+        self.themes_folder_button = self.add_action_button("themesFolderButton")
+        self.update_button = self.add_action_button("themesFolderButton")
+        self.backup_button = self.add_action_button("themesFolderButton")
+        self.restore_button = self.add_action_button("themesFolderButton")
+        self.remove_memories_button = self.add_action_button("removeMemoriesButton")
+        self.update_button.clicked.connect(self.update_requested.emit)
         self.backup_button.clicked.connect(self.backup_data)
         self.restore_button.clicked.connect(self.restore_data)
         self.remove_memories_button.clicked.connect(self.remove_memories)
@@ -375,6 +357,16 @@ class SettingsView(QWidget):
         self.voice_timer.setInterval(1000)
         self.voice_timer.timeout.connect(self.refresh_voices)
         self.voice_timer.start()
+
+    def add_action_button(self, object_name: str) -> QPushButton:
+        """Place a new button in the next free cell of the action grid."""
+        button = QPushButton()
+        button.setObjectName(object_name)
+        button.setCursor(Qt.PointingHandCursor)
+        button.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        index = self.action_grid.count()
+        self.action_grid.addWidget(button, index // self.ACTION_COLUMNS, index % self.ACTION_COLUMNS)
+        return button
 
     def refresh_themes(self):
         current = current_theme()
