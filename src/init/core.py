@@ -162,15 +162,29 @@ class Assistant:
         from src.init.lang import get_language
 
         language = {"english": "English", "spanish": "European Spanish", "chinese": "Simplified Chinese"}.get(get_language(), "English")
+        try:
+            from src.init.nova.tools import agenda_brief
+            agenda = agenda_brief()
+        except Exception:
+            logging.getLogger("assistant.nova").exception("Today's agenda could not be read for the greeting")
+            agenda = ""
+        if agenda:
+            request_text = (f"Write a short, natural greeting of at most thirty words in {language} for the user, "
+                            f"{self.username}, that briefly mentions today's agenda from Nova, the user's agenda: "
+                            f"{agenda}. Summarise it, for example how many reminders there are and the time of "
+                            "the next event, instead of listing everything. ")
+        else:
+            request_text = (f"Write one short, natural greeting of at most twelve words in {language} for the user, "
+                            f"{self.username}, offering your help. ")
         prompt = (f"You are {self.name}, a personal desktop assistant that has just started. "
-                  f"Write one short, natural greeting of at most twelve words in {language} for the user, "
-                  f"{self.username}, offering your help. Infer your grammatical gender from your name "
+                  f"{request_text}Infer your grammatical gender from your name "
                   "and use it consistently. Use a "
                   f"{load_config()['personality']['tone']} tone and vary the wording. "
                   "Reply with the greeting only, without quotes, emojis or Markdown.")
         payload = json.dumps({
             "model": self.MODEL_NAME, "prompt": prompt, "stream": False, "think": False,
-            "keep_alive": OLLAMA_KEEP_ALIVE, "options": {"temperature": 1.0, "num_predict": 60},
+            "keep_alive": OLLAMA_KEEP_ALIVE,
+            "options": {"temperature": 1.0, "num_predict": 120 if agenda else 60},
         }).encode("utf-8")
         request = urllib.request.Request(
             "http://127.0.0.1:11434/api/generate", data=payload,
@@ -182,7 +196,7 @@ class Assistant:
             logging.getLogger("assistant.model").exception("Startup greeting could not be generated")
             return ""
         lines = (line.strip().strip("\"'“”«»*").strip() for line in str(text).splitlines())
-        return next((line for line in lines if line), "")[:200]
+        return next((line for line in lines if line), "")[:300]
 
 
     @property

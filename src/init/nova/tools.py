@@ -132,6 +132,31 @@ def list_agenda(first_day: str | None = None, last_day: str | None = None) -> di
         return {"ok": False, "error": str(error)}
 
 
+def agenda_brief(now: datetime | None = None, limit: int = 8) -> str:
+    """Today's pending reminders and events and the number of overdue reminders, in a few words."""
+    now = now or datetime.now()
+    today = now.date()
+    store = _shared()
+    parts = []
+    for entry in store.entries(today, today):
+        if hasattr(entry, "starts_at"):
+            if entry.all_day:
+                when = "all day"
+            elif entry.starts_at.date() == today:
+                when = f"{entry.starts_at:%H:%M}"
+            else:
+                when = f"until {entry.ends_at:%H:%M}" if entry.ends_at.date() == today else "all day"
+            parts.append(f"event {entry.title} ({when})")
+        elif not entry.is_completed:
+            parts.append(f"reminder {entry.title} ({entry.remind_at:%H:%M})")
+    overdue = sum(1 for reminder in store.overdue(now) if reminder.remind_at.date() < today)
+    if overdue:
+        parts.append(f"{overdue} overdue reminder{'s' if overdue > 1 else ''} from earlier days")
+    if len(parts) > limit:
+        parts = parts[:limit] + [f"{len(parts) - limit} more"]
+    return "; ".join(parts)
+
+
 def complete_reminder(reminder_id: str, completed: bool = True) -> dict:
     """Mark a Nova reminder as done, or pending again with completed false. Use IDs from list_agenda.
     Completing a repeating reminder moves it to its next time."""
