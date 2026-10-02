@@ -11,6 +11,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda
 - Add Nova search, a sidebar section with one box that finds reminders, events and the diary days whose conversations mention the words typed, opening the day in the diary when clicked
+- Add Nova Week, a weekly review section that shows the reminders done, pending and missed, the events, conversations and new memories of each week, the days with activity opening in the diary, and a Summarize button that asks the main model for a short review of the week
 - Add pin_memory tool and a pinned option on remember, so Arlo can pin or unpin a memory when asked or store one already pinned for requests like "always remember that ...", with list_memories showing which are pinned
 - Add pinned memories that are always placed first in the model's context, and a Nova Memories section to review every stored memory and pin, edit or remove it
 - Add search_agenda tool that lets Arlo find Nova reminders and events by the words in their title or notes, past or upcoming, when their date is unknown

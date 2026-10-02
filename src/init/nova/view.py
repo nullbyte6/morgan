@@ -31,6 +31,7 @@ from .dialog import EVENT, REMINDER, NovaEntryDialog
 from .diary import DiaryView
 from .entries import Entry, Reminder
 from .memories import MemoriesView
+from .review import ReviewView
 from .rows import EntryList
 from .search import SearchView
 from .sections import Section
@@ -84,8 +85,9 @@ class NovaView(QWidget):
         self.diary = DiaryView(store)
         self.search = SearchView(store)
         self.memories = MemoriesView()
+        self.review = ReviewView(store)
         pages = {Section.CALENDAR: self.calendar, Section.DIARY: self.diary, Section.MEMORIES: self.memories,
-                 Section.SEARCH: self.search}
+                 Section.SEARCH: self.search, Section.REVIEW: self.review}
         self.pages = QStackedWidget()
         for section in Section:
             self.pages.addWidget(pages.get(section) or self.lists[section])
@@ -115,6 +117,7 @@ class NovaView(QWidget):
         self.diary.entry_activated.connect(self.dialog.open_edit)
         self.search.entry_activated.connect(self.dialog.open_edit)
         self.search.day_selected.connect(self._open_day)
+        self.review.day_selected.connect(self._open_day)
         self.calendar.create_requested.connect(lambda moment: self.dialog.open_new(EVENT, moment))
         store.changed.connect(self._refresh)
 
@@ -133,7 +136,8 @@ class NovaView(QWidget):
     def show_section(self, section: Section) -> None:
         self._section = section
         self.sidebar.select(section)
-        self.add_button.setVisible(section not in (Section.DIARY, Section.MEMORIES, Section.SEARCH))
+        self.add_button.setVisible(section not in (Section.DIARY, Section.REVIEW, Section.MEMORIES,
+                                                   Section.SEARCH))
         self.pages.setCurrentIndex(list(Section).index(section))
         self._refresh()
         if section is Section.SEARCH:
@@ -150,6 +154,7 @@ class NovaView(QWidget):
         self.diary.refresh_language()
         self.search.refresh_language()
         self.memories.refresh_language()
+        self.review.refresh_language()
         self.add_button.setToolTip(tr("nova.add"))
         self._refresh()
 
