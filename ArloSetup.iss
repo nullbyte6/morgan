@@ -44,9 +44,20 @@ Source: "{#ArloSourceDir}\ArloTUI.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "scripts\arlo-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "dev\core.json"; DestDir: "{app}\dev"; Flags: ignoreversion
 Source: "src\__init__.py"; DestDir: "{app}\src"; Flags: ignoreversion
-Source: "src\init\*"; DestDir: "{app}\src\init"; Excludes: "__pycache__"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "src\init\__init__.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\attachments.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\config.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\identity.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\lang.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\speech_text.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\subtitle_timing.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\tts_server.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\voice_client.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\voice_ipc.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\voice_profiles.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\voice_service.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\locales\*"; DestDir: "{app}\src\init\locales"; Flags: ignoreversion
 Source: "src\cosyvoice\*"; DestDir: "{app}\src\cosyvoice"; Excludes: "__pycache__"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "src\third_party\Matcha-TTS\*"; DestDir: "{app}\src\third_party\Matcha-TTS"; Excludes: "__pycache__"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "src\voices\*"; DestDir: "{app}\src\voices"; Flags: ignoreversion
@@ -61,6 +72,8 @@ Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "In
 
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\tui"
+Type: filesandordirs; Name: "{app}\src\init"
+Type: filesandordirs; Name: "{app}\dev"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\.venv"
