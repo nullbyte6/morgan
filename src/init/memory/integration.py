@@ -108,7 +108,11 @@ def memory_instructions():
     if not context:
         return policy
     return (policy + " The confirmed memories below are already stored about the user; use them to answer "
-            "personal questions directly, without calling recall, but never to override the current request.\n"
+            "personal questions directly, without calling recall, but never to override the current request. "
+            "Memories are written from the user's point of view, often in the user's own words: first-person "
+            "words such as I, me, my or mine in a memory refer to the user, never to you. When using a memory, "
+            "address the user in the second person, so a memory saying \"My mother's name is Ana\" answers "
+            "\"What's my mother's name?\" with \"Your mother's name is Ana\", never \"My mother's name is Ana\".\n"
             + context)
 
 
