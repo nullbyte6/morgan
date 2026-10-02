@@ -44,6 +44,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update Nova lists to show flagged entries first, red then yellow then green, in the agenda days, overdue and pending reminders, upcoming events and the day lists of the diary and the terminal version
 - Update Nova sidebar icons and star to be 15% larger
 - Update Nova storage, agenda grouping and the diary and week helpers to work without Qt, so the terminal version can read and write Nova and Arlo's Nova tools and agenda greeting work there too
+- Update README to list the current features, document updates from Settings and remove the regression check commands for test folders that no longer exist
 - Update services launcher to read the bundled core.json when the dev folder is not installed
 - Update startup greeting to briefly mention today's Nova reminders, events and overdue reminders when there are any
 - Update startup greeting to open with a plain salutation and the user's name, without Arlo introducing itself each time

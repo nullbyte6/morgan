@@ -7,6 +7,32 @@
 Adaptive Reasoning Local Operator is a local desktop assistant that uses
 Ollama to run tools and automate tasks on Windows.
 
+## Features
+
+- Local multimodal model (`gemma4:e4b` through Ollama) for text, images and
+  voice, with tool calling to run commands, read and edit files and automate
+  tasks on the PC.
+- Spoken replies with CosyVoice, hands-free wake phrase activation and live
+  voice input. See [wake voice](docs/WAKE-VOICE.md).
+- Persistent local memory in SQLite, with pinned memories that are always in
+  context. See [memory](docs/MEMORY.md).
+- Nova, a personal organizer with reminders and events (flags and daily,
+  weekly, monthly or custom repeats), a calendar, a diary of every day's
+  conversations, a weekly review, memories and search. Arlo manages it from
+  chat, and due reminders arrive as Windows notifications with snooze buttons.
+- Tiling workspaces for editors, files, diffs, PDFs, terminals and Nova. See
+  [workspaces](docs/WORKSPACES.md).
+- File attachments and `@file` references. See
+  [attachments](docs/ATTACHMENTS.md).
+- Local PC health diagnostics tools. See [diagnostics](docs/DIAGNOSTICS.md).
+- A health view in the command palette that checks Ollama, GPU use and the
+  voice service.
+- 26 built-in color themes and interface languages in Spanish, English and
+  Chinese (Simplified).
+- Settings buttons to back up and restore memories, Nova and the daily logs,
+  and to check for updates from the GitHub releases.
+- A lightweight terminal version that shares the desktop's runtime.
+
 ## Installation
 
 Run `ArloSetup.exe` (Windows 10 or later, 64-bit). No administrator rights are
@@ -84,15 +110,13 @@ quit it completely. On other desktops, launch Arlo again to restore the existing
 instance instead of starting another one.
 
 After updating, restart both the desktop app and its persistent TTS service so
-they use the same interruption protocol. Offline regression checks can be run
-with `.venv/Scripts/python.exe -m unittest discover -s test -v`.
+they use the same interruption protocol. Arlo can also check for newer versions
+from Settings or the command palette, download the installer and install it.
 
 Hands-free voice activation uses a wake phrase to start Arlo's normal voice
 recording, including in corner mascot mode. See
-[wake voice setup and configuration](docs/WAKE-VOICE.md). After updating, 
-restart
-the desktop and the `ARLO_WAKE` task. Wake regression checks:
-`.venv/Scripts/python.exe -B -m unittest discover -s tests -v`.
+[wake voice setup and configuration](docs/WAKE-VOICE.md). After updating,
+restart the desktop and the `ARLO_WAKE` task.
 
 With the desktop open, `reload`, `ref`, or the Reload modules command in the
 command palette hot-reloads Arlo's loaded source/tool modules and rebuilds the model tool registry for the following turn.
