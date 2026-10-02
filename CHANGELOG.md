@@ -14,9 +14,9 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add due Nova reminder notifications to the terminal version, shown as Windows toasts with In 10 min, Tomorrow and Done buttons and a notice in the status line, sharing its Nova records with Arlo's tools
 - Add edit button to the reminder and event rows of the Nova agenda, reminders, events, diary and search, opening the overlay to change the title, time, notes and repeat
 - Add Exit Arlo command in the command palette that stops any running reply and closes Arlo gracefully, so the session end time is recorded without ending the process from the Task Manager
+- Add flag choice to the Nova form and colored flags to the entry rows of the terminal version
 - Add flag field to Nova reminders and events, stored as none, green for unimportant, yellow for important or red for high priority, like the iOS Reminders app, and set through a flag parameter on the add_reminder, add_event and update_agenda_entry tools, with the agenda brief naming important and high priority entries
 - Add flag selector and green, yellow and red flags to the Nova overlay, rows and calendar chips of the desktop version, to mark reminders and events as unimportant, important or high priority
-- Add flag choice to the Nova form and colored flags to the entry rows of the terminal version
 - Add health check on the first start of each new version, run once the services had time to start, that opens the health view with the results when a check fails
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda
 - Add Nova search, a sidebar section with one box that finds reminders, events and the diary days whose conversations mention the words typed, opening the day in the diary when clicked
