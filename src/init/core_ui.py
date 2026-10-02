@@ -652,6 +652,8 @@ class AssistantWindow(DesktopWindow):
                                 ("diary", "diario")))
         commands.append(Command("workspace.health", "palette.health", self.open_health_view,
                                 ("health", "diagnostics", "salud", "diagnóstico", "estado")))
+        commands.append(Command("app.exit", "palette.exit", self.exit_app,
+                                ("exit", "quit", "salir", "cerrar arlo", "退出")))
         self.command_palette = CommandPalette(CommandRegistry(commands), self)
         self.workspace.panel_focused.connect(
             lambda _panel_id: self.command_palette.dismiss(restore_focus=False))
@@ -1503,8 +1505,26 @@ class AssistantWindow(DesktopWindow):
                        r"<b>\1</b>", escaped, flags=re.DOTALL, )
                 .replace("\n", "<br>"))
 
+    def consume_exit_command(self, session):
+        ui = session.ui
+        if ui is None or ui.input.toPlainText().strip().casefold() != "/exit":
+            return False
+        ui.input.clear()
+        self.exit_app()
+        return True
+
+    def exit_app(self):
+        if self.quitting:
+            return
+        for session in self.sessions:
+            if session.busy and not session.stopping:
+                self.stop_response(session)
+        self.request_quit()
+
     def send_message(self, session=None):
         session = session or self.session
+        if self.consume_exit_command(session):
+            return
         ui = session.ui
         if ui is None or not session.ready or (
                 self.voice_thread is not None and self.voice_session is session):
@@ -1652,6 +1672,8 @@ class AssistantWindow(DesktopWindow):
 
     def on_send_clicked(self, session=None):
         session = session or self.session
+        if self.consume_exit_command(session):
+            return
         if self.voice_thread is not None and self.voice_thread.live and self.voice_session in (session, None):
             voice_session = self.voice_session or session
             self.voice_thread.stop_event.set()

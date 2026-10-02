@@ -674,6 +674,7 @@
   "nova.memories.edit": "Editar",
   "nova.memories.empty": "Aún no hay nada recordado. Pide a {assistant_name} que recuerde algo.",
   "palette.health": "Abrir comprobación de estado",
+  "palette.exit": "Salir de {assistant_name}",
   "health.title": "Estado",
   "health.tagline": "Cómo están Ollama, el modelo, la GPU y la voz.",
   "health.refresh": "Comprobar de nuevo",

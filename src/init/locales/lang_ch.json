@@ -674,6 +674,7 @@
   "nova.memories.edit": "编辑",
   "nova.memories.empty": "还没有任何记忆。请让 {assistant_name} 记住一些事情。",
   "palette.health": "打开运行状态检查",
+  "palette.exit": "退出 {assistant_name}",
   "health.title": "运行状态",
   "health.tagline": "Ollama、模型、GPU 和语音的运行情况。",
   "health.refresh": "重新检查",

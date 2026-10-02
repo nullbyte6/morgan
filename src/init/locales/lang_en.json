@@ -674,6 +674,7 @@
   "nova.memories.edit": "Edit",
   "nova.memories.empty": "Nothing is remembered yet. Ask {assistant_name} to remember something.",
   "palette.health": "Open health check",
+  "palette.exit": "Exit {assistant_name}",
   "health.title": "Health",
   "health.tagline": "How Ollama, the model, the GPU and the voice are doing.",
   "health.refresh": "Check again",
