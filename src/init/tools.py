@@ -91,7 +91,7 @@ from src.init.memory.tools import (remember, recall, forget, list_memories,
                                    search_words, word_instances, read_conversation,
                                    read_memory_message)
 from src.init.nova.tools import (add_reminder, add_event, list_agenda, complete_reminder,
-                                 delete_agenda_entry)
+                                 update_agenda_entry, delete_agenda_entry)
 from src.init.desktop.clipboard import read_clipboard
 from src.init.visuals.gateway import render_flowchart
 from src.init.reader import analyze_image, analyze_screen
@@ -158,6 +158,7 @@ TOOLS = [
     add_event,
     list_agenda,
     complete_reminder,
+    update_agenda_entry,
     delete_agenda_entry,
     send_notification,
     schedule_notification,

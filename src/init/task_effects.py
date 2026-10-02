@@ -128,7 +128,7 @@ register("draft_email edit_email_draft send_email_draft send_email delete_email"
 register("send_message", ToolSpec(True, "messages"))
 register("list_timers", ToolSpec(False, "notifications"))
 register("list_agenda", ToolSpec(False, "nova"))
-register("add_reminder add_event complete_reminder delete_agenda_entry", ToolSpec(True, "nova"))
+register("add_reminder add_event complete_reminder update_agenda_entry delete_agenda_entry", ToolSpec(True, "nova"))
 register("send_notification schedule_notification start_timer cancel_timer", ToolSpec(True, "notifications"))
 register("load_config", ToolSpec(False, "config"))
 register("update_config set_weather_location learn_pronunciation", ToolSpec(True, "config"))

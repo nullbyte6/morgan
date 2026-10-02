@@ -166,6 +166,43 @@ def complete_reminder(reminder_id: str, completed: bool = True) -> dict:
         return {"ok": False, "error": str(error)}
 
 
+def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str | None = None,
+                        starts_at: str | None = None, ends_at: str | None = None,
+                        all_day: bool | None = None, notes: str | None = None,
+                        repeat: str | None = None) -> dict:
+    """Change or reschedule one Nova reminder or event by exact ID from list_agenda, keeping its ID.
+    Pass only the fields to change; times are local ISO, e.g. 2026-10-02T17:00.
+    remind_at applies to reminders; starts_at, ends_at and all_day to events. Moving an event's
+    start without ends_at keeps its duration. Changing a repeating entry changes the whole series.
+    repeat is none, daily, weekly or monthly.
+    """
+    try:
+        store = _shared()
+        reminder = store.reminder(entry_id)
+        if reminder is not None:
+            if starts_at or ends_at or all_day is not None:
+                raise ValueError("Reminders only take remind_at; starts_at, ends_at and all_day are for events")
+            moment = _moment(remind_at, "remind_at") if remind_at else reminder.remind_at
+            return {"ok": True, "reminder": _reminder(store.update_reminder(
+                entry_id, reminder.title if title is None else title, moment,
+                reminder.notes if notes is None else notes,
+                reminder.recurrence if repeat is None else repeat))}
+        event = store.event(entry_id)
+        if event is None:
+            raise ValueError("No reminder or event has that ID; use list_agenda to find it")
+        if remind_at:
+            raise ValueError("Events take starts_at and ends_at instead of remind_at")
+        starts = _moment(starts_at, "starts_at") if starts_at else event.starts_at
+        ends = _moment(ends_at, "ends_at") if ends_at else starts + (event.ends_at - event.starts_at)
+        return {"ok": True, "event": _event(store.update_event(
+            entry_id, event.title if title is None else title, starts, ends,
+            all_day=event.all_day if all_day is None else all_day,
+            notes=event.notes if notes is None else notes,
+            recurrence=event.recurrence if repeat is None else repeat))}
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+
+
 def delete_agenda_entry(entry_id: str) -> dict:
     """Delete one Nova reminder or event by exact ID from list_agenda, on explicit user request."""
     try:
