@@ -313,12 +313,12 @@ begin
     GetRuntimeSwitches('');
   if not Exec('powershell.exe', Parameters, '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then begin
     Log('Could not start the runtime setup: ' + SysErrorMessage(ResultCode));
-    MsgBox('The ' + GetAssistantName('') + ' runtime could not be prepared: ' + SysErrorMessage(ResultCode) +
-      #13#10#13#10 + 'Run this installer again to retry.', mbError, MB_OK);
+    MsgBox('The ' + GetAssistantName('') + ' runtime could not be prepared: ' + SysErrorMessage(ResultCode) + #13#10#13#10 +
+      'Run this installer again to retry.', mbError, MB_OK);
   end else if ResultCode <> 0 then begin
     Log('The runtime setup failed with exit code ' + IntToStr(ResultCode) + '.');
-    MsgBox('The ' + GetAssistantName('') + ' runtime setup did not finish (exit code ' + IntToStr(ResultCode) + ').' +
-      #13#10#13#10 + GetAssistantName('') + ' will not start its local services until it completes. ' +
+    MsgBox('The ' + GetAssistantName('') + ' runtime setup did not finish (exit code ' + IntToStr(ResultCode) + ').' + #13#10#13#10 +
+      GetAssistantName('') + ' will not start its local services until it completes. ' +
       'Check your internet connection and run this installer again to resume.', mbError, MB_OK);
   end;
 end;
