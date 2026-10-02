@@ -287,6 +287,8 @@ class TaskState:
         for criterion in criteria:
             contract = verification.get(criterion)
             if criterion not in proposed:
+                if not contract and proposed_kind == "read_only":
+                    contract = {"method": "Observable check", "resources": []}
                 if not contract or not contract.get("method", "").strip():
                     return reject("Each new criterion needs an explicit verification method and resource list.",
                                   "verification." + criterion, {"method": "Describe the observable check", "resources": []})

@@ -199,7 +199,7 @@ behavior that motivated the change and relevant behavior the changed code alread
 For research/audits use kind='read_only'. Each criterion must describe the user's outcome,
 never supervisor protocol. Criteria updates are additive: omitted existing criteria and their evidence
 are preserved. Use stable exact criterion keys; do not translate or rename them after registration.
-For phase-only updates use criteria=[] and omit verification. Reopen completed criteria when needed. Resources are file:absolute-path, entry:absolute-path or domain:name as shown in evidence.
+For phase-only updates use criteria=[] and omit verification; a read_only contract may also omit it. Reopen completed criteria when needed. Resources are file:absolute-path, entry:absolute-path or domain:name as shown in evidence.
 Use phase='verify' before independent observations, and resources=[...] to declare the dependencies
 you are inspecting when a tool's intrinsic scope does not identify them. Semantic relevance and
 interpretation are your responsibility. Successful mutation messages cannot verify mutations.
@@ -1217,6 +1217,12 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.messages = [message for message in ctx.messages if message is not response]
             self.recover_model_output("length")
             raise TaskModelRetry("The partial model response was archived, not executed. Submit a complete answer or valid tool call.")
+        if self.state.status == Lifecycle.ACTIVE and not any(
+                part.part_kind == "tool-call" or part.part_kind == "text" and part.content.strip()
+                for part in response.parts):
+            self.messages = [message for message in ctx.messages if message is not response]
+            self.recover_model_output("empty_output")
+            raise TaskModelRetry("The empty model response was discarded. Submit a complete answer or valid tool call.")
         return response
 
     def recover_model_output(self, reason):
