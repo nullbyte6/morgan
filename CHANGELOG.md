@@ -9,6 +9,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add Copy day and Export buttons to the Nova diary that copy the day as Markdown or save it to a Markdown file, with its agenda, remembered facts and every conversation message
 - Add Copy report button to the health view that copies the results with the version, system and check time as Markdown for bug reports
 - Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen
+- Add due Nova reminder notifications to the terminal version, shown as Windows toasts with In 10 min, Tomorrow and Done buttons and a notice in the status line, sharing its Nova records with Arlo's tools
 - Add Exit Arlo command in the command palette that stops any running reply and closes Arlo gracefully, so the session end time is recorded without ending the process from the Task Manager
 - Add health check on the first start of each new version, run once the services had time to start, that opens the health view with the results when a check fails
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda

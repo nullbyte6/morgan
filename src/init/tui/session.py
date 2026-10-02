@@ -23,6 +23,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from getpass import getuser
 
 from src.init.attachments import Attachment, DesktopMessage, DesktopVoiceMessage, inspect_attachment, normalized_path
@@ -31,6 +32,7 @@ from src.init.core import Assistant
 from src.init.events import Emitter
 from src.init.identity import register_assistant
 from src.init.lang import LANGUAGES, set_language
+from src.init.notifications import ask_notification, send_notification
 from src.init.session_runner import SessionRunner
 from src.init.task_view import TaskProjection
 from src.init.tui import i18n
@@ -106,6 +108,9 @@ class Confirmation:
         return max(0, int(self.deadline - time.monotonic() + 0.999))
 
 
+NOVA_FIRST_CHECK_SECONDS = 3.0
+NOVA_CHECK_SECONDS = 30.0
+
 class TuiSession:
     """One conversation; every method runs on the interface thread."""
 
@@ -131,6 +136,9 @@ class TuiSession:
         self.changed = Emitter()
         self.draft_accepted = Emitter()
         self.exit_requested = Emitter()
+        self.nova_changed = Emitter()
+        self.nova_requested = Emitter()
+        self.nova = self.open_nova()
 
         self.ready = False
         self.started_at = None
@@ -230,6 +238,82 @@ class TuiSession:
         self.worker.start()
         self.worker.submit(self.runner.initialize)
         self.refresh_branch()
+        if self.nova is not None:
+            self.scheduler.later(NOVA_FIRST_CHECK_SECONDS, self.check_reminders)
+
+    def open_nova(self):
+        """Open Nova's records, shared with the assistant's tools, and follow their changes."""
+        try:
+            from src.init.nova.records import NovaRecords
+            from src.init.nova.tools import use_store
+            records = NovaRecords()
+        except Exception:
+            logging.getLogger("assistant.nova").exception("Nova storage is unavailable")
+            return None
+        use_store(records)
+        records.subscribe(lambda: self.scheduler.post(self.nova_changed.emit))
+        return records
+
+    def check_reminders(self):
+        """Announce the reminders that came due, then look again in a while."""
+        if self.quitting:
+            return
+        self.scheduler.later(NOVA_CHECK_SECONDS, self.check_reminders)
+        try:
+            due = self.nova.pop_due()
+        except Exception:
+            logging.getLogger("assistant.nova").exception("Unable to read due reminders")
+            return
+        if not due:
+            return
+        from src.init.tui import nova_text
+        title = f"{i18n.assistant_name()} · {t('nova.reminder')}"[:63]
+        today = datetime.now().date()
+        messages = [f"{nova_text.time_text(reminder.remind_at)} · {reminder.title}"
+                    if reminder.remind_at.date() == today else
+                    f"{nova_text.date_time_text(reminder.remind_at)} · {reminder.title}" for reminder in due]
+        self.flash(f"{t('nova.reminder')} · {', '.join(reminder.title for reminder in due)}", 12.0)
+        if len(messages) > 3:
+            message = t("nova.due_reminders", count=len(due), titles=", ".join(reminder.title for reminder in due))
+            threading.Thread(target=send_notification, args=(message[:255], title), daemon=True).start()
+            return
+        actions = [(action, t(f"nova.toast.{action}")) for action in ("snooze", "tomorrow", "done")]
+        for reminder, message in zip(due, messages):
+            threading.Thread(target=self.ask_reminder, args=(reminder, message[:255], title, actions),
+                             daemon=True).start()
+
+    def ask_reminder(self, reminder, message, title, actions):
+        try:
+            choice = ask_notification(title, message, actions)
+        except Exception:
+            logging.getLogger("assistant.nova").exception("Unable to show the reminder notification")
+            return
+        if choice:
+            self.scheduler.post(self.answer_reminder, reminder, choice)
+
+    def answer_reminder(self, reminder, choice):
+        """Apply the button pressed on a due reminder's notification."""
+        from src.init.tui import nova_text
+        now = datetime.now().replace(second=0, microsecond=0)
+        try:
+            if choice in ("snooze", "tomorrow"):
+                until = (now + timedelta(minutes=10) if choice == "snooze" else
+                         datetime.combine((now + timedelta(days=1)).date(), reminder.remind_at.time()))
+                try:
+                    self.nova.snooze_reminder(reminder.id, until)
+                except ValueError:
+                    self.flash(t("nova.snoozed_missing", title=reminder.title))
+                    raise
+                when = (nova_text.time_text(until) if until.date() == now.date()
+                        else nova_text.date_time_text(until))
+                self.flash(t("nova.snoozed", title=reminder.title, when=when))
+            elif choice == "done":
+                if not reminder.is_recurring:
+                    self.nova.set_reminder_completed(reminder.id, True)
+            elif choice == "open":
+                self.nova_requested.emit()
+        except (ValueError, OSError):
+            logging.getLogger("assistant.nova").exception("Unable to apply the reminder action %s", choice)
 
     def shutdown(self):
         self.quitting = True
