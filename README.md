@@ -125,3 +125,14 @@ preserved so reloading does not require restarting the application.
 
 For native voice input, tool execution, and action regression checks, see
 [desktop action execution](docs/ACTION-EXECUTION.md).
+
+## License
+
+Arlo is free software released under the [GNU General Public License v3.0](LICENSE).
+You can use, study, modify and share it, and anyone who distributes a modified
+version must publish its source under the same license.
+
+Arlo builds on third-party software that keeps its own licenses. Their license
+texts are in the [licenses](licenses) directory and are installed with Arlo.
+Models such as CosyVoice, Whisper and the Ollama models are covered by their own
+terms, which may restrict some uses.
