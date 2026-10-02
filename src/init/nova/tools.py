@@ -132,6 +132,21 @@ def list_agenda(first_day: str | None = None, last_day: str | None = None) -> di
         return {"ok": False, "error": str(error)}
 
 
+def search_agenda(query: str, limit: int = 20) -> dict:
+    """Find Nova reminders and events, past or upcoming and done or pending, whose title or notes
+    contain every word of query, newest first. Use it to find an entry by name when its date is
+    unknown, e.g. before update_agenda_entry or delete_agenda_entry. Use recall for conversations.
+    """
+    try:
+        if not str(query).split():
+            raise ValueError("query must contain at least one word")
+        limit = min(max(1, int(limit)), 100)
+        found = _shared().search(query, limit=limit)
+        return {"ok": True, "query": query, "entries": [_entry(entry) for entry in found]}
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+
+
 def agenda_brief(now: datetime | None = None, limit: int = 8) -> str:
     """Today's pending reminders and events and the number of overdue reminders, in a few words."""
     now = now or datetime.now()
@@ -189,7 +204,7 @@ def update_agenda_entry(entry_id: str, title: str | None = None, remind_at: str 
                 reminder.recurrence if repeat is None else repeat))}
         event = store.event(entry_id)
         if event is None:
-            raise ValueError("No reminder or event has that ID; use list_agenda to find it")
+            raise ValueError("No reminder or event has that ID; use list_agenda or search_agenda to find it")
         if remind_at:
             raise ValueError("Events take starts_at and ends_at instead of remind_at")
         starts = _moment(starts_at, "starts_at") if starts_at else event.starts_at
