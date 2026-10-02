@@ -60,7 +60,16 @@ TextList = Annotated[list[str], BeforeValidator(decoded_list)]
 
 
 def select_schemas(names, available, control):
-    selected = [name for name in dict.fromkeys(names) if name in available and name not in control]
+    selected = []
+    for name in dict.fromkeys(names):
+        if name not in available or name in control or name in selected:
+            continue
+        selected.append(name)
+        spec = TOOL_SPECS.get(name)
+        if spec is not None and spec.domain == "nova":
+            selected.extend(other for other, other_spec in TOOL_SPECS.items()
+                            if other in available and other not in selected and other not in control
+                            and other_spec.domain == "nova")
     for name in tuple(selected):
         spec = TOOL_SPECS.get(name)
         if spec is None or not spec.path_argument:

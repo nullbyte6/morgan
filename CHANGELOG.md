@@ -36,6 +36,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add update checks to the terminal version, from a Check for updates palette action that lists the newer releases, downloads the chosen one with a progress box above the composer, installs it and starts the terminal version again
 - Add update_agenda_entry tool that lets Arlo rename, move or reschedule a Nova reminder or event from chat while keeping its ID and repeat, instead of deleting and adding it again
 - Fix Arlo apologizing for a failed tool call and asking for a second confirmation when saving a reminder or event, because reading the clock first counted as a first action and moved the second one, the Nova entry, into supervision, which rejected it until a task contract existed
+- Fix Arlo losing the delete, update, list and search agenda tools after saving a reminder or event, because a request too large for the context kept only the tools used in the last messages, so every Nova tool now stays available together
 - Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
 - Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
 - Fix Arlo staying open after being asked to close itself during a reply, because the shutdown waited on a quit request that had already been marked as handled
