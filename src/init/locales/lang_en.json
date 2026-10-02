@@ -804,5 +804,6 @@
   "health.voice.connected": "Connected to the voice service",
   "health.voice.processor": "processor",
   "health.voice.device": "Runs on {backend}: {name}",
-  "health.voice.load_time": "CosyVoice loaded in {seconds} s"
+  "health.voice.load_time": "CosyVoice loaded in {seconds} s",
+  "memory.unsaved_notice": "I did not actually save that to my memory. Please ask me again."
 }

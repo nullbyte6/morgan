@@ -449,6 +449,43 @@ QComboBox#modelSelector QAbstractItemView::item {
     min-height: 24px;
 }
 
+QComboBox#languageDropdown QAbstractItemView,
+QComboBox#modelDropdown QAbstractItemView,
+QComboBox#themeDropdown QAbstractItemView {
+    font-size: 16px;
+}
+
+QComboBox#modelSelector QAbstractItemView {
+    font-size: 16px;
+}
+
+QComboBoxPrivateContainer {
+    background: transparent;
+    border: none;
+}
+
+QComboBox#languageDropdown QAbstractItemView[opens="up"],
+QComboBox#modelDropdown QAbstractItemView[opens="up"],
+QComboBox#themeDropdown QAbstractItemView[opens="up"],
+QComboBox#modelSelector QAbstractItemView[opens="up"] {
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+
+QComboBox#languageDropdown QAbstractItemView[opens="down"],
+QComboBox#modelDropdown QAbstractItemView[opens="down"],
+QComboBox#themeDropdown QAbstractItemView[opens="down"],
+QComboBox#modelSelector QAbstractItemView[opens="down"] {
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+QComboBox#languageDropdown QAbstractItemView,
+QComboBox#modelDropdown QAbstractItemView,
+QComboBox#themeDropdown QAbstractItemView {
+    border-radius: 12px;
+}
+
 QComboBox#languageDropdown QAbstractItemView::item:hover,
 QComboBox#modelDropdown QAbstractItemView::item:hover,
 QComboBox#themeDropdown QAbstractItemView::item:hover,

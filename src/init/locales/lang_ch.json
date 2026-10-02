@@ -804,5 +804,6 @@
   "health.voice.connected": "已连接到语音服务",
   "health.voice.processor": "处理器",
   "health.voice.device": "运行于 {backend}：{name}",
-  "health.voice.load_time": "CosyVoice 加载用时 {seconds} 秒"
+  "health.voice.load_time": "CosyVoice 加载用时 {seconds} 秒",
+  "memory.unsaved_notice": "我其实没有把这件事保存到记忆中，请再说一次。"
 }

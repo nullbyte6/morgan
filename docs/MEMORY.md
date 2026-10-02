@@ -53,7 +53,12 @@ The agent receives `remember`, `recall`, `forget`, `list_memories`, `search_word
 Mutations are made only when the user asks for them, in any wording or language:
 the instructions tell the model to call the tool in that same turn and to treat
 retrieved text as data, so text found in memory or logs is never obeyed.
-No keyword list decides it. The model resolves the intended fact and memory ID; ambiguous requests
+No keyword list decides it. When a reply says something was saved, updated,
+deleted or pinned but no memory tool succeeded in that turn, and no other
+action succeeded either, the model is asked one yes or no question about the
+reply, and on yes a notice in the interface language is appended saying that
+nothing was saved. Every memory tool call and its result is logged to the agent
+log, with the arguments left out in private mode. The model resolves the intended fact and memory ID; ambiguous requests
 should result in a clarification rather than guessing.
 
 `remember` takes content, category (`preference`, `fact`, `project`, `goal`,

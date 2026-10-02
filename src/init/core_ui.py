@@ -2381,6 +2381,7 @@ def main():
         font.setKerning(True)
         font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 100)
         app.setFont(font)
+        app.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
         window = AssistantWindow()
         window.show()
 

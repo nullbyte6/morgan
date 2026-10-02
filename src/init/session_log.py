@@ -395,11 +395,11 @@ class SessionLog:
             except Exception as error:
                 self.memory_error = str(error)
                 logging.getLogger("assistant.memory").exception("Memory tools unavailable")
-        token = active_memory.set(MemoryTurn(service, self.session_id,
-                                            self.last_user_message_id, self.last_user_text,
-                                            self.private, self.memory_error))
+        turn = MemoryTurn(service, self.session_id, self.last_user_message_id, self.last_user_text,
+                          self.private, self.memory_error)
+        token = active_memory.set(turn)
         try:
-            yield
+            yield turn
         finally:
             active_memory.reset(token)
 

@@ -23,6 +23,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add health check on the first start of each new version, run once the services had time to start, that opens the health view with the results when a check fails
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda
 - Add logging of every memory tool call and its result, including failures with their error, to the agent log, with the arguments left out in private mode, so a memory that was not saved can be traced instead of failing silently
+- Add notice, in the interface language, under a reply that says a memory was saved, updated, deleted or pinned when no memory tool succeeded in that turn and no other action did either, found by asking the model one yes or no question about the reply, so Arlo no longer leaves the user believing something was stored when it never called the tool
 - Add Nova search, a sidebar section with one box that finds reminders, events and the diary days whose conversations mention the words typed, opening the day in the diary when clicked
 - Add Nova to the terminal version, opened from the palette, Ctrl+Alt+N or Ctrl+L, with the agenda, reminders, events, a month calendar, the diary with unfoldable conversations and Markdown export, the week review and its summary, memories with pinning and editing, search, and a form to create, edit and delete reminders and events
 - Add Nova Week, a weekly review section that shows the reminders done, pending and missed, the events, conversations and new memories of each week, the days with activity opening in the diary, and a Summarize button that asks the main model for a short review of the week
@@ -45,6 +46,8 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
 - Fix Arlo staying open after being asked to close itself during a reply, because the shutdown waited on a quit request that had already been marked as handled
 - Fix model selector list covering the selector when opened upward, by keeping it anchored above the selector with a small gap while it resizes
+- Fix model selector list visibly jumping and sliding into place when opened, by keeping it invisible while it is moved above the selector and showing it only once it is in its final position
+- Fix dropdown lists of Settings showing smaller text than the chosen option above them, and the model selector list opening with a gap above the selector, by sizing the items like the chosen option and starting the list right at the top of the selector, shrinking the list to scroll when there is not enough room above
 - Fix Nova events not opening in the edit overlay, and adding or updating them failing in the desktop version, because Qt's own event method hid the store's event lookup, now called find_event, which also let update_agenda_entry find events again
 - Fix Settings being squished when its panel is short, such as at the top or bottom of the screen, by placing it in a scroll area with a hidden scrollbar, with the mouse wheel over a dropdown scrolling the page instead of changing the dropdown
 - Fix small blank windows flashing on screen when a Nova list is rebuilt, as when opening the diary with Ctrl+L, because the old rows were detached while still visible
@@ -66,6 +69,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update Nova storage, agenda grouping and the diary and week helpers to work without Qt, so the terminal version can read and write Nova and Arlo's Nova tools and agenda greeting work there too
 - Update README to list the current features, document updates from Settings and remove the regression check commands for test folders that no longer exist
 - Update services launcher to read the bundled core.json when the dev folder is not installed
+- Update Settings dropdown lists to have all four corners rounded to 12 pixels
 - Update Settings buttons, the themes folder, updates, backup, restore and remove memories, to a three column grid at the bottom that adds rows as buttons are added
 - Update startup greeting to briefly mention today's Nova reminders, events and overdue reminders when there are any
 - Update startup greeting to open with a plain salutation and the user's name, without Arlo introducing itself each time

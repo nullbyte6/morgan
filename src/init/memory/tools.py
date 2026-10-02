@@ -22,6 +22,7 @@ import json
 import logging
 from typing import Literal
 
+from ..task_effects import TOOL_SPECS
 from .integration import active_memory
 from .service import CATEGORIES
 
@@ -39,6 +40,9 @@ def _logged(function):
             name: value[:120] + "…" if isinstance(value, str) and len(value) > 120 else value
             for name, value in signature.bind(*args, **values).arguments.items()}
         succeeded = isinstance(result, dict) and bool(result.get("ok"))
+        spec = TOOL_SPECS.get(function.__name__)
+        if succeeded and spec is not None and spec.effectful:
+            active_memory.get().writes.append(function.__name__)
         logger.log(logging.INFO if succeeded else logging.WARNING, "Memory tool %s %s: %s%s",
                    function.__name__, "succeeded" if succeeded else "failed",
                    json.dumps(arguments, ensure_ascii=False, default=str),

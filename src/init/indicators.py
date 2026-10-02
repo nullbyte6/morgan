@@ -86,9 +86,32 @@ class GitBranchIndicator(QToolButton):
         self.setVisible(bool(branch))
 
 
+class PopupCorners(QObject):
+    """Rounds only the corners of a dropdown list that face away from its combo box."""
+
+    def __init__(self, combo):
+        super().__init__(combo)
+        self.combo = combo
+        self.popup = combo.view().window()
+        self.popup.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
+        self.popup.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.popup.installEventFilter(self)
+
+    def eventFilter(self, watched, event):
+        if watched is self.popup and event.type() in (QEvent.Type.Show, QEvent.Type.Move):
+            opens = ("up" if self.popup.geometry().center().y()
+                     < self.combo.mapToGlobal(self.combo.rect().center()).y() else "down")
+            options = self.combo.view()
+            if options.property("opens") != opens:
+                options.setProperty("opens", opens)
+                options.style().unpolish(options)
+                options.style().polish(options)
+        return False
+
+
 class ModelSelector(QComboBox):
     model_selected = Signal(str)
-    POPUP_GAP = 6
+    POPUP_GAP = 0
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -99,6 +122,7 @@ class ModelSelector(QComboBox):
         options = QListView(self)
         options.setMouseTracking(True)
         self.setView(options)
+        PopupCorners(self)
         self.setMaxVisibleItems(4)
         options.setAutoFillBackground(True)
         options.viewport().setAutoFillBackground(True)
@@ -150,20 +174,66 @@ class ModelSelector(QComboBox):
 
     def showPopup(self):
         self.refresh(self.currentData())
-        super().showPopup()
         popup = self.view().window()
+        self._set_popup_opacity(popup, 0)
+        animate_combo = QApplication.isEffectEnabled(Qt.UIEffect.UI_AnimateCombo)
+        QApplication.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
+        try:
+            super().showPopup()
+        finally:
+            QApplication.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, animate_combo)
+        self._set_popup_opacity(popup, 0)
         popup.removeEventFilter(self)
         popup.installEventFilter(self)
         self._anchor_popup(popup)
+        QApplication.sendPostedEvents()
+        self._anchor_popup(popup)
+        QTimer.singleShot(0, lambda: self._reveal_popup(popup))
+
+    def _reveal_popup(self, popup):
+        if popup.isVisible():
+            self._anchor_popup(popup)
+        self._set_popup_opacity(popup, 1)
+
+    @staticmethod
+    def _set_popup_opacity(popup, opacity):
+        popup.setWindowOpacity(opacity)
+        proxy = popup.graphicsProxyWidget()
+        if proxy is not None:
+            proxy.setOpacity(opacity)
+
+    def _popup_shift(self, popup):
+        proxy = popup.graphicsProxyWidget()
+        if proxy is not None:
+            top = self.mapTo(self.window(), QPoint(0, 0)).y() - self.POPUP_GAP
+            return round(top - proxy.y() - popup.height())
+        target = self.mapToGlobal(QPoint(0, 0)).y() - self.POPUP_GAP
+        frame = popup.frameGeometry()
+        shift = target - frame.bottom() - 1
+        if os.name == "nt" and popup.graphicsProxyWidget() is None:
+            from ctypes import byref, windll, wintypes
+            rect = wintypes.RECT()
+            if windll.user32.GetWindowRect(int(popup.winId()), byref(rect)):
+                height = (rect.bottom - rect.top) / popup.devicePixelRatioF()
+                shift = round(target - frame.top() - height)
+        return shift
 
     def _anchor_popup(self, popup):
-        top = self.mapToGlobal(QPoint(0, 0)).y() - popup.frameGeometry().height() - self.POPUP_GAP
-        if top >= self.screen().availableGeometry().top() and popup.y() != top:
-            popup.move(popup.x(), top)
+        if self.mapToGlobal(QPoint(0, 0)).y() <= self.screen().availableGeometry().top():
+            return
+        for _ in range(4):
+            shift = self._popup_shift(popup)
+            if not shift:
+                break
+            proxy = popup.graphicsProxyWidget()
+            if proxy is not None:
+                proxy.moveBy(0, shift)
+            else:
+                popup.move(popup.x(), popup.y() + shift)
 
     def eventFilter(self, watched, event):
         if (watched is self.view().window() and watched.isVisible()
-                and event.type() in (QEvent.Type.Show, QEvent.Type.Resize, QEvent.Type.Move)):
+                and event.type() in (QEvent.Type.Show, QEvent.Type.Resize)):
             self._anchor_popup(watched)
         return super().eventFilter(watched, event)
 

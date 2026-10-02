@@ -24,7 +24,7 @@ import sqlite3
 import tempfile
 import zipfile
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
@@ -39,9 +39,28 @@ class MemoryTurn:
     prompt: str = ""
     private: bool = False
     error: str | None = None
+    writes: list = field(default_factory=list)
 
 
 active_memory = ContextVar("arlo_memory_turn", default=MemoryTurn())
+
+CLAIM_AUDIT = (
+    "You audit one reply of an assistant. During this turn no long-term memory tool succeeded, so nothing was "
+    "stored, updated, deleted or pinned in the user's persistent memory of facts and preferences. "
+    "Reminders, calendar events, notes and files are not that memory. "
+    "Answer YES if the reply states that it has just stored, saved, updated, deleted or pinned something in "
+    "that persistent memory. Answer NO in every other case: answering a question, stating or recalling a "
+    "fact, or greeting, without saying that something was just saved, is NO. Answer with one word.")
+
+
+async def claims_unsaved_memory(model, prompt, reply):
+    from pydantic_ai import Agent
+    auditor = Agent(model, instructions=CLAIM_AUDIT)
+    result = await auditor.run(
+        "User message:\n" + prompt[:1500] + "\n\nAssistant reply:\n" + reply[:3000],
+        model_settings={"thinking": False, "openai_reasoning_effort": "none", "temperature": 0,
+                        "max_tokens": 8, "timeout": 20})
+    return str(result.output).strip().upper().startswith("YES")
 
 
 @lru_cache(maxsize=4)

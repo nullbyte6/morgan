@@ -909,6 +909,8 @@ class Assistant:
 
             def emit_step(name, call_id, result, failed=False):
                 note_search(name, call_id, failed)
+                if not failed and name not in controller.control_tools:
+                    succeeded_tools.append(name)
                 if on_phase is None:
                     return
                 receipt = controller.receipts.get(call_id, {})
@@ -1135,9 +1137,11 @@ class Assistant:
                 raise
 
         from src.init.attachments import active_attachments
+        memory_turn = None
+        succeeded_tools = []
         attachment_token = active_attachments.set(attachments)
         try:
-            with session.memory_scope() if session is not None else nullcontext():
+            with session.memory_scope() if session is not None else nullcontext() as memory_turn:
                 if event_loop is None:
                     asyncio.run(run())
                 else:
@@ -1215,6 +1219,31 @@ class Assistant:
                 "all displayed text was spoken. Tools already started may have completed; "
                 "inspect current state before retrying. Follow the user's next instruction.]")]))
             return text, safe
+
+        from src.init.task_effects import TOOL_SPECS
+        if (memory_turn is not None and memory_turn.service is not None and text.strip()
+                and not memory_turn.writes and not any(
+                    TOOL_SPECS[name].effectful for name in succeeded_tools if name in TOOL_SPECS)):
+            from src.init.memory.integration import claims_unsaved_memory
+            from src.init.lang import tr
+            claimed = False
+            try:
+                audit = claims_unsaved_memory(session_model, memory_turn.prompt, text)
+                claimed = asyncio.run(audit) if event_loop is None else event_loop.run_until_complete(audit)
+            except Exception:
+                logging.getLogger("assistant.memory").exception("Memory claim audit failed")
+            if claimed:
+                logging.getLogger("assistant.memory").warning("Reply claimed a memory write that never happened")
+                notice = "\n\n" + tr("memory.unsaved_notice")
+                if on_chunk is not None:
+                    on_chunk(notice)
+                text += notice
+                for message in reversed(completed_history or []):
+                    if isinstance(message, ModelResponse):
+                        part = next((item for item in reversed(message.parts) if isinstance(item, TextPart)), None)
+                        if part is not None:
+                            part.content += notice
+                            break
 
         if controller.state is not None and controller.state.status == "complete":
             task_context.task_controller = controller.pending_task

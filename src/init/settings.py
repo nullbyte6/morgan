@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 from .choice_dialog import ChoiceDialog
 from .config import CONTEXT_LENGTH_RANGE, load_config, save_config
 from .identity import get_assistant_name
+from .indicators import PopupCorners
 from .lang import get_language, tr
 from .ollama_service import ollama_executable, restart_ollama
 from .theme import current_theme, discover_themes, on_theme_changed, seed_user_themes, select_theme
@@ -250,6 +251,7 @@ class SettingsView(QWidget):
         self.language_label = QLabel()
         self.language_label.setObjectName("muted")
         self.language_dropdown = QComboBox()
+        PopupCorners(self.language_dropdown)
         self.language_dropdown.setObjectName("languageDropdown")
 
         self.language_dropdown.view().setAutoFillBackground(True)
@@ -286,6 +288,7 @@ class SettingsView(QWidget):
             lambda: self.language_changed.emit(self.language_dropdown.currentData()))
 
         self.model_dropdown = QComboBox()
+        PopupCorners(self.model_dropdown)
         self.model_dropdown.setObjectName("modelDropdown")
         self.model_dropdown.view().setAutoFillBackground(True)
         self.model_dropdown.view().viewport().setAutoFillBackground(True)
@@ -317,6 +320,7 @@ class SettingsView(QWidget):
         self.theme_label = QLabel()
         self.theme_label.setObjectName("muted")
         self.theme_dropdown = ThemeDropdown()
+        PopupCorners(self.theme_dropdown)
         self.theme_dropdown.setObjectName("themeDropdown")
         self.theme_dropdown.view().setAutoFillBackground(True)
         self.theme_dropdown.view().viewport().setAutoFillBackground(True)
