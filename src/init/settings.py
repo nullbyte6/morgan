@@ -176,6 +176,7 @@ class SettingsView(QWidget):
     subtitles_changed = Signal(bool)
     orb_pulse_changed = Signal(bool)
     ephemeral_steps_changed = Signal(bool)
+    song_panel_changed = Signal(bool)
     mute_changed = Signal(bool)
     language_changed = Signal(str)
     model_changed = Signal(str)
@@ -184,7 +185,8 @@ class SettingsView(QWidget):
     ACTION_COLUMNS = 3
 
     def __init__(self, subtitles_enabled: bool,
-                 orb_pulse_enabled: bool, parent=None, *, muted=False, ephemeral_steps_enabled=True):
+                 orb_pulse_enabled: bool, parent=None, *, muted=False, ephemeral_steps_enabled=True,
+                 song_panel_enabled=True):
         super().__init__(parent)
         self.setObjectName("settingsPage")
         content = QWidget()
@@ -248,6 +250,17 @@ class SettingsView(QWidget):
         ephemeral_steps_row.addWidget(self.ephemeral_steps_switch)
         layout.addLayout(ephemeral_steps_row)
 
+        self.song_panel_label = QLabel()
+        self.song_panel_label.setObjectName("muted")
+        self.song_panel_switch = ToggleSwitch()
+        self.song_panel_switch.setChecked(song_panel_enabled)
+        self.song_panel_label.setBuddy(self.song_panel_switch)
+        song_panel_row = QHBoxLayout()
+        song_panel_row.addWidget(self.song_panel_label)
+        song_panel_row.addStretch()
+        song_panel_row.addWidget(self.song_panel_switch)
+        layout.addLayout(song_panel_row)
+
         self.language_label = QLabel()
         self.language_label.setObjectName("muted")
         self.language_dropdown = QComboBox()
@@ -284,6 +297,7 @@ class SettingsView(QWidget):
         self.subtitles_switch.toggled.connect(self.subtitles_changed.emit)
         self.orb_pulse_switch.toggled.connect(self.orb_pulse_changed.emit)
         self.ephemeral_steps_switch.toggled.connect(self.ephemeral_steps_changed.emit)
+        self.song_panel_switch.toggled.connect(self.song_panel_changed.emit)
         self.language_dropdown.currentIndexChanged.connect(
             lambda: self.language_changed.emit(self.language_dropdown.currentData()))
 
@@ -616,6 +630,9 @@ class SettingsView(QWidget):
         self.ephemeral_steps_label.setText(tr("ui.ephemeral_steps"))
         self.ephemeral_steps_switch.setAccessibleName(tr("ui.ephemeral_steps"))
         self.ephemeral_steps_switch.setToolTip(tr("ui.ephemeral_steps_hint"))
+        self.song_panel_label.setText(tr("ui.song_panel"))
+        self.song_panel_switch.setAccessibleName(tr("ui.song_panel"))
+        self.song_panel_switch.setToolTip(tr("ui.song_panel_hint"))
         self.language_label.setText(tr("ui.language"))
         self.language_dropdown.setAccessibleName(tr("ui.language"))
         self.language_dropdown.setToolTip(tr("ui.language_hint"))

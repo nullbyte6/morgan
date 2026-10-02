@@ -27,6 +27,8 @@
   "ui.orb_speech_pulse_hint": "Hace que el Orb crezca y decrezca con la voz de {assistant_name}",
   "ui.ephemeral_steps": "Pasos efímeros",
   "ui.ephemeral_steps_hint": "Mostrar u ocultar los pasos de actividad debajo del orbe",
+  "ui.song_panel": "Abrir el panel de la canción",
+  "ui.song_panel_hint": "Abrir el panel de reproducción por sí solo cuando empieza una canción",
   "ui.language": "Idioma de la interfaz",
   "ui.voice": "Voz",
   "voice.selection_restart": "El servicio de voz no admite la selección dinámica o no responde. Reinicia el servicio de voz de {assistant_name}, no solo la ventana.",

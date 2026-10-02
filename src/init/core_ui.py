@@ -944,11 +944,13 @@ class AssistantWindow(DesktopWindow):
                 self.subtitles_enabled,
                 self.settings.value("orb_speech_pulse", True, type=bool),
                 muted=self.muted,
-                ephemeral_steps_enabled=self.settings.value("ephemeral_steps", True, type=bool))
+                ephemeral_steps_enabled=self.settings.value("ephemeral_steps", True, type=bool),
+                song_panel_enabled=self.settings.value("song_panel", True, type=bool))
             view.mute_changed.connect(self.toggle_mute)
             view.subtitles_changed.connect(self.toggle_subtitles)
             view.orb_pulse_changed.connect(self.toggle_orb_speech_pulse)
             view.ephemeral_steps_changed.connect(self.toggle_ephemeral_steps)
+            view.song_panel_changed.connect(self.toggle_song_panel)
             view.language_changed.connect(self.change_language)
             view.update_requested.connect(self.check_for_updates)
             return view
@@ -1107,6 +1109,7 @@ class AssistantWindow(DesktopWindow):
             self.song_panel_key = None
             return
         if (not song.playing or song.key == self.song_panel_key or self.quitting or not self.isVisible()
+                or not self.settings.value("song_panel", True, type=bool)
                 or self.workspace.findChildren(SongView)):
             return
         self.song_panel_key = song.key
@@ -1446,6 +1449,9 @@ class AssistantWindow(DesktopWindow):
             with QSignalBlocker(view.ephemeral_steps_switch):
                 view.ephemeral_steps_switch.setChecked(
                     self.settings.value("ephemeral_steps", True, type=bool))
+            with QSignalBlocker(view.song_panel_switch):
+                view.song_panel_switch.setChecked(
+                    self.settings.value("song_panel", True, type=bool))
             view.refresh_language()
 
     def _refresh_view_language(self, session):
@@ -1606,6 +1612,12 @@ class AssistantWindow(DesktopWindow):
         for session in self._views():
             session.ui.activity_trail.set_steps_enabled(enabled)
         self.settings.setValue("ephemeral_steps", enabled)
+        self.refresh_settings_workspaces()
+
+    @Slot(bool)
+    def toggle_song_panel(self, enabled: bool):
+        self.settings.setValue("song_panel", enabled)
+        self.song_panel_key = None
         self.refresh_settings_workspaces()
 
     def set_orbs_speaking(self, speaking: bool, session=None):

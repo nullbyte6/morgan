@@ -79,6 +79,8 @@ marked as overdue.
 When a song starts playing, a Now playing panel opens by itself to the right of the
 active panel. It is shown once per song: if you close it, it stays closed until a
 different song starts or the player is closed and opened again.
+Turn off "Open the song panel" in Settings to stop it from opening by itself; the song
+detection keeps running but no panel is opened.
 
 Only songs count, not videos or podcasts. Arlo reads the Windows media session of
 Spotify, or of a browser playing YouTube Music or an auto-generated "Topic" track, and

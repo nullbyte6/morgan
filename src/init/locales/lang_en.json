@@ -27,6 +27,8 @@
   "ui.orb_speech_pulse_hint": "Make the Orb grow and shrink with {assistant_name}'s voice",
   "ui.ephemeral_steps": "Ephemeral steps",
   "ui.ephemeral_steps_hint": "Show or hide activity steps below the orb",
+  "ui.song_panel": "Open the song panel",
+  "ui.song_panel_hint": "Open the Now playing panel by itself when a song starts",
   "ui.language": "Interface language",
   "ui.voice": "Voice",
   "voice.selection_restart": "The voice service does not support dynamic selection or is not responding. Restart {assistant_name}'s voice service, not just the window.",
