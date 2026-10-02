@@ -359,6 +359,29 @@ QLineEdit#contextLengthInput:focus {
     border-color: @accent;
 }
 
+QPushButton#ollamaButton {
+    background-color: @surface;
+    color: @text;
+    border: 2px solid @border;
+    border-radius: 8px;
+    padding: 0;
+    font-size: 20px;
+}
+
+QPushButton#ollamaButton:hover,
+QPushButton#ollamaButton:focus {
+    border-color: @accent;
+}
+
+QPushButton#ollamaButton:pressed {
+    background-color: @surface_selected;
+}
+
+QPushButton#ollamaButton:disabled {
+    border-color: @border;
+    background-color: @surface_sunken;
+}
+
 QPushButton#themesFolderButton {
     background-color: @surface;
     color: @text;
