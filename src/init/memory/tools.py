@@ -18,20 +18,18 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from typing import Literal
 
-from .integration import active_memory, explicit_intent
+from .integration import active_memory
 from .service import CATEGORIES
 
 Category = Literal[CATEGORIES]
 
 
-def _turn(action=None):
+def _turn():
     turn = active_memory.get()
     if turn.private:
         raise ValueError("Persistent memory is disabled in private mode")
     if turn.service is None:
         raise ValueError("Persistent memory is unavailable" + (": " + turn.error if turn.error else ""))
-    if action and not explicit_intent(turn.prompt, action):
-        raise ValueError("An explicit memory request in the current user message is required")
     return turn
 
 
@@ -42,7 +40,7 @@ def remember(content: str, category: Category = "fact", key: str | None = None,
     pinned true keeps it always in context, for requests such as "always remember that ...".
     """
     try:
-        turn = _turn("remember")
+        turn = _turn()
         if memory_id:
             memory = turn.service.update_memory(memory_id, content, category=category, key=key,
                                                 expires_at=expires_at, source_message_id=turn.message_id)
@@ -81,7 +79,7 @@ def forget(memory_id: str) -> dict:
     This does not delete original conversation messages or Markdown logs.
     """
     try:
-        deleted = _turn("forget").service.delete_memory(memory_id)
+        deleted = _turn().service.delete_memory(memory_id)
         return {"ok": deleted, "deleted": deleted, "original_messages_and_markdown_retained": True}
     except Exception as error:
         return {"ok": False, "error": str(error)}
@@ -92,7 +90,7 @@ def pin_memory(memory_id: str, pinned: bool = True) -> dict:
     on explicit user request. Use list_memories or recall to find the ID first.
     """
     try:
-        turn = _turn("pin")
+        turn = _turn()
         if not turn.service.pin_memory(memory_id, pinned):
             raise ValueError("No active memory has that ID")
         return {"ok": True, "memory": turn.service.get_memory(memory_id)}

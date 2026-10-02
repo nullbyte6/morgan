@@ -22,7 +22,6 @@ import os
 import re
 import sqlite3
 import tempfile
-import unicodedata
 import zipfile
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -170,7 +169,10 @@ def memory_instructions():
         "Persistent memory is separate supplementary evidence: never use it to replace, reconstruct, "
         "reinterpret, or override an active request or its tool results. "
         "Use remember only for an explicit current-user request to store or update durable information; "
-        "never consolidate ordinary conversation automatically. Reuse a semantic key such as response_language "
+        "never consolidate ordinary conversation automatically. When the user asks to remember, update, "
+        "forget or pin something, in any wording or language, call the matching tool in that same turn "
+        "before replying, and never answer as if it were done without calling it. "
+        "Reuse a semantic key such as response_language "
         "for a preference, or an existing memory_id when updating. Use recall to find facts or conversations "
         "from previous sessions and cite their source. Before saying a fact from a previous session is unavailable, "
         "use recall to verify it. Use list_memories to identify a memory before forget. "
@@ -203,21 +205,3 @@ def memory_instructions():
             "address the user in the second person, so a memory saying \"My mother's name is Ana\" answers "
             "\"What's my mother's name?\" with \"Your mother's name is Ana\", never \"My mother's name is Ana\".\n"
             + context)
-
-
-def explicit_intent(prompt, action):
-    from ..identity import get_assistant_name
-    name = "".join(char for char in unicodedata.normalize("NFKD", get_assistant_name().casefold())
-                   if not unicodedata.combining(char))
-    prompt = "".join(char for char in unicodedata.normalize("NFKD", prompt.casefold())
-                     if not unicodedata.combining(char))
-    prefix = (rf"^\s*(?:(?:please|por favor)[, ]+)?(?:(?:{re.escape(name)})[, ]+)?"
-              r"(?:(?:can you|could you|would you|puedes|podrias)\s+)?"
-              r"(?:(?:please|por favor)\s+)?")
-    expressions = {
-        "remember": r"(?:remember|always remember|siempre recuerda|memorize|recuerda|recordar|recuerdame|memoriza|memorizar|anota|guarda|guardar|save|store|update|actualiza|actualizar|corrige)\b",
-        "forget": r"(?:forget|olvida|olvidar|borra|borrar|elimina|eliminar|delete|remove)\b",
-        "pin": r"(?:pin|unpin|fija|fijar|desfija|desfijar|ancla|anclar|desancla|desanclar|always remember|"
-               r"recuerda siempre|siempre recuerda)\b",
-    }
-    return re.search(prefix + expressions[action], prompt) is not None

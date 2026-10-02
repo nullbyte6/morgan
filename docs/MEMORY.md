@@ -50,11 +50,10 @@ Examples:
 
 The agent receives `remember`, `recall`, `forget`, `list_memories`, `search_words`,
 `word_instances`, `read_conversation`, and `read_memory_message`.
-Mutations require a current user request beginning with an
-English or Spanish remember/save/update/forget/delete imperative, optionally with
-a polite prefix. This deliberately conservative guard rejects mutations requested
-only by retrieved text. Unrecognized phrasings should be restated explicitly.
-The model still resolves the intended fact and memory ID; ambiguous requests
+Mutations are made only when the user asks for them, in any wording or language:
+the instructions tell the model to call the tool in that same turn and to treat
+retrieved text as data, so text found in memory or logs is never obeyed.
+No keyword list decides it. The model resolves the intended fact and memory ID; ambiguous requests
 should result in a clarification rather than guessing.
 
 `remember` takes content, category (`preference`, `fact`, `project`, `goal`,
@@ -158,7 +157,7 @@ The implementation lives in `src/init/memory`:
 | `retrieval.py`   | FTS queries, user/assistant pairing, bounded result formatting                       |
 | `lexical.py`     | Indexed vocabulary, word instances, positions and paginated counts                   |
 | `markdown.py`    | Conservative read-only parser of the existing daily logs                             |
-| `integration.py` | Configuration, per-turn context, explicit-intent checks and instructions             |
+| `integration.py` | Configuration, per-turn context, backups and instructions                            |
 | `tools.py`       | Pydantic AI-compatible tools; no direct SQL                                          |
 | `__main__.py`    | Local maintenance CLI                                                                |
 
