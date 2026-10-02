@@ -30,8 +30,9 @@ from src.init.settings import ToggleSwitch
 
 from . import formatting
 from .calendar_paint import MiniMonth
-from .entries import (FLAGS, MAX_REPEAT_COUNT, RECURRENCES, REPEAT_UNITS, Entry, Reminder, normalize_recurrence,
+from .entries import (FLAG_COUNTS, FLAGS, MAX_REPEAT_COUNT, RECURRENCES, REPEAT_UNITS, Entry, Reminder, normalize_recurrence,
                       parse_recurrence)
+from .rows import FLAG, PENCIL
 from .store import NovaStore
 
 REMINDER, EVENT = "reminder", "event"
@@ -154,6 +155,8 @@ class NovaEntryDialog(QWidget):
             button.setCheckable(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             self.repeat.addButton(button)
+            if recurrence == CUSTOM:
+                button.setProperty("glyph", True)
             self._repeat_buttons[recurrence] = button
             repeat_line.addWidget(button)
         repeat_line.addStretch(1)
@@ -336,9 +339,9 @@ class NovaEntryDialog(QWidget):
         self.labels["repeat"].setText(tr("nova.dialog.repeat"))
         self.labels["flag"].setText(tr("nova.dialog.flag"))
         for flag, button in self._flag_buttons.items():
-            button.setText(tr(f"nova.flag.{flag}"))
+            button.setText(FLAG * FLAG_COUNTS[flag] if flag in FLAG_COUNTS else tr("nova.flag.none"))
         for recurrence, button in self._repeat_buttons.items():
-            button.setText(tr(f"nova.repeat.{recurrence}"))
+            button.setText(PENCIL if recurrence == CUSTOM else tr(f"nova.repeat.{recurrence}"))
         self.every_label.setText(tr("nova.dialog.every"))
         for unit, button in self._unit_buttons.items():
             button.setText(tr(f"nova.unit.{unit}"))

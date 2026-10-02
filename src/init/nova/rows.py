@@ -147,7 +147,6 @@ class EntryRow(QFrame):
             flag = QLabel(FLAG)
             flag.setObjectName("novaRowFlag")
             flag.setProperty("flag", entry.flag)
-            flag.setToolTip(tr(f"nova.flag.{entry.flag}"))
             flag.setFixedSize(CircleCheck.SIZE, 30)
             flag.setAlignment(Qt.AlignmentFlag.AlignCenter)
             row.addWidget(flag, 0, Qt.AlignmentFlag.AlignTop)

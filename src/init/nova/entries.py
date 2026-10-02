@@ -35,6 +35,7 @@ RECURRENCES = ("none", "daily", "weekly", "monthly")
 REPEAT_UNITS = ("hours", "days", "weeks", "months", "years")
 FLAGS = ("none", "green", "yellow", "red")
 FLAG_ROLES = {"green": "success", "yellow": "warning", "red": "error"}
+FLAG_COUNTS = {"green": 1, "yellow": 2, "red": 3}
 FLAG_RANKS = {"red": 0, "yellow": 1, "green": 2, "none": 3}
 STEP_DELTAS = {"hours": timedelta(hours=1), "days": timedelta(days=1), "weeks": timedelta(weeks=1)}
 STEP_MONTHS = {"months": 1, "years": 12}

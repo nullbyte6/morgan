@@ -50,6 +50,7 @@ NAMES = {
 TOKEN = re.compile(r"'[^']*'|d{1,4}|M{1,4}|y{4}|y{2}")
 REPEAT = "↻"
 FLAG = "⚑"
+PENCIL = "✎"
 
 
 def names() -> dict:

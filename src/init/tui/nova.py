@@ -26,8 +26,8 @@ from pathlib import Path
 
 from src.init.memory.integration import configured_service
 from src.init.nova.agenda import agenda_groups, event_groups, reminder_groups
-from src.init.nova.entries import (FLAG_ROLES, FLAGS, MAX_REPEAT_COUNT, RECURRENCES, REPEAT_UNITS, Event, Reminder,
-                                   flagged_first, normalize_recurrence, parse_recurrence)
+from src.init.nova.entries import (FLAG_COUNTS, FLAG_ROLES, FLAGS, MAX_REPEAT_COUNT, RECURRENCES, REPEAT_UNITS,
+                                   Event, Reminder, flagged_first, normalize_recurrence, parse_recurrence)
 from src.init.nova.journal import clipped, day_bounds, describe_week, local_moment, message_count, summarize
 from src.init.nova.sections import Section
 from src.init.tui import nova_text as fmt
@@ -127,11 +127,11 @@ class EntryForm:
         if item.key == "kind":
             return t("nova.reminder" if self.kind == REMINDER else "nova.event")
         if item.key == "repeat":
-            return t(f"nova.repeat.{value}")
+            return fmt.PENCIL if value == CUSTOM else t(f"nova.repeat.{value}")
         if item.key == "unit":
             return t(f"nova.unit.{value}")
         if item.key == "flag":
-            return t(f"nova.flag.{value}")
+            return fmt.FLAG * FLAG_COUNTS[value] if value in FLAG_COUNTS else t("nova.flag.none")
         if item.kind == "toggle":
             return "[x]" if value else "[ ]"
         return str(value).replace("\n", " ⏎ ")

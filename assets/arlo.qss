@@ -1019,6 +1019,13 @@ QPushButton#novaFlagOption {
     font-size: 14px;
 }
 
+QPushButton#novaFlagOption[flag="green"],
+QPushButton#novaFlagOption[flag="yellow"],
+QPushButton#novaFlagOption[flag="red"],
+QPushButton#novaSegment[glyph="true"] {
+    font-family: "JetBrainsMonoNL NFM";
+}
+
 QPushButton#novaFlagOption:hover {
     background-color: @surface_raised;
     color: @text;
