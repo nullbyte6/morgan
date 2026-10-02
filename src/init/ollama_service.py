@@ -30,7 +30,9 @@ from .lang import tr
 
 VERSION_URL = "http://127.0.0.1:11434/api/version"
 SERVER_NAMES = {"ollama.exe", "ollama"}
-PROCESS_NAMES = SERVER_NAMES | {"ollama app.exe"}
+APP_NAMES = {"ollama app.exe"}
+PROCESS_NAMES = SERVER_NAMES | APP_NAMES
+RUNNER_NAMES = {"llama-server.exe", "llama-server"}
 STOP_SECONDS = 10
 START_SECONDS = 30
 
@@ -39,7 +41,8 @@ def _processes() -> list[psutil.Process]:
     found = []
     for process in psutil.process_iter(["name"]):
         try:
-            if (process.info["name"] or "").casefold() in PROCESS_NAMES:
+            name = (process.info["name"] or "").casefold()
+            if name in PROCESS_NAMES or name in RUNNER_NAMES and "ollama" in process.exe().casefold():
                 found.append(process)
         except psutil.Error:
             continue
@@ -74,12 +77,7 @@ def ollama_ready() -> bool:
         return False
 
 
-def restart_ollama(context_length: int) -> None:
-    """Stop every Ollama process and start the server again with the given OLLAMA_CONTEXT_LENGTH."""
-    executable = ollama_executable()
-    if executable is None:
-        raise FileNotFoundError(tr("ui.restart_ollama_missing"))
-    processes = _processes()
+def _stop(processes: list[psutil.Process]) -> None:
     for process in processes:
         try:
             process.terminate()
@@ -92,10 +90,20 @@ def restart_ollama(context_length: int) -> None:
         except psutil.Error:
             continue
     psutil.wait_procs(alive, timeout=STOP_SECONDS)
+
+
+def restart_ollama(context_length: int) -> None:
+    """Stop every Ollama process and start the server again with the given OLLAMA_CONTEXT_LENGTH."""
+    executable = ollama_executable()
+    if executable is None:
+        raise FileNotFoundError(tr("ui.restart_ollama_missing"))
+    processes = _processes()
+    apps = [process for process in processes if (process.info["name"] or "").casefold() in APP_NAMES]
+    _stop(apps)
+    _stop([process for process in processes if process not in apps])
     options = {}
     if os.name == "nt":
-        options["creationflags"] = (subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
-                                    | subprocess.CREATE_NEW_PROCESS_GROUP)
+        options["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
     subprocess.Popen(
         [str(executable), "serve"], env={**os.environ, "OLLAMA_CONTEXT_LENGTH": str(context_length)},
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **options)
