@@ -36,6 +36,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix Arlo staying open after being asked to close itself during a reply, because the shutdown waited on a quit request that had already been marked as handled
 - Fix model selector list covering the selector when opened upward, by keeping it anchored above the selector with a small gap while it resizes
 - Fix Nova events not opening in the edit overlay, and adding or updating them failing in the desktop version, because Qt's own event method hid the store's event lookup, now called find_event, which also let update_agenda_entry find events again
+- Fix Settings being squished when its panel is short, such as at the top or bottom of the screen, by placing it in a scroll area with a hidden scrollbar, with the mouse wheel over a dropdown scrolling the page instead of changing the dropdown
 - Fix small blank windows flashing on screen when a Nova list is rebuilt, as when opening the diary with Ctrl+L, because the old rows were detached while still visible
 - Fix snoozing a due Nova reminder giving no sign of its new time, by confirming it in a notification or saying the reminder no longer exists, and Tomorrow on a daily reminder adding a duplicate at the time it already repeats
 - Remove the /exit, /private and /reload slash commands in favour of the command palette, which gains Toggle private mode in the desktop and terminal versions and Reload modules in the desktop, while reload and ref still work as messages

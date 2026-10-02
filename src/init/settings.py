@@ -20,11 +20,11 @@
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
+from PySide6.QtCore import QEvent, Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QIntValidator, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListView,
-    QMessageBox, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
+    QAbstractButton, QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QLineEdit, QListView, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from .config import CONTEXT_LENGTH_RANGE, load_config, save_config
 from .identity import get_assistant_name
@@ -165,7 +165,19 @@ class SettingsView(QWidget):
                  orb_pulse_enabled: bool, parent=None, *, muted=False, ephemeral_steps_enabled=True):
         super().__init__(parent)
         self.setObjectName("settingsPage")
-        layout = QVBoxLayout(self)
+        content = QWidget()
+        content.setObjectName("settingsPage")
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("settingsScroll")
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setWidget(content)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self.scroll)
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(32, 12, 32, 20)
         layout.setSpacing(24)
 
@@ -344,6 +356,9 @@ class SettingsView(QWidget):
         self.restore_button.clicked.connect(self.restore_data)
         self.remove_memories_button.clicked.connect(self.remove_memories)
 
+        for dropdown in (self.language_dropdown, self.model_dropdown, self.theme_dropdown):
+            dropdown.installEventFilter(self)
+
         self.theme_dropdown.popup_requested.connect(self.refresh_themes)
         self.theme_dropdown.activated.connect(self.change_theme)
         self.themes_folder_button.clicked.connect(self.open_themes_folder)
@@ -357,6 +372,12 @@ class SettingsView(QWidget):
         self.voice_timer.setInterval(1000)
         self.voice_timer.timeout.connect(self.refresh_voices)
         self.voice_timer.start()
+
+    def eventFilter(self, watched, event):
+        if isinstance(watched, QComboBox) and event.type() == QEvent.Type.Wheel:
+            QApplication.sendEvent(self.scroll.viewport(), event)
+            return True
+        return super().eventFilter(watched, event)
 
     def add_action_button(self, object_name: str) -> QPushButton:
         """Place a new button in the next free cell of the action grid."""

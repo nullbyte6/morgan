@@ -87,6 +87,11 @@ QWidget#settingsPage {
     color: @text;
 }
 
+QScrollArea#settingsScroll {
+    background: transparent;
+    border: none;
+}
+
 QLabel#muted,
 QLabel#status,
 QLabel#activityTrail,
