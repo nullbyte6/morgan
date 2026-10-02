@@ -6,6 +6,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 - Add /exit in the input box and an Exit Arlo command in the command palette that stop any running reply and close Arlo gracefully, so the session end time is recorded without ending the process from the Task Manager
 - Add a health view, opened from the command palette, that checks Ollama, how much of the main model sits on the GPU and how long it took to load, the graphics adapters against the installed CUDA or ROCm PyTorch build, and the voice service device and CosyVoice load time
+- Add Back Up and Restore buttons to Settings, next to Remove Memories, that save the memory database, Nova's reminders and events and the daily logs to one zip file and bring them back from it, migrating older backups to the current schema
 - Add Copy day and Export buttons to the Nova diary that copy the day as Markdown or save it to a Markdown file, with its agenda, remembered facts and every conversation message
 - Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda

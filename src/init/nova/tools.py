@@ -44,6 +44,14 @@ def _shared():
         return _store
 
 
+def refresh_store() -> None:
+    """Tell the views of the shared store that its databases were replaced underneath them."""
+    with _lock:
+        store = _store
+    if store is not None:
+        store.changed.emit()
+
+
 def _moment(value: str, name: str) -> datetime:
     try:
         moment = datetime.fromisoformat(str(value).strip())

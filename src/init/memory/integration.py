@@ -16,9 +16,14 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
+import json
 import logging
+import os
 import re
+import sqlite3
+import tempfile
 import unicodedata
+import zipfile
 from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import lru_cache
@@ -72,6 +77,88 @@ def clear_memories():
     from ..session_log import clear_logs
     _settings_service(load_config()["memory"]).clear()
     clear_logs()
+
+
+LOG_NAME = re.compile(r"\d{4}-\d{2}-\d{2}\.md")
+BACKUP_MANIFEST = "backup.json"
+
+
+def _databases():
+    from ..config import HOME_PATH, load_config
+    from ..nova.database import EventDatabase, ReminderDatabase
+    memory = _settings_service(load_config()["memory"]).db
+    return {"memory.sqlite3": (type(memory), memory.path),
+            "nova/reminders.sqlite3": (ReminderDatabase, HOME_PATH / "nova" / "reminders.sqlite3"),
+            "nova/events.sqlite3": (EventDatabase, HOME_PATH / "nova" / "events.sqlite3")}
+
+
+def _daily_logs():
+    from ..config import HOME_PATH
+    directory = HOME_PATH / ".log"
+    if not directory.is_dir():
+        return []
+    return [path for path in sorted(directory.iterdir())
+            if LOG_NAME.fullmatch(path.name) and path.is_file() and not path.is_symlink()]
+
+
+def backup_data(destination):
+    """Save the memory database, Nova's reminders and events and the daily logs into one zip file."""
+    from ..brain import get_version
+    from .database import timestamp
+    destination = Path(destination)
+    partial = destination.with_name(destination.name + ".partial")
+    counts = {"databases": 0, "logs": 0}
+    try:
+        with tempfile.TemporaryDirectory() as folder, zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name, (kind, path) in _databases().items():
+                if path.exists():
+                    copy = Path(folder) / name.replace("/", "-")
+                    kind(path).backup(copy)
+                    archive.write(copy, name)
+                    counts["databases"] += 1
+            for path in _daily_logs():
+                archive.write(path, "logs/" + path.name)
+                counts["logs"] += 1
+            archive.writestr(BACKUP_MANIFEST, json.dumps({"version": get_version(), "created_at": timestamp(),
+                                                         **counts}, indent=2))
+        os.replace(partial, destination)
+    finally:
+        partial.unlink(missing_ok=True)
+    return counts
+
+
+def restore_data(source):
+    """Replace the memory database, Nova's reminders and events and the matching daily logs with a backup's."""
+    from ..config import HOME_PATH
+    counts = {"databases": 0, "logs": 0}
+    with zipfile.ZipFile(source) as archive, tempfile.TemporaryDirectory() as folder:
+        names = set(archive.namelist())
+        if BACKUP_MANIFEST not in names:
+            raise ValueError("The file is not a backup made by this application")
+        staged = []
+        for name, (kind, path) in _databases().items():
+            if name in names:
+                copy = Path(folder) / name.replace("/", "-")
+                copy.write_bytes(archive.read(name))
+                kind(copy)
+                staged.append((copy, path))
+        for copy, path in staged:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            reader, writer = sqlite3.connect(copy), sqlite3.connect(path, timeout=5)
+            try:
+                reader.backup(writer)
+            finally:
+                writer.close()
+                reader.close()
+            counts["databases"] += 1
+        logs = HOME_PATH / ".log"
+        for name in sorted(names):
+            folder_name, _, file_name = name.partition("/")
+            if folder_name == "logs" and LOG_NAME.fullmatch(file_name):
+                logs.mkdir(parents=True, exist_ok=True)
+                (logs / file_name).write_bytes(archive.read(name))
+                counts["logs"] += 1
+    return counts
 
 
 def memory_instructions():

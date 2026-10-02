@@ -17,12 +17,16 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+from datetime import datetime
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QPainter
 from PySide6.QtWidgets import (
-    QAbstractButton, QComboBox, QHBoxLayout, QLabel, QListView, QMessageBox, QPushButton, QVBoxLayout,
-    QWidget)
+    QAbstractButton, QComboBox, QFileDialog, QHBoxLayout, QLabel, QListView, QMessageBox, QPushButton,
+    QVBoxLayout, QWidget)
 
+from .identity import get_assistant_name
 from .lang import get_language, tr
 from .theme import current_theme, discover_themes, on_theme_changed, seed_user_themes, select_theme
 from .voice_profiles import available_voices, selected_voice, select_voice, VOICE_NAMES
@@ -315,10 +319,20 @@ class SettingsView(QWidget):
         self.remove_memories_button = QPushButton()
         self.remove_memories_button.setObjectName("removeMemoriesButton")
         self.remove_memories_button.setCursor(Qt.PointingHandCursor)
+        self.backup_button = QPushButton()
+        self.backup_button.setObjectName("themesFolderButton")
+        self.backup_button.setCursor(Qt.PointingHandCursor)
+        self.restore_button = QPushButton()
+        self.restore_button.setObjectName("themesFolderButton")
+        self.restore_button.setCursor(Qt.PointingHandCursor)
         remove_memories_row = QHBoxLayout()
         remove_memories_row.addStretch()
+        remove_memories_row.addWidget(self.backup_button)
+        remove_memories_row.addWidget(self.restore_button)
         remove_memories_row.addWidget(self.remove_memories_button)
         layout.addLayout(remove_memories_row)
+        self.backup_button.clicked.connect(self.backup_data)
+        self.restore_button.clicked.connect(self.restore_data)
         self.remove_memories_button.clicked.connect(self.remove_memories)
 
         self.theme_dropdown.popup_requested.connect(self.refresh_themes)
@@ -363,6 +377,39 @@ class SettingsView(QWidget):
 
     def open_themes_folder(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(seed_user_themes())))
+
+    def backup_data(self):
+        from .memory.integration import backup_data
+        path, _filter = QFileDialog.getSaveFileName(
+            self, tr("ui.backup_data"),
+            str(Path.home() / f"{get_assistant_name()}-backup-{datetime.now():%Y-%m-%d}.zip"), "Zip (*.zip)")
+        if not path:
+            return
+        try:
+            counts = backup_data(path)
+        except Exception as error:
+            QMessageBox.warning(self, tr("ui.backup_data"), tr("ui.error", error=error))
+            return
+        QMessageBox.information(self, tr("ui.backup_data"), tr("ui.backup_data_done", path=path, **counts))
+
+    def restore_data(self):
+        from .memory.integration import restore_data
+        from .nova.tools import refresh_store
+        path, _filter = QFileDialog.getOpenFileName(self, tr("ui.restore_data"), str(Path.home()), "Zip (*.zip)")
+        if not path:
+            return
+        answer = QMessageBox.warning(
+            self, tr("ui.restore_data"), tr("ui.restore_data_confirm"),
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            counts = restore_data(path)
+        except Exception as error:
+            QMessageBox.warning(self, tr("ui.restore_data"), tr("ui.error", error=error))
+            return
+        refresh_store()
+        QMessageBox.information(self, tr("ui.restore_data"), tr("ui.restore_data_done", **counts))
 
     def remove_memories(self):
         from .memory.integration import clear_memories
@@ -438,6 +485,11 @@ class SettingsView(QWidget):
             self.theme_dropdown.setAccessibleName(tr("ui.theme"))
             self.theme_dropdown.setToolTip(tr("ui.theme_hint"))
             self.themes_folder_button.setText(tr("ui.open_themes_folder"))
+        if hasattr(self, "backup_button"):
+            self.backup_button.setText(tr("ui.backup_data"))
+            self.backup_button.setToolTip(tr("ui.backup_data_hint"))
+            self.restore_button.setText(tr("ui.restore_data"))
+            self.restore_button.setToolTip(tr("ui.restore_data_hint"))
         if hasattr(self, "remove_memories_button"):
             self.remove_memories_button.setText(tr("ui.remove_memories"))
             self.remove_memories_button.setToolTip(tr("ui.remove_memories_hint"))
