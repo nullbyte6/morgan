@@ -645,7 +645,7 @@ QMessageBox QLabel {
     background: transparent;
     border: none;
     border-radius: 6px;
-    font-size: 16px;
+    font-size: 18px;
 }
 
 #workspacePanelClose:hover {
@@ -659,7 +659,7 @@ QMessageBox QLabel {
     border: none;
     border-radius: 6px;
     font-family: "JetBrainsMonoNL NFM";
-    font-size: 16px;
+    font-size: 18px;
     padding: 0;
 }
 

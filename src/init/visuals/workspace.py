@@ -72,7 +72,7 @@ class WorkspacePanel(QFrame):
 
         self.header = QWidget(self)
         self.header.setObjectName("workspacePanelHeader")
-        self.header.setFixedHeight(38)
+        self.header.setFixedHeight(42)
         self.header.setCursor(Qt.OpenHandCursor)
         self.header.setMouseTracking(True)
         self.header.installEventFilter(self)
@@ -96,7 +96,7 @@ class WorkspacePanel(QFrame):
 
         self.palette_button = QPushButton("\U000f0349", self.header)
         self.palette_button.setObjectName("workspacePanelPalette")
-        self.palette_button.setFixedSize(28, 28)
+        self.palette_button.setFixedSize(31, 31)
         self.palette_button.setCursor(Qt.PointingHandCursor)
         self.palette_button.setFocusPolicy(Qt.NoFocus)
         self.palette_button.clicked.connect(
@@ -104,7 +104,7 @@ class WorkspacePanel(QFrame):
 
         self.close_button = QPushButton("×", self.header)
         self.close_button.setObjectName("workspacePanelClose")
-        self.close_button.setFixedSize(28, 28)
+        self.close_button.setFixedSize(31, 31)
         self.close_button.setCursor(Qt.PointingHandCursor)
         self.close_button.setToolTip("Close panel")
         self.close_button.setVisible(closable)
