@@ -36,6 +36,7 @@ from src.init.notifications import ask_notification, send_notification
 from src.init.session_runner import SessionRunner
 from src.init.task_view import TaskProjection
 from src.init.tui import i18n
+from src.init.tui.choice import Choice, ChoiceDialog, ChoiceRequest
 from src.init.tui.i18n import t
 from src.init.tui.shell import ShellRun, is_change_directory
 from src.init.tui.text import elapsed
@@ -100,12 +101,8 @@ class TuiRunner(SessionRunner):
 @dataclass
 class Confirmation:
     turn_id: int
-    message: str
     request_id: int
-    deadline: float
-
-    def remaining(self) -> int:
-        return max(0, int(self.deadline - time.monotonic() + 0.999))
+    request: ChoiceRequest | None = None
 
 
 NOVA_FIRST_CHECK_SECONDS = 3.0
@@ -180,6 +177,7 @@ class TuiSession:
         self.attachments = {}
         self.history = []
         self.attachment_jobs = 0
+        self.dialog = ChoiceDialog(self.notify)
         self.confirmation = None
         self.recording = False
         self.voice_thread = None
@@ -937,23 +935,29 @@ class TuiSession:
             self.runner.resolve_confirmation(False, request_id)
             return
         self.presentation.awaiting_permission(turn_id)
-        self.confirmation = Confirmation(turn_id, message, request_id, time.monotonic() + timeout)
-        self.notify()
+        deadline = time.monotonic() + timeout
+        confirmation = Confirmation(turn_id, request_id)
 
-    def answer_confirmation(self, accepted):
-        confirmation, self.confirmation = self.confirmation, None
-        if confirmation is None:
-            return
-        self.presentation.awaiting_permission(confirmation.turn_id, waiting=False)
-        self.runner.resolve_confirmation(accepted, confirmation.request_id)
-        self.notify()
+        def answered(accepted):
+            if self.confirmation is confirmation:
+                self.confirmation = None
+            self.presentation.awaiting_permission(turn_id, waiting=False)
+            self.runner.resolve_confirmation(accepted, request_id)
+
+        def remaining():
+            return max(0, int(deadline - time.monotonic() + 0.999))
+
+        self.confirmation = confirmation
+        confirmation.request = self.dialog.ask(
+            t("command.title"), f"{t('command.request')}\n\n{message}",
+            [Choice(t("command.yes"), lambda: answered(True), "accent", ("y", "Y", "s", "S")),
+             Choice(lambda: f"{t('command.no')} · {remaining()}s", lambda: answered(False), "warning", ("n", "N"))],
+            default=1, on_cancel=lambda: answered(False), tone="warning")
 
     def on_confirmation_closed(self, request_id):
         confirmation = self.confirmation
         if confirmation is not None and confirmation.request_id == request_id:
-            self.confirmation = None
-            self.presentation.awaiting_permission(confirmation.turn_id, waiting=False)
-            self.notify()
+            confirmation.request.cancel()
 
     def set_permission_mode(self, mode):
         self.permission_mode = mode

@@ -50,7 +50,7 @@ from src.init.tui.overlays import Command, FileOverlay, ModelOverlay, PaletteOve
 from src.init.tui.palette import mix
 from src.init.tui.session import TuiSession
 from src.init.tui.shell import shell_command_text
-from src.init.tui.text import banner, bold_fragments, elide, pad, subtitle_lines, width_of, wrap
+from src.init.tui.text import banner, bold_fragments, elide, pad, subtitle_lines, width_of
 from src.init.tui.widgets import ScrollControl, clicked, exact, rounded_box, style
 from src.init.updates import Release, UpdateCancelled, available_releases, download, install, relaunch_command
 
@@ -193,12 +193,12 @@ class TuiApp:
         self.scheduler = scheduler
         self.palette = palette
         self.session = TuiSession(scheduler, prefs, voice_enabled=voice_enabled)
+        self.dialog = self.session.dialog
         self.version = load_dev_file()["version"]
         i18n.refresh()
         self.overlay = None
         self.update = None
         self.update_checking = False
-        self.confirm_choice = 1
         self.panel = Scroll()
         self.output = Scroll()
         self.tag_popup = TagPopup(self)
@@ -234,7 +234,7 @@ class TuiApp:
         return self.palette[role]
 
     def normal(self):
-        return self.overlay is None and self.session.confirmation is None
+        return self.overlay is None and not self.dialog.visible
 
     def size(self):
         return self.application.output.get_size()
@@ -335,7 +335,7 @@ class TuiApp:
             return 0.125
         if session.shell is not None:
             return 0.25
-        if session.confirmation is not None or session.timer_started is not None:
+        if self.dialog.visible or session.timer_started is not None:
             return 1.0
         return None
 
@@ -804,46 +804,11 @@ class TuiApp:
         lines = len(overlay.lines(self, self.overlay_width() - 2, self.overlay_rows()))
         return max(1, min(self.overlay_rows(), lines)) + 1
 
-    def confirm_lines(self):
-        confirmation = self.session.confirmation
-        if confirmation is None:
-            return []
-        width = self.confirm_width() - 4
-        lines = []
-        for paragraph in (t("command.request"), "", *confirmation.message.strip().split("\n")):
-            lines.extend(wrap(paragraph, width))
-        return lines[-12:]
+    def dialog_fragments(self):
+        return self.dialog.fragments(self.palette, self.columns())
 
-    def confirm_width(self):
-        return max(30, min(76, self.columns() - 4))
-
-    def confirm_height(self):
-        return len(self.confirm_lines()) + 2
-
-    def confirm_fragments(self):
-        confirmation = self.session.confirmation
-        if confirmation is None:
-            return []
-        P = self.palette
-        fragments = []
-        lines = self.confirm_lines()
-        for position, line in enumerate(lines):
-            tone = style(P["text"], bold=position == 0)
-            fragments.append((tone, " " + line))
-            fragments.append(("", "\n"))
-        yes = self.confirm_choice == 0
-        yes_style = style(P["on_accent"], P["accent"], bold=True) if yes else style(P["text"], P["surface_raised"])
-        no_style = style(P["on_accent"], P["warning"], bold=True) if not yes else style(P["text"], P["surface_raised"])
-        fragments.append(("", "\n"))
-        fragments.append(("", " "))
-        fragments.append((yes_style, f"  {t('command.yes')}  ", clicked(lambda: self.session.answer_confirmation(True))))
-        fragments.append(("", "  "))
-        fragments.append((no_style, f"  {t('command.no')} · {confirmation.remaining()}s  ",
-                          clicked(lambda: self.session.answer_confirmation(False))))
-        return fragments
-
-    def confirm_title(self):
-        return [(style(self.c("warning"), bold=True), f" {t('command.title')} ")]
+    def dialog_height(self):
+        return self.dialog.height(self.palette, self.columns())
 
     def build_root(self):
         center_width = lambda: exact(self.content_width())
@@ -938,16 +903,16 @@ class TuiApp:
         overlay = Float(
             content=ConditionalContainer(
                 rounded_box(overlay_body, lambda: style(self.c("accent")), top_left=self.overlay_title),
-                Condition(lambda: self.overlay is not None and self.session.confirmation is None)),
+                Condition(lambda: self.overlay is not None and not self.dialog.visible)),
             width=lambda: self.overlay_width(), height=lambda: self.overlay_height() + 2)
 
-        confirm_body = Window(FormattedTextControl(self.confirm_fragments), wrap_lines=False,
-                              style=f"bg:{self.c('surface_raised')}")
+        dialog_body = Window(FormattedTextControl(self.dialog_fragments), wrap_lines=False,
+                             style=f"bg:{self.c('surface_raised')}")
         confirm = Float(
             content=ConditionalContainer(
-                rounded_box(confirm_body, lambda: style(self.c("warning")), top_left=self.confirm_title),
-                Condition(lambda: self.session.confirmation is not None)),
-            width=lambda: self.confirm_width(), height=lambda: self.confirm_height() + 2)
+                rounded_box(dialog_body, lambda: self.dialog.border(self.palette)),
+                Condition(lambda: self.dialog.visible)),
+            width=lambda: self.dialog.width(self.columns()), height=lambda: self.dialog_height() + 2)
 
         return FloatContainer(content=body, floats=[progress, update, tag_popup, overlay, confirm])
 
@@ -1048,14 +1013,14 @@ class TuiApp:
         ]
 
     def open_palette(self):
-        if not self.session.ready or self.session.confirmation is not None:
+        if not self.session.ready or self.dialog.visible:
             return
         self.tag_popup.hide()
         self.overlay = PaletteOverlay(self.commands())
         self.application.invalidate()
 
     def open_files(self):
-        if not self.session.editable() or self.session.confirmation is not None:
+        if not self.session.editable() or self.dialog.visible:
             return
         self.tag_popup.hide()
         self.overlay = FileOverlay(self.session.directory)
@@ -1063,7 +1028,7 @@ class TuiApp:
 
     def open_models(self):
         session = self.session
-        if not session.ready or session.busy or session.confirmation is not None:
+        if not session.ready or session.busy or self.dialog.visible:
             return
         self.tag_popup.hide()
         session.refresh_models()
@@ -1074,7 +1039,7 @@ class TuiApp:
         self.application.invalidate()
 
     def open_nova(self, section):
-        if self.session.nova is None or self.session.confirmation is not None:
+        if self.session.nova is None or self.dialog.visible:
             return
         self.tag_popup.hide()
         if isinstance(self.overlay, NovaOverlay):
@@ -1150,8 +1115,8 @@ class TuiApp:
 
     def interrupt(self):
         session = self.session
-        if session.confirmation is not None:
-            session.answer_confirmation(False)
+        if self.dialog.visible:
+            self.dialog.cancel()
         elif self.overlay is not None:
             self.close_overlay()
         elif session.cancel_shell():
@@ -1172,8 +1137,8 @@ class TuiApp:
 
     def escape(self):
         session = self.session
-        if session.confirmation is not None:
-            session.answer_confirmation(False)
+        if self.dialog.visible:
+            self.dialog.cancel()
         elif self.overlay is not None:
             if not self.overlay.back(self):
                 self.close_overlay()
@@ -1195,8 +1160,8 @@ class TuiApp:
     def build_bindings(self):
         kb = KeyBindings()
         normal = Condition(self.normal)
-        overlay_open = Condition(lambda: self.overlay is not None and self.session.confirmation is None)
-        confirming = Condition(lambda: self.session.confirmation is not None)
+        overlay_open = Condition(lambda: self.overlay is not None and not self.dialog.visible)
+        confirming = Condition(lambda: self.dialog.visible)
         modal = overlay_open | confirming
         popup = Condition(lambda: self.tag_popup.visible)
         editable = Condition(self.session.editable)
@@ -1206,7 +1171,9 @@ class TuiApp:
         @kb.add(Keys.Any, filter=modal)
         def _(event):
             data = event.data
-            if self.overlay is not None and len(data) == 1 and data.isprintable():
+            if self.dialog.visible:
+                self.dialog.on_text(data)
+            elif self.overlay is not None and len(data) == 1 and data.isprintable():
                 self.overlay.on_text(self, data)
                 self.application.invalidate()
 
@@ -1242,25 +1209,14 @@ class TuiApp:
             self.overlay.on_key(self, "clear")
             self.application.invalidate()
 
-        for key in ("y", "Y", "s", "S"):
+        for key in ("left", "right", "up", "down", "tab", "s-tab"):
             @kb.add(key, filter=confirming)
-            def _(event):
-                self.session.answer_confirmation(True)
-
-        for key in ("n", "N"):
-            @kb.add(key, filter=confirming)
-            def _(event):
-                self.session.answer_confirmation(False)
-
-        for key in ("left", "right", "tab", "s-tab"):
-            @kb.add(key, filter=confirming)
-            def _(event):
-                self.confirm_choice = 1 - self.confirm_choice
-                self.application.invalidate()
+            def _(event, key=key):
+                self.dialog.move(key)
 
         @kb.add("enter", filter=confirming)
         def _(event):
-            self.session.answer_confirmation(self.confirm_choice == 0)
+            self.dialog.activate()
 
         @kb.add("enter", filter=normal & popup, eager=True)
         @kb.add("tab", filter=normal & popup, eager=True)
