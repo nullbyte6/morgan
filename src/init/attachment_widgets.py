@@ -84,9 +84,9 @@ class AttachmentTray(QWidget):
             if len(self.items) >= self.limits["max_files"]:
                 rejected = True
                 if interactive:
-                    from PySide6.QtWidgets import QMessageBox
-                    QMessageBox.warning(self, tr("ui.attach_files"),
-                                        tr("ui.attachment_count", count=self.limits["max_files"]))
+                    from .choice_dialog import ChoiceDialog
+                    ChoiceDialog.of(self.window()).notify(
+                        tr("ui.attach_files"), tr("ui.attachment_count", count=self.limits["max_files"]))
                 break
             known.add(normalized_path(path))
             item = Attachment.pending(path)

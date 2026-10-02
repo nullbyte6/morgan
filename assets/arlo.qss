@@ -1278,6 +1278,34 @@ QLabel#novaDialogTitle {
     border: none;
 }
 
+QScrollArea#choiceScroll,
+QWidget#choiceGrid {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea#choiceScroll QScrollBar:vertical {
+    background: transparent;
+    width: 6px;
+    margin: 0;
+}
+
+QScrollArea#choiceScroll QScrollBar::handle:vertical {
+    background-color: @scrollbar_hover;
+    border-radius: 3px;
+    min-height: 24px;
+}
+
+QScrollArea#choiceScroll QScrollBar::add-line:vertical,
+QScrollArea#choiceScroll QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollArea#choiceScroll QScrollBar::add-page:vertical,
+QScrollArea#choiceScroll QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
 QLabel#choiceMessage {
     color: @text_muted;
     font-size: 15px;

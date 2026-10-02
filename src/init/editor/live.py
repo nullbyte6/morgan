@@ -17,7 +17,9 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
+from src.init.choice_dialog import DANGER_BUTTON, NEUTRAL_BUTTON, ChoiceDialog
 from src.init.identity import get_assistant_name
+from src.init.lang import tr
 
 from pathlib import Path
 
@@ -250,28 +252,29 @@ class EditorView(QWidget):
             name += " *"
         self.setWindowTitle(f"Editor - {name}")
 
-    def confirm_discard(self) -> bool:
+    def confirm_discard(self, proceed) -> None:
         if not self.editor.document().isModified():
-            return True
-        result = QMessageBox.question(
-            self,
-            "Unsaved changes",
-            "Save changes before closing?",
-            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-            QMessageBox.Cancel)
-        if result == QMessageBox.Cancel:
-            return False
-        return result != QMessageBox.Save or self.save_current()
+            proceed()
+            return
+        ChoiceDialog.of(self).ask(
+            "Unsaved changes", "Save changes before closing?",
+            [(tr("ui.cancel"), NEUTRAL_BUTTON, None),
+             ("Discard", DANGER_BUTTON, proceed),
+             ("Save", NEUTRAL_BUTTON, lambda: self.save_current() and proceed())],
+            columns=3)
 
     def open_file(self, path: str | Path):
         path = Path(path).expanduser().resolve()
-        if self.editor.file_path == path:
-            return self.editor
-        if not self.confirm_discard():
-            return None
-        self.editor.open_file(path)
+        if self.editor.file_path != path:
+            self.confirm_discard(lambda: self.load_file(path))
+
+    def load_file(self, path: Path):
+        try:
+            self.editor.open_file(path)
+        except (OSError, UnicodeError, ValueError) as error:
+            ChoiceDialog.of(self).notify(f"{get_assistant_name()}", str(error))
+            return
         self.update_title()
-        return self.editor
 
     def choose_file(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -286,8 +289,7 @@ class EditorView(QWidget):
         try:
             self.open_file(path)
         except (OSError, UnicodeError, ValueError) as error:
-            QMessageBox.warning(
-                self, f"{get_assistant_name()}", str(error))
+            ChoiceDialog.of(self).notify(f"{get_assistant_name()}", str(error))
 
     def save_current(self):
         editor = self.current_editor()
@@ -312,8 +314,7 @@ class EditorView(QWidget):
         try:
             editor.save_file(path)
         except (OSError, ValueError) as error:
-            QMessageBox.warning(
-                self, f"{get_assistant_name()}", str(error))
+            ChoiceDialog.of(self).notify(f"{get_assistant_name()}", str(error))
             return False
 
         self.update_title()

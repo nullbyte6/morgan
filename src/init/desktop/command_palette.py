@@ -24,11 +24,12 @@ from typing import Callable
 
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QLabel, QLayout, QPlainTextEdit, QListWidget, QListWidgetItem, QMessageBox,
+    QApplication, QFrame, QLabel, QLayout, QPlainTextEdit, QListWidget, QListWidgetItem,
     QVBoxLayout, QWidget,
 )
 from shiboken6 import isValid
 
+from src.init.choice_dialog import ChoiceDialog
 from src.init.lang import tr
 
 
@@ -174,12 +175,7 @@ class CommandPalette(QFrame):
             try:
                 self.owner.open_terminal_command(shell)
             except Exception as error:
-                message = QMessageBox(self.owner)
-                message.setIcon(QMessageBox.Critical)
-                message.setWindowTitle(tr("palette.shell_error"))
-                message.setText(str(error))
-                message.setDetailedText(shell)
-                message.exec()
+                ChoiceDialog.of(self.owner).notify(tr("palette.shell_error"), f"{error}\n\n{shell}")
             return
         item = item or self.results.currentItem()
         if item is None:

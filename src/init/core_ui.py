@@ -91,6 +91,7 @@ WORKSPACE_VIEW_CONFIG = {
 
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
+from src.init.choice_dialog import ChoiceDialog, NEUTRAL_BUTTON
 from src.init.brain import MODEL_OVERRIDE, get_version, is_cloud_model, kill_self
 from src.init.config import DEFAULTS, load_dev_file, load_config, save_config
 from src.init.editor.live import EditorView
@@ -850,8 +851,8 @@ class AssistantWindow(DesktopWindow):
         self.closing_sessions.append(session)
         if self.session is session:
             self.session = self.sessions[0]
-        for dialog in tuple(session.confirmation_dialogs.values()):
-            dialog.done(0)
+        for request in tuple(session.confirmation_dialogs.values()):
+            request.cancel()
         self.file_drop_router.remove_composer(session.ui.composer_widget)
         session.ui = None
         session.current_response_view = None
@@ -1047,23 +1048,21 @@ class AssistantWindow(DesktopWindow):
             return
         title = tr("update.title")
         if error is not None:
-            QMessageBox.warning(self, title, tr("update.check_failed", error=error))
+            ChoiceDialog.of(self).notify(title, tr("update.check_failed", error=error))
             return
         if not releases:
-            QMessageBox.information(self, title, tr("update.up_to_date", version=get_version()))
+            ChoiceDialog.of(self).notify(title, tr("update.up_to_date", version=get_version()))
             return
-        labels = [tr("update.choice", version=release.version, date=release.published or "?",
-                     size=f"{release.size / 1024 ** 2:.0f}") for release in releases]
-        label, accepted = QInputDialog.getItem(
-            self, title, tr("update.choose", version=get_version()), labels, 0, False)
-        if not accepted:
-            return
-        release = releases[labels.index(label)]
-        answer = QMessageBox.question(
-            self, title, tr("update.confirm", version=release.version),
-            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
-        if answer == QMessageBox.Yes:
-            self.start_update(release)
+        choices = [(tr("update.choice", version=release.version, date=release.published or "?",
+                       size=f"{release.size / 1024 ** 2:.0f}"), NEUTRAL_BUTTON,
+                    lambda release=release: self.confirm_update(release)) for release in releases]
+        choices.append((tr("ui.cancel"), NEUTRAL_BUTTON, None))
+        ChoiceDialog.of(self).ask(title, tr("update.choose", version=get_version()), choices, columns=1)
+
+    def confirm_update(self, release) -> None:
+        ChoiceDialog.of(self).confirm(
+            tr("update.title"), tr("update.confirm", version=release.version),
+            lambda: self.start_update(release), danger=False)
 
     def start_update(self, release) -> None:
         self._update_running = True
@@ -1086,7 +1085,7 @@ class AssistantWindow(DesktopWindow):
         except Exception as error:
             self._update_running = False
             logging.getLogger("assistant.update").exception("The installer could not be started")
-            QMessageBox.warning(self, tr("update.title"), tr("ui.error", error=error))
+            ChoiceDialog.of(self).notify(tr("update.title"), tr("ui.error", error=error))
             return
         QTimer.singleShot(800, self.exit_app)
 
@@ -1272,41 +1271,35 @@ class AssistantWindow(DesktopWindow):
             session.worker.resolve_confirmation(False, request_id)
             return
         session.presentation.awaiting_permission(turn_id)
-        dialog = QMessageBox(self)
         title = tr("command.title")
         if len(self.sessions) > 1:
             title += " · " + tr("session.label", index=session.index + 1, count=len(self.sessions))
-        dialog.setWindowTitle(title)
-        dialog.setIcon(QMessageBox.Question)
-        dialog.setText(tr("command.request"))
-        dialog.setInformativeText(message)
-        dialog.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        dialog.button(QMessageBox.Yes).setText(tr("command.yes"))
-        reject_button = dialog.button(QMessageBox.No)
-        dialog.setDefaultButton(QMessageBox.No)
         deadline = QDeadlineTimer(timeout * 1000)
-        countdown = QTimer(dialog)
+        countdown = QTimer(self)
         countdown.setInterval(250)
+
+        def answered(accepted):
+            countdown.stop()
+            countdown.deleteLater()
+            session.confirmation_dialogs.pop(request_id, None)
+            session.presentation.awaiting_permission(turn_id, waiting=False)
+            session.worker.resolve_confirmation(accepted, request_id)
+
+        request = ChoiceDialog.of(self).ask(
+            title, f"{tr('command.request')}\n\n{message}",
+            [(tr("command.no"), NEUTRAL_BUTTON, lambda: answered(False)),
+             (tr("command.yes"), NEUTRAL_BUTTON, lambda: answered(True))],
+            on_cancel=lambda: answered(False))
 
         def show_remaining():
             remaining = max(0, (deadline.remainingTime() + 999) // 1000)
-            reject_button.setText(f"{tr('command.no')} · {remaining}s")
+            if request.buttons:
+                request.buttons[0].setText(f"{tr('command.no')} · {remaining}s")
 
         countdown.timeout.connect(show_remaining)
         show_remaining()
         countdown.start()
-        session.confirmation_dialogs[request_id] = dialog
-
-        def answered(_result):
-            countdown.stop()
-            session.confirmation_dialogs.pop(request_id, None)
-            accepted = dialog.clickedButton() is dialog.button(QMessageBox.Yes)
-            dialog.deleteLater()
-            session.presentation.awaiting_permission(turn_id, waiting=False)
-            session.worker.resolve_confirmation(accepted, request_id)
-
-        dialog.finished.connect(answered)
-        dialog.open()
+        session.confirmation_dialogs[request_id] = request
 
     def set_status(self, key, session=None):
         session = session or self.session
@@ -1373,8 +1366,7 @@ class AssistantWindow(DesktopWindow):
             set_language(language)
         except (OSError, ValueError) as error:
             self.refresh_settings_workspaces()
-            QMessageBox.warning(self, tr("ui.settings"),
-                                tr("ui.error", error=error))
+            ChoiceDialog.of(self).notify(tr("ui.settings"), tr("ui.error", error=error))
             return
         self.refresh_language()
 
@@ -1462,11 +1454,19 @@ class AssistantWindow(DesktopWindow):
                 or any(session.busy for session in self.sessions) or self.model_switching):
             self._set_model_selectors(self.assistant.selected_model)
             return
-        if is_cloud_model(model) and QMessageBox.question(
-                self, tr("ui.model"), tr("ui.cloud_model_confirm", model=model)
-        ) != QMessageBox.StandardButton.Yes:
-            self._set_model_selectors(self.assistant.selected_model)
+        if is_cloud_model(model):
+            def restore():
+                self._set_model_selectors(self.assistant.selected_model)
+
+            ChoiceDialog.of(self).ask(
+                tr("ui.model"), tr("ui.cloud_model_confirm", model=model),
+                [(tr("ui.cancel"), NEUTRAL_BUTTON, restore),
+                 (tr("command.yes"), NEUTRAL_BUTTON, lambda: self.switch_model(model))],
+                on_cancel=restore)
             return
+        self.switch_model(model)
+
+    def switch_model(self, model):
         self.model_switching = True
         self.update_send_button()
         self.model_request.emit(model)
@@ -1486,7 +1486,7 @@ class AssistantWindow(DesktopWindow):
         self.model_switching = False
         self._set_model_selectors(self.assistant.selected_model)
         self.update_send_button()
-        QMessageBox.warning(self, tr("ui.model"), error)
+        ChoiceDialog.of(self).notify(tr("ui.model"), error)
 
     def _reveal_startup_controls(self, session):
         """Slide the composer and subtitles into view after startup."""
@@ -1539,7 +1539,7 @@ class AssistantWindow(DesktopWindow):
             for session in self.sessions:
                 session.worker.set_muted(self.muted)
         except Exception as error:
-            QMessageBox.warning(self, tr("ui.mute"), str(error))
+            ChoiceDialog.of(self).notify(tr("ui.mute"), str(error))
         if self.muted:
             for session in self.sessions:
                 self.on_speaking(session, session.turn_id, False)
@@ -1706,7 +1706,7 @@ class AssistantWindow(DesktopWindow):
                 and self.voice_session is session):
             self.voice_thread.stop_event.set()
         self.update_send_button()
-        QMessageBox.warning(self, tr("ui.attach_files"), error)
+        ChoiceDialog.of(self).notify(tr("ui.attach_files"), error)
 
     @Slot()
     def on_mascot_record(self):

@@ -165,9 +165,9 @@ class DesktopSession(QObject):
 
     @Slot(int)
     def on_confirmation_closed(self, request_id):
-        dialog = self.confirmation_dialogs.get(request_id)
-        if dialog is not None:
-            dialog.done(0)
+        request = self.confirmation_dialogs.get(request_id)
+        if request is not None:
+            request.cancel()
 
     @Slot(object)
     def on_view(self, view):
