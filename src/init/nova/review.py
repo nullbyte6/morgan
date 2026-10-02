@@ -183,6 +183,7 @@ class ReviewView(QWidget):
         self.summarize_button.setText(tr("nova.review.summarizing" if busy else "nova.review.summarize"))
         while self._rows.count() > 1:
             widget = self._rows.takeAt(0).widget()
+            widget.hide()
             widget.setParent(None)
             widget.deleteLater()
         reminders, events, data, error = self._week()

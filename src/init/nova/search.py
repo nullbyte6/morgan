@@ -144,6 +144,7 @@ class SearchView(QWidget):
         self._delay.stop()
         while self._rows.count() > 1:
             widget = self._rows.takeAt(0).widget()
+            widget.hide()
             widget.setParent(None)
             widget.deleteLater()
         query = self.field.text().strip()

@@ -210,6 +210,7 @@ class EntryList(QWidget):
         position = scrollbar.value()
         while self._rows.count() > 1:
             widget = self._rows.takeAt(0).widget()
+            widget.hide()
             widget.setParent(None)
             widget.deleteLater()
         now = datetime.now()
