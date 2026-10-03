@@ -21,7 +21,6 @@
 from src.init.lang import tr
 import base64
 import codecs
-import ctypes
 import errno
 import hashlib
 import json
@@ -47,15 +46,9 @@ from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import unicodedata
-import winshell
 
 from .identity import get_assistant
 from .task_outcomes import ActionResult, Outcome
-
-try:
-    import winreg
-except ImportError:
-    winreg = None
 
 from src.init.config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config,
                      save_config, load_dev_file, update_config)
@@ -847,13 +840,7 @@ def open_file(path: str) -> str:
         target = resolve_safe_path(path)
         if not target.exists():
             return tr('brain.path_does_not_exist', target=target)
-        if os.name == "nt":
-            os.startfile(target)
-        elif os.name == "posix":
-            opener = "open" if shutil.which("open") else "xdg-open"
-            subprocess.Popen([opener, str(target)])
-        else:
-            return tr('brain.unsupported_operating_system')
+        current_platform().open_path(target)
         return f"Opened: {target}"
     except Exception as error:
         return f"Error: {error}"
@@ -1105,61 +1092,8 @@ def get_city_distance(origin: str, destination: str) -> str:
 def kill_process(process: str, force: bool = False,
                  include_children: bool = False) -> str:
     """End a Windows process by exact PID or image name."""
-    if os.name != "nt":
-        return tr('brain.error_kill_process_is_only_supported_on_windows')
-
-    target = process.strip()
-    if not target:
-        return tr('brain.error_process_pid_or_image_name_is_required')
-
-    command = ["taskkill.exe"]
-    if target.isdecimal():
-        process_id = int(target)
-        if process_id <= 4:
-            return tr('brain.refusing_to_terminate_a_critical_system_pid', process_id=process_id)
-        if process_id == os.getpid():
-            return tr('brain.refusing_to_terminate_s_own_pid', value0=get_assistant().name, process_id=process_id)
-        command.extend(["/PID", str(process_id)])
-        description = f"PID {process_id}"
-    else:
-        forbidden_characters = set('<>:"/\\|?*')
-        if forbidden_characters.intersection(target):
-            return tr('brain.error_invalid_process_image_name', target=target)
-        image_name = target if target.casefold().endswith(
-            ".exe") else f"{target}.exe"
-        protected_images = {
-            "registry",
-            "registry.exe",
-            "system",
-            "system.exe",
-            "system idle process",
-            "system idle process.exe",
-            "csrss.exe",
-            "lsass.exe",
-            "services.exe",
-            "smss.exe",
-            "wininit.exe",
-            "winlogon.exe",
-            Path(sys.executable).name.casefold(),
-        }
-        if image_name.casefold() in protected_images:
-            return tr('brain.refusing_to_terminate_a_critical_or_current_process', image_name=image_name)
-        command.extend(["/IM", image_name])
-        description = image_name
-
-    if force:
-        command.append("/F")
-    if include_children:
-        command.append("/T")
-
     try:
-        result = subprocess.run(
-            command, capture_output=True, text=True, errors="replace",
-            creationflags=subprocess.CREATE_NO_WINDOW)
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip()
-            return tr('brain.error_terminating', description=description, value1=detail or tr('brain.taskkill_failed'))
-        return tr('brain.process_terminated', description=description)
+        return current_platform().terminate_process(process, force, include_children)
     except OSError as error:
         return f"Error: {error}"
 
@@ -1169,31 +1103,15 @@ def shutdown_computer(delay_seconds: int = 0) -> str:
     Convert requested minutes or hours to seconds. Omit the delay for an
     immediate shutdown. Returns the operating system's result.
     """
-    if os.name != "nt":
-        return tr('brain.error_shutdown_computer_is_only_supported_on_windows')
     if isinstance(delay_seconds, bool) or not isinstance(delay_seconds, int):
         return tr('brain.error_delay_seconds_must_be_an_integer')
     if not 0 <= delay_seconds <= 315_360_000:
         return tr('brain.error_delay_seconds_must_be_between_0_and_315360000')
 
     try:
-        executable = shutil.which("shutdown.exe") or "shutdown.exe"
-        result = subprocess.run(
-            [
-                executable,
-                "/s",
-                "/t",
-                str(delay_seconds),
-                "/c",
-                tr('brain.shutdown_scheduled_by', value0=get_assistant().name),
-            ],
-            capture_output=True,
-            text=True,
-            errors="replace",
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip()
+        succeeded, detail = current_platform().schedule_shutdown(
+            delay_seconds, tr('brain.shutdown_scheduled_by', value0=get_assistant().name))
+        if not succeeded:
             return tr('brain.error_scheduling_shutdown', value0=detail or tr('brain.shutdown_failed'))
         return tr('brain.computer_shutdown_scheduled_in_second_s', delay_seconds=delay_seconds)
     except OSError as error:
@@ -1202,18 +1120,9 @@ def shutdown_computer(delay_seconds: int = 0) -> str:
 
 def cancel_shutdown() -> str:
     """Cancel a shutdown that is currently pending on Windows."""
-    if os.name != "nt":
-        return tr('brain.error_cancel_shutdown_is_only_supported_on_windows')
     try:
-        result = subprocess.run(
-            ["shutdown.exe", "/a"],
-            capture_output=True,
-            text=True,
-            errors="replace",
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout).strip()
+        succeeded, detail = current_platform().cancel_shutdown()
+        if not succeeded:
             return tr('brain.error_cancelling_shutdown', value0=detail or tr('brain.no_shutdown_is_pending'))
         return tr('brain.pending_computer_shutdown_cancelled')
     except OSError as error:
@@ -1229,81 +1138,9 @@ def normalize_application_name(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", name))
 
 
-def get_fixed_drive_roots() -> list[Path]:
-    """Return every fixed local drive in deterministic order."""
-    if os.name != "nt":
-        return [Path("/")]
-
-    roots = []
-    drive_mask = ctypes.windll.kernel32.GetLogicalDrives()
-    for index in range(26):
-        if drive_mask & (1 << index):
-            root = f"{chr(ord('A') + index)}:\\"
-            if ctypes.windll.kernel32.GetDriveTypeW(root) == 3:
-                roots.append(Path(root))
-    return sorted(roots, key=lambda path: str(path).casefold())
-
-
-def get_app_paths() -> list[dict[str, str]]:
-    """Read executable paths registered by desktop applications."""
-    if winreg is None:
-        return []
-
-    registry_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"
-    locations = (
-        (winreg.HKEY_CURRENT_USER, winreg.KEY_READ),
-        (winreg.HKEY_LOCAL_MACHINE,
-         winreg.KEY_READ | winreg.KEY_WOW64_64KEY),
-        (winreg.HKEY_LOCAL_MACHINE,
-         winreg.KEY_READ | winreg.KEY_WOW64_32KEY),
-    )
-    apps = {}
-    for hive, access in locations:
-        try:
-            with winreg.OpenKey(hive, registry_path, 0, access) as parent:
-                subkey_count = winreg.QueryInfoKey(parent)[0]
-                for index in range(subkey_count):
-                    subkey_name = winreg.EnumKey(parent, index)
-                    try:
-                        with winreg.OpenKey(parent, subkey_name) as subkey:
-                            executable = winreg.QueryValueEx(subkey, None)[0]
-                    except OSError:
-                        continue
-                    executable = os.path.expandvars(str(executable)).strip('"')
-                    if Path(executable).is_file():
-                        key = executable.casefold()
-                        apps[key] = {
-                            "Name": Path(subkey_name).stem,
-                            "Path": executable,
-                        }
-        except OSError:
-            continue
-    return sorted(apps.values(), key=lambda app: (
-        normalize_application_name(app["Name"]), app["Path"].casefold()))
-
-
 def get_applications() -> list[dict[str, str]]:
-    """Read applications registered with Windows."""
-    if os.name != "nt":
-        return []
-    start_apps = []
-    try:
-        result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-Command", "Get-StartApps | "
-                                                         "Select-Object Name,AppID | "
-                                                         "ConvertTo-Json -Compress"],
-            capture_output=True, text=True, encoding="utf-8",
-            creationflags=subprocess.CREATE_NO_WINDOW)
-        if result.returncode == 0:
-            data = json.loads(result.stdout or "[]")
-            start_apps = data if isinstance(data, list) else [data]
-    except (OSError, json.JSONDecodeError):
-        pass
-
-    apps = [app for app in start_apps
-            if app.get("Name") and app.get("AppID")]
-    apps.extend(get_app_paths())
-    return sorted(apps, key=lambda app: (
+    """Read applications registered with the operating system."""
+    return sorted(current_platform().installed_applications(), key=lambda app: (
         normalize_application_name(app["Name"]),
         app.get("AppID", app.get("Path", "")).casefold()))
 
@@ -1336,7 +1173,8 @@ def find_applications_on_all_drives(application: str) -> list[dict[str, str]]:
     if query in _APPLICATION_SEARCH_CACHE:
         return _APPLICATION_SEARCH_CACHE[query]
 
-    roots = get_fixed_drive_roots()
+    roots = sorted(current_platform().local_drives(removable=False),
+                   key=lambda path: str(path).casefold())
     matches = []
     if roots:
         with ThreadPoolExecutor(max_workers=len(roots)) as executor:
@@ -1812,7 +1650,6 @@ def take_screenshot() -> str:
 def empty_recycle_bin() -> str:
     """Empty the recycle bin directory"""
     try:
-        winshell.recycle_bin().empty(confirm=False,
-        show_progress=False, sound=True)
+        current_platform().empty_recycle_bin()
     except Exception:
         print(tr('brain.error_recycle_bin_is_already_empty'))

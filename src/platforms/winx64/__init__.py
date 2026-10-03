@@ -19,7 +19,7 @@
 """Windows x64 services for Arlo, backed by Win32, the Shell and PowerShell."""
 
 from ..base import Platform
-from . import folders, notifications, windows
+from . import folders, notifications, system, windows
 
 
 class WinX64Platform(Platform):
@@ -33,3 +33,9 @@ class WinX64Platform(Platform):
     local_drives = staticmethod(folders.local_drives)
     notify = staticmethod(notifications.notify)
     ask_notification = staticmethod(notifications.ask_notification)
+    open_path = staticmethod(system.open_path)
+    terminate_process = staticmethod(system.terminate_process)
+    schedule_shutdown = staticmethod(system.schedule_shutdown)
+    cancel_shutdown = staticmethod(system.cancel_shutdown)
+    installed_applications = staticmethod(system.installed_applications)
+    empty_recycle_bin = staticmethod(system.empty_recycle_bin)
