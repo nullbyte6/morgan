@@ -32,7 +32,7 @@ def extract_command(text: str) -> str | None:
 @dataclass(frozen=True)
 class WakeSettings:
     wait_seconds: float = 6.0
-    silence_seconds: float = 1.2
+    silence_seconds: float = 3.0
     max_seconds: float = 120.0
     pre_roll_seconds: float = 0.3
     threshold: float = 400.0
