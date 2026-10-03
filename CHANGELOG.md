@@ -16,6 +16,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add scripts/rebuild.sh, which builds both macOS disk images, stops at the first failure and opens build/installer
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
 - Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
+- Add the MiniCPM-o 4.5 omni model as Arlo's voice, speaking each reply word for word in the selected voice reference through a local llama.cpp-omni server that the voice service starts, warms up and stops by itself, with the omni_server setting to point at a different server program
 - Fix Marina's voice cutting off while speaking, by fading out the end of her reference clip, which stopped abruptly, and adding silence after it
 - Fix Arlo cutting itself off while speaking with the Marina voice and recording the end of its own speech as input, by keeping the echo reference for 1.5 seconds and requiring louder, longer sound to count as the user speaking while Arlo is talking
 - Fix every request failing on computers where Ollama was already running with its own small default context, by restarting Ollama at startup with the configured context length when the running server was started with a different one

@@ -18,27 +18,25 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-import logging
+import base64
 import gc
-import os
+import json
+import logging
 import queue
 import re
-import sys
 import threading
 import time
 import warnings
-from functools import partial
 from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
-
-os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
-import torch
-from transformers.utils import logging as transformers_logging
+from websockets.exceptions import ConnectionClosed
+from websockets.sync.client import connect
 
 from src.init.lang import tr
 from .config import load_config
+from .omni_server import WEBSOCKET_URL
 from .speech_text import SpeechNumbers, prepare_speech
 from .subtitle_timing import StreamingWordTimeline
 from .voice_profiles import selected_voice, resolve_voice
@@ -52,6 +50,16 @@ logger = logging.getLogger(f"{get_assistant_identifier()}.tts")
 
 RESUME_LEAD_SECONDS = 1.5
 RESUME_MAX_WAIT_SECONDS = 2.5
+SAMPLE_RATE = 24000
+SPEAK_PROMPT = ("You are a text-to-speech engine. Repeat the user's text word for word, "
+                "exactly, and say nothing else.")
+MAX_NEW_TOKENS = 400
+SESSION_RETRIES = 40
+SESSION_RETRY_SECONDS = 0.15
+RECEIVE_TIMEOUT_SECONDS = 90
+PHRASE_MIN_CHARS = 40
+PHRASE_MAX_CHARS = 220
+SENTENCE_END = re.compile(r"(?<=[.!?。！？…;；:\n])\s*")
 
 
 def _raise_priority(*, process: bool) -> None:
@@ -61,57 +69,27 @@ def _raise_priority(*, process: bool) -> None:
         logger.exception("Unable to raise the voice priority")
 
 
-def _silence_tts_loggers():
-    prefixes = (
-        "cosyvoice",
-        "modelscope",
-        "onnxruntime",
-        "transformers",
-        "ttsfrd",
-        "wetext",
-    )
-
-    for name in prefixes:
-        logger = logging.getLogger(name)
-        logger.handlers.clear()
-        logger.propagate = False
-        logger.disabled = True
-
-transformers_logging.set_verbosity_error()
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_DIR = PROJECT_ROOT / "src"
-MATCHA_DIR = SRC_DIR / "third_party" / "Matcha-TTS"
-
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-if str(MATCHA_DIR) not in sys.path:
-    sys.path.insert(0, str(MATCHA_DIR))
-
-torch.backends.cuda.enable_flash_sdp(False)
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_math_sdp(True)
-
-_silence_tts_loggers()
-from cosyvoice.cli.cosyvoice import AutoModel
-from cosyvoice.utils.frontend_utils import contains_chinese, split_paragraph
-_silence_tts_loggers()
-
-KANA = re.compile(r"[぀-ヿ]")
-
-import shutil
-
-if shutil.which("ffmpeg") is None:
-    raise RuntimeError(tr('voice_service.ffmpeg_is_required_by_cosyvoice_but_was_not_found_in_path'))
-
-
 def device_info() -> dict:
-    """Where speech is synthesized: the PyTorch backend, the device name and the PyTorch version."""
-    if torch.cuda.is_available():
-        backend = "ROCm" if getattr(torch.version, "hip", None) else "CUDA"
-        return {"backend": backend, "name": torch.cuda.get_device_name(0), "torch": torch.__version__}
-    return {"backend": "CPU", "name": "", "torch": torch.__version__}
+    """The voice backend reported to the assistant: the omni runtime and its model."""
+    return {"backend": "llama.cpp-omni", "name": "MiniCPM-o 4.5", "torch": ""}
+
+
+def _split_phrases(text: str) -> list[str]:
+    """Group sentences into phrases long enough to sound natural and short enough to stay faithful."""
+    parts = [part.strip() for part in SENTENCE_END.split(text) if part.strip()]
+    phrases, current = [], ""
+    for part in parts:
+        if current and len(current) + len(part) + 1 > PHRASE_MAX_CHARS:
+            phrases.append(current)
+            current = part
+        else:
+            current = f"{current} {part}".strip()
+        if len(current) >= PHRASE_MIN_CHARS:
+            phrases.append(current)
+            current = ""
+    if current:
+        phrases.append(current)
+    return phrases
 
 
 def _clean_for_speech(text: str) -> str:
@@ -148,36 +126,22 @@ class SpeechBatch:
 
 class VoiceService:
     """
-    Arlo's multilingual voice service using Fun-CosyVoice3.
-    The model is loaded once and kept alive for the entire Arlo session.
+    Arlo's multilingual voice service on the local MiniCPM-o omni model.
+    The omni server keeps the model loaded for the entire Arlo session.
     Speech synthesis runs on a background worker so it does not block
     text generation.
     """
 
-    def __init__(self, model_path, voice_reference, reference_text,
-                 speed=0.95,
+    def __init__(self, voice_reference,
                  audio_callback=None, speaking_callback=None,
                  subtitle_callback=None):
         _raise_priority(process=True)
-        self.model_path = Path(model_path)
         self.voice_reference = selected_voice() or Path(voice_reference)
-        reference_text = reference_text.strip()
-        if "<|endofprompt|>" not in reference_text:
-            reference_text = "You are a helpful assistant.<|endofprompt|>" + reference_text
-
-        self.reference_text = reference_text
-        self.speed = speed
-
-        if not (self.model_path / "cosyvoice3.yaml").is_file():
-            raise RuntimeError(tr('voice_service.voice_model_not_found', path=self.model_path))
-
-        self.voice = AutoModel(model_dir=str(self.model_path), fp16=True, text_frontend=False)
-        self.sample_rate = self.voice.sample_rate
+        self.sample_rate = SAMPLE_RATE
         self._reference_key = None
-        self._instruction_key = None
+        self._reference_audio = ""
         self._select_reference(self.voice_reference)
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        self._open_session(threading.Event()).close()
 
         self._text_queue = queue.Queue()
         self._audio_queue = queue.Queue(maxsize=4)
@@ -222,24 +186,13 @@ class VoiceService:
             self._text_queue.put((batch, text, subtitle, reference))
 
     def _select_reference(self, reference):
-        """Only the synthesis worker replaces speaker conditioning after startup."""
+        """Only the synthesis worker replaces the speaker reference after startup."""
         if reference is None:
             raise FileNotFoundError("No WAV voice references available")
-        transcript = reference.with_suffix(".txt")
-        key = (str(reference), reference.stat().st_mtime_ns,
-               transcript.stat().st_mtime_ns if transcript.is_file() else None)
+        key = (str(reference), reference.stat().st_mtime_ns)
         if key == self._reference_key:
             return
-        text = (transcript.read_text(encoding="utf-8-sig").strip()
-                if transcript.is_file() else self.reference_text)
-        if "<|endofprompt|>" not in text:
-            text = "You are a helpful assistant.<|endofprompt|>" + text
-        try:
-            self.voice.add_zero_shot_spk(text, str(reference), get_assistant_identifier())
-        finally:
-            self.voice.frontend.release_reference_sessions()
-            gc.collect()
-        self._reference_prompt = text
+        self._reference_audio = base64.b64encode(reference.read_bytes()).decode("ascii")
         self.voice_reference = reference
         self._reference_key = key
         logger.info("Voice reference applied: %s", reference.name)
@@ -282,35 +235,43 @@ class VoiceService:
                     self._set_subtitle(batch, "")
                 batch.done.set()
 
-    def _synthesize(self, text, language=None):
-        speaker_id = get_assistant_identifier()
-        instruction = ""
-        if language is not None:
-            prefix, transcript = self._reference_prompt.split("<|endofprompt|>", 1)
-            instruction = (f"{prefix.rstrip()} Please speak in "
-                           f"{language.name.replace('_', ' ').lower()}."
-                           f"<|endofprompt|>{transcript}")
-            instruction_key = (self._reference_key, language)
-            instructed_id = speaker_id + "-instruct"
-            if instruction_key != self._instruction_key:
-                frontend = self.voice.frontend
-                speaker = dict(frontend.spk2info[speaker_id])
-                speaker["prompt_text"], speaker["prompt_text_len"] = (
-                    frontend._extract_text_token(instruction))
-                frontend.spk2info[instructed_id] = speaker
-                self._instruction_key = instruction_key
-            speaker_id = instructed_id
+    def _open_session(self, cancelled):
+        for _ in range(SESSION_RETRIES):
+            if cancelled.is_set():
+                return None
+            connection = connect(WEBSOCKET_URL, max_size=None, open_timeout=10)
+            try:
+                connection.send(json.dumps({"type": "session.init", "payload": {
+                    "mode": "turn_based", "use_tts": True, "system_prompt": SPEAK_PROMPT,
+                    "voice": {"ref_audio": self._reference_audio}}}))
+                if json.loads(connection.recv(timeout=RECEIVE_TIMEOUT_SECONDS)).get("type") == "session.created":
+                    return connection
+            except ConnectionClosed:
+                pass
+            connection.close()
+            cancelled.wait(SESSION_RETRY_SECONDS)
+        raise RuntimeError(tr('voice_service.omni_session_unavailable'))
 
-        tokenize = partial(self.voice.frontend.tokenizer.encode,
-                           allowed_special=self.voice.frontend.allowed_special)
-        phrases = split_paragraph(text, tokenize,
-                                  "zh" if contains_chinese(text) or KANA.search(text) else "en",
-                                  token_max_n=80, token_min_n=60,
-                                  merge_len=20, comma_split=False)
-        for phrase in phrases:
-            yield from self.voice.inference_zero_shot(
-                phrase, "", "", zero_shot_spk_id=speaker_id,
-                stream=True, speed=self.speed, text_frontend=False)
+    def _speak(self, phrase, cancelled):
+        connection = self._open_session(cancelled)
+        if connection is None:
+            return
+        with connection:
+            connection.send(json.dumps({"type": "input.append", "input": {
+                "messages": [{"role": "user", "content": phrase}],
+                "streaming": True, "use_tts_template": True,
+                "generation": {"max_new_tokens": MAX_NEW_TOKENS, "length_penalty": 1.1}}}))
+            while not cancelled.is_set():
+                event = json.loads(connection.recv(timeout=RECEIVE_TIMEOUT_SECONDS))
+                kind = event.get("type")
+                if kind == "response.output.delta" and event.get("kind") == "audio":
+                    yield np.frombuffer(base64.b64decode(event["audio"]), dtype=np.float32)
+                elif kind in ("response.done", "session.closed"):
+                    return
+
+    def _synthesize(self, text, cancelled):
+        for phrase in _split_phrases(text):
+            yield from self._speak(phrase, cancelled)
 
     def _tts_loop(self) -> None:
         idle_trimmed = False
@@ -333,14 +294,11 @@ class VoiceService:
                 if batch.cancelled.is_set():
                     continue
                 self._select_reference(reference)
-                generator = self._synthesize(text, batch.numbers.language)
+                generator = self._synthesize(text, batch.cancelled)
                 for chunk in generator:
                     if batch.cancelled.is_set():
                         break
-                    audio = chunk["tts_speech"]
-                    if hasattr(audio, "detach"):
-                        audio = audio.detach().cpu().numpy()
-                    samples = np.asarray(audio, dtype=np.float32).reshape(-1)
+                    samples = np.asarray(chunk, dtype=np.float32).reshape(-1)
                     if not samples.size:
                         continue
                     while not batch.cancelled.is_set():
@@ -366,7 +324,7 @@ class VoiceService:
                 try:
                     if generator is not None:
                         generator.close()
-                    generator = chunk = audio = samples = timeline = None
+                    generator = chunk = samples = timeline = None
                 except Exception as error:
                     batch.error = error
                     logger.exception(tr('voice_service.tts_generator_cleanup_failed'))
@@ -374,13 +332,11 @@ class VoiceService:
                     self._synthesizing = False
                     self._text_queue.task_done()
                     self._complete(batch)
-                    generator = chunk = audio = samples = timeline = None
+                    generator = chunk = samples = timeline = None
 
     def _release_idle_memory(self):
         try:
             gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
             current_platform().trim_memory()
             logger.info("Voice service released idle memory")
         except Exception:

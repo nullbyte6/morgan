@@ -30,11 +30,8 @@ import time
 
 import numpy as np
 
-from .voice_profiles import (
-    VOICE_MODEL,
-    VOICE_REFERENCE,
-    VOICE_REFERENCE_TEXT)
-
+from .omni_server import start_omni_server, stop_omni_server
+from .voice_profiles import VOICE_REFERENCE
 from .voice_service import VoiceService, device_info
 
 
@@ -55,20 +52,18 @@ class TTSServer:
         self._send_lock = threading.Lock()
         self._playback_reference = False
         self._last_audio_update = 0.0
-        logger.info(tr('tts_server.loading_cosyvoice'))
+        logger.info(tr('tts_server.loading_omni'))
         started = time.monotonic()
 
+        self._omni = start_omni_server()
         self.voice = VoiceService(
-            model_path=VOICE_MODEL,
             voice_reference=VOICE_REFERENCE,
-            reference_text=VOICE_REFERENCE_TEXT,
-            speed=1.0,
             audio_callback=self._on_audio,
             speaking_callback=self._on_speaking,
             subtitle_callback=self._on_subtitle)
         self._load_seconds = round(time.monotonic() - started, 1)
         self._device = device_info()
-        logger.info(tr('tts_server.cosyvoice_ready'))
+        logger.info(tr('tts_server.omni_ready'))
 
     def _send(self, message: dict, client=None) -> None:
         data = (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")
@@ -219,6 +214,8 @@ def main():
         server.run()
     except KeyboardInterrupt:
         logger.info(tr('tts_server.stopping_tts_service'))
+    finally:
+        stop_omni_server(server._omni)
 
 
 if __name__ == "__main__":
