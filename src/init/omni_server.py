@@ -17,6 +17,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Starting and stopping the local llama.cpp-omni server and the gateway in front of it."""
+import base64
 import glob
 import json
 import os
@@ -57,6 +58,16 @@ def _ready(url: str) -> bool:
 
 def omni_ready() -> bool:
     return _ready(HEALTH_URL)
+
+
+def transcribe(wav: bytes, timeout: float = 120) -> str:
+    """The words spoken in a WAV recording, written by the model."""
+    request = urllib.request.Request(
+        f"{GATEWAY_URL}/v1/audio/transcriptions",
+        data=json.dumps({"audio": base64.b64encode(wav).decode("ascii")}).encode("utf-8"),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return str(json.load(response)["text"]).strip()
 
 
 def context_length() -> int:

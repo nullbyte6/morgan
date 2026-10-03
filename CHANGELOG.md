@@ -15,6 +15,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add scripts/build-dmg.sh, which builds Arlo.app with PyInstaller on an Apple Silicon Mac, with the app version and the microphone and automation permission prompts, and packs it into a build/installer/Arlo-<version>.dmg disk image
 - Add scripts/build-tui-dmg.sh, which builds the terminal version on an Apple Silicon Mac and packs it with an Arlo Terminal.command launcher into a build/installer/ArloTUI-<version>.dmg disk image
 - Add scripts/rebuild.sh, which builds both macOS disk images, stops at the first failure and opens build/installer
+- Add speech input through the omni model, which writes down what was said word for word in the language spoken from the recording, replacing the Whisper speech recognition and its packages
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
 - Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
 - Add the MiniCPM-o 4.5 omni model as Arlo's voice, speaking each reply word for word in the selected voice reference through a local llama.cpp-omni server that the voice service starts, warms up and stops by itself, with the omni_server setting to point at a different server program
@@ -26,9 +27,11 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix installing from requirements.txt failing on torchcodec 0.1.2, a version that was never published, by pinning torchcodec 0.7.0, the release that matches the pinned torch and torchaudio 2.8
 - Fix scripts\rebuild-tui.bat compiling the installer after a failed terminal build, by running build-tui.sh through Git's bash.exe so its exit code is checked
 - Fix scripts\rebuild.bat only working from the scripts folder, compiling the installer after a failed build and never launching it, by running both builds through Git's bash.exe from the script's own folder, stopping at the first failure and starting the installer with start
+- Fix speech requests crashing the model server right after another session closed, by letting each session finish closing before the next one starts
 - Fix splitting of Japanese text without kanji into phrases like English, which ignored the 。 sentence end and appended a stray period, by splitting any text with kana the Chinese way
 - Fix splitting of spoken text leaving the closing » of a Russian quotation at the start of the next phrase, by keeping it with the sentence it closes
 - Fix spoken file paths always spelling letters and the dot in Spanish, by using the letter names and the word for dot of the language detected in the reply for English, Spanish, Chinese, French, German, Portuguese, Italian, Russian, Japanese and Korean, and by keeping accented and non-Latin parts of a path that were dropped
+- Fix the voice reference reaching the omni model as a corrupted WAV file instead of the 16 kHz audio it expects, so the selected voice now conditions the speech
 - Fix the voice runtime on AMD ROCm installs failing to load audio, by installing TorchCodec 0.16 from PyPI after the ROCm PyTorch and the shared FFmpeg build it loads when only the static one is present, also repairing existing ROCm installs
 - Remove Ollama from Arlo: the runtime setup no longer installs it or downloads gemma4:e4b, the services launchers no longer start or preload it, and its model queries, cloud model handling, keep-alive and load timing are gone
 - Remove the CosyVoice, Matcha-TTS and Triton TensorRT-LLM runtime packages and the Matcha-TTS submodule entry, ahead of replacing the voice model with a single omni model

@@ -18,12 +18,10 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """One conversation session's turn execution, independent of any interface toolkit."""
 import asyncio
-import io
 import itertools
 import logging
 import threading
 import time
-import wave
 from contextlib import nullcontext
 from dataclasses import replace
 
@@ -195,20 +193,9 @@ class SessionRunner:
                 self.finished.emit("")
                 return
             if voice_input and not prompt:
-                try:
-                    from src.init.voice import transcribe_voice
-
-                    with wave.open(io.BytesIO(message.audio_wav), "rb") as wav:
-                        prompt, _ = transcribe_voice(
-                            wav.readframes(wav.getnframes()), wav.getframerate(),
-                            beam_size=1, vad_filter=False)
-                    prompt = prompt.strip()
-                except Exception:
-                    logging.getLogger("assistant.voice").exception(
-                        "Local voice transcript unavailable; attempting native transcription")
-                    prompt = self.assistant.transcribe_audio(
-                        message.audio_wav, event_loop=self.event_loop,
-                        context=self.session.context)
+                prompt = self.assistant.transcribe_audio(
+                    message.audio_wav, event_loop=self.event_loop,
+                    context=self.session.context)
             if voice_input:
                 if cancel_event.is_set():
                     self.finished.emit("")

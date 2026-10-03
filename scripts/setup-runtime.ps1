@@ -113,7 +113,6 @@ $VoicePackages = @(
     "numpy==2.2.6",
     "omegaconf==2.3.1",
     "onnxruntime-directml==1.24.4",
-    "openai-whisper==20250625",
     "packaging==26.3",
     "pandas==3.0.5",
     "pillow==12.3.0",
@@ -510,7 +509,7 @@ function Test-VoiceRuntime {
     }
 
     try {
-        & $VenvPython -c "import torch, torchaudio, onnxruntime, transformers, hyperpyyaml, whisper, modelscope, sounddevice, librosa, wetext, pyworld, x_transformers, lingua" *> $null
+        & $VenvPython -c "import torch, torchaudio, onnxruntime, transformers, hyperpyyaml, modelscope, sounddevice, librosa, wetext, pyworld, x_transformers, lingua" *> $null
 
         return ($LASTEXITCODE -eq 0)
     }
