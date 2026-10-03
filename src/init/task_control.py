@@ -1037,8 +1037,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
     def context_impossible(self, measurements):
         self.trace("context_budget_impossible", **measurements)
         self.state.suspend(Lifecycle.LIMIT_REACHED,
-                           "The mandatory request context cannot fit with a safe completion reserve. "
-                           "The task and its evidence are preserved.")
+                           tr("task_control.mandatory_context_budget_impossible"))
         self.publish_activity()
         raise TaskStopped(self.state.notice)
 
@@ -1582,7 +1581,7 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
                             "reserved_completion_tokens": completion, "safety_margin_tokens": margin,
                             "input_limit": input_limit, "estimated_input_before": before["estimated_input_tokens"]}
         if measured["estimated_input_tokens"] > input_limit:
-            self.notice = "The request context cannot fit with a safe completion reserve."
+            self.notice = tr("task_control.context_budget_impossible")
             raise TaskStopped(self.notice)
         request_context.messages = history
         request_context.model_settings = {**(request_context.model_settings or {}), "max_tokens": completion}
@@ -1601,7 +1600,7 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
             return await self.controller.wrap_model_request(ctx, request_context=request_context, handler=handler)
         measured = await self.measure_request(request_context, request_context.messages)
         if measured["estimated_input_tokens"] > self.last_budget["input_limit"]:
-            self.notice = "The request context exceeds its completion reserve."
+            self.notice = tr("task_control.context_budget_exceeded")
             raise TaskStopped(self.notice)
         return await handler(request_context)
 
