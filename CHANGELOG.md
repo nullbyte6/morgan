@@ -4,19 +4,20 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.3-beta (2026-10-03)
 
-- Add scripts/build-dmg.sh, which builds Arlo.app with PyInstaller on an Apple Silicon Mac, with the app version and the microphone and automation permission prompts, and packs it into a build/installer/Arlo-<version>.dmg disk image
 - Add macOS desktop launching for the wake listener, opening Arlo.app when it is installed and the desktop entry from source otherwise
 - Add macOS notifications, reminder dialogs with up to three buttons, and Spotify and Music now-playing, cover art, playback control and seeking through AppleScript to the macx64 package
 - Add macOS window listing, app launching, quitting and hiding, mounted volumes, process termination, shutdown scheduling, installed apps, Trash emptying, Homebrew app management and the Steam folder to the macx64 package, with the pyobjc Cocoa and Quartz bindings it needs
 - Add macx64 requirements, included from requirements.txt, with onnxruntime for the voice service on macOS in place of the Windows DirectML build
 - Add platform layer with winx64 and macx64 packages behind a shared interface, moving window listing, launching, closing and minimizing, known folders, local drives and notifications out of the core so other operating systems can provide their own implementations
+- Add scripts/arlo-services.sh, the macOS services launcher that starts Ollama, preloads the model, starts CosyVoice and opens a Terminal debug console following its logs, and run it at startup on macOS through the macx64 package
+- Add scripts/build-dmg.sh, which builds Arlo.app with PyInstaller on an Apple Silicon Mac, with the app version and the microphone and automation permission prompts, and packs it into a build/installer/Arlo-<version>.dmg disk image
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
 - Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
 - Fix every request failing on computers where Ollama was already running with its own small default context, by restarting Ollama at startup with the configured context length when the running server was started with a different one
 - Fix installed copies failing to start their services, because the installer did not ship the platform layer that config.py and the voice service now import
 - Fix installing from requirements.txt failing on torchcodec 0.1.2, a version that was never published, by pinning torchcodec 0.7.0, the release that matches the pinned torch and torchaudio 2.8
-- Fix scriptsebuild-tui.bat compiling the installer after a failed terminal build, by running build-tui.sh through Git's bash.exe so its exit code is checked
-- Fix scriptsebuild.bat only working from the scripts folder, compiling the installer after a failed build and never launching it, by running both builds through Git's bash.exe from the script's own folder, stopping at the first failure and starting the installer with start
+- Fix scripts\rebuild-tui.bat compiling the installer after a failed terminal build, by running build-tui.sh through Git's bash.exe so its exit code is checked
+- Fix scripts\rebuild.bat only working from the scripts folder, compiling the installer after a failed build and never launching it, by running both builds through Git's bash.exe from the script's own folder, stopping at the first failure and starting the installer with start
 - Fix the voice runtime on AMD ROCm installs failing to load audio, by installing TorchCodec 0.16 from PyPI after the ROCm PyTorch and the shared FFmpeg build it loads when only the static one is present, also repairing existing ROCm installs
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
 - Update media session reading and playback control, the now-playing song reader and system audio capture for song recognition to go through the platform layer

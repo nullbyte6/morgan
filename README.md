@@ -105,8 +105,14 @@ platform layer in `src/platforms`:
 - `macx64` implements it for macOS with AppKit, Quartz, AppleScript and
   Homebrew. It targets Apple Silicon, because the pinned PyTorch and ONNX
   Runtime have no Intel Mac builds. It has not been tested on a Mac yet, and
-  macOS still has no services launcher (start Ollama and the voice service by
-  hand), no song recognition from system audio and no diagnostics.
+  macOS still has no song recognition from system audio and no diagnostics.
+  `scripts/arlo-services.sh` is the macOS counterpart of
+  `scripts\arlo-services.ps1`: it starts Ollama (from `PATH`, Homebrew or
+  `Ollama.app`), preloads the model, starts CosyVoice from the repository's
+  `.venv`, restarting it when its sources changed, and opens a Terminal window
+  that follows the TTS and agent logs (`--no-console` and `--no-voice` skip
+  them). Arlo runs it at startup on macOS; a packaged app finds it through
+  `ARLO_HOME` pointing at the repository's `scripts` folder.
   `scripts/build-dmg.sh`, run on an Apple Silicon Mac with the dependencies
   from `requirements.txt` in `.venv`, builds `Arlo.app` with PyInstaller
   (in `build/packaging-macos/dist`) and packs it into
