@@ -42,10 +42,10 @@ VOICE_REFERENCE_LANGUAGE = "english"
 VOICE_REFERENCE_INSTRUCTION = (f"You are a helpful assistant. "
                                f"Please speak in {VOICE_REFERENCE_LANGUAGE}.<|endofprompt|>")
 VOICE_NAMES = {
-    "voice-01.wav": "David",
-    "voice-02.wav": "Javier",
-    "voice-03.wav": "Aitana",
-    "voice-04.wav": "Marina",
+    "voice-01.wav": "Theo",
+    "voice-02.wav": "Leo",
+    "voice-03.wav": "Morgan",
+    "voice-04.wav": "Nora",
 }
 
 
