@@ -27,6 +27,7 @@ from PySide6.QtWidgets import *
 
 from src.init.config import PermissionMode
 from src.init.lang import tr
+from src.platforms import current_platform
 
 
 class WorkingDirectory(QToolButton):
@@ -67,7 +68,7 @@ class GitBranchIndicator(QToolButton):
             result = subprocess.run(
                 ["git", "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD"],
                 capture_output=True, text=True, errors="replace", timeout=1,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                creationflags=current_platform().no_window_flags,
             )
             if result.returncode == 0:
                 branch = result.stdout.strip()
@@ -75,7 +76,7 @@ class GitBranchIndicator(QToolButton):
                 result = subprocess.run(
                     ["git", "-C", path, "rev-parse", "--short", "HEAD"],
                     capture_output=True, text=True, errors="replace", timeout=1,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                    creationflags=current_platform().no_window_flags,
                 )
                 if result.returncode == 0:
                     branch = f"detached:{result.stdout.strip()}"

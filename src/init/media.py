@@ -28,6 +28,7 @@ import subprocess
 import sys
 import time
 from src.init.visuals.gateway import open_url
+from src.platforms import current_platform
 from collections import OrderedDict
 from typing import Literal
 
@@ -569,7 +570,7 @@ def search_youtube_songs(query: str, max_results: int = 5) -> str:
                    f"ytsearch{max_results}:{query.strip()}"]
         result = subprocess.run(
             command, capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=45, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            timeout=45, creationflags=current_platform().no_window_flags,
         )
         if result.returncode:
             return (tr('media.error_searching_youtube_ensure_yt_dlp_is_installed', value0=result.stderr.strip() or tr('media.yt_dlp_failed')))

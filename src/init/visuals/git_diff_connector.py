@@ -22,6 +22,7 @@ import os
 import subprocess
 
 from ..lang import tr
+from src.platforms import current_platform
 
 
 def _run_git(repo_path: str, arguments: list[str]) -> subprocess.CompletedProcess:
@@ -35,7 +36,7 @@ def _run_git(repo_path: str, arguments: list[str]) -> subprocess.CompletedProces
         errors='surrogateescape',
         check=False,
         timeout=10,
-        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        creationflags=current_platform().no_window_flags
     )
 
 

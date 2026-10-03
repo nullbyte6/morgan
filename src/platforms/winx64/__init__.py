@@ -18,12 +18,15 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Windows x64 services for Arlo, backed by Win32, the Shell and PowerShell."""
 
+import subprocess
+
 from ..base import Platform
 from . import folders, notifications, system, windows
 
 
 class WinX64Platform(Platform):
     name = "winx64"
+    no_window_flags = subprocess.CREATE_NO_WINDOW
 
     list_windows = staticmethod(windows.get_open_windows)
     launch_application = staticmethod(windows.launch_application)

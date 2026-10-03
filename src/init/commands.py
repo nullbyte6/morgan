@@ -33,6 +33,7 @@ from contextvars import ContextVar
 from .lang import tr
 
 from .brain import get_working_directory
+from src.platforms import current_platform
 
 
 _confirmation = ContextVar("command_confirmation", default=None)
@@ -184,7 +185,7 @@ def execute_command(command: str, working_directory: str = ".",
         completed = subprocess.run(
             argv, cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True,
             text=True, errors="replace", timeout=timeout_seconds,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+            creationflags=current_platform().no_window_flags)
         return result("completed" if completed.returncode == 0 else "failed",
                       exit_code=completed.returncode,
                       stdout=completed.stdout[-32000:], stderr=completed.stderr[-32000:],

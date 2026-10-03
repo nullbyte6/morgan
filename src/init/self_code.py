@@ -33,6 +33,7 @@ from pydantic import Field
 from src.init.visuals.gateway import open_url
 from src.init.paths import PROJECT_ROOT
 from .task_outcomes import ActionResult, Outcome, normalize_result
+from src.platforms import current_platform
 
 READ_CODE_MAX_CHARACTERS = 3000
 READ_CODE_PAGE_CHARACTERS = 12000
@@ -425,7 +426,7 @@ def update_repo() -> dict:
         status = subprocess.run(
             ["git", "-C", str(PROJECT_ROOT), "status", "--porcelain", "--untracked-files=all"],
             capture_output=True, text=True, errors="replace", timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+            creationflags=current_platform().no_window_flags)
         if status.returncode:
             return ActionResult(Outcome.FAILED, status.stderr, "git_status_failed").payload()
         if status.stdout.strip():

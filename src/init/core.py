@@ -35,6 +35,7 @@ from src.init.config import load_config
 from src.init.console import DebugConsole
 from src.init.identity import get_assistant_name
 from src.init.voice_client import VoiceClient
+from src.platforms import current_platform
 
 def _tool_payload(value, tool_names):
     try:
@@ -583,7 +584,7 @@ class Assistant:
                 ["git", "-C", directory, "symbolic-ref", "--quiet", "--short",
                  "HEAD"],
                 capture_output=True, text=True, errors="replace", timeout=2,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                creationflags=current_platform().no_window_flags,
             )
             if result.returncode == 0:
                 branch = result.stdout.strip()
@@ -591,7 +592,7 @@ class Assistant:
                 result = subprocess.run(
                     ["git", "-C", directory, "rev-parse", "--short", "HEAD"],
                     capture_output=True, text=True, errors="replace", timeout=2,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                    creationflags=current_platform().no_window_flags,
                 )
                 if result.returncode == 0:
                     branch = f"detached:{result.stdout.strip()}"

@@ -42,6 +42,7 @@ from src.init.tui.shell import ShellRun, is_change_directory
 from src.init.tui.text import elapsed
 from src.init.voice_client import SilentVoice
 from src.init.voice_input import VoiceInputRunner
+from src.platforms import current_platform
 
 log = logging.getLogger("assistant.tui")
 SUSPENDED = {"interrupted", "waiting", "blocked", "limit_reached"}
@@ -413,11 +414,10 @@ class TuiSession:
         self.background(self._read_branch, directory)
 
     def _read_branch(self, directory):
-        import os
         import subprocess
 
         branch = ""
-        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        flags = current_platform().no_window_flags
         try:
             result = subprocess.run(
                 ["git", "-C", directory, "symbolic-ref", "--quiet", "--short", "HEAD"],

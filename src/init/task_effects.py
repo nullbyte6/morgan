@@ -28,6 +28,7 @@ from typing import Callable
 
 from .paths import PROJECT_ROOT
 from .task_outcomes import ActionResult, Outcome, normalize_result
+from src.platforms import current_platform
 
 
 @dataclass(frozen=True)
@@ -181,7 +182,7 @@ def content_revision(resource):
             for arguments in (("show-ref", "--head"), ("symbolic-ref", "--quiet", "HEAD"),
                               ("diff", "--cached", "--binary", "--no-ext-diff")):
                 result = subprocess.run(["git", "-C", path, *arguments], capture_output=True, timeout=15,
-                                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+                                        creationflags=current_platform().no_window_flags)
                 if result.returncode not in (0, 1) or (result.returncode and result.stderr):
                     return None
                 digest.update(result.stdout)
@@ -206,7 +207,7 @@ def content_revision(resource):
         if shutil.which("git"):
             tracked = subprocess.run(["git", "-C", str(path), "ls-files", "--cached", "--others",
                                       "--exclude-standard", "-z", "--", "."], capture_output=True,
-                                     timeout=15, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+                                     timeout=15, creationflags=current_platform().no_window_flags)
         if tracked is not None and tracked.returncode == 0:
             for name in sorted(set(tracked.stdout.decode("utf-8", errors="surrogateescape").split("\0")) - {""}):
                 child = path / name

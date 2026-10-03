@@ -638,7 +638,7 @@ def run_git(repository: str, arguments: list[str]) -> dict:
         result = subprocess.run(
             ["git", "-C", str(repository_path), "--no-pager", *arguments],
             capture_output=True, text=True, errors="replace", timeout=GIT_TIMEOUT_SECONDS,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            creationflags=current_platform().no_window_flags,
             env=environment)
         return ActionResult(Outcome.SUCCESS if result.returncode == 0 else Outcome.FAILED,
                             {"stdout": result.stdout, "stderr": result.stderr,

@@ -23,6 +23,7 @@ import re
 import shutil
 import subprocess
 import threading
+from src.platforms import current_platform
 
 MAX_OUTPUT = 64 * 1024
 _CHANGE_DIRECTORY = re.compile(r"cd(?:\s+.*)?", re.IGNORECASE | re.DOTALL)
@@ -80,7 +81,7 @@ class ShellRun:
             self.process = subprocess.Popen(
                 argv, cwd=self.directory, stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+                creationflags=current_platform().no_window_flags)
         except (OSError, ValueError) as error:
             self.error = str(error)
             self.on_done(self)
