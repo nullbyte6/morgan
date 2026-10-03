@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 from src.init.identity import get_assistant, get_assistant_name, get_assistant_environment
+from src.init.lang import LANGUAGE_NAMES, get_language
 
 import asyncio
 import os
@@ -44,7 +45,7 @@ vision_agent = Agent(
     instructions=lambda: (
         f"You are {get_assistant_name()}'s image analysis module. "
         "Analyze the supplied image and answer the user's question. "
-        "Respond in Spanish unless another language is requested. "
+        f"Respond in {LANGUAGE_NAMES.get(get_language(), 'English')} unless another language is requested. "
         "Describe only what is supported by the image. "
         "If text is unreadable or something is uncertain, say so. "
         "Do not claim to have interacted with the computer."
