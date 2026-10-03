@@ -28,6 +28,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix splitting of spoken text leaving the closing » of a Russian quotation at the start of the next phrase, by keeping it with the sentence it closes
 - Fix spoken file paths always spelling letters and the dot in Spanish, by using the letter names and the word for dot of the language detected in the reply for English, Spanish, Chinese, French, German, Portuguese, Italian, Russian, Japanese and Korean, and by keeping accented and non-Latin parts of a path that were dropped
 - Fix the voice runtime on AMD ROCm installs failing to load audio, by installing TorchCodec 0.16 from PyPI after the ROCm PyTorch and the shared FFmpeg build it loads when only the static one is present, also repairing existing ROCm installs
+- Remove the CosyVoice, Matcha-TTS and Triton TensorRT-LLM runtime packages and the Matcha-TTS submodule entry, ahead of replacing the voice model with a single omni model
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
 - Update Arlo to sound more relaxed and natural, with a relaxed conversational default tone, a response rule for everyday wording, and a slightly slower default speech speed
 - Update the end of voice input to wait 1.8 seconds of silence instead of 0.6 to 1.2, so there is room to pause between words and sentences, including the wake silence default and its documentation
