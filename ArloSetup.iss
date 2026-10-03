@@ -1,19 +1,19 @@
-#ifndef ArloSourceDir
-  #define ArloSourceDir "C:\Arlo"
+#ifndef MorganSourceDir
+  #define MorganSourceDir "C:\Morgan"
 #endif
-#ifndef ArloVersion
-  #define ArloVersion GetStringFileInfo(ArloSourceDir + "\Arlo.exe", "ProductVersion")
+#ifndef MorganVersion
+  #define MorganVersion GetStringFileInfo(MorganSourceDir + "\Morgan.exe", "ProductVersion")
 #endif
-#ifndef ArloRepositoryDir
-  #define ArloRepositoryDir SourcePath
+#ifndef MorganRepositoryDir
+  #define MorganRepositoryDir SourcePath
 #endif
 
 [Setup]
 AppId={{EFC7E428-7C68-4FF5-A608-C737BD547853}
-AppName=Arlo
-AppVersion={#ArloVersion}
+AppName=Morgan
+AppVersion={#MorganVersion}
 AppPublisher=XDG
-DefaultDirName=C:\Arlo
+DefaultDirName=C:\Morgan
 DisableDirPage=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -23,12 +23,12 @@ MinVersion=10.0
 ChangesEnvironment=yes
 SetupLogging=yes
 OutputDir=build\installer
-OutputBaseFilename=ArloSetup
+OutputBaseFilename=MorganSetup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-SetupIconFile=assets\arlo.ico
-UninstallDisplayIcon={app}\Arlo.exe
+SetupIconFile=assets\morgan.ico
+UninstallDisplayIcon={app}\Morgan.exe
 LicenseFile=LICENSE
 
 [Languages]
@@ -38,12 +38,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 
 [Files]
-Source: "{#ArloSourceDir}\Arlo.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#ArloSourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#ArloSourceDir}\ArloTUI.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#MorganSourceDir}\Morgan.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#MorganSourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MorganSourceDir}\MorganTUI.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "scripts\arlo-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\morgan-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "src\__init__.py"; DestDir: "{app}\src"; Flags: ignoreversion
 Source: "src\init\__init__.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
 Source: "src\init\attachments.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
@@ -69,9 +69,9 @@ Source: "scripts\setup-runtime.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
 [Registry]
 Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvironmentPrefix}"; ValueData: "{app}"
 Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "ASSISTANT_NAME"; ValueData: "{code:GetAssistantName}"
-Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvironmentPrefix}_HOME"; ValueData: "{code:GetRepositoryScripts}"; Check: HasArloRepository
-Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "AssistantName"; ValueData: "{code:GetAssistantName}"; Flags: uninsdeletevalue uninsdeletekeyifempty
-Root: HKCU; Subkey: "Software\Arlo\Installer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Environment"; ValueType: string; ValueName: "{code:GetEnvironmentPrefix}_HOME"; ValueData: "{code:GetRepositoryScripts}"; Check: HasMorganRepository
+Root: HKCU; Subkey: "Software\Morgan\Installer"; ValueType: string; ValueName: "AssistantName"; ValueData: "{code:GetAssistantName}"; Flags: uninsdeletevalue uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Morgan\Installer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\tui"
@@ -83,9 +83,9 @@ Type: filesandordirs; Name: "{app}\.venv"
 Type: filesandordirs; Name: "{app}\src"
 
 [Icons]
-Name: "{autoprograms}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\{code:GetAssistantName}"; Filename: "{app}\Arlo.exe"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{autoprograms}\{code:GetAssistantName} Terminal"; Filename: "{app}\ArloTUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Arlo.exe"
+Name: "{autoprograms}\{code:GetAssistantName}"; Filename: "{app}\Morgan.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\{code:GetAssistantName}"; Filename: "{app}\Morgan.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\{code:GetAssistantName} Terminal"; Filename: "{app}\MorganTUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Morgan.exe"
 
 [Code]
 var
@@ -108,7 +108,7 @@ end;
 
 function IsCustomAssistantName: Boolean;
 begin
-  Result := CompareText(GetAssistantName(''), 'Arlo') <> 0;
+  Result := CompareText(GetAssistantName(''), 'Morgan') <> 0;
 end;
 
 function AssistantNameError: String;
@@ -146,13 +146,13 @@ end;
 
 procedure InitializeWizard;
 begin
-  RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'AssistantName', PreviousAssistantName);
-  RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'InstallPath', PreviousInstallPath);
+  RegQueryStringValue(HKCU, 'Software\Morgan\Installer', 'AssistantName', PreviousAssistantName);
+  RegQueryStringValue(HKCU, 'Software\Morgan\Installer', 'InstallPath', PreviousInstallPath);
   AssistantPage := CreateInputQueryPage(wpSelectDir,
     'Assistant name', 'Customize the assistant and its environment variables.',
-    'This name will be saved in the application settings and names the data folder (.name in your user profile). Arlo creates ARLO and ARLO_HOME; Luna creates LUNA and LUNA_HOME. The first variable points to the installation folder. The second is only created when a cloned Arlo repository is found and points to its scripts folder.');
+    'This name will be saved in the application settings and names the data folder (.name in your user profile). Morgan creates MORGAN and MORGAN_HOME; Luna creates LUNA and LUNA_HOME. The first variable points to the installation folder. The second is only created when a cloned Morgan repository is found and points to its scripts folder.');
   AssistantPage.Add('Assistant name:', False);
-  AssistantPage.Values[0] := ExpandConstant('{param:ASSISTANTNAME|' + GetPreviousData('AssistantName', 'Arlo') + '}');
+  AssistantPage.Values[0] := ExpandConstant('{param:ASSISTANTNAME|' + GetPreviousData('AssistantName', 'Morgan') + '}');
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -256,12 +256,12 @@ begin
     RegDeleteValue(HKCU, 'Environment', Name);
 end;
 
-function IsArloRepository(Directory: String): Boolean;
+function IsMorganRepository(Directory: String): Boolean;
 begin
   Directory := RemoveBackslashUnlessRoot(Trim(Directory));
   Result := (Directory <> '') and
     (DirExists(Directory + '\.git') or FileExists(Directory + '\.git')) and
-    FileExists(Directory + '\scripts\arlo-services.ps1') and
+    FileExists(Directory + '\scripts\morgan-services.ps1') and
     FileExists(Directory + '\src\init\core.py');
 end;
 
@@ -273,33 +273,33 @@ begin
   if RegQueryStringValue(HKCU, 'Environment', Name, Value) then begin
     Value := RemoveBackslashUnlessRoot(Trim(Value));
     if (CompareText(ExtractFileName(Value), 'scripts') = 0) and
-       IsArloRepository(ExtractFileDir(Value)) then
+       IsMorganRepository(ExtractFileDir(Value)) then
       Result := ExtractFileDir(Value);
   end;
 end;
 
-function FindArloRepository: String;
+function FindMorganRepository: String;
 begin
   Result := RepositoryFromHome(GetEnvironmentPrefix('') + '_HOME');
   if Result = '' then
-    Result := RepositoryFromHome('ARLO_HOME');
-  if (Result = '') and IsArloRepository('{#ArloRepositoryDir}') then
-    Result := RemoveBackslashUnlessRoot('{#ArloRepositoryDir}');
+    Result := RepositoryFromHome('MORGAN_HOME');
+  if (Result = '') and IsMorganRepository('{#MorganRepositoryDir}') then
+    Result := RemoveBackslashUnlessRoot('{#MorganRepositoryDir}');
 end;
 
-function HasArloRepository: Boolean;
+function HasMorganRepository: Boolean;
 begin
-  Result := FindArloRepository <> '';
+  Result := FindMorganRepository <> '';
 end;
 
 function GetRepositoryScripts(Param: String): String;
 begin
-  Result := AddBackslash(FindArloRepository) + 'scripts';
+  Result := AddBackslash(FindMorganRepository) + 'scripts';
 end;
 
 function GetRuntimeSwitches(Param: String): String;
 begin
-  if HasArloRepository then
+  if HasMorganRepository then
     Result := ' -SkipVoiceRuntime'
   else
     Result := '';
@@ -329,10 +329,10 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
-    if HasArloRepository then
-      Log('Arlo repository found: ' + GetRepositoryScripts(''))
+    if HasMorganRepository then
+      Log('Morgan repository found: ' + GetRepositoryScripts(''))
     else begin
-      Log('No cloned Arlo repository found; ' + GetEnvironmentPrefix('') + '_HOME is not configured.');
+      Log('No cloned Morgan repository found; ' + GetEnvironmentPrefix('') + '_HOME is not configured.');
       DeleteEnvironmentIfMatching(GetEnvironmentPrefix('') + '_HOME', ExpandConstant('{app}\scripts'));
     end;
   end;
@@ -351,9 +351,9 @@ var
   Name: String;
 begin
   if CurUninstallStep = usUninstall then begin
-    if RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'AssistantName', Name) then
+    if RegQueryStringValue(HKCU, 'Software\Morgan\Installer', 'AssistantName', Name) then
       UninstallPrefix := Uppercase(Name);
-    RegQueryStringValue(HKCU, 'Software\Arlo\Installer', 'InstallPath', UninstallPath);
+    RegQueryStringValue(HKCU, 'Software\Morgan\Installer', 'InstallPath', UninstallPath);
   end;
   if (CurUninstallStep = usPostUninstall) and
      (UninstallPrefix <> '') and (UninstallPath <> '') then begin
