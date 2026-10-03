@@ -53,8 +53,9 @@ required. The installer:
   downloads resume on the next run, and files already present are skipped;
 - installs FFmpeg and Python 3.12 through WinGet if they are missing, and
   creates the voice runtime (`.venv` inside the installation folder) with
-  PyTorch (CUDA build on NVIDIA GPUs, CPU build otherwise) and the CosyVoice
-  dependencies. No repository clone is needed; when a cloned repository is
+  PyTorch (CUDA build on NVIDIA GPUs, ROCm build on AMD Radeon GPUs together
+  with TorchCodec and the shared FFmpeg libraries it loads, CPU build
+  otherwise) and the CosyVoice dependencies. No repository clone is needed; when a cloned repository is
   found through `ARLO_HOME`, this step is skipped and its `.venv` is used.
 
 Configuration and user data are stored in `C:\Users\<username>\.<name>`. Refer
@@ -76,7 +77,9 @@ then launches the installed `Arlo.exe` if one is found, or `entry.desktop` from
 the `.venv` otherwise.
 
 To build the executable, run `scripts/build-exe.sh` from Git Bash (PyInstaller,
-output in `C:\Arlo` by default), then compile `ArloSetup.iss` with Inno Setup.
+output in the folder named by the `ARLO` environment variable, which the
+installer sets to the installation folder, or `C:\Arlo` when it is not set, so
+a build replaces the installed copy), then compile `ArloSetup.iss` with Inno Setup.
 `scripts\rebuild.bat` builds the desktop and the terminal version
 (`scripts/build-tui.sh`, output in `C:\Arlo\tui`, without Qt) and compiles the
 installer, which requires both. `scripts\rebuild-tui.bat` rebuilds only the terminal
@@ -84,6 +87,37 @@ version before compiling; build the desktop first, because its build replaces th
 whole `C:\Arlo` folder. The installer is written to
 `build\installer\ArloSetup.exe`. `dev\export_orb_icon.py` regenerates
 `assets\arlo.ico` and `assets\arlo.png` from the orb widget.
+
+## Platform packages
+
+The core of Arlo (`src/init`, `src/diagnostics` and `entry`) does not call
+operating system APIs directly. Everything system-specific goes through the
+platform layer in `src/platforms`:
+
+- `base.py` defines the `Platform` interface: windows and app launching,
+  folders and drives, notifications, processes and power, package management,
+  media sessions, terminals, services, updates, window styling and system
+  telemetry. Its defaults are portable (a POSIX terminal, `fcntl` file locks,
+  `sudo`), and anything a platform cannot provide raises
+  `UnsupportedOperation`, which the core reports as an unsupported feature.
+- `winx64` implements it for Windows x64 with Win32, the Shell, PowerShell,
+  WinRT, ConPTY and WinGet.
+- `macx64` implements it for macOS with AppKit, Quartz, AppleScript and
+  Homebrew. It targets Apple Silicon, because the pinned PyTorch and ONNX
+  Runtime have no Intel Mac builds. It has not been tested on a Mac yet, and
+  macOS still has no services launcher (start Ollama and the voice service by
+  hand), no song recognition from system audio, no diagnostics and no packaged
+  app or installer.
+- `current_platform()` in `src/platforms/__init__.py` selects the package from
+  `sys.platform` and falls back to the portable defaults elsewhere.
+
+Each package lists its own dependencies in its `requirements.txt`, with a
+`sys_platform` marker on every line. The root `requirements.txt` holds the
+cross-platform dependencies and includes both package files, so
+`pip install -r requirements.txt` installs only what the current system needs.
+To support another system, add a package next to these that subclasses
+`Platform`, override what that system provides, and select it in
+`current_platform()`.
 
 ## Terminal version
 
