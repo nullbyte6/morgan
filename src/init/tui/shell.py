@@ -18,9 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Direct shell commands typed after > run here, without involving the model."""
 import codecs
-import os
 import re
-import shutil
 import subprocess
 import threading
 from src.platforms import current_platform
@@ -41,24 +39,6 @@ def is_change_directory(command: str) -> bool:
     return _CHANGE_DIRECTORY.fullmatch(command.strip()) is not None
 
 
-def _console_encoding() -> str:
-    if os.name == "nt":
-        try:
-            import ctypes
-            code_page = ctypes.windll.kernel32.GetConsoleOutputCP()
-            if code_page:
-                return f"cp{code_page}"
-        except (AttributeError, OSError):
-            pass
-    return "utf-8"
-
-
-def _default_shell() -> str:
-    if os.name == "nt":
-        return "pwsh" if shutil.which("pwsh") else "powershell"
-    return "sh"
-
-
 class ShellRun:
     """One command with streamed, bounded output and a cancellable process tree."""
 
@@ -77,7 +57,7 @@ class ShellRun:
         from src.init.commands import _shell_command
 
         try:
-            argv = _shell_command(self.command, _default_shell())
+            argv = _shell_command(self.command, current_platform().default_shell())
             self.process = subprocess.Popen(
                 argv, cwd=self.directory, stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
@@ -89,7 +69,7 @@ class ShellRun:
         threading.Thread(target=self._read, name="tui-shell", daemon=True).start()
 
     def _read(self):
-        decoder = codecs.getincrementaldecoder(_console_encoding())(errors="replace")
+        decoder = codecs.getincrementaldecoder(current_platform().console_encoding())(errors="replace")
         stream = self.process.stdout
         try:
             while True:

@@ -22,6 +22,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
 import sys
@@ -70,6 +71,46 @@ class MediaReader:
         pass
 
 
+class PosixTerminal:
+    """A shell running in a POSIX pseudo-terminal."""
+
+    def __init__(self, argv: list[str] | None, directory: Path, environment: dict[str, str],
+                 columns: int, rows: int):
+        from ptyprocess import PtyProcessUnicode
+        shell = os.environ.get("SHELL") or shutil.which("sh") or "/bin/sh"
+        self.process = PtyProcessUnicode.spawn(
+            argv or [shell, "-i"], cwd=str(directory), env=environment,
+            dimensions=(rows, columns))
+        self.pid = self.process.pid
+
+    def write(self, text: str) -> None:
+        self.process.write(text)
+
+    def resize(self, columns: int, rows: int) -> None:
+        self.process.setwinsize(rows, columns)
+
+    def read(self) -> str:
+        """Return pending output without waiting, raising EOFError once the terminal closed."""
+        import select
+        if select.select([self.process.fd], [], [], 0)[0]:
+            return self.process.read(32768)
+        return ""
+
+    def isalive(self) -> bool:
+        return self.process.isalive()
+
+    def exit_status(self) -> int | None:
+        return self.process.exitstatus
+
+    def kill(self) -> None:
+        """End the shell and every process it started."""
+        import signal
+        os.killpg(self.pid, signal.SIGKILL)
+
+    def close(self) -> None:
+        self.process.close(force=True)
+
+
 class Platform:
     """Portable defaults that each platform package overrides with native services."""
 
@@ -79,6 +120,7 @@ class Platform:
     persistent_environment = False
     elevation_captures_output = False
     installer_name = ""
+    has_drive_letters = False
 
     def unsupported(self, operation: str) -> UnsupportedOperation:
         return UnsupportedOperation(self.name, operation)
@@ -239,3 +281,16 @@ class Platform:
 
     def trim_memory(self) -> None:
         """Return idle memory of the current process to the system."""
+
+    def open_terminal(self, argv: list[str] | None, directory: Path, environment: dict[str, str],
+                      columns: int, rows: int):
+        """Start argv, or an interactive shell, in a pseudo-terminal of the given size."""
+        return PosixTerminal(argv, directory, environment, columns, rows)
+
+    def terminal_command_line(self, command: str) -> str:
+        """Return the line that makes the interactive shell run command."""
+        return "eval " + shlex.quote(command)
+
+    def console_encoding(self) -> str:
+        """Return the encoding console programs use for their output."""
+        return "utf-8"

@@ -27,6 +27,7 @@ from src.init.tui.i18n import t
 from src.init.tui.shell import shell_command_text
 from src.init.tui.text import elide, pad
 from src.init.tui.widgets import clicked, style
+from src.platforms import current_platform
 
 
 @dataclass(frozen=True)
@@ -287,7 +288,7 @@ class FileOverlay(Overlay):
         entries = []
         if self.directory.parent != self.directory:
             entries.append(("..", self.directory.parent, True))
-        elif os.name == "nt":
+        elif current_platform().has_drive_letters:
             entries.append(("..", None, True))
         try:
             with os.scandir(self.directory) as scanner:

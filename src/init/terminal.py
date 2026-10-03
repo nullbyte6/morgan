@@ -21,15 +21,8 @@ from __future__ import annotations
 from src.init.identity import get_assistant_name
 
 import os
-import base64
-import shlex
 from collections import deque
 import queue
-import select
-import shutil
-import signal
-import subprocess
-import sys
 import threading
 import time
 import re
@@ -42,6 +35,7 @@ from PySide6.QtGui import QColor, QFont, QKeySequence, QTextCharFormat, QTextCur
 from PySide6.QtWidgets import *
 
 from .theme import current_theme, on_theme_changed
+from src.platforms import current_platform
 
 
 @dataclass(eq=False)
@@ -219,37 +213,8 @@ class TerminalSession(QThread):
         exit_code = -1
         try:
             environment = dict(os.environ, TERM="xterm-256color")
-            if os.name == "nt":
-                from winpty import PTY
-                process = PTY(self.columns, self.rows, timeout=3000)
-                argv = self.argv
-                if argv is None:
-                    shell = shutil.which("pwsh.exe") or str(
-                        Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-                        / "PowerShell" / "7" / "pwsh.exe")
-                    if not Path(shell).is_file():
-                        shell = shutil.which("powershell.exe")
-                    if shell is None:
-                        raise FileNotFoundError("PowerShell is unavailable")
-                    argv = [shell, "-NoLogo", "-NoProfile"]
-                if getattr(sys, "frozen", False):
-                    executable, arguments = argv[0], argv[1:]
-                else:
-                    python = Path(sys.executable)
-                    if python.name.lower() == "pythonw.exe":
-                        python = python.with_name("python.exe")
-                    bootstrap = Path(__file__).with_name("desktop") / "terminal_shell.py"
-                    executable, arguments = str(python), [str(bootstrap), *argv]
-                process.spawn(executable,
-                              cmdline=" " + subprocess.list2cmdline(arguments),
-                              cwd=str(self.directory),
-                              env="\0".join(f"{k}={v}" for k, v in environment.items()) + "\0")
-            else:
-                from ptyprocess import PtyProcessUnicode
-                shell = os.environ.get("SHELL") or shutil.which("sh") or "/bin/sh"
-                process = PtyProcessUnicode.spawn(
-                    self.argv or [shell, "-i"], cwd=str(self.directory), env=environment,
-                    dimensions=(self.rows, self.columns))
+            process = current_platform().open_terminal(
+                self.argv, self.directory, environment, self.columns, self.rows)
             self.pid = process.pid
             self.ready.emit()
             started = time.monotonic()
@@ -264,21 +229,13 @@ class TerminalSession(QThread):
                         break
                     if action == "write":
                         process.write(value)
-                    elif os.name == "nt":
-                        process.set_size(*value)
                     else:
-                        process.setwinsize(value[1], value[0])
-                if os.name == "nt":
-                    data = process.read(blocking=False)
-                elif select.select([process.fd], [], [], 0)[0]:
-                    data = process.read(32768)
-                else:
-                    data = ""
+                        process.resize(*value)
+                data = process.read()
                 if data:
                     self.output.emit(data)
                 if not process.isalive():
-                    exit_code = (process.get_exitstatus() if os.name == "nt"
-                                 else process.exitstatus) or 0
+                    exit_code = process.exit_status() or 0
                     break
                 self.msleep(10)
         except EOFError:
@@ -289,7 +246,7 @@ class TerminalSession(QThread):
                 while (process.isalive() and not self.isInterruptionRequested()
                        and time.monotonic() < deadline):
                     self.msleep(10)
-                code = (process.get_exitstatus() if os.name == "nt" else process.exitstatus)
+                code = process.exit_status()
                 exit_code = code if code is not None else -1
         except Exception as error:
             if not self.isInterruptionRequested():
@@ -298,15 +255,8 @@ class TerminalSession(QThread):
             if process is not None and self.pid is not None:
                 try:
                     if process.isalive():
-                        if os.name == "nt":
-                            subprocess.run(
-                                ["taskkill.exe", "/PID", str(process.pid), "/T", "/F"],
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                creationflags=subprocess.CREATE_NO_WINDOW, timeout=5)
-                        else:
-                            os.killpg(process.pid, signal.SIGKILL)
-                    if os.name != "nt":
-                        process.close(force=True)
+                        process.kill()
+                    process.close()
                 except Exception as error:
                     self.failed.emit(f"Could not close terminal: {error}")
             self.exited.emit(exit_code)
@@ -505,12 +455,7 @@ class TerminalView(QWidget):
         if self._disposed or self.session is None or self._pending_command is None:
             return
         command, self._pending_command = self._pending_command, None
-        if os.name == "nt":
-            encoded = base64.b64encode(command.encode("utf-8")).decode("ascii")
-            text = ". ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded + "'))))"
-        else:
-            text = "eval " + shlex.quote(command)
-        self.send_input(text + "\r")
+        self.send_input(current_platform().terminal_command_line(command) + "\r")
 
     @Slot(str)
     def receive_output(self, text):
