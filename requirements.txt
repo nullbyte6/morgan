@@ -35,7 +35,6 @@ confection==1.3.3
 conformer==0.3.2
 contourpy==1.4.0
 contractions==0.1.73
-cosyvoice==0.0.8
 cryptography==50.0.1
 csvw==4.1.0
 ctranslate2==4.8.2

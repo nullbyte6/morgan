@@ -38,29 +38,22 @@ $DataDir = Join-Path $env:USERPROFILE ("." + (Get-AssistantIdentifier $Assistant
 
 $ConfigFile = Join-Path $DataDir "json\config.json"
 $ModelsDir = Join-Path $DataDir "models"
-$CosyVoiceDir = Join-Path $ModelsDir "Fun-CosyVoice3-0.5B"
-$CosyVoiceRepo = "FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+$OmniDir = Join-Path $ModelsDir "MiniCPM-o-4_5-gguf"
+$OmniRepo = "openbmb/MiniCPM-o-4_5-gguf"
+$OmniServer = Join-Path $DataDir "llama.cpp-omni\build-hip2\bin\llama-omni-server.exe"
 $TimezoneDataVersion = "1.2026.3"
 $TimezoneDataDir = Join-Path $ModelsDir "timezonefinder-data"
-$CosyVoiceRequired = @(
-    "cosyvoice3.yaml",
-    "campplus.onnx",
-    "speech_tokenizer_v3.onnx",
-    "flow.pt",
-    "flow.decoder.estimator.fp32.onnx",
-    "hift.pt",
-    "llm.pt",
-    "CosyVoice-BlankEN/config.json",
-    "CosyVoice-BlankEN/merges.txt",
-    "CosyVoice-BlankEN/model.safetensors",
-    "CosyVoice-BlankEN/tokenizer_config.json",
-    "CosyVoice-BlankEN/vocab.json"
-)
-$CosyVoiceSkipped = @(
-    ".gitattributes",
-    "README.md",
-    "llm.rl.pt",
-    "speech_tokenizer_v3.batch.onnx"
+$OmniRequired = @(
+    "MiniCPM-o-4_5-Q4_K_M.gguf",
+    "audio/MiniCPM-o-4_5-audio-F16.gguf",
+    "tts/MiniCPM-o-4_5-tts-F16.gguf",
+    "tts/MiniCPM-o-4_5-projector-F16.gguf",
+    "vision/MiniCPM-o-4_5-vision-F16.gguf",
+    "token2wav-gguf/encoder.gguf",
+    "token2wav-gguf/flow_extra.gguf",
+    "token2wav-gguf/flow_matching.gguf",
+    "token2wav-gguf/hifigan2.gguf",
+    "token2wav-gguf/prompt_cache.gguf"
 )
 
 $VenvDir = Join-Path $InstallDir ".venv"
@@ -324,9 +317,9 @@ function Ensure-OllamaModel {
     Write-Host "$Model installed successfully."
 }
 
-function Test-CosyVoice {
-    foreach ($Relative in $CosyVoiceRequired) {
-        $File = Join-Path $CosyVoiceDir ($Relative -replace "/", "\")
+function Test-Omni {
+    foreach ($Relative in $OmniRequired) {
+        $File = Join-Path $OmniDir ($Relative -replace "/", "\")
 
         if (-not (Test-Path $File -PathType Leaf)) {
             return $false
@@ -340,32 +333,31 @@ function Test-CosyVoice {
     return $true
 }
 
-function Get-CosyVoiceFiles {
-    $Uri = "https://huggingface.co/api/models/$CosyVoiceRepo/tree/main?recursive=true"
+function Get-OmniFiles {
+    $Uri = "https://huggingface.co/api/models/$OmniRepo/tree/main?recursive=true"
 
     try {
         $Entries = Invoke-RestMethod -Uri $Uri -UseBasicParsing
     }
     catch {
-        throw "Could not list the CosyVoice model files: $($_.Exception.Message)"
+        throw "Could not list the voice model files: $($_.Exception.Message)"
     }
 
     $Files = @($Entries | Where-Object {
         ($_.type -eq "file") -and
-        ($CosyVoiceSkipped -notcontains $_.path) -and
-        (-not $_.path.StartsWith("asset/"))
+        ($OmniRequired -contains $_.path)
     })
 
-    foreach ($Relative in $CosyVoiceRequired) {
+    foreach ($Relative in $OmniRequired) {
         if (-not ($Files | Where-Object { $_.path -eq $Relative })) {
-            throw "CosyVoice repository is missing $Relative."
+            throw "Voice model repository is missing $Relative."
         }
     }
 
     return $Files
 }
 
-function Save-CosyVoiceFile {
+function Save-OmniFile {
     param(
         [Parameter(Mandatory = $true)]
         [string]$Curl,
@@ -377,7 +369,7 @@ function Save-CosyVoiceFile {
         [long]$Size
     )
 
-    $Target = Join-Path $CosyVoiceDir ($Relative -replace "/", "\")
+    $Target = Join-Path $OmniDir ($Relative -replace "/", "\")
 
     if ((Test-Path $Target -PathType Leaf) -and ((Get-Item $Target).Length -eq $Size)) {
         Write-Host "$Relative is already downloaded."
@@ -390,7 +382,7 @@ function Save-CosyVoiceFile {
         -Force | Out-Null
 
     $Part = "$Target.part"
-    $Url = "https://huggingface.co/$CosyVoiceRepo/resolve/main/$Relative"
+    $Url = "https://huggingface.co/$OmniRepo/resolve/main/$Relative"
 
     Write-Host "Downloading $Relative ($([math]::Round($Size / 1MB, 1)) MB)..."
 
@@ -423,42 +415,50 @@ function Save-CosyVoiceFile {
     Move-Item -Path $Part -Destination $Target -Force
 }
 
-function Ensure-CosyVoice {
-    Write-Step "Checking CosyVoice..."
+function Ensure-Omni {
+    Write-Step "Checking the voice model..."
 
-    if (Test-CosyVoice) {
-        Write-Host "CosyVoice model found:"
-        Write-Host "  $CosyVoiceDir"
-        return
+    if (Test-Omni) {
+        Write-Host "Voice model found:"
+        Write-Host "  $OmniDir"
+    }
+    else {
+        $Curl = Get-Command "curl.exe" -ErrorAction SilentlyContinue
+
+        if (-not $Curl) {
+            throw "curl.exe is required to download the voice model."
+        }
+
+        Write-Host "Voice model is missing. Downloading..."
+
+        $Files = Get-OmniFiles
+        $Total = ($Files | Measure-Object -Property size -Sum).Sum
+
+        Write-Host "Source: https://huggingface.co/$OmniRepo"
+        Write-Host "Destination: $OmniDir"
+        Write-Host "Total size: $([math]::Round($Total / 1GB, 1)) GB"
+
+        foreach ($File in $Files) {
+            Save-OmniFile `
+                -Curl $Curl.Source `
+                -Relative $File.path `
+                -Size ([long]$File.size)
+        }
+
+        if (-not (Test-Omni)) {
+            throw "Voice model was downloaded but could not be verified."
+        }
+
+        Write-Host "Voice model installed successfully."
     }
 
-    $Curl = Get-Command "curl.exe" -ErrorAction SilentlyContinue
-
-    if (-not $Curl) {
-        throw "curl.exe is required to download the CosyVoice model."
+    if (Test-Path $OmniServer -PathType Leaf) {
+        Write-Host "Voice server found:"
+        Write-Host "  $OmniServer"
     }
-
-    Write-Host "CosyVoice model is missing. Downloading..."
-
-    $Files = Get-CosyVoiceFiles
-    $Total = ($Files | Measure-Object -Property size -Sum).Sum
-
-    Write-Host "Source: https://huggingface.co/$CosyVoiceRepo"
-    Write-Host "Destination: $CosyVoiceDir"
-    Write-Host "Total size: $([math]::Round($Total / 1GB, 1)) GB"
-
-    foreach ($File in $Files) {
-        Save-CosyVoiceFile `
-            -Curl $Curl.Source `
-            -Relative $File.path `
-            -Size ([long]$File.size)
+    else {
+        Write-Warning "Voice server not found at $OmniServer. Build llama.cpp-omni with HIP and place it there, or set omni_server in the configuration."
     }
-
-    if (-not (Test-CosyVoice)) {
-        throw "CosyVoice model was downloaded but could not be verified."
-    }
-
-    Write-Host "CosyVoice model installed successfully."
 }
 
 function Ensure-TimezoneData {
@@ -990,7 +990,7 @@ try {
         -Ollama $Ollama `
         -Model $MainModel
 
-    Ensure-CosyVoice
+    Ensure-Omni
 
     try {
         Ensure-TimezoneData
