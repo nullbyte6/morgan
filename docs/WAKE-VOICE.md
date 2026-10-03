@@ -101,7 +101,7 @@ PowerShell before starting `wake.py`.
 | Variable                        | Default | Meaning                                                                                             |
 |---------------------------------|---------|-----------------------------------------------------------------------------------------------------|
 | `ARLO_WAKE_WAIT_SECONDS`        | `6`     | Internal capture timeout after detection.                                                           |
-| `ARLO_WAKE_SILENCE_SECONDS`     | `3.0`   | Silence threshold used by wake detection.                                                           |
+| `ARLO_WAKE_SILENCE_SECONDS`     | `1.8`   | Silence threshold used by wake detection.                                                           |
 | `ARLO_WAKE_MAX_SECONDS`         | `120`   | Safety limit for a listener capture.                                                                |
 | `ARLO_WAKE_PRE_ROLL_SECONDS`    | `0.3`   | Audio retained before speech onset; `0` disables it.                                                |
 | `ARLO_WAKE_THRESHOLD`           | `400`   | RMS speech threshold in signed 16-bit PCM units. Tune for microphone/noise level.                   |

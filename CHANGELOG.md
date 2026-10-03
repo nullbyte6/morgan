@@ -30,7 +30,8 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix the voice runtime on AMD ROCm installs failing to load audio, by installing TorchCodec 0.16 from PyPI after the ROCm PyTorch and the shared FFmpeg build it loads when only the static one is present, also repairing existing ROCm installs
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
 - Update Arlo to sound more relaxed and natural, with a relaxed conversational default tone, a response rule for everyday wording, and a slightly slower default speech speed
-- Update the end of voice input to wait 3 seconds of silence instead of 0.6 to 1.2, so there is room to pause between words and sentences, including the wake silence default and its documentation
+- Update the end of voice input to wait 1.8 seconds of silence instead of 0.6 to 1.2, so there is room to pause between words and sentences, including the wake silence default and its documentation
+- Update source files to remove inline comments
 - Update media session reading and playback control, the now-playing song reader and system audio capture for song recognition to go through the platform layer
 - Update process termination, shutdown scheduling, installed application discovery, file opening and Recycle Bin emptying to go through the platform layer, so the core no longer requires winshell or winreg to import
 - Update requirements.txt to keep only cross-platform dependencies and include the winx64 package's own requirements, so Windows-only libraries such as pywin32, winshell, winrt, pywinpty, DirectML and MKL install only on Windows

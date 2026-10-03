@@ -34,7 +34,7 @@ VOICE_MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
 VOICE_BLOCK_SECONDS = 0.1
 VOICE_MAX_SECONDS = 30
 VOICE_START_TIMEOUT_SECONDS = 10
-VOICE_END_SILENCE_SECONDS = 3.0
+VOICE_END_SILENCE_SECONDS = 1.8
 VOICE_SILENCE_THRESHOLD = 400
 PLAYBACK_SILENCE_THRESHOLD = 1200
 ECHO_TAIL_SECONDS = 1.5
@@ -42,7 +42,7 @@ _VOICE_MODEL = None
 
 
 class LiveVoiceCapture:
-    def __init__(self, sample_rate, *, silence_seconds=3.0, idle_seconds=30):
+    def __init__(self, sample_rate, *, silence_seconds=1.8, idle_seconds=30):
         import numpy as np
         from scipy.signal import correlate, resample_poly
 
