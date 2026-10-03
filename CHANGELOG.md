@@ -4,6 +4,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.3-beta (2026-10-03)
 
+- Add French, German, Portuguese (Brazil), Japanese, Russian, Korean and Italian as interface languages, selectable in Settings and the terminal version, with translated interface text, localized dates in Nova and wake word detection
 - Add macOS desktop launching for the wake listener, opening Arlo.app when it is installed and the desktop entry from source otherwise
 - Add macOS notifications, reminder dialogs with up to three buttons, and Spotify and Music now-playing, cover art, playback control and seeking through AppleScript to the macx64 package
 - Add macOS window listing, app launching, quitting and hiding, mounted volumes, process termination, shutdown scheduling, installed apps, Trash emptying, Homebrew app management and the Steam folder to the macx64 package, with the pyobjc Cocoa and Quartz bindings it needs
@@ -28,7 +29,10 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update service startup, Ollama restarts, the updater and the voice service's priority and memory trimming to get the services script, installer, install location and process flags from the platform layer
 - Update system diagnostics to run their PowerShell telemetry through the platform layer, keeping the allowed sources, result parsing and scoring in the core
 - Update the built-in terminal, the TUI shell and the TUI file picker to get the pseudo-terminal, command injection, console encoding and drive list from the platform layer, moving the Windows Ctrl+C bootstrap and console input into winx64
+- Update the config.json language check, the interface language table and the Settings and terminal language lists to cover every interface language
 - Update the desktop window frame colors, popup anchoring, taskbar identity and the wake listener's launcher, priority and audio host to come from the platform layer
+- Update the startup greeting, the week summary and the song summary to take the language name from one shared table, so they write in every interface language instead of falling back to English
+- Update the terminal version's Nova day and month names, which were hardcoded for English, Spanish and Chinese, to cover every interface language, and the Nova calendar month titles to use the standalone month name that Russian requires
 - Update the storage folder locator, file locks and elevated commands to get registry variables, msvcrt locks, administrator checks, the default shell and sudo from the platform layer
 
 ## 26.10.2-beta (2026-10-02)

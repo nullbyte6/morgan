@@ -27,8 +27,9 @@ Ollama to run tools and automate tasks on Windows.
 - Local PC health diagnostics tools. See [diagnostics](docs/DIAGNOSTICS.md).
 - A health view in the command palette that checks Ollama, GPU use and the
   voice service.
-- 26 built-in color themes and interface languages in Spanish, English and
-  Chinese (Simplified).
+- 26 built-in color themes and interface languages in Spanish, English,
+  Chinese (Simplified), French, German, Portuguese (Brazil), Japanese, Russian,
+  Korean and Italian.
 - Settings buttons to back up and restore memories, Nova and the daily logs,
   and to check for updates from the GitHub releases.
 - A lightweight terminal version that shares the desktop's runtime.
