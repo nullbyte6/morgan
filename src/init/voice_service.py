@@ -42,6 +42,7 @@ from .config import load_config
 from .speech_text import SpeechNumbers, prepare_speech
 from .subtitle_timing import StreamingWordTimeline
 from .voice_naturalness import Naturalizer
+from .voice_prosody import ProsodyTracker
 from .voice_profiles import selected_voice, resolve_voice
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -147,6 +148,7 @@ class SpeechBatch:
         self.subtitle = ""
         self.error = None
         self.naturalizer = Naturalizer()
+        self.prosody = ProsodyTracker()
         self.last_timeline = None
         self.last_total = 0
         self.first_enqueue = None
@@ -355,8 +357,10 @@ class VoiceService:
                 if batch.cancelled.is_set():
                     continue
                 self._select_reference(reference)
+                prosody = batch.prosody.analyze(text, verbatim)
                 pause, text = batch.naturalizer.plan(
-                    text, verbatim, batch.numbers.code, idle=self._audio_queue.empty())
+                    prosody.text, verbatim, batch.numbers.code, idle=self._audio_queue.empty())
+                pause *= prosody.pause_scale
                 if pause > 0 and batch.last_timeline is not None:
                     self._queue_audio(batch, np.zeros(int(self.sample_rate * pause),
                                                       dtype=np.float32),
@@ -371,6 +375,8 @@ class VoiceService:
                     samples = np.asarray(audio, dtype=np.float32).reshape(-1)
                     if not samples.size:
                         continue
+                    if prosody.gain != 1.0:
+                        samples = samples * np.float32(prosody.gain)
                     if self._queue_audio(batch, samples, timeline, sample_offset):
                         sample_offset += len(samples)
                         if not batch.chunk_logged:
