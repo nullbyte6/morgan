@@ -85,7 +85,7 @@ def get_repo_lnk() -> str:
     """Open the assistant's public repository in the user's default web browser.
     Use when asked to open the assistant's online repository, not to inspect local code.
     """
-    url = "https://github.com/xddigs/arlo"
+    url = "https://github.com/xddigs/morgan"
     try:
         open_url(url)
         return tr('self_code.opened_repository_in_the_default_browser', url=url)
