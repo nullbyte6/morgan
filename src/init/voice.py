@@ -34,13 +34,15 @@ VOICE_MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
 VOICE_BLOCK_SECONDS = 0.1
 VOICE_MAX_SECONDS = 30
 VOICE_START_TIMEOUT_SECONDS = 10
-VOICE_END_SILENCE_SECONDS = 1.2
+VOICE_END_SILENCE_SECONDS = 3.0
 VOICE_SILENCE_THRESHOLD = 400
+PLAYBACK_SILENCE_THRESHOLD = 1200
+ECHO_TAIL_SECONDS = 1.5
 _VOICE_MODEL = None
 
 
 class LiveVoiceCapture:
-    def __init__(self, sample_rate, *, silence_seconds=0.6, idle_seconds=30):
+    def __init__(self, sample_rate, *, silence_seconds=3.0, idle_seconds=30):
         import numpy as np
         from scipy.signal import correlate, resample_poly
 
@@ -70,17 +72,17 @@ class LiveVoiceCapture:
                                     sample_rate // divisor)
         with self.reference_lock:
             now = time.monotonic()
-            if now - self.reference_time > 0.8:
+            if now - self.reference_time > ECHO_TAIL_SECONDS:
                 self.reference = self.reference[:0]
             self.reference = np.concatenate((self.reference, samples))[
-                -int(self.sample_rate * 0.8):]
+                -int(self.sample_rate * ECHO_TAIL_SECONDS):]
             self.reference_time = now
 
     def suppress_echo(self, samples):
         import numpy as np
 
         with self.reference_lock:
-            recent = time.monotonic() - self.reference_time < 0.8
+            recent = time.monotonic() - self.reference_time < ECHO_TAIL_SECONDS
             reference = self.reference.copy() if recent else self.reference[:0]
         if len(reference) < len(samples):
             return samples, recent
@@ -108,7 +110,8 @@ class LiveVoiceCapture:
         samples, playback = self.suppress_echo(samples)
         pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2").tobytes()
         duration = len(samples) / self.sample_rate
-        speech = pcm_rms(pcm) >= VOICE_SILENCE_THRESHOLD
+        speech = pcm_rms(pcm) >= (PLAYBACK_SILENCE_THRESHOLD if playback
+                                 else VOICE_SILENCE_THRESHOLD)
         if not self.frames:
             self.idle = 0.0 if playback else self.idle + duration
             if not speech:
@@ -121,7 +124,7 @@ class LiveVoiceCapture:
         self.frames.append(pcm)
         self.silent_seconds = 0.0 if speech else self.silent_seconds + duration
         self.speech_seconds = self.speech_seconds + duration if speech else 0.0
-        if not self.started and self.speech_seconds >= (0.3 if playback else 0.15):
+        if not self.started and self.speech_seconds >= (0.6 if playback else 0.15):
             self.started = True
             self.event = "started"
         if (self.silent_seconds >= self.silence_seconds or
