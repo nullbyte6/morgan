@@ -37,7 +37,7 @@ os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
 import torch
 from transformers.utils import logging as transformers_logging
 
-from src.init.lang import tr
+from src.init.lang import tr, LANGUAGE_NAMES
 from .config import load_config
 from .speech_text import SpeechNumbers, prepare_speech
 from .subtitle_timing import StreamingWordTimeline
@@ -314,7 +314,7 @@ class VoiceService:
             prefix, transcript = self._reference_prompt.split("<|endofprompt|>", 1)
             prefix = prefix.rstrip().removesuffix(f"Please speak in {VOICE_REFERENCE_LANGUAGE}.").rstrip()
             instruction = (f"{prefix} Please speak in "
-                           f"{language.name.replace('_', ' ').lower()}."
+                           f"{LANGUAGE_NAMES.get(language.name.lower(), language.name.replace('_', ' ').lower())}."
                            f"<|endofprompt|>{transcript}")
             instruction_key = (self._reference_key, language)
             instructed_id = speaker_id + "-instruct"
