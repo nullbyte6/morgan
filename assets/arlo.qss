@@ -205,7 +205,10 @@ ToggleSwitch {
     qproperty-thumbColor: @toggle_thumb;
 }
 
-QMainWindow#assistantWindow,
+QMainWindow#assistantWindow {
+    background-color: @surface_sunken;
+}
+
 QGraphicsView#globalZoomView,
 QWidget#globalZoomViewport,
 QWidget#windowContainer {

@@ -16,45 +16,52 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Frameless desktop window fitted to the current screen's work area."""
+"""Framed desktop window whose title bar follows the active theme."""
 
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtWidgets import QApplication, QMainWindow
+import ctypes
+import sys
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMainWindow
+
+from src.init.theme import current_theme
+
+DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+DWMWA_BORDER_COLOR = 34
+DWMWA_CAPTION_COLOR = 35
+DWMWA_TEXT_COLOR = 36
+
+
+def _colorref(color) -> ctypes.c_uint:
+    return ctypes.c_uint(color.red() | color.green() << 8 | color.blue() << 16)
 
 
 class DesktopWindow(QMainWindow):
-    """Keep the outer surface transparent and follow OS work-area changes."""
+    """Resizable window with a native frame colored from the theme."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("assistantWindow")
-        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self._screen_tracking_started = False
+        self.setAttribute(Qt.WA_StyledBackground)
+        self.setWindowState(Qt.WindowMaximized)
 
-        app = QApplication.instance()
-        for screen in app.screens():
-            self._watch_screen(screen)
-        app.screenAdded.connect(self._watch_screen)
-
-    def _watch_screen(self, screen):
-        screen.availableGeometryChanged.connect(self.fit_available_screen)
-        screen.geometryChanged.connect(self.fit_available_screen)
-
-    def fit_available_screen(self, *_):
-        """Use Qt's logical coordinates, excluding OS-reserved taskbar space."""
-        if not self.isVisible() or self.isMinimized():
+    def apply_frame_theme(self, theme):
+        """Match the native title bar and border to the theme's surface colors."""
+        if sys.platform != "win32":
             return
-        screen = self.screen()
-        if screen is not None:
-            available = screen.availableGeometry()
-            if self.geometry() != available:
-                self.setGeometry(available)
+        background = theme.color("surface_sunken")
+        dark = background.lightness() < 128
+        attributes = (
+            (DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.c_int(int(dark))),
+            (DWMWA_CAPTION_COLOR, _colorref(background)),
+            (DWMWA_BORDER_COLOR, _colorref(theme.color("border"))),
+            (DWMWA_TEXT_COLOR, _colorref(theme.color("text"))),
+        )
+        hwnd = int(self.winId())
+        for attribute, value in attributes:
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value))
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not self._screen_tracking_started:
-            self.windowHandle().screenChanged.connect(self.fit_available_screen)
-            self._screen_tracking_started = True
-        self.fit_available_screen()
-        QTimer.singleShot(0, self.fit_available_screen)
+        self.apply_frame_theme(current_theme())

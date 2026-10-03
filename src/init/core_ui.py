@@ -762,6 +762,7 @@ class AssistantWindow(DesktopWindow):
 
     def apply_theme(self, theme):
         self.load_stylesheet()
+        self.apply_frame_theme(theme)
 
     def _orbs(self, session=None):
         session = session or self.session
@@ -1797,7 +1798,8 @@ class AssistantWindow(DesktopWindow):
         if self._workspace_hiding:
             self._workspace_hiding = False
             self.workspace.animate_visibility(True)
-        self.showNormal()
+        self.setWindowState(self.windowState() & ~Qt.WindowMinimized)
+        self.show()
         self.raise_()
         self.activateWindow()
         self.zoom_view.setFocus(Qt.OtherFocusReason)
