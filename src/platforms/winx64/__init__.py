@@ -21,7 +21,7 @@
 import subprocess
 
 from ..base import Platform
-from . import folders, notifications, system, windows
+from . import apps, folders, notifications, system, windows
 
 
 class WinX64Platform(Platform):
@@ -42,3 +42,6 @@ class WinX64Platform(Platform):
     cancel_shutdown = staticmethod(system.cancel_shutdown)
     installed_applications = staticmethod(system.installed_applications)
     empty_recycle_bin = staticmethod(system.empty_recycle_bin)
+    package_command = staticmethod(apps.package_command)
+    app_data_roots = staticmethod(apps.app_data_roots)
+    steam_path = staticmethod(apps.steam_path)

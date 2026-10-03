@@ -19,45 +19,18 @@
 """Browses the local Steam library and checks whether the installed games
 match the game requested by the user, managed by a Steam account"""
 
-import os
 import re
-import winreg
 from difflib import get_close_matches
 from pathlib import Path
+
+from src.platforms import current_platform
 
 class SteamManager:
     """Represents a steam game manager. Holds the entire registry of
     local games."""
 
     def __init__(self):
-        self.steam_path = self._find_steam_path()
-
-    @staticmethod
-    def _find_steam_path() -> Path | None:
-        """Finds the local Steam installation path"""
-        keys = (
-            (winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam"),
-            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam")
-        )
-
-        for root, key_path in keys:
-            try:
-                with winreg.OpenKey(root, key_path) as key:
-                    value, _ = winreg.QueryValueEx(key, "SteamPath")
-                    path = Path(value)
-                    if (path / "steam.exe").is_file():
-                        return path
-            except OSError:
-                continue
-
-        system_drive = Path(os.environ.get("SystemDrive", "C:") + os.sep)
-        candidates = [
-            system_drive / "Steam",
-            Path(os.environ.get("ProgramFiles", system_drive / "Program Files")) / "Steam",
-            Path(os.environ.get("ProgramFiles(x86)", system_drive / "Program Files (x86)")) / "Steam",
-        ]
-        return next((path for path in candidates
-                     if (path / "steam.exe").is_file()), None)
+        self.steam_path = current_platform().steam_path()
 
     def _library_paths(self) -> list[Path]:
         """Returns a list of paths to local Steam libraries"""
@@ -139,7 +112,7 @@ class SteamManager:
         if game is None:
             return False
 
-        os.startfile(f"steam://rungameid/{game['appid']}")
+        current_platform().open_path(f"steam://rungameid/{game['appid']}")
         return True
 
 

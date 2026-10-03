@@ -22,7 +22,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import stat
 import subprocess
 import tempfile
@@ -34,6 +33,7 @@ _candidates = {}
 _lock = threading.RLock()
 from .config import DEFAULTS, HOME_PATH
 from .identity import get_assistant_identifier
+from src.platforms import current_platform
 
 _SHARED = {"microsoft", "windows", "packages", "programs", "temp", "cache",
            "google", "mozilla", "adobe", "common files", DEFAULTS["assistant"]["name"].casefold(), "." + DEFAULTS["assistant"]["name"].casefold(), HOME_PATH.name, get_assistant_identifier()}
@@ -52,22 +52,7 @@ def _argument(value):
     return value.strip()
 
 
-def _winget():
-    executable = shutil.which("winget")
-    if not executable and os.environ.get("LOCALAPPDATA"):
-        alias = Path(
-            os.environ["LOCALAPPDATA"]) / "Microsoft/WindowsApps/winget.exe"
-        if alias.is_file():
-            executable = str(alias)
-    if not executable:
-        raise ValueError(
-            tr('app_manager.winget_is_unavailable_install_update_microsoft_app_installer_and'))
-    return executable
-
-
-def _start(arguments, mutation=False):
-    if os.name != "nt":
-        return _result("error", error=tr('app_manager.application_management_requires_windows'))
+def _start(operation, package, option=False, mutation=False):
     with _lock:
         try:
             if mutation and any(
@@ -75,15 +60,14 @@ def _start(arguments, mutation=False):
                     _jobs.values()):
                 return _result("error",
                                error=tr('app_manager.an_app_operation_is_still_running_check_its_job_id_first'))
-            command = [_winget(), *arguments, "--accept-source-agreements",
-                       "--disable-interactivity"]
+            command = current_platform().package_command(operation, package, option)
             log = tempfile.TemporaryFile()
             try:
                 process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                            stdout=log,
                                            stderr=subprocess.STDOUT,
                                            shell=False,
-                                           creationflags=subprocess.CREATE_NO_WINDOW)
+                                           creationflags=current_platform().no_window_flags)
             except OSError:
                 log.close()
                 raise
@@ -123,8 +107,7 @@ def get_app_operation(job_id: str) -> str:
 def search_apps(query: str, installed_only: bool = False) -> str:
     """Find winget package IDs. installed_only lists matching installed applications."""
     try:
-        return _start(["list" if installed_only else "search", "--query",
-                       _argument(query)])
+        return _start("list" if installed_only else "search", _argument(query))
     except ValueError as error:
         return _result("error", error=str(error))
 
@@ -132,12 +115,8 @@ def search_apps(query: str, installed_only: bool = False) -> str:
 def install_app(package_id: str, download_only: bool = False) -> str:
     """Download and install an exact winget package ID from search_apps; download_only saves to Downloads."""
     try:
-        args = ["download" if download_only else "install", "--id",
-                _argument(package_id),
-                "--exact", "--source", "winget", "--accept-package-agreements"]
-        if not download_only:
-            args.append("--silent")
-        return _start(args, mutation=True)
+        return _start("download" if download_only else "install", _argument(package_id),
+                      not download_only, mutation=True)
     except ValueError as error:
         return _result("error", error=str(error))
 
@@ -145,19 +124,9 @@ def install_app(package_id: str, download_only: bool = False) -> str:
 def uninstall_app(package_id: str, purge_portable: bool = False) -> str:
     """Uninstall an exact installed ID. purge_portable deletes portable package files only when requested."""
     try:
-        args = ["uninstall", "--id", _argument(package_id), "--exact",
-                "--silent"]
-        if purge_portable:
-            args.append("--purge")
-        return _start(args, mutation=True)
+        return _start("uninstall", _argument(package_id), purge_portable, mutation=True)
     except ValueError as error:
         return _result("error", error=str(error))
-
-
-def _roots():
-    return [Path(os.environ[key]).absolute() for key in
-            ("LOCALAPPDATA", "APPDATA", "PROGRAMDATA")
-            if os.environ.get(key)]
 
 
 def _linked(path):
@@ -186,7 +155,7 @@ def scan_app_residues(app_name: str) -> str:
         return _result("error",
                        error=tr('app_manager.specify_a_distinctive_app_name_of_at_least_three_characters'))
     results, errors = [], []
-    for root in _roots():
+    for root in current_platform().app_data_roots():
         try:
             for path in root.iterdir():
                 if term not in path.name.casefold():

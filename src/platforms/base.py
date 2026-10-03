@@ -77,8 +77,8 @@ class Platform:
         """Show a notification with buttons and return the chosen action ID or an empty string."""
         raise self.unsupported("ask_notification")
 
-    def open_path(self, path: Path) -> None:
-        """Open a file or folder with its default application."""
+    def open_path(self, path: Path | str) -> None:
+        """Open a file, folder or URI with its default application."""
         opener = "open" if shutil.which("open") else "xdg-open"
         subprocess.Popen([opener, str(path)])
 
@@ -102,3 +102,16 @@ class Platform:
     def empty_recycle_bin(self) -> None:
         """Permanently empty the system trash."""
         raise self.unsupported("empty_recycle_bin")
+
+    def package_command(self, operation: str, package: str, option: bool = False) -> list[str]:
+        """Build the package manager command for search, list, install, download or uninstall.
+        option means silent install for install and purge for uninstall."""
+        raise self.unsupported("package_command")
+
+    def app_data_roots(self) -> list[Path]:
+        """Return the folders where applications keep per-app data."""
+        return []
+
+    def steam_path(self) -> Path | None:
+        """Return the local Steam installation folder."""
+        return None
