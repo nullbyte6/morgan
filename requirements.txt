@@ -64,6 +64,8 @@ faster-whisper==1.2.1
 fastmcp-slim==4.0.4
 filelock==4.0.0
 flatbuffers==25.12.19
+flexcache==0.3
+flexparser==0.4
 fonttools==4.65.0
 frozendict==2.4.7
 frozenlist==1.8.0
@@ -157,6 +159,7 @@ pephubclient==0.6.0
 peppy==0.40.8
 phonemizer-fork==3.3.2
 pillow==12.3.0
+Pint==0.26.1
 piper==0.15.1
 piper-tts==1.8.0
 pipestat==0.13.1

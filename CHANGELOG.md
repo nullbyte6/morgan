@@ -4,6 +4,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.3-beta (2026-10-03)
 
+- Add calculator to the command palette, opened by typing >> instead of >, that shows the result live as one types and copies it with Enter, covering arithmetic with exact fractions and decimals, implicit multiplication, factorials and mathematical functions and constants, equations such as x^2 = 4, unit conversions such as 5 km to mi and 20 degC to degF, and symbolic derivatives, integrals, limits, factoring, expansion and prime factorization computed on Enter, built on sympy and the new Pint dependency (with flexcache and flexparser) in requirements.txt, with its text in every interface language
 - Add French, German, Portuguese (Brazil), Japanese, Russian, Korean and Italian as interface languages, selectable in Settings and the terminal version, with translated interface text, localized dates in Nova and wake word detection
 - Add macOS desktop launching for the wake listener, opening Arlo.app when it is installed and the desktop entry from source otherwise
 - Add macOS notifications, reminder dialogs with up to three buttons, and Spotify and Music now-playing, cover art, playback control and seeking through AppleScript to the macx64 package
