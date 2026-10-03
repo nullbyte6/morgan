@@ -1,12 +1,12 @@
 # Changelog
 
-All notable changes to Arlo, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
+All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
 ## 26.10.3-beta (2026-10-03)
 
 - Add calculator to the command palette, opened by typing >> instead of >, that shows the result live as one types and copies it with Enter, covering arithmetic with exact fractions and decimals, implicit multiplication, factorials and mathematical functions and constants, equations such as x^2 = 4, unit conversions such as 5 km to mi and 20 degC to degF, and symbolic derivatives, integrals, limits, factoring, expansion and prime factorization computed on Enter, built on sympy and the new Pint dependency (with flexcache and flexparser) in requirements.txt, with its text in every interface language
 - Add French, German, Portuguese (Brazil), Japanese, Russian, Korean and Italian as interface languages, selectable in Settings and the terminal version, with translated interface text, localized dates in Nova and wake word detection
-- Add macOS desktop launching for the wake listener, opening Arlo.app when it is installed and the desktop entry from source otherwise
+- Add macOS desktop launching for the wake listener, opening Morgan.app when it is installed and the desktop entry from source otherwise
 - Add macOS notifications, reminder dialogs with up to three buttons, and Spotify and Music now-playing, cover art, playback control and seeking through AppleScript to the macx64 package
 - Add macOS window listing, app launching, quitting and hiding, mounted volumes, process termination, shutdown scheduling, installed apps, Trash emptying, Homebrew app management and the Steam folder to the macx64 package, with the pyobjc Cocoa and Quartz bindings it needs
 - Add macx64 requirements, included from requirements.txt, with onnxruntime for the voice service on macOS in place of the Windows DirectML build
@@ -15,16 +15,16 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add per-turn voice latency log from the end of the user's speech to the first model text, the first phrase sent to speech and the first audible audio, with the first CosyVoice chunk and first played frame timed in the voice service
 - Add platform layer with winx64 and macx64 packages behind a shared interface, moving window listing, launching, closing and minimizing, known folders, local drives and notifications out of the core so other operating systems can provide their own implementations
 - Add scripts/arlo-services.sh, the macOS services launcher that starts Ollama, preloads the model, starts CosyVoice and opens a Terminal debug console following its logs, and run it at startup on macOS through the macx64 package
-- Add scripts/build-dmg.sh, which builds Arlo.app with PyInstaller on an Apple Silicon Mac, with the app version and the microphone and automation permission prompts, and packs it into a build/installer/Arlo-<version>.dmg disk image
-- Add scripts/build-tui-dmg.sh, which builds the terminal version on an Apple Silicon Mac and packs it with an Arlo Terminal.command launcher into a build/installer/ArloTUI-<version>.dmg disk image
+- Add scripts/build-dmg.sh, which builds Morgan.app with PyInstaller on an Apple Silicon Mac, with the app version and the microphone and automation permission prompts, and packs it into a build/installer/Morgan-<version>.dmg disk image
+- Add scripts/build-tui-dmg.sh, which builds the terminal version on an Apple Silicon Mac and packs it with an Morgan Terminal.command launcher into a build/installer/MorganTUI-<version>.dmg disk image
 - Add scripts/rebuild.sh, which builds both macOS disk images, stops at the first failure and opens build/installer
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
-- Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
+- Add Toggle Morgan orb switch to Settings that turns off the floating orb, so closing the window sends Morgan to the system tray instead, remembered between sessions
 - Fix Marina's voice cutting off while speaking, by fading out the end of her reference clip, which stopped abruptly, and adding silence after it
-- Fix Arlo cutting itself off while speaking with the Marina voice and recording the end of its own speech as input, by keeping the echo reference for 1.5 seconds and requiring louder, longer sound to count as the user speaking while Arlo is talking
-- Fix Arlo referring to itself with feminine forms whatever its name, by telling the model in the default identity prompt to take its gender from its name, masculine for male names and feminine for female ones
-- Fix barge-in needing a loud, unbroken 0.6 seconds of sound while Arlo speaks, which made it work only when the user called out its name, by counting about one second of speech with short pauses between words as the user interrupting
-- Fix barge-in needing a loud voice while Arlo speaks, by lowering the volume that counts as the user speaking over Arlo from 1200 to 900
+- Fix Morgan cutting itself off while speaking with the Marina voice and recording the end of its own speech as input, by keeping the echo reference for 1.5 seconds and requiring louder, longer sound to count as the user speaking while Morgan is talking
+- Fix Morgan referring to itself with feminine forms whatever its name, by telling the model in the default identity prompt to take its gender from its name, masculine for male names and feminine for female ones
+- Fix barge-in needing a loud, unbroken 0.6 seconds of sound while Morgan speaks, which made it work only when the user called out its name, by counting about one second of speech with short pauses between words as the user interrupting
+- Fix barge-in needing a loud voice while Morgan speaks, by lowering the volume that counts as the user speaking over Morgan from 1200 to 900
 - Fix every request failing on computers where Ollama was already running with its own small default context, by restarting Ollama at startup with the configured context length when the running server was started with a different one
 - Fix image analysis always answering in Spanish unless asked otherwise, by answering in the interface language
 - Fix installed copies failing to start their services, because the installer did not ship the platform layer that config.py and the voice service now import
@@ -32,13 +32,13 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix scripts\rebuild-tui.bat compiling the installer after a failed terminal build, by running build-tui.sh through Git's bash.exe so its exit code is checked
 - Fix scripts\rebuild.bat only working from the scripts folder, compiling the installer after a failed build and never launching it, by running both builds through Git's bash.exe from the script's own folder, stopping at the first failure and starting the installer with start
 - Fix speech of an interrupted response still being queued after the user interrupted it, by ignoring phrases that arrive after the turn was stopped
-- Fix Arlo sometimes talking on after being stopped, by stopping the previous turn's speech whenever a new turn begins, targeting the last spoken turn on stop, stopping speech when a turn fails or its speech is disabled, and stopping even when the session no longer owns speech
+- Fix Morgan sometimes talking on after being stopped, by stopping the previous turn's speech whenever a new turn begins, targeting the last spoken turn on stop, stopping speech when a turn fails or its speech is disabled, and stopping even when the session no longer owns speech
 - Fix splitting of Japanese text without kanji into phrases like English, which ignored the 。 sentence end and appended a stray period, by splitting any text with kana the Chinese way
 - Fix splitting of spoken text leaving the closing » of a Russian quotation at the start of the next phrase, by keeping it with the sentence it closes
 - Fix spoken file paths always spelling letters and the dot in Spanish, by using the letter names and the word for dot of the language detected in the reply for English, Spanish, Chinese, French, German, Portuguese, Italian, Russian, Japanese and Korean, and by keeping accented and non-Latin parts of a path that were dropped
 - Fix the voice runtime on AMD ROCm installs failing to load audio, by installing TorchCodec 0.16 from PyPI after the ROCm PyTorch and the shared FFmpeg build it loads when only the static one is present, also repairing existing ROCm installs
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
-- Update Arlo to sound more relaxed and natural, with a relaxed conversational default tone, a response rule for everyday wording, and a slightly slower default speech speed
+- Update Morgan to sound more relaxed and natural, with a relaxed conversational default tone, a response rule for everyday wording, and a slightly slower default speech speed
 - Update the end of voice input to wait 1.8 seconds of silence instead of 0.6 to 1.2, so there is room to pause between words and sentences, including the wake silence default and its documentation
 - Update source files to remove inline comments
 - Update media session reading and playback control, the now-playing song reader and system audio capture for song recognition to go through the platform layer
@@ -58,52 +58,52 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 ## 26.10.2-beta (2026-10-02)
 
 - Add a health view, opened from the command palette, that checks Ollama, how much of the main model sits on the GPU and how long it took to load, the graphics adapters against the installed CUDA or ROCm PyTorch build, and the voice service device and CosyVoice load time
-- Add automatic opening of a Now playing panel to the right of the active panel when a song starts playing, once per song so that closing it is respected, with the song detection running in the background while Arlo is open
+- Add automatic opening of a Now playing panel to the right of the active panel when a song starts playing, once per song so that closing it is respected, with the song detection running in the background while Morgan is open
 - Add Back Up and Restore buttons to Settings, next to Remove Memories, that save the memory database, Nova's reminders and events and the daily logs to one zip file and bring them back from it, migrating older backups to the current schema
-- Add Check for Updates button in Settings, above Remove Memories, and a command palette action that look for newer versions in the repository's GitHub releases, let the user choose one, download ArloSetup.exe to the Downloads folder with a progress bar docked at the bottom of the current workspace, install it, delete the installer and start Arlo again
+- Add Check for Updates button in Settings, above Remove Memories, and a command palette action that look for newer versions in the repository's GitHub releases, let the user choose one, download MorganSetup.exe to the Downloads folder with a progress bar docked at the bottom of the current workspace, install it, delete the installer and start Morgan again
 - Add command palette button to the header of every desktop workspace panel, running the same palette as Ctrl+K so it can be opened with a click, with Ctrl+K kept
-- Add context length field to Settings, saved in the user configuration instead of dev/core.json and used both for the OLLAMA_CONTEXT_LENGTH set when the services script starts Ollama and for the context Arlo budgets against, so users with less GPU memory can lower it from the default 32768
+- Add context length field to Settings, saved in the user configuration instead of dev/core.json and used both for the OLLAMA_CONTEXT_LENGTH set when the services script starts Ollama and for the context Morgan budgets against, so users with less GPU memory can lower it from the default 32768
 - Add Copy day and Export buttons to the Nova diary that copy the day as Markdown or save it to a Markdown file, with its agenda, remembered facts and every conversation message
 - Add Copy report button to the health view that copies the results with the version, system and check time as Markdown for bug reports
 - Add Custom option to the repeat choice of the Nova overlay and form, in the desktop and terminal versions, with an interval from 1 to 999 and an hours, days, weeks, months or years unit
 - Add custom repeat intervals to Nova reminders and events, such as every 2 weeks, every 15 days or every 3 hours, accepted by the repeat parameter of the add_reminder, add_event and update_agenda_entry tools together with hourly and yearly, with the Nova databases migrated to the wider schema and repeating events expanded by the hour
 - Add daily, weekly and monthly repeats to Nova reminders and events, chosen in the entry overlay or through a repeat parameter on the add_reminder and add_event tools, with repeating reminders moving to their next time when due or completed and repeating events shown on every day they happen
-- Add due Nova reminder notifications to the terminal version, shown as Windows toasts with In 10 min, Tomorrow and Done buttons and a notice in the status line, sharing its Nova records with Arlo's tools
+- Add due Nova reminder notifications to the terminal version, shown as Windows toasts with In 10 min, Tomorrow and Done buttons and a notice in the status line, sharing its Nova records with Morgan's tools
 - Add edit button to the reminder and event rows of the Nova agenda, reminders, events, diary and search, opening the overlay to change the title, time, notes and repeat
-- Add Exit Arlo command in the command palette that stops any running reply and closes Arlo gracefully, so the session end time is recorded without ending the process from the Task Manager
+- Add Exit Morgan command in the command palette that stops any running reply and closes Morgan gracefully, so the session end time is recorded without ending the process from the Task Manager
 - Add flag choice to the Nova form and colored flags to the entry rows of the terminal version
 - Add flag field to Nova reminders and events, stored as none, green for unimportant, yellow for important or red for high priority, like the iOS Reminders app, and set through a flag parameter on the add_reminder, add_event and update_agenda_entry tools, with the agenda brief naming important and high priority entries
 - Add flag selector and green, yellow and red flags to the Nova overlay, rows and calendar chips of the desktop version, to mark reminders and events as unimportant, important or high priority
 - Add health check on the first start of each new version, run once the services had time to start, that opens the health view with the results when a check fails
 - Add In 10 min, Tomorrow and Done buttons to due Nova reminder notifications, now shown as Windows toasts that stay on screen, with a click on the toast opening the Nova agenda
 - Add logging of every memory tool call and its result, including failures with their error, to the agent log, with the arguments left out in private mode, so a memory that was not saved can be traced instead of failing silently
-- Add notice, in the interface language, under a reply that says a memory was saved, updated, deleted or pinned when no memory tool succeeded in that turn and no other action did either, found by asking the model one yes or no question about the reply, so Arlo no longer leaves the user believing something was stored when it never called the tool
+- Add notice, in the interface language, under a reply that says a memory was saved, updated, deleted or pinned when no memory tool succeeded in that turn and no other action did either, found by asking the model one yes or no question about the reply, so Morgan no longer leaves the user believing something was stored when it never called the tool
 - Add Nova search, a sidebar section with one box that finds reminders, events and the diary days whose conversations mention the words typed, opening the day in the diary when clicked
 - Add Nova to the terminal version, opened from the palette, Ctrl+Alt+N or Ctrl+L, with the agenda, reminders, events, a month calendar, the diary with unfoldable conversations and Markdown export, the week review and its summary, memories with pinning and editing, search, and a form to create, edit and delete reminders and events
 - Add Nova Week, a weekly review section that shows the reminders done, pending and missed, the events, conversations and new memories of each week, the days with activity opening in the diary, and a Summarize button that asks the main model for a short review of the week
 - Add Ollama button, drawn with the Ollama llama, to the left of the context length field in Settings, that stops every Ollama process and starts the server again with the configured OLLAMA_CONTEXT_LENGTH after confirmation, so a new context length applies without the services script
 - Add Open the song panel switch to Settings that turns off the automatic opening of the Now playing panel when a song starts, remembered between sessions
-- Add pin_memory tool and a pinned option on remember, so Arlo can pin or unpin a memory when asked or store one already pinned for requests like "always remember that ...", with list_memories showing which are pinned
+- Add pin_memory tool and a pinned option on remember, so Morgan can pin or unpin a memory when asked or store one already pinned for requests like "always remember that ...", with list_memories showing which are pinned
 - Add pinned memories that are always placed first in the model's context, and a Nova Memories section to review every stored memory and pin, edit or remove it
 - Add choice dialog to the terminal version, with a centered title and message over a grid of buttons that answers to arrows, Tab, Enter, the mouse and Esc, queues questions and now shows the command permission request instead of its own box
 - Add choice dialog built into the Settings view, a scrim with a small centered card and gridded buttons, replacing the separate Qt message windows of Remove Memories, Remove Markdowns, Back Up, Restore and the Settings warnings, and reusable by anything that needs a choice
 - Add Remove Markdowns button to Settings, next to Remove Memories and in the same red, that deletes every daily log and session artifact after confirmation, keeping the memories, conversations, settings, themes and the Nova agenda
 - Add scrolling to the model selector list of the desktop version, showing four models at a time
-- Add search_agenda tool that lets Arlo find Nova reminders and events by the words in their title or notes, past or upcoming, when their date is unknown
+- Add search_agenda tool that lets Morgan find Nova reminders and events by the words in their title or notes, past or upcoming, when their date is unknown
 - Add seek_media to the media controls, moving the playback position of a Windows media session or of Spotify
 - Add song detection that finds the song playing on Spotify or in a browser through the Windows media sessions, leaving out videos, podcasts and ads, confirms it as a track and takes its album art through the Spotify Web API when Spotify is already authorized, and follows songs playing on other Spotify devices without ever opening the browser to authorize
 - Add song summary written by the main model in the interface language, in at most 500 words, from web search results and one page about the song: what the lyrics are about, their themes and fun facts such as interviews with the singer or band and the history of the album
 - Add song view with the album cover, a progress bar that seeks when clicked, previous, play or pause and next buttons wired to the player, Song, Album and Artist buttons that copy each name, and a Summarize button, with its interface text in English, Spanish and Chinese
 - Add update checks to the terminal version, from a Check for updates palette action that lists the newer releases, downloads the chosen one with a progress box above the composer, installs it and starts the terminal version again
-- Add update_agenda_entry tool that lets Arlo rename, move or reschedule a Nova reminder or event from chat while keeping its ID and repeat, instead of deleting and adding it again
-- Fix Arlo apologizing for a failed tool call and asking for a second confirmation when saving a reminder or event, because reading the clock first counted as a first action and moved the second one, the Nova entry, into supervision, which rejected it until a task contract existed
-- Fix Arlo ending a task with "Exceeded maximum output retries" when the model's tool call could not be parsed and came back as an empty reply, because the framework gave up after one retry and a read-only task contract demanded a nested verification map that the model could not write, so empty replies now go through Arlo's own recovery, which stops cleanly after three attempts, and read-only criteria no longer need an explicit verification
-- Fix Arlo failing to save a memory when the model chose a category outside the allowed list or sent an empty or spaced key or an expiration without a time zone, by listing the allowed categories in the remember tool, turning keys into underscored words, ignoring empty keys and expirations and reading an expiration without a time zone as local time
-- Fix Arlo losing the delete, update, list and search agenda tools after saving a reminder or event, because a request too large for the context kept only the tools used in the last messages, so every Nova tool now stays available together
-- Fix Arlo not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
-- Fix Arlo refusing to remember, forget or pin something unless the message began with one of a fixed list of English or Spanish verbs, so wordings such as "Hey Arlo, remember ...", "yes, store it" or "recuérdalo" were rejected, by removing that keyword check and instructing the model to call the memory tool in the same turn, in any wording or language
-- Fix Arlo repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
-- Fix Arlo staying open after being asked to close itself during a reply, because the shutdown waited on a quit request that had already been marked as handled
+- Add update_agenda_entry tool that lets Morgan rename, move or reschedule a Nova reminder or event from chat while keeping its ID and repeat, instead of deleting and adding it again
+- Fix Morgan apologizing for a failed tool call and asking for a second confirmation when saving a reminder or event, because reading the clock first counted as a first action and moved the second one, the Nova entry, into supervision, which rejected it until a task contract existed
+- Fix Morgan ending a task with "Exceeded maximum output retries" when the model's tool call could not be parsed and came back as an empty reply, because the framework gave up after one retry and a read-only task contract demanded a nested verification map that the model could not write, so empty replies now go through Morgan's own recovery, which stops cleanly after three attempts, and read-only criteria no longer need an explicit verification
+- Fix Morgan failing to save a memory when the model chose a category outside the allowed list or sent an empty or spaced key or an expiration without a time zone, by listing the allowed categories in the remember tool, turning keys into underscored words, ignoring empty keys and expirations and reading an expiration without a time zone as local time
+- Fix Morgan losing the delete, update, list and search agenda tools after saving a reminder or event, because a request too large for the context kept only the tools used in the last messages, so every Nova tool now stays available together
+- Fix Morgan not accepting requests to write down reminders, events or tasks in Nova, because its instructions only described notifications and timers, and refresh the saved instructions that were never edited
+- Fix Morgan refusing to remember, forget or pin something unless the message began with one of a fixed list of English or Spanish verbs, so wordings such as "Hey Morgan, remember ...", "yes, store it" or "recuérdalo" were rejected, by removing that keyword check and instructing the model to call the memory tool in the same turn, in any wording or language
+- Fix Morgan repeating remembered facts in the first person, such as "My mother's name is ...", instead of reading them as the user's own memories and answering "Your mother's name is ..."
+- Fix Morgan staying open after being asked to close itself during a reply, because the shutdown waited on a quit request that had already been marked as handled
 - Fix model selector list covering the selector when opened upward, by keeping it anchored above the selector with a small gap while it resizes
 - Fix model selector list visibly jumping and sliding into place when opened, by keeping it invisible while it is moved above the selector and showing it only once it is in its final position
 - Fix dropdown lists of Settings showing smaller text than the chosen option above them, and the model selector list opening with a gap above the selector, by sizing the items like the chosen option and starting the list right at the top of the selector, shrinking the list to scroll when there is not enough room above
@@ -117,24 +117,24 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix voice service hanging until the startup timeout when the CosyVoice model folder is missing, because the model loader tried to download the local path as an online model, so it now stops at once with a message naming the missing folder
 - Remove the /exit, /private and /reload slash commands in favour of the command palette, which gains Toggle private mode in the desktop and terminal versions and Reload modules in the desktop, while reload and ref still work as messages
 - Update command permission, cloud model, update, unsaved changes, attachment and error popups of the desktop version to the choice dialog, shown over the window or editor instead of a separate Qt window, with queued questions, a scrolling list for the releases to install and Esc or a click outside answering as cancel or No
-- Update desktop and terminal builds to leave out lingua, babel, num2words and the speech text module, which only the voice service uses and which the voice runtime already installs, so ArloSetup.exe no longer bundles the 290 MB language detector
+- Update desktop and terminal builds to leave out lingua, babel, num2words and the speech text module, which only the voice service uses and which the voice runtime already installs, so MorganSetup.exe no longer bundles the 290 MB language detector
 - Update flag selector of the Nova overlay to a horizontal track with a colored pill for the chosen flag, like the permissions selector
 - Update installer to download the 62 MB timezone data from PyPI during runtime setup into the models folder instead of bundling it in the desktop and terminal builds, with get_current_time reading it from there or from the installed package when running from source, and reporting a missing download clearly
 - Update installer to ship only the voice service modules and locales in the src folder, stop installing the dev folder and remove both old copies on upgrade
 - Update model selector list of the desktop version to open upward, above the selector, when there is room on the screen
-- Update Nova agenda tools and instructions to take a date alone, loose date and time formats, a time zone suffix read as local time and null optional arguments, and to write the reminder or event at once with the date and time Arlo is already given instead of calling get_current_time or asking for a second confirmation
+- Update Nova agenda tools and instructions to take a date alone, loose date and time formats, a time zone suffix read as local time and null optional arguments, and to write the reminder or event at once with the date and time Morgan is already given instead of calling get_current_time or asking for a second confirmation
 - Update Nova diary header to place the copy, export, previous entry and today buttons in a row below the day and the previous and next day arrows
 - Update Nova flag and custom repeat choices of the overlay and form to symbols, with one, two or three flags for unimportant, important and high priority and a pencil for Custom, and remove the translated flag names and Custom label
 - Update Nova flag symbols in the desktop overlay to have a space between them
 - Update Nova lists to show flagged entries first, red then yellow then green, in the agenda days, overdue and pending reminders, upcoming events and the day lists of the diary and the terminal version
 - Update Nova sidebar icons and star to be 15% larger
-- Update Nova storage, agenda grouping and the diary and week helpers to work without Qt, so the terminal version can read and write Nova and Arlo's Nova tools and agenda greeting work there too
+- Update Nova storage, agenda grouping and the diary and week helpers to work without Qt, so the terminal version can read and write Nova and Morgan's Nova tools and agenda greeting work there too
 - Update README to list the current features, document updates from Settings and remove the regression check commands for test folders that no longer exist
 - Update services launcher to read the bundled core.json when the dev folder is not installed
 - Update Settings dropdown lists to have all four corners rounded to 12 pixels
 - Update Settings buttons, the themes folder, updates, backup, restore and remove memories, to a three column grid at the bottom that adds rows as buttons are added
 - Update startup greeting to briefly mention today's Nova reminders, events and overdue reminders when there are any
-- Update startup greeting to open with a plain salutation and the user's name, without Arlo introducing itself each time
+- Update startup greeting to open with a plain salutation and the user's name, without Morgan introducing itself each time
 - Update workspace panel header buttons, the command palette and close buttons, to be 10% larger
 - Update workspaces documentation to name the Nova diary, not the removed conversation logs, as a place whose web links open in the default browser
 
@@ -147,14 +147,14 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add Nova calendar widgets with week, month and year views, drill-down between them, a date picker and Spanish and English day and month names
 - Add Nova diary remove buttons next to each message copy button and on each conversation, which after a second click delete the message or the whole conversation from the memory database and the daily Markdown log
 - Add Nova diary that presents the memory database one day at a time, with the day's agenda, remembered facts and unfoldable conversations
-- Add Nova persistence with one SQLite database for reminders and another for events, stored in the Arlo user folder, with due-reminder tracking
+- Add Nova persistence with one SQLite database for reminders and another for events, stored in the Morgan user folder, with due-reminder tracking
 - Add Nova star button to new workspaces that slides out the other workspace buttons and opens Nova with Ctrl+click
-- Add Nova tools that let Arlo add reminders and events, list the agenda and complete or delete entries from chat, so requested reminders persist across restarts and appear in Nova
+- Add Nova tools that let Morgan add reminders and events, list the agenda and complete or delete entries from chat, so requested reminders persist across restarts and appear in Nova
 - Add Remove Memories button to Settings that deletes every stored conversation, memory, daily log and session artifact after confirmation, keeping settings, themes and the Nova agenda
-- Fix Arlo forgetting stored facts such as family names and pets by including every confirmed memory in each turn again, relevant ones first and within the context budget
+- Fix Morgan forgetting stored facts such as family names and pets by including every confirmed memory in each turn again, relevant ones first and within the context budget
 - Fix command confirmation crashing with an undefined sys module when no confirmation dialog is attached, instead of declining the command
 - Fix directory change and module reload commands being stored as conversations, and remove the ones already stored
-- Fix due Nova reminders being marked as announced without a notification when they came due more than a day earlier while Arlo was closed, and group more than three due reminders into one notification
+- Fix due Nova reminders being marked as announced without a notification when they came due more than a day earlier while Morgan was closed, and group more than three due reminders into one notification
 - Fix installer failing to replace a CPU PyTorch with the CUDA build on NVIDIA GPUs, because pip treated the pinned version as already installed
 - Fix installer setting up CPU PyTorch on AMD Radeon RX 9000 GPUs by installing the ROCm build for them, and reinstalling PyTorch when an existing runtime does not match the GPU
 - Fix log pruning that deleted unrelated YYYY-MM-DD.md files because its header check never matched and failed on unreadable files
@@ -166,7 +166,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Remove the embedded browser, its extension manager, persistent sessions, Ctrl+B shortcut and Open browser command, which also drops Qt WebEngine from the app
 - Remove the Logs workspace and its button, Ctrl+L shortcut and command, since the Nova diary shows the same daily conversation messages
 - Update docs, stylesheet and executable build to drop the browser rules and the Qt WebEngine exceptions
-- Update due Nova reminders to be announced as Windows notifications while Arlo runs
+- Update due Nova reminders to be announced as Windows notifications while Morgan runs
 - Update Nova diary copy button to sit in the top right corner of each message and briefly show a tick after copying
 - Update Nova diary to show every message of a conversation as a log card with Markdown, a copy button for the content only and live updates, including system and interrupted messages, with the daily Markdown log as fallback
 - Update startup greetings to be generated by the main Ollama model from the assistant name and its grammatical gender, in the interface language, replacing the fixed greetings
@@ -184,7 +184,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix Gemma 4 task_finish parse failures that looped without delivering an answer
 - Fix response workspace font size
 - Update executable build to exclude unused modules and Qt files (numba, pandas, pyarrow, matplotlib, QML, 3D, debug and devtools resources)
-- Update installer to share one runtime between Arlo and the terminal version and use stronger compression, shrinking ArloSetup from 1.1 GB to about 440 MB
+- Update installer to share one runtime between Morgan and the terminal version and use stronger compression, shrinking MorganSetup from 1.1 GB to about 440 MB
 - Update voice playback to rebuffer after an underrun and raise the audio thread and process priority
 - Update voice service to use the MIOpen fast find mode for a quicker first synthesis
 
@@ -226,7 +226,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 1.4.39-beta (2026-09-30)
 
-- Add ArloSetup.iss Inno Setup script and rebuild.bat to the repository
+- Add MorganSetup.iss Inno Setup script and rebuild.bat to the repository
 - Fix services launcher lookup falling back to the registry when ARLO_HOME is missing from the process environment
 - Update arlo.ico to match the current arlo.png
 
@@ -501,15 +501,15 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add ACTION-EXECUTION.md documentation
 - Add agent LLM mode with full TaskControl integration
 - Add allowlisted Windows queries and PowerShell tools
-- Add application icon and a custom personal icon for Arlo
+- Add application icon and a custom personal icon for Morgan
 - Add application name normalization and ranking for open_application
 - Add application opening and window listing methods
 - Add app_cache to cache applications for faster lookups
-- Add Arlo as a background process, detached from the launcher terminal
-- Add Arlo mascot and ring in the new desktop package
-- Add Arlo microphone recording and speaking
-- Add Arlo response latency timer pill
-- Add Arlo's wake word script (wake.py)
+- Add Morgan as a background process, detached from the launcher terminal
+- Add Morgan mascot and ring in the new desktop package
+- Add Morgan microphone recording and speaking
+- Add Morgan response latency timer pill
+- Add Morgan's wake word script (wake.py)
 - Add assistant command execution in terminal workspaces
 - Add attachments system with attachment cards and a per-file size limit
 - Add ATTACHMENTS.md documentation
@@ -521,7 +521,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add built-in terminal integration in workspaces
 - Add bundled fonts (Ubuntu Nerd Font, Inter, JetBrains Mono, Arimo)
 - Add change directory and Git directory checking
-- Add clickable "Made with Arlo" privacy indicator
+- Add clickable "Made with Morgan" privacy indicator
 - Add clipboard support
 - Add color-coded input and output
 - Add command execution with confirmation to the desktop interface
@@ -535,9 +535,9 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add CosyVoice integration to the voice service
 - Add current directory widget
 - Add debug console in a separate window
-- Add desktop visual interface of the Arlo app
+- Add desktop visual interface of the Morgan app
 - Add DIAGNOSTICS.md documentation for system health checks
-- Add drag and drop for the Arlo widget
+- Add drag and drop for the Morgan widget
 - Add drop previews while dragging workspaces
 - Add editor integration driven by the assistant (pyvim, later neovim)
 - Add email drafting tool
@@ -555,7 +555,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add global translator and tool
 - Add GNU GPL v3 license
 - Add greeting that is random, localized and uses the dynamic username
-- Add hot_reload to avoid rebooting Arlo
+- Add hot_reload to avoid rebooting Morgan
 - Add independent TTS server, voice client and arlo-services script
 - Add initial assistant script with Assistant class, chat abstraction and streaming responses
 - Add initial README with project description
@@ -573,7 +573,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add music session listening methods ("shazam")
 - Add mute button
 - Add native audio model (Gemma) processing for faster response times
-- Add new Arlo voice models and voice profiles with a selection dropdown
+- Add new Morgan voice models and voice profiles with a selection dropdown
 - Add new voice models Brian and Gabriel
 - Add notifications system with timers
 - Add number pronunciation tool for the local language
@@ -602,8 +602,8 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add response workspace bridge with highlighting
 - Add Rich terminal
 - Add rules script to hold all instructions given to the agent
-- Add screenshotting function for Arlo
-- Add script to set up Arlo at boot (optional)
+- Add screenshotting function for Morgan
+- Add script to set up Morgan at boot (optional)
 - Add search_code tool to search codebase structures
 - Add self_code to let the assistant read and change its own code live
 - Add session context and artifact storage
@@ -621,7 +621,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add system health diagnostics (telemetry, scanner and scoring)
 - Add tabs to the interface
 - Add task progress widget
-- Add tool for Arlo to close itself
+- Add tool for Morgan to close itself
 - Add tools.py to break down the main agent
 - Add version number for the assistant
 - Add voice commands
@@ -636,11 +636,11 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix agent plan grounding and execution evidence
 - Fix app opening and lookup methods
 - Fix application launching, window verification and premature success responses
-- Fix Arlo closing after a shutdown request
-- Fix Arlo hanging after any request
-- Fix Arlo hearing and replying to his own speech
-- Fix Arlo looping on the same actions over and over
-- Fix Arlo speaking delay and pauses between sentences
+- Fix Morgan closing after a shutdown request
+- Fix Morgan hanging after any request
+- Fix Morgan hearing and replying to his own speech
+- Fix Morgan looping on the same actions over and over
+- Fix Morgan speaking delay and pauses between sentences
 - Fix assistant announcing an action and never executing it
 - Fix barge-in mechanic and wake word interruptions
 - Fix cache emptying in model.py
@@ -653,8 +653,8 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix folders.json not being read correctly
 - Fix Forge approval routing and continuity
 - Fix Forge plan validation, replanning and read-only enforcement
-- Fix frozen timer on Arlo's actions
-- Fix ghost launching of Arlo
+- Fix frozen timer on Morgan's actions
+- Fix ghost launching of Morgan
 - Fix hot reload of modules
 - Fix logs not rendering in the log tab
 - Fix long-term memory isolation from active tasks
@@ -669,28 +669,28 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix speaking_enabled to avoid the "vertical bar" bug
 - Fix speech patterns with tables
 - Fix Steam games detection and launching
-- Fix subtitles cutoff and not clearing after Arlo finishes
+- Fix subtitles cutoff and not clearing after Morgan finishes
 - Fix task progress and compact workspace layout
 - Fix task_control recovery, loop breaking and execution safeguards
 - Fix tool continuation and response streaming
 - Fix truncated model response continuation
-- Fix wake words, recording sessions and how Arlo reacts
+- Fix wake words, recording sessions and how Morgan reacts
 - Fix web search suddenly not working
 - Fix workspace panel dragging and splitter resizing
 - Remove built-in editor tabs
 - Remove Forge runtime integration and UI
 - Remove neovim from dependencies
-- Remove power request shortcuts and support graceful Arlo closure
-- Remove terminal and agent integration, reworking Arlo into a desktop interface only
+- Remove power request shortcuts and support graceful Morgan closure
+- Remove terminal and agent integration, reworking Morgan into a desktop interface only
 - Remove usage limits
 - Update agent instructions to be more explicit and safeguarded for the LLM
 - Update agent runtime to use a shared Assistant class with a singleton identity
 - Update agent.py into smaller modules (brain, rules, tools, voice, spin)
-- Update Arlo as an independent Windows app
-- Update Arlo setting for pulsating the orb whilst speaking
-- Update Arlo's orb design to 2 rings
-- Update Arlo's private indicator
-- Update Arlo's thinking state animation
+- Update Morgan as an independent Windows app
+- Update Morgan setting for pulsating the orb whilst speaking
+- Update Morgan's orb design to 2 rings
+- Update Morgan's private indicator
+- Update Morgan's thinking state animation
 - Update Assistant class into core.py and reduce agent.py features
 - Update basic config.json into a more robust editable version
 - Update code blocks to remain in conversation logs
@@ -705,16 +705,16 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update main script into a more robust version
 - Update memory instructions policy and memory retrieval tools
 - Update Nora personality to be less childish, less serviceable and adjustable live
-- Update Nora to Arlo
+- Update Nora to Morgan
 - Update Ollama redirection towards GPU instead of CPU
-- Update Orb as the focus of Arlo's identity and unify the Orb
+- Update Orb as the focus of Morgan's identity and unify the Orb
 - Update Orb with circular audio spectrum
 - Update pronunciation of paths and technical terms
 - Update response workspace design and table formatting
 - Update scripts into a unified arlo-run.ps1 launcher and arloui and arlo-tui launchers
 - Update session logs to match the terminal 1:1
 - Update shortcuts for creating and switching between workspaces
-- Update speech speed so Arlo replies faster
+- Update speech speed so Morgan replies faster
 - Update speech to skip symbols such as * and -
 - Update speech to stream before synthesis completes and start the first spoken phrase sooner
 - Update starting over with the pydantic-ai framework
