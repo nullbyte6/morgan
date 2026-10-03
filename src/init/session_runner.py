@@ -155,10 +155,22 @@ class SessionRunner:
             with lease as audio_lease:
                 self._ask(turn_id, message, audio_lease)
         except Exception as error:
+            self.silence()
             self.rejected.emit(turn_id, str(error))
         finally:
+            if self.cancel_event.is_set():
+                self.silence()
             self.speech_owner = False
             self.assistant.release_speech(self)
+
+    def silence(self):
+        voice = self.assistant.voice
+        if voice is not None and self.speech_owner:
+            try:
+                voice.stop()
+            except Exception:
+                logging.getLogger("assistant.voice").exception(
+                    "Unable to stop speech")
 
     def claim_speech(self):
         self.speech_owner = self.assistant.acquire_speech(self)
@@ -308,6 +320,7 @@ class SessionRunner:
                          cause=cause) if cause is not None else str(
                 error)
             self.session.write("System", message, status="error")
+            self.silence()
             self.failed.emit(message)
 
         finally:
@@ -332,7 +345,7 @@ class SessionRunner:
         self.assistant.cancel_active_generation(self.session.context)
         self.resolve_confirmation(False)
         voice = self.assistant.voice
-        if voice is not None and self.speech_owner:
+        if voice is not None and (self.speech_owner or self.assistant.speech_unowned()):
             try:
                 voice.stop()
             except Exception:

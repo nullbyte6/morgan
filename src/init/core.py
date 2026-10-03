@@ -427,6 +427,10 @@ class Assistant:
                 return True
             return False
 
+    def speech_unowned(self) -> bool:
+        with self._speech_lock:
+            return self._speech_owner is None
+
     def release_speech(self, owner) -> None:
         with self._speech_lock:
             if self._speech_owner is owner:
@@ -1186,6 +1190,8 @@ class Assistant:
 
                 while not self.voice.is_done():
                     await asyncio.sleep(0.02)
+            elif owns_speech:
+                self.voice.stop()
 
         async def run():
             nonlocal stream_messages
