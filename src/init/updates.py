@@ -88,8 +88,8 @@ def available_releases(current: str | None = None) -> list[Release]:
 
 
 def setup_path() -> Path:
-    from src.init.folders import known_folder_path
-    return known_folder_path("downloads") / SETUP_NAME
+    from src.platforms import current_platform
+    return current_platform().known_folder("downloads") / SETUP_NAME
 
 
 def download(release: Release, progress: Callable[[int, int], None],

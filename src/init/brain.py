@@ -64,6 +64,7 @@ from src.init.steam import steam_manager
 from src.init.voice_profiles import (VOICE_DIR, MODEL_DIR, VOICE_MODEL,
                              VOICE_REFERENCE, VOICE_REFERENCE_TEXT)
 from src.init.desktop.capture import request_screenshot
+from src.platforms import current_platform
 
 VERSION = "no-version-found"
 
@@ -1386,24 +1387,18 @@ def list_open_applications() -> str:
     Enumerates standard visible windows on the current desktop; custom Shell
     taskbar registration or virtual-desktop settings may differ.
     """
-    if os.name != "nt":
-        return tr('brain.error_listing_open_applications_is_only_supported_on_windows')
     try:
-        from src.init.windows import get_open_windows
-
-        return json.dumps({"open_windows": get_open_windows()},
+        return json.dumps({"open_windows": current_platform().list_windows()},
                           ensure_ascii=False, indent=2)
     except Exception as error:
         return tr('brain.error_listing_open_applications', error=error)
 
 
 def _launch_application(app):
-    from src.init.windows import launch_application
-
     target = app.get("Path") or app.get("AppID")
     if app["Source"] == "registered" and not Path(target).is_file():
         target = f"shell:AppsFolder\\{target}"
-    result = launch_application(target)
+    result = current_platform().launch_application(target)
     return json.dumps({"application": app["Name"], **result}, ensure_ascii=False)
 
 

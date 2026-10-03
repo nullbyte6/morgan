@@ -20,7 +20,6 @@
 
 from src.init.lang import tr
 from collections import deque
-import ctypes
 import json
 import os
 from pathlib import Path
@@ -30,6 +29,7 @@ import time
 
 from .config import HOME_PATH
 from .folders import FOLDER_ALIASES, resolve_directory
+from src.platforms import current_platform
 
 FOLDERS_FILE = HOME_PATH / "json" / "folders.json"
 _lock = threading.RLock()
@@ -101,21 +101,6 @@ def remember_folders(name, paths, complete=False, replace=False):
             return False
 
 
-def disk_roots():
-    if os.name != "nt":
-        return [Path("/")]
-    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel.GetLogicalDrives.restype = ctypes.c_uint32
-    kernel.GetDriveTypeW.argtypes = [ctypes.c_wchar_p]
-    kernel.GetDriveTypeW.restype = ctypes.c_uint
-    mask = kernel.GetLogicalDrives()
-    if not mask:
-        raise ctypes.WinError(ctypes.get_last_error())
-    return [Path(f"{chr(65 + index)}:\\") for index in range(26)
-            if mask & (1 << index)
-            and kernel.GetDriveTypeW(f"{chr(65 + index)}:\\") in (2, 3)]
-
-
 def is_folder_name(value):
     value = value.strip().strip("\"'")
     return (bool(value) and value not in (".", "..")
@@ -140,7 +125,7 @@ def search_folders(name, directory="", partial=False, max_results=100,
             return dict(name=name, source="cache", matches=paths[:max_results],
                         complete=cached["complete"] and len(paths) <= max_results,
                         stop_reason="max_results" if len(paths) > max_results else None)
-    roots = disk_roots() if global_search else [resolve_directory(directory)]
+    roots = current_platform().local_drives() if global_search else [resolve_directory(directory)]
     if not roots:
         raise ValueError(tr('folder_search.no_local_disks_available'))
     if not global_search and not roots[0].is_dir():

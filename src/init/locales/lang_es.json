@@ -334,6 +334,7 @@
   "email_service.could_not_open_email_folder": "No se pudo abrir la carpeta de correo: {folder}",
   "email_service.could_not_mark_the_email_for_deletion": "No se pudo marcar el correo para eliminarlo",
   "folders.cannot_resolve_hresult_0x": "No se puede resolver {name}: HRESULT 0x{value1:08X}",
+  "platforms.operation_not_supported": "{operation} no está disponible en {platform}",
   "folder_search.folders_json_must_contain_an_object": "folders.json debe contener un objeto",
   "folder_search.name_must_be_a_folder_name_not_a_path": "name debe ser un nombre de carpeta, no una ruta",
   "folder_search.max_results_must_be_between_1_and_1000": "max_results debe estar entre 1 y 1000",

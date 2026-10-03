@@ -4,6 +4,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.3-beta (2026-10-03)
 
+- Add platform layer with winx64 and macx64 packages behind a shared interface, moving window listing, launching, closing and minimizing, known folders, local drives and notifications out of the core so other operating systems can provide their own implementations
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
 - Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
 - Fix every request failing on computers where Ollama was already running with its own small default context, by restarting Ollama at startup with the configured context length when the running server was started with a different one

@@ -334,6 +334,7 @@
   "email_service.could_not_open_email_folder": "无法打开邮件文件夹：{folder}",
   "email_service.could_not_mark_the_email_for_deletion": "无法将邮件标记为删除",
   "folders.cannot_resolve_hresult_0x": "无法解析 {name}：HRESULT 0x{value1:08X}",
+  "platforms.operation_not_supported": "{platform} 不支持 {operation}",
   "folder_search.folders_json_must_contain_an_object": "folders.json 必须包含一个对象",
   "folder_search.name_must_be_a_folder_name_not_a_path": "name 必须是文件夹名称，而不是路径",
   "folder_search.max_results_must_be_between_1_and_1000": "max_results 必须介于 1 到 1000 之间",

@@ -28,7 +28,7 @@ import unicodedata
 import psutil
 
 from .app_cache import cached_app
-from .windows import get_open_windows, request_window_close
+from src.platforms import current_platform
 
 
 def _normalize(name):
@@ -48,8 +48,6 @@ def close_application(application: str, force: bool = False) -> str:
     def result(status, **values):
         return json.dumps(dict(status=status, **values), ensure_ascii=False)
 
-    if os.name != "nt":
-        return result("error", error=tr('app_close.closing_applications_is_supported_on_windows_only'))
     query = _normalize(application)
     if not query:
         return result("error", error=tr('app_close.an_application_name_is_required'))
@@ -83,7 +81,8 @@ def close_application(application: str, force: bool = False) -> str:
         if len(groups) > 1:
             return result("needs_input", candidates=matches,
                           question=tr('app_close.which_app_do_you_want_to_close_tell_me_the_pid_or_the_executable'))
-        windows = get_open_windows()
+        platform = current_platform()
+        windows = platform.list_windows()
         outcomes = []
         for match in matches:
             pid = match["pid"]
@@ -100,7 +99,7 @@ def close_application(application: str, force: bool = False) -> str:
                 explorer = _normalize(match["executable"]) == "explorer"
                 if targets and (not force or explorer):
                     for window in targets:
-                        request_window_close(window["hwnd"], pid)
+                        platform.request_window_close(window["hwnd"], pid)
                     outcomes.append(dict(pid=pid, status="close_requested", windows=len(targets)))
                 elif explorer:
                     outcomes.append(dict(pid=pid, status="no_open_windows"))
