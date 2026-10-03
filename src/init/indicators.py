@@ -16,7 +16,6 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -211,12 +210,9 @@ class ModelSelector(QComboBox):
         target = self.mapToGlobal(QPoint(0, 0)).y() - self.POPUP_GAP
         frame = popup.frameGeometry()
         shift = target - frame.bottom() - 1
-        if os.name == "nt" and popup.graphicsProxyWidget() is None:
-            from ctypes import byref, windll, wintypes
-            rect = wintypes.RECT()
-            if windll.user32.GetWindowRect(int(popup.winId()), byref(rect)):
-                height = (rect.bottom - rect.top) / popup.devicePixelRatioF()
-                shift = round(target - frame.top() - height)
+        height = current_platform().window_height(int(popup.winId()))
+        if height is not None:
+            shift = round(target - frame.top() - height / popup.devicePixelRatioF())
         return shift
 
     def _anchor_popup(self, popup):

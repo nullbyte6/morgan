@@ -121,6 +121,7 @@ class Platform:
     elevation_captures_output = False
     installer_name = ""
     has_drive_letters = False
+    preferred_audio_host = ""
 
     def unsupported(self, operation: str) -> UnsupportedOperation:
         return UnsupportedOperation(self.name, operation)
@@ -294,3 +295,22 @@ class Platform:
     def console_encoding(self) -> str:
         """Return the encoding console programs use for their output."""
         return "utf-8"
+
+    def style_window_frame(self, handle: int, dark: bool, caption: tuple[int, int, int],
+                           border: tuple[int, int, int], text: tuple[int, int, int]) -> None:
+        """Color the native title bar and border of a window."""
+
+    def window_height(self, handle: int) -> int | None:
+        """Return the native frame height of a window in physical pixels, when the system reports it."""
+        return None
+
+    def set_app_id(self, app_id: str) -> None:
+        """Identify this process as an independent application to the desktop shell."""
+
+    def desktop_launcher(self, installation: Path | None, root: Path) -> Path | None:
+        """Return the installed desktop executable, or the development launcher under root."""
+        return None
+
+    def launch_command(self, launcher: Path, root: Path) -> tuple[list[str], Path]:
+        """Return the command and working folder that run a desktop launcher."""
+        return [str(launcher)], launcher.parent

@@ -21,7 +21,7 @@
 import subprocess
 
 from ..base import Platform
-from . import apps, environment, folders, media, notifications, services, system, terminal, windows
+from . import apps, desktop, environment, folders, media, notifications, services, system, terminal, windows
 
 
 class WinX64Platform(Platform):
@@ -32,6 +32,7 @@ class WinX64Platform(Platform):
     elevation_captures_output = True
     installer_name = "ArloSetup.exe"
     has_drive_letters = True
+    preferred_audio_host = "Windows WASAPI"
 
     list_windows = staticmethod(windows.get_open_windows)
     launch_application = staticmethod(windows.launch_application)
@@ -74,3 +75,8 @@ class WinX64Platform(Platform):
     open_terminal = staticmethod(terminal.WinTerminal)
     terminal_command_line = staticmethod(terminal.terminal_command_line)
     console_encoding = staticmethod(terminal.console_encoding)
+    style_window_frame = staticmethod(desktop.style_window_frame)
+    window_height = staticmethod(desktop.window_height)
+    set_app_id = staticmethod(desktop.set_app_id)
+    desktop_launcher = staticmethod(desktop.desktop_launcher)
+    launch_command = staticmethod(desktop.launch_command)

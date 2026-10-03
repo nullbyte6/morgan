@@ -13,6 +13,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update process termination, shutdown scheduling, installed application discovery, file opening and Recycle Bin emptying to go through the platform layer, so the core no longer requires winshell or winreg to import
 - Update service startup, Ollama restarts, the updater and the voice service's priority and memory trimming to get the services script, installer, install location and process flags from the platform layer
 - Update the built-in terminal, the TUI shell and the TUI file picker to get the pseudo-terminal, command injection, console encoding and drive list from the platform layer, moving the Windows Ctrl+C bootstrap and console input into winx64
+- Update the desktop window frame colors, popup anchoring, taskbar identity and the wake listener's launcher, priority and audio host to come from the platform layer
 - Update the storage folder locator, file locks and elevated commands to get registry variables, msvcrt locks, administrator checks, the default shell and sudo from the platform layer
 
 ## 26.10.2-beta (2026-10-02)

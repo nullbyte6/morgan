@@ -18,22 +18,15 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Framed desktop window whose title bar follows the active theme."""
 
-import ctypes
-import sys
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow
 
 from src.init.theme import current_theme
-
-DWMWA_USE_IMMERSIVE_DARK_MODE = 20
-DWMWA_BORDER_COLOR = 34
-DWMWA_CAPTION_COLOR = 35
-DWMWA_TEXT_COLOR = 36
+from src.platforms import current_platform
 
 
-def _colorref(color) -> ctypes.c_uint:
-    return ctypes.c_uint(color.red() | color.green() << 8 | color.blue() << 16)
+def _rgb(color) -> tuple[int, int, int]:
+    return color.red(), color.green(), color.blue()
 
 
 class DesktopWindow(QMainWindow):
@@ -47,20 +40,10 @@ class DesktopWindow(QMainWindow):
 
     def apply_frame_theme(self, theme):
         """Match the native title bar and border to the theme's surface colors."""
-        if sys.platform != "win32":
-            return
         background = theme.color("surface_sunken")
-        dark = background.lightness() < 128
-        attributes = (
-            (DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.c_int(int(dark))),
-            (DWMWA_CAPTION_COLOR, _colorref(background)),
-            (DWMWA_BORDER_COLOR, _colorref(theme.color("border"))),
-            (DWMWA_TEXT_COLOR, _colorref(theme.color("text"))),
-        )
-        hwnd = int(self.winId())
-        for attribute, value in attributes:
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value))
+        current_platform().style_window_frame(
+            int(self.winId()), background.lightness() < 128, _rgb(background),
+            _rgb(theme.color("border")), _rgb(theme.color("text")))
 
     def showEvent(self, event):
         super().showEvent(event)

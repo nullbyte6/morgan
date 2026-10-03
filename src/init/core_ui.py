@@ -128,6 +128,7 @@ from src.init.desktop.health_view import HealthView
 from src.init.health import collect as collect_health, new_version_seen
 from src.init.desktop.update_view import HEIGHT as UPDATE_HEIGHT, UpdateView
 from src.init.updates import available_releases, install as install_update, relaunch_command
+from src.platforms import current_platform
 from src.init.desktop.session import DesktopSession
 from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
@@ -2324,13 +2325,9 @@ class AssistantWindow(DesktopWindow):
         self.close()
 
 
-def set_windows_app_id():
-    """Identify the assistant as an independent Windows application."""
-    if sys.platform == "win32":
-        import ctypes
-
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            ASSISTANT_INSTANCE_SERVER)
+def set_app_id():
+    """Identify the assistant as an independent application to the desktop shell."""
+    current_platform().set_app_id(ASSISTANT_INSTANCE_SERVER)
 
 
 def notify_running_instance(timeout_ms: int = 1500) -> bool:
@@ -2396,7 +2393,7 @@ def install_tray_icon(app: QApplication, window: AssistantWindow, icon: QIcon):
     return tray
 
 def main():
-    set_windows_app_id()
+    set_app_id()
     os.chdir(Path.home())
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)

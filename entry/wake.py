@@ -50,9 +50,9 @@ from src.init.identity import (
     get_assistant_name,
 )
 from src.init.wake_capture import BLOCK_SECONDS, SAMPLE_RATE, WakeCapture, WakeSettings
+from src.platforms import current_platform
 
 ROOT = Path(__file__).resolve().parent.parent
-DEVELOPMENT_LAUNCHER = ROOT / "scripts" / "arlo-start.bat"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,19 +63,8 @@ log = logging.getLogger(f"{get_assistant_identifier()}.wake")
 
 def prioritize_listener() -> None:
     """Keep foreground UI rendering from starving wake audio/inference."""
-    if sys.platform != "win32":
-        return
     try:
-        import ctypes
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
-        kernel32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
-        kernel32.SetPriorityClass.restype = ctypes.c_int
-        above_normal_priority_class = 0x00008000
-        if not kernel32.SetPriorityClass(
-                kernel32.GetCurrentProcess(), above_normal_priority_class):
-            raise ctypes.WinError(ctypes.get_last_error())
+        current_platform().raise_priority(process=True)
     except OSError:
         log.exception("Unable to raise wake-listener priority")
 
@@ -89,32 +78,26 @@ def is_assistant_running() -> bool:
     return False
 
 
-def resolve_launcher() -> Path:
+def resolve_launcher() -> Path | None:
     """Prefer the installed executable named by <NAME>, then the repository launcher."""
-    installation = get_assistant_installation()
-    if installation is not None:
-        return installation / "Arlo.exe"
-    return DEVELOPMENT_LAUNCHER
+    return current_platform().desktop_launcher(get_assistant_installation(), ROOT)
 
 
 def launch_assistant() -> None:
     """Start the desktop without waiting for its services or UI."""
     launcher = resolve_launcher()
-    if not launcher.is_file():
+    if launcher is None or not launcher.is_file():
         log.error(tr("wake.launcher_not_found", path=launcher))
         return
     if is_assistant_running():
         return
 
     log.info(tr("wake.activation_detected"))
-    if launcher.suffix.casefold() == ".exe":
-        command, directory = [str(launcher)], launcher.parent
-    else:
-        command, directory = ["cmd.exe", "/c", str(launcher)], ROOT
+    command, directory = current_platform().launch_command(launcher, ROOT)
     subprocess.Popen(
         command,
         cwd=str(directory),
-        creationflags=subprocess.CREATE_NO_WINDOW,
+        creationflags=current_platform().no_window_flags,
     )
 
 
@@ -151,13 +134,14 @@ def capture_wake_word(recognizer, settings):
     import sounddevice as sd
 
     device = sd.query_devices(kind="input")
-    if sys.platform == "win32":
+    preferred_host = current_platform().preferred_audio_host
+    if preferred_host:
         host_apis = sd.query_hostapis()
         for index, candidate in enumerate(sd.query_devices()):
             host_name = host_apis[candidate["hostapi"]]["name"]
             if (candidate["max_input_channels"] >= 1 and
                     candidate["name"] == device["name"] and
-                    host_name == "Windows WASAPI"):
+                    host_name == preferred_host):
                 device = dict(candidate, index=index)
                 break
     sample_rate = int(device.get("default_samplerate") or SAMPLE_RATE)
