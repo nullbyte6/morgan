@@ -12,6 +12,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
 - Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
 - Fix every request failing on computers where Ollama was already running with its own small default context, by restarting Ollama at startup with the configured context length when the running server was started with a different one
+- Fix installed copies failing to start their services, because the installer did not ship the platform layer that config.py and the voice service now import
 - Fix installing from requirements.txt failing on torchcodec 0.1.2, a version that was never published, by pinning torchcodec 0.7.0, the release that matches the pinned torch and torchaudio 2.8
 - Fix the voice runtime on AMD ROCm installs failing to load audio, by installing TorchCodec 0.16 from PyPI after the ROCm PyTorch and the shared FFmpeg build it loads when only the static one is present, also repairing existing ROCm installs
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
