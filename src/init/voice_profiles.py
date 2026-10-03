@@ -37,8 +37,7 @@ def _voice_model() -> Path:
 
 VOICE_MODEL = _voice_model()
 VOICE_REFERENCE = VOICE_DIR / "voice-01.wav"
-VOICE_REFERENCE_TEXT = ("Hola, soy Morgan. Estoy aquí para ayudarte "
-                        "con lo que necesites.")
+VOICE_REFERENCE_TEXT = "Hi I'm Morgan, I'm ready when you are!"
 VOICE_NAMES = {
     "voice-01.wav": "David",
     "voice-02.wav": "Javier",
