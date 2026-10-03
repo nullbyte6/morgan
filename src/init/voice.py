@@ -40,14 +40,14 @@ VOICE_SILENCE_THRESHOLD = 400
 PLAYBACK_SILENCE_THRESHOLD = 900
 ECHO_TAIL_SECONDS = 1.5
 PARTIAL_SILENCE_SECONDS = 0.5
-BARGE_IN_SECONDS = 1.0
+BARGE_IN_SECONDS = 0.6
 BARGE_IN_GAP_SECONDS = 0.4
 _VOICE_MODEL = None
 _VOICE_MODEL_LOCK = threading.Lock()
 
 
 class LiveVoiceCapture:
-    def __init__(self, sample_rate, *, silence_seconds=1.8, idle_seconds=30,
+    def __init__(self, sample_rate, *, silence_seconds=1.2, idle_seconds=30,
                  partial_seconds=PARTIAL_SILENCE_SECONDS):
         import numpy as np
         from scipy.signal import correlate, resample_poly
@@ -250,7 +250,8 @@ def get_voice_model():
                     tr("voice.recognition_missing")
                 ) from error
             _VOICE_MODEL = WhisperModel(
-                VOICE_MODEL_NAME, device="cpu", compute_type="int8")
+                VOICE_MODEL_NAME, device="cpu", compute_type="int8",
+                cpu_threads=os.cpu_count() or 4)
         return _VOICE_MODEL
 
 
