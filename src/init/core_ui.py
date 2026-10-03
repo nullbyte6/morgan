@@ -185,7 +185,8 @@ class AssistantWindow(DesktopWindow):
         self.mascot.record_requested.connect(self.on_mascot_record)
         self.mascot.restore_requested.connect(self.restore_from_mascot)
         self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
-        self.mascot_shortcut.activated.connect(self.show_mascot)
+        self.mascot_shortcut.setContext(Qt.ApplicationShortcut)
+        self.mascot_shortcut.activated.connect(self.toggle_mascot)
 
         self.recording = False
         self.voice_thread = None
@@ -1787,6 +1788,13 @@ class AssistantWindow(DesktopWindow):
     @property
     def orb_enabled(self) -> bool:
         return self.settings.value("orb_enabled", True, type=bool)
+
+    def toggle_mascot(self):
+        """Switch between the full window and compact mode."""
+        if self.isVisible() and not self._workspace_hiding:
+            self.show_mascot()
+        else:
+            self.restore_from_mascot()
 
     def show_mascot(self):
         """Switch to compact desktop mode when the orb is enabled."""
