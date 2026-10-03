@@ -352,7 +352,6 @@ class Assistant:
             tools=[Tool(function, sequential=True) for function in TOOLS])
 
         self.agent.instructions(self.current_instructions)
-        self.agent.instructions(self.current_datetime_instructions)
         self.agent.instructions(self.wd_instructions)
         from src.init.memory.integration import memory_instructions
         self.agent.instructions(memory_instructions)
@@ -362,6 +361,7 @@ class Assistant:
             "render_flowchart with newly supplied nodes and edges. "
             "It does not require an existing diagram. Do not claim "
             "this capability is unavailable.")
+        self.agent.instructions(self.current_datetime_instructions)
 
     @staticmethod
     def _new_provider():
@@ -481,7 +481,6 @@ class Assistant:
                     tools=[Tool(function, sequential=True)
                            for function in TOOLS])
                 self.agent.instructions(self.current_instructions)
-                self.agent.instructions(self.current_datetime_instructions)
                 self.agent.instructions(self.wd_instructions)
                 from src.init.memory.integration import memory_instructions
                 self.agent.instructions(memory_instructions)
@@ -492,6 +491,7 @@ class Assistant:
                     "render_flowchart with newly supplied nodes and edges. "
                     "It does not require an existing diagram. Do not claim "
                     "this capability is unavailable.")
+                self.agent.instructions(self.current_datetime_instructions)
 
             summary = f"Reloaded {len(reloaded)} source modules"
             if errors:
@@ -659,7 +659,7 @@ class Assistant:
         now = datetime.now().astimezone()
 
         return (
-            f"Current local date and time: {now.isoformat(timespec='seconds')}\n"
+            f"Current local date and time: {now.isoformat(timespec='minutes')}\n"
             f"Current year: {now.year}\n"
             f"Current timezone: {now.tzname()}\n"
             "This is the authoritative current date and time for this turn. "
