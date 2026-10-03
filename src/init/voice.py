@@ -40,6 +40,8 @@ VOICE_SILENCE_THRESHOLD = 400
 PLAYBACK_SILENCE_THRESHOLD = 1200
 ECHO_TAIL_SECONDS = 1.5
 PARTIAL_SILENCE_SECONDS = 0.5
+BARGE_IN_SECONDS = 1.0
+BARGE_IN_GAP_SECONDS = 0.4
 _VOICE_MODEL = None
 _VOICE_MODEL_LOCK = threading.Lock()
 
@@ -132,8 +134,13 @@ class LiveVoiceCapture:
             self.pre_roll.clear()
         self.frames.append(pcm)
         self.silent_seconds = 0.0 if speech else self.silent_seconds + duration
-        self.speech_seconds = self.speech_seconds + duration if speech else 0.0
-        if not self.started and self.speech_seconds >= (0.6 if playback else 0.15):
+        if speech:
+            self.speech_seconds += duration
+        elif not (playback and not self.started
+                  and self.silent_seconds <= BARGE_IN_GAP_SECONDS):
+            self.speech_seconds = 0.0
+        if not self.started and self.speech_seconds >= (
+                BARGE_IN_SECONDS if playback else 0.15):
             self.started = True
             self.event = "started"
         if self.started and self.event is None:
