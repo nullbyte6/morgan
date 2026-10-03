@@ -4,7 +4,7 @@
 
 <h1 align="center">MORGAN</h1>
 
-Adaptive Reasoning Local Operator is a local desktop assistant that uses
+My Organizer for Reminders, Goals, Activities and Notes is a local desktop assistant that uses
 Ollama to run tools and automate tasks on Windows.
 
 ## Features
