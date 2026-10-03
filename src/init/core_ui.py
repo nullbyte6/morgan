@@ -946,12 +946,14 @@ class AssistantWindow(DesktopWindow):
                 self.settings.value("orb_speech_pulse", True, type=bool),
                 muted=self.muted,
                 ephemeral_steps_enabled=self.settings.value("ephemeral_steps", True, type=bool),
-                song_panel_enabled=self.settings.value("song_panel", True, type=bool))
+                song_panel_enabled=self.settings.value("song_panel", True, type=bool),
+                orb_enabled=self.orb_enabled)
             view.mute_changed.connect(self.toggle_mute)
             view.subtitles_changed.connect(self.toggle_subtitles)
             view.orb_pulse_changed.connect(self.toggle_orb_speech_pulse)
             view.ephemeral_steps_changed.connect(self.toggle_ephemeral_steps)
             view.song_panel_changed.connect(self.toggle_song_panel)
+            view.orb_enabled_changed.connect(self.toggle_orb_enabled)
             view.language_changed.connect(self.change_language)
             view.update_requested.connect(self.check_for_updates)
             return view
@@ -1453,6 +1455,8 @@ class AssistantWindow(DesktopWindow):
             with QSignalBlocker(view.song_panel_switch):
                 view.song_panel_switch.setChecked(
                     self.settings.value("song_panel", True, type=bool))
+            with QSignalBlocker(view.orb_enabled_switch):
+                view.orb_enabled_switch.setChecked(self.orb_enabled)
             view.refresh_language()
 
     def _refresh_view_language(self, session):
@@ -1621,6 +1625,13 @@ class AssistantWindow(DesktopWindow):
         self.song_panel_key = None
         self.refresh_settings_workspaces()
 
+    @Slot(bool)
+    def toggle_orb_enabled(self, enabled: bool):
+        self.settings.setValue("orb_enabled", enabled)
+        if not enabled:
+            self.mascot.pop_out()
+        self.refresh_settings_workspaces()
+
     def set_orbs_speaking(self, speaking: bool, session=None):
         for orb in self._orbs(session):
             orb.set_speaking(speaking)
@@ -1772,14 +1783,24 @@ class AssistantWindow(DesktopWindow):
 
         self.start_recording(session=session)
 
+    @property
+    def orb_enabled(self) -> bool:
+        return self.settings.value("orb_enabled", True, type=bool)
+
     def show_mascot(self):
-        """Switch to compact desktop mode."""
+        """Switch to compact desktop mode when the orb is enabled."""
+        if self.orb_enabled:
+            self.enter_background()
+
+    def enter_background(self):
+        """Hide the window, leaving the orb on screen when it is enabled."""
         if self.quitting or self._workspace_hiding:
             return
         self.command_palette.dismiss(restore_focus=False)
-        if not self.mascot.isVisible():
-            self.mascot.move_mascot()
-        self.mascot.pop_in()
+        if self.orb_enabled:
+            if not self.mascot.isVisible():
+                self.mascot.move_mascot()
+            self.mascot.pop_in()
         if self.isVisible():
             self._workspace_hiding = True
             self.workspace.animate_visibility(False, on_finished=self._hide_workspace)
@@ -2258,7 +2279,7 @@ class AssistantWindow(DesktopWindow):
     def closeEvent(self, event):
         if not self.quitting:
             event.ignore()
-            self.show_mascot()
+            self.enter_background()
             return
 
         unregister_capture_handler(self.capture_handler)

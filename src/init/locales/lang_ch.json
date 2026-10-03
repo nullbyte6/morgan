@@ -29,6 +29,8 @@
   "ui.ephemeral_steps_hint": "显示或隐藏光球下方的活动步骤",
   "ui.song_panel": "打开歌曲面板",
   "ui.song_panel_hint": "歌曲开始播放时自动打开正在播放面板",
+  "ui.orb_enabled": "切换 {assistant_name} 球体",
+  "ui.orb_enabled_hint": "关闭窗口时显示悬浮的 {assistant_name} 球体。关闭此选项后，关闭窗口会将 {assistant_name} 收到系统托盘",
   "ui.language": "界面语言",
   "ui.voice": "语音",
   "voice.selection_restart": "语音服务不支持动态选择或没有响应。请重启 {assistant_name} 的语音服务，而不仅仅是窗口。",
