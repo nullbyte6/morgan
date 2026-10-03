@@ -211,9 +211,11 @@ class Assistant:
         return figlet_format(self.name, font="4max", width=128)
 
     def _ensure_services(self):
-        if os.name != "nt":
+        platform = current_platform()
+        name: str = load_config()["assistant"]["name"]
+        launchers = platform.service_launchers(name)
+        if not launchers:
             return
-        import shutil
         import socket
         import sys
         from pathlib import Path
@@ -242,19 +244,13 @@ class Assistant:
                 logging.getLogger("assistant.services").exception(
                     "Ollama could not be restarted with the configured context length")
             return
-        name: str = load_config()["assistant"]["name"]
-        launchers = dict.fromkeys((f"{name}-services.ps1", "arlo-services.ps1"))
         directories = [PROJECT_ROOT / "scripts"]
         if getattr(sys, "frozen", False):
             directories.append(Path(sys.executable).resolve().parent / "scripts")
 
         def registry_value(variable):
-            import winreg
-            try:
-                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-                    return os.path.expandvars(winreg.QueryValueEx(key, variable)[0])
-            except OSError:
-                return None
+            value = platform.user_environment(variable)
+            return os.path.expandvars(value) if value else None
 
         install = os.environ.get(name.upper()) or registry_value(name.upper())
         if install:
@@ -266,31 +262,22 @@ class Assistant:
         services = next((path for path in candidates if path.is_file()), None)
         if services is None:
             raise RuntimeError(tr("startup.services_missing"))
-        powershell = shutil.which("pwsh.exe") or shutil.which("powershell.exe")
-        if powershell is None:
-            raise RuntimeError(tr("startup.powershell_missing"))
+        command = platform.service_command(services, self.voice_service_required)
         environment = os.environ.copy()
-        frozen = getattr(sys, "frozen", False)
-        if frozen:
-            import ctypes
+        libraries = nullcontext()
+        if getattr(sys, "frozen", False):
             bundle = Path(sys._MEIPASS).resolve()
             environment["PATH"] = os.pathsep.join(
                 entry for entry in environment.get("PATH", "").split(os.pathsep)
                 if not Path(os.path.expandvars(entry)).resolve().is_relative_to(bundle))
             environment.pop("PYTHONHOME", None)
-            ctypes.windll.kernel32.SetDllDirectoryW(None)
+            libraries = platform.unbundled_libraries(bundle)
         try:
-            try:
+            with libraries:
                 process = subprocess.Popen(
-                    [powershell, "-NoLogo", "-NoProfile", "-NonInteractive",
-                     "-ExecutionPolicy", "Bypass", "-File", str(services), "-NoConsole",
-                     *(() if self.voice_service_required else ("-NoVoice",))],
-                    cwd=str(services.parent.parent), env=environment,
+                    command, cwd=str(services.parent.parent), env=environment,
                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)
-            finally:
-                if frozen:
-                    ctypes.windll.kernel32.SetDllDirectoryW(str(bundle))
+                    text=True, errors="replace", creationflags=platform.no_window_flags)
             try:
                 output, _ = process.communicate(timeout=900)
             except subprocess.TimeoutExpired as error:

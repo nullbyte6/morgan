@@ -27,6 +27,7 @@ from pathlib import Path
 import psutil
 
 from .lang import tr
+from src.platforms import current_platform
 
 VERSION_URL = "http://127.0.0.1:11434/api/version"
 SERVER_NAMES = {"ollama.exe", "ollama"}
@@ -115,12 +116,10 @@ def restart_ollama(context_length: int) -> None:
     apps = [process for process in processes if (process.info["name"] or "").casefold() in APP_NAMES]
     _stop(apps)
     _stop([process for process in processes if process not in apps])
-    options = {}
-    if os.name == "nt":
-        options["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
     subprocess.Popen(
         [str(executable), "serve"], env={**os.environ, "OLLAMA_CONTEXT_LENGTH": str(context_length)},
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **options)
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True,
+        creationflags=current_platform().detached_flags)
     deadline = time.monotonic() + START_SECONDS
     while time.monotonic() < deadline:
         if ollama_ready():

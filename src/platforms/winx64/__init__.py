@@ -21,14 +21,16 @@
 import subprocess
 
 from ..base import Platform
-from . import apps, environment, folders, media, notifications, system, windows
+from . import apps, environment, folders, media, notifications, services, system, windows
 
 
 class WinX64Platform(Platform):
     name = "winx64"
     no_window_flags = subprocess.CREATE_NO_WINDOW
+    detached_flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
     persistent_environment = True
     elevation_captures_output = True
+    installer_name = "ArloSetup.exe"
 
     list_windows = staticmethod(windows.get_open_windows)
     launch_application = staticmethod(windows.launch_application)
@@ -61,3 +63,10 @@ class WinX64Platform(Platform):
     is_elevated = staticmethod(environment.is_elevated)
     default_shell = staticmethod(environment.default_shell)
     elevation_prefix = staticmethod(environment.elevation_prefix)
+    service_launchers = staticmethod(services.service_launchers)
+    service_command = staticmethod(services.service_command)
+    unbundled_libraries = staticmethod(services.unbundled_libraries)
+    installed_executable = staticmethod(services.installed_executable)
+    run_installer_after_exit = staticmethod(services.run_installer_after_exit)
+    raise_priority = staticmethod(services.raise_priority)
+    trim_memory = staticmethod(services.trim_memory)

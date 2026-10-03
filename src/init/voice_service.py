@@ -46,6 +46,7 @@ from .voice_profiles import selected_voice, resolve_voice
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 from .identity import get_assistant_identifier
+from src.platforms import current_platform
 
 logger = logging.getLogger(f"{get_assistant_identifier()}.tts")
 
@@ -54,20 +55,8 @@ RESUME_MAX_WAIT_SECONDS = 2.5
 
 
 def _raise_priority(*, process: bool) -> None:
-    if sys.platform != "win32":
-        return
     try:
-        import ctypes
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        if process:
-            kernel32.GetCurrentProcess.restype = ctypes.c_void_p
-            kernel32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint]
-            kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), 0x00008000)
-        else:
-            kernel32.GetCurrentThread.restype = ctypes.c_void_p
-            kernel32.SetThreadPriority.argtypes = [ctypes.c_void_p, ctypes.c_int]
-            kernel32.SetThreadPriority(kernel32.GetCurrentThread(), 2)
+        current_platform().raise_priority(process)
     except Exception:
         logger.exception("Unable to raise the voice priority")
 
@@ -389,16 +378,7 @@ class VoiceService:
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            if sys.platform == "win32":
-                import ctypes
-
-                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-                kernel32.GetCurrentProcess.restype = ctypes.c_void_p
-                psapi = ctypes.WinDLL("psapi", use_last_error=True)
-                psapi.EmptyWorkingSet.argtypes = [ctypes.c_void_p]
-                psapi.EmptyWorkingSet.restype = ctypes.c_int
-                if not psapi.EmptyWorkingSet(kernel32.GetCurrentProcess()):
-                    raise ctypes.WinError(ctypes.get_last_error())
+            current_platform().trim_memory()
             logger.info("Voice service released idle memory")
         except Exception:
             logger.exception("Unable to release idle voice memory")

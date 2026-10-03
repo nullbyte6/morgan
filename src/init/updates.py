@@ -16,13 +16,12 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Updates from the repository's GitHub releases: list, download and install ArloSetup.exe."""
+"""Updates from the repository's GitHub releases: list, download and install the platform installer."""
 from __future__ import annotations
 
 import json
 import os
 import re
-import subprocess
 import sys
 import threading
 import urllib.request
@@ -30,11 +29,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from src.platforms import current_platform
+
 REPOSITORY = "xddigs/arlo"
 RELEASES_URL = f"https://api.github.com/repos/{REPOSITORY}/releases?per_page=30"
-SETUP_NAME = "ArloSetup.exe"
 CHUNK_SIZE = 256 * 1024
-INSTALLER_SWITCHES = ("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS")
 
 
 class UpdateCancelled(Exception):
@@ -65,17 +64,18 @@ def _request(url: str, accept: str) -> urllib.request.Request:
 
 
 def available_releases(current: str | None = None) -> list[Release]:
-    """The published releases newer than the running version that ship ArloSetup.exe, newest first."""
+    """The published releases newer than the running version that ship this platform's installer, newest first."""
     from src.init.brain import get_version
     current = current or get_version()
     with urllib.request.urlopen(_request(RELEASES_URL, "application/vnd.github+json"), timeout=15) as response:
         payload = json.loads(response.read().decode("utf-8"))
+    setup_name = current_platform().installer_name
     releases = []
     for item in payload:
         if item.get("draft"):
             continue
         asset = next((asset for asset in item.get("assets", ())
-                      if asset.get("name", "").casefold() == SETUP_NAME.casefold()), None)
+                      if setup_name and asset.get("name", "").casefold() == setup_name.casefold()), None)
         version = (item.get("tag_name") or "").strip()
         if asset is None or not version or version_key(version) <= version_key(current):
             continue
@@ -88,8 +88,8 @@ def available_releases(current: str | None = None) -> list[Release]:
 
 
 def setup_path() -> Path:
-    from src.platforms import current_platform
-    return current_platform().known_folder("downloads") / SETUP_NAME
+    platform = current_platform()
+    return platform.known_folder("downloads") / platform.installer_name
 
 
 def download(release: Release, progress: Callable[[int, int], None],
@@ -123,19 +123,10 @@ def relaunch_command(terminal: bool = False) -> tuple[list[str], Path]:
     """The command and folder that start Arlo again once the installer has finished."""
     if getattr(sys, "frozen", False):
         return [sys.executable], Path(sys.executable).parent
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Arlo\Installer") as key:
-            installed = Path(winreg.QueryValueEx(key, "InstallPath")[0]) / ("ArloTUI.exe" if terminal else "Arlo.exe")
-        if installed.is_file():
-            return [str(installed)], installed.parent
-    except OSError:
-        pass
+    installed = current_platform().installed_executable(terminal)
+    if installed is not None and installed.is_file():
+        return [str(installed)], installed.parent
     return [sys.executable, str(Path(sys.argv[0]).resolve()), *sys.argv[1:]], Path.cwd()
-
-
-def _quoted(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
 
 
 def _environment() -> dict[str, str]:
@@ -154,23 +145,4 @@ def _environment() -> dict[str, str]:
 
 def install(setup: Path, command: list[str], directory: Path) -> None:
     """Once this process exits, run the installer, delete it from Downloads and start Arlo again."""
-    arguments = ", ".join(_quoted(argument) for argument in command[1:]) or "@()"
-    script = "; ".join((
-        "$ErrorActionPreference = 'SilentlyContinue'",
-        f"Wait-Process -Id {os.getpid()}",
-        f"$setup = {_quoted(str(setup))}",
-        "Start-Process -FilePath $setup -ArgumentList " + ", ".join(map(_quoted, INSTALLER_SWITCHES)) + " -Wait",
-        "Remove-Item -LiteralPath $setup -Force",
-        f"$arguments = @({arguments})",
-        f"if ($arguments.Count) {{ Start-Process -FilePath {_quoted(command[0])} -ArgumentList $arguments "
-        f"-WorkingDirectory {_quoted(str(directory))} }} "
-        f"else {{ Start-Process -FilePath {_quoted(command[0])} -WorkingDirectory {_quoted(str(directory))} }}",
-    ))
-    powershell = (Path(os.environ.get("SystemRoot", r"C:\Windows"))
-                  / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
-    subprocess.Popen(
-        [str(powershell) if powershell.is_file() else "powershell.exe",
-         "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-        env=_environment(), cwd=str(setup.parent), stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True,
-        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP)
+    current_platform().run_installer_after_exit(setup, command, directory, _environment())

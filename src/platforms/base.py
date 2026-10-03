@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Operating system services the core requests from the active platform package."""
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -74,8 +75,10 @@ class Platform:
 
     name = sys.platform
     no_window_flags = 0
+    detached_flags = 0
     persistent_environment = False
     elevation_captures_output = False
+    installer_name = ""
 
     def unsupported(self, operation: str) -> UnsupportedOperation:
         return UnsupportedOperation(self.name, operation)
@@ -209,3 +212,30 @@ class Platform:
         if not sudo:
             raise ValueError(tr("command.sudo_missing"))
         return [sudo, "--"]
+
+    def service_launchers(self, name: str) -> list[str]:
+        """Return the file names of the script that starts Ollama and the voice service."""
+        return []
+
+    def service_command(self, script: Path, voice: bool) -> list[str]:
+        """Return the command that runs a services script, optionally without the voice service."""
+        raise self.unsupported("service_command")
+
+    def unbundled_libraries(self, bundle: Path):
+        """Context in which child processes do not load libraries from a frozen bundle."""
+        return nullcontext()
+
+    def installed_executable(self, terminal: bool = False) -> Path | None:
+        """Return the installed desktop or terminal executable."""
+        return None
+
+    def run_installer_after_exit(self, setup: Path, command: list[str], directory: Path,
+                                 environment: dict[str, str]) -> None:
+        """Once this process exits, run the installer, delete it and run command in directory."""
+        raise self.unsupported("run_installer_after_exit")
+
+    def raise_priority(self, process: bool) -> None:
+        """Raise the priority of the current process, or of the current thread when process is false."""
+
+    def trim_memory(self) -> None:
+        """Return idle memory of the current process to the system."""
