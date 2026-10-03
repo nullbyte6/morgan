@@ -106,8 +106,13 @@ platform layer in `src/platforms`:
   Homebrew. It targets Apple Silicon, because the pinned PyTorch and ONNX
   Runtime have no Intel Mac builds. It has not been tested on a Mac yet, and
   macOS still has no services launcher (start Ollama and the voice service by
-  hand), no song recognition from system audio, no diagnostics and no packaged
-  app or installer.
+  hand), no song recognition from system audio and no diagnostics.
+  `scripts/build-dmg.sh`, run on an Apple Silicon Mac with the dependencies
+  from `requirements.txt` in `.venv`, builds `Arlo.app` with PyInstaller
+  (in `build/packaging-macos/dist`) and packs it into
+  `build/installer/Arlo-<version>.dmg`. The app is only ad-hoc signed, so
+  macOS asks for confirmation the first time it opens until it is signed and
+  notarized with an Apple Developer ID.
 - `current_platform()` in `src/platforms/__init__.py` selects the package from
   `sys.platform` and falls back to the portable defaults elsewhere.
 
