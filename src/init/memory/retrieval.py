@@ -34,7 +34,6 @@ def search_expression(query, mode="any"):
     if mode == "phrase":
         if len(tokens) > 32:
             raise ValueError("Phrase exceeds 32 tokens")
-        # Preserve repetition, accents and combining marks for SQLite's tokenizer.
         return '"' + query.replace('"', '""') + '"' if tokens else ""
     tokens = list(dict.fromkeys(tokens))[:32]
     return (" OR " if mode == "any" else " AND ").join('"' + token + '"' for token in tokens)

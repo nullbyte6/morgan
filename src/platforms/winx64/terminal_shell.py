@@ -28,14 +28,11 @@ def main():
     kernel.SetConsoleCtrlHandler.argtypes = [handler_type, ctypes.c_int]
     kernel.SetConsoleCtrlHandler.restype = ctypes.c_int
 
-    # The inherited ignore-Ctrl+C flag also affects the shell's children.
-    # Clear it here, without changing Arlo's own console handlers.
     if not kernel.SetConsoleCtrlHandler(handler_type(), False):
         raise ctypes.WinError(ctypes.get_last_error())
 
     @handler_type
     def handle_control(event):
-        # The shell handles these events; keep its supervising process alive.
         return event in (0, 1)
 
     if not kernel.SetConsoleCtrlHandler(handle_control, True):

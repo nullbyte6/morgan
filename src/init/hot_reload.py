@@ -31,8 +31,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STYLESHEET_PATH = PROJECT_ROOT / "assets" / "arlo.qss"
 _stylesheet_bridge = None
 
-# These modules own live threads, locks, GUI bridges, open sessions, or context
-# variables. Recreating those globals would disconnect the running application.
 _PRESERVED = {
     "src.init.hot_reload",
     "src.init.identity",

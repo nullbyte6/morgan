@@ -318,7 +318,6 @@ class MemoryService:
                 (session_id, after, limit + 1))]
         result = {"warning": UNTRUSTED, "session": dict(session), "messages": [], "next_after": None}
         for row in rows[:limit]:
-            # Reserve space for pagination and the response envelope. Never skip a row.
             remaining = self.recall_chars - len(json.dumps(result, ensure_ascii=False)) - 40
             selected = bounded([row], remaining)
             if not selected:
@@ -346,7 +345,6 @@ class MemoryService:
         if available <= 0:
             raise ValueError("Message metadata exceeds recall_chars; increase the configured budget")
         chunk = content[offset:offset + available]
-        # Escaped control characters can consume more than one JSON character.
         while len(json.dumps({**result, "content": chunk}, ensure_ascii=False)) > self.recall_chars - 20:
             chunk = chunk[:len(chunk) // 2]
         result["content"] = chunk

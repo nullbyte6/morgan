@@ -154,7 +154,6 @@ def desktop_audio(*, stop_event=None, timeout=5.0, tail=0.6, directory=None):
         acquired = True
         yield AudioLease()
     finally:
-        # Let speaker/reverb tails settle before wake capture resumes.
         if acquired:
             if tail:
                 time.sleep(tail)
@@ -177,8 +176,6 @@ class WakeInbox:
             )""")
 
     def connect(self):
-        # Context management commits and explicitly closes (sqlite's own
-        # connection context manager only commits, it does not close).
         return _connection(self.path)
 
     def enqueue(self, text: str, *, command_id=None, ttl=300.0) -> str:

@@ -240,8 +240,6 @@ class TerminalSession(QThread):
                 self.msleep(10)
         except EOFError:
             if process is not None:
-                # ConPTY can close its output pipe just before the bootstrap
-                # process exits. Wait for its real status instead of guessing.
                 deadline = time.monotonic() + 5
                 while (process.isalive() and not self.isInterruptionRequested()
                        and time.monotonic() < deadline):

@@ -62,7 +62,6 @@ def vocabulary(db, scope, options, *, term=None, prefix=None):
             where += " AND v.term=?"
             parameters.append(term)
         if prefix is not None:
-            # Range constraint lets fts5vocab seek instead of scanning every term.
             where += " AND v.term >= ? AND v.term < ?"
             parameters.extend((prefix, prefix + chr(0x10ffff)))
         queries.append(f"""SELECT v.term,m.id,m.rowid AS document_rowid,v.offset AS token_index,

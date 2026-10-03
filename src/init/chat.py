@@ -77,7 +77,6 @@ class ChatInput(QTextEdit):
         self.history_index = None
         self.history_draft = ""
 
-        # Conectar señales de cambio de contenido para ajustar altura
         self.textChanged.connect(self.adjust_height)
         self.document().documentLayout().documentSizeChanged.connect(
             self.adjust_height)
@@ -89,10 +88,8 @@ class ChatInput(QTextEdit):
         line_height = self.fontMetrics().lineSpacing()
         content_height = self.document().size().height()
 
-        # Calcular altura basada en líneas visibles (incluyendo wrapping)
         max_height = self.max_lines * line_height
 
-        # Altura mínima para una línea, máxima para 4 líneas
         height = max(line_height, min(max_height, int(content_height)))
         self.setFixedHeight(height)
 

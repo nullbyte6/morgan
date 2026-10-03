@@ -138,9 +138,6 @@ class ZoomView(QGraphicsView):
     def eventFilter(self, watched, event):
         if watched is self.content and event.type() == QEvent.LayoutRequest:
             self._layout_timer.start(0)
-        # Some layouts deliver shifted plus as Key_Plus instead of Key_Equal;
-        # handle that variant directly because QShortcut cannot match it
-        # consistently across keyboard layouts.
         if (event.type() == QEvent.KeyPress
                 and event.key() == Qt.Key_Plus
                 and event.modifiers() & Qt.ControlModifier

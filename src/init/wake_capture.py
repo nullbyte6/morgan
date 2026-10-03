@@ -90,7 +90,6 @@ class WakeCapture:
                 self.idle_start = max(1, self.position - self.blocks(self.settings.pre_roll_seconds))
             if self.active_start is not None and self.position > self.wake_end:
                 self.command_candidate = True
-        # Include inference latency without ever growing unbounded.
         keep = self.blocks(self.settings.max_seconds + self.settings.wait_seconds + 10)
         while len(self.frames) > keep:
             self.frames.popleft()
@@ -105,7 +104,6 @@ class WakeCapture:
         silence = self.position - self.last_speech
         if self.active_start is not None:
             if self.position - self.active_start >= self.blocks(self.settings.max_seconds):
-                # Never execute a command which may have been cut in half.
                 self.event = "too_long"
                 return None
             if self.command_candidate and self.last_speech > self.retry_after:
@@ -127,8 +125,6 @@ class WakeCapture:
         if snapshot.final:
             if command:
                 return command
-            # Wake-only partial detection can include its trailing syllable.
-            # An empty final result must still allow the paused-command pattern.
             self.retry_after = snapshot.end
             self.command_candidate = self.last_speech > snapshot.end
             return None
@@ -136,9 +132,6 @@ class WakeCapture:
             self.active_start = snapshot.start
             self.wake_end = snapshot.end
             self.activated_at = self.position
-            # Always verify the complete utterance once. A short, low-beam
-            # detection pass can recognize the name but omit the command that
-            # was already spoken in the very same snapshot.
             self.command_candidate = True
             self.event = "activated"
         elif self.last_speech <= snapshot.end and self.position - self.last_speech >= self.blocks(self.settings.silence_seconds):

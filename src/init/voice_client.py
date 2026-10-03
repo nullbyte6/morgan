@@ -217,7 +217,6 @@ class VoiceClient:
         if not text or not text.strip():
             return
 
-        # Do not erase an asynchronous synthesis error when another phrase arrives.
         if self._error is not None:
             self.is_done()
         if self._done.is_set():
