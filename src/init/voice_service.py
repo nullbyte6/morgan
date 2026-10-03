@@ -438,6 +438,15 @@ class VoiceService:
         _raise_priority(process=False)
         frame_size = max(1, int(self.sample_rate * 0.04))
         stream = None
+        try:
+            opened = time.monotonic()
+            stream = sd.OutputStream(samplerate=self.sample_rate, channels=1,
+                                     dtype="float32", latency="low", blocksize=0)
+            logger.info("Voice output stream opened in %d ms, device latency %d ms",
+                        (time.monotonic() - opened) * 1000, stream.latency * 1000)
+        except Exception:
+            stream = None
+            logger.exception("Unable to pre-open the audio output stream")
         while True:
             try:
                 item = self._audio_queue.get_nowait()
