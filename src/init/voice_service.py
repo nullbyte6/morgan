@@ -212,7 +212,8 @@ class VoiceService:
 
             batch = self._batch
             batch.numbers.observe(subtitle)
-            text = prepare_speech(subtitle, load_config().get("pronunciations", {}))
+            text = prepare_speech(subtitle, load_config().get("pronunciations", {}),
+                                  batch.numbers.code)
             text = batch.numbers.normalize(text)
             batch.pending += 1
             batch.done.clear()

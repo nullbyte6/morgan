@@ -17,6 +17,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import re
+import string
 from functools import lru_cache
 
 from babel import UnknownLocaleError
@@ -46,10 +47,14 @@ class SpeechNumbers:
             self.language = (detector.detect_language_of(self.response)
                              or detector.detect_language_of(self.context))
 
+    @property
+    def code(self):
+        return self.language.iso_code_639_1.name.lower() if self.language else None
+
     def normalize(self, text):
         if self.language is None:
             return text
-        code = self.language.iso_code_639_1.name.lower()
+        code = self.code
 
         def cardinal(value):
             try:
@@ -76,14 +81,38 @@ class SpeechNumbers:
         return re.sub(r"(?<!\w)-\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*", replace, text)
 
 
+def _letters(*names, **extra):
+    return {**dict(zip(string.ascii_lowercase, names)), **extra}
+
+
 LETTER_NAMES = {
-    "a": "a", "b": "be", "c": "ce", "d": "de", "e": "e",
-    "f": "efe", "g": "ge", "h": "hache", "i": "i", "j": "jota",
-    "k": "ka", "l": "ele", "m": "eme", "n": "ene", "ñ": "eñe",
-    "o": "o", "p": "pe", "q": "cu", "r": "erre", "s": "ese",
-    "t": "te", "u": "u", "v": "uve", "w": "doble uve", "x": "equis",
-    "y": "i griega", "z": "zeta",
+    "en": _letters("ay", "bee", "see", "dee", "ee", "eff", "gee", "aitch", "eye", "jay", "kay", "el", "em",
+                   "en", "oh", "pee", "cue", "ar", "ess", "tee", "you", "vee", "double you", "ex", "why", "zee"),
+    "es": _letters("a", "be", "ce", "de", "e", "efe", "ge", "hache", "i", "jota", "ka", "ele", "eme", "ene",
+                   "o", "pe", "cu", "erre", "ese", "te", "u", "uve", "doble uve", "equis", "i griega", "zeta",
+                   ñ="eñe"),
+    "zh": _letters("诶", "比", "西", "迪", "伊", "艾弗", "吉", "艾尺", "艾", "杰", "开", "艾勒", "艾马", "艾娜",
+                   "欧", "屁", "吉吾", "艾儿", "艾丝", "提", "优", "维", "达布溜", "艾克斯", "吾艾", "贼德"),
+    "fr": _letters("a", "bé", "cé", "dé", "e", "effe", "gé", "ache", "i", "ji", "ka", "elle", "emme", "enne",
+                   "o", "pé", "ku", "erre", "esse", "té", "u", "vé", "double vé", "iks", "i grec", "zède"),
+    "de": _letters("a", "be", "ze", "de", "e", "ef", "ge", "ha", "i", "jot", "ka", "el", "em", "en", "o", "pe",
+                   "ku", "er", "es", "te", "u", "fau", "we", "iks", "ypsilon", "zet"),
+    "pt": _letters("a", "bê", "cê", "dê", "e", "éfe", "gê", "agá", "i", "jota", "cá", "éle", "ême", "ene", "o",
+                   "pê", "quê", "érre", "ésse", "tê", "u", "vê", "dáblio", "xis", "ípsilon", "zê"),
+    "it": _letters("a", "bi", "ci", "di", "e", "effe", "gi", "acca", "i", "i lunga", "cappa", "elle", "emme",
+                   "enne", "o", "pi", "cu", "erre", "esse", "ti", "u", "vu", "doppia vu", "ics", "ipsilon",
+                   "zeta"),
+    "ru": _letters("а", "би", "си", "ди", "и", "эф", "джи", "эйч", "ай", "джей", "кей", "эл", "эм", "эн", "оу",
+                   "пи", "кью", "ар", "эс", "ти", "ю", "ви", "дабл-ю", "экс", "уай", "зед"),
+    "ja": _letters("エー", "ビー", "シー", "ディー", "イー", "エフ", "ジー", "エイチ", "アイ", "ジェー", "ケー", "エル",
+                   "エム", "エヌ", "オー", "ピー", "キュー", "アール", "エス", "ティー", "ユー", "ブイ", "ダブリュー",
+                   "エックス", "ワイ", "ゼット"),
+    "ko": _letters("에이", "비", "씨", "디", "이", "에프", "지", "에이치", "아이", "제이", "케이", "엘", "엠", "엔",
+                   "오", "피", "큐", "알", "에스", "티", "유", "브이", "더블유", "엑스", "와이", "제트"),
 }
+
+DOT_WORDS = {"en": "dot", "es": "punto", "zh": "点", "fr": "point", "de": "Punkt", "pt": "ponto", "it": "punto",
+             "ru": "точка", "ja": "ドット", "ko": "점"}
 
 INITIALISMS = {
     "ai", "api", "cli", "cpu", "css", "csv", "dll", "dns", "exe",
@@ -99,30 +128,34 @@ PATH_PATTERN = re.compile(
 )
 
 
-def spell_letters(value):
-    return " ".join(LETTER_NAMES.get(letter.casefold(), letter) for letter in value)
+LATIN_WORD = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿ]+")
 
 
-def speak_component(value):
+def spell_letters(value, language=None):
+    names = LETTER_NAMES.get(language, LETTER_NAMES["en"])
+    return " ".join(names.get(letter.casefold(), letter) for letter in value)
+
+
+def speak_component(value, language=None):
     value = value.strip("._- ")
     if not value:
         return ""
-    pieces = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+|\d+", value)
+    pieces = re.findall(r"[^\W\d_]+|\d+", value)
     spoken = []
     for piece in pieces:
         lowered = piece.casefold()
-        letters = piece.isalpha()
-        no_vowels = letters and not re.search(r"[aeiouáéíóúü]", lowered)
+        letters = LATIN_WORD.fullmatch(piece) is not None
+        no_vowels = letters and not re.search(r"[aeiouáéíóúüàèìòùâêîôûäöãõ]", lowered)
         uppercase_initialism = letters and piece.isupper() and len(piece) <= 5
         if letters and (len(piece) == 1 or lowered in INITIALISMS
                         or no_vowels or uppercase_initialism):
-            spoken.append(spell_letters(piece))
+            spoken.append(spell_letters(piece, language))
         else:
             spoken.append(piece)
     return " ".join(spoken)
 
 
-def speak_path(path):
+def speak_path(path, language=None):
     segments = [segment for segment in re.split(r"[\\/]+", path) if segment]
     spoken = []
     for index, segment in enumerate(segments):
@@ -130,18 +163,18 @@ def speak_path(path):
             segment = segment[:-1]
         if index == len(segments) - 1 and "." in segment.lstrip("."):
             parts = [part for part in segment.split(".") if part]
-            values = [speak_component(part) for part in parts]
+            values = [speak_component(part, language) for part in parts]
             values = [value for value in values if value]
             if values:
-                spoken.append(" punto ".join(values))
+                spoken.append(f" {DOT_WORDS.get(language, DOT_WORDS['en'])} ".join(values))
         else:
-            value = speak_component(segment)
+            value = speak_component(segment, language)
             if value:
                 spoken.append(value)
     return ", ".join(spoken)
 
 
-def replace_path(match):
+def replace_path(match, language=None):
     path = match.group()
     segments = [segment for segment in re.split(r"[\\/]+", path) if segment]
     final = segments[-1] if segments else ""
@@ -149,7 +182,7 @@ def replace_path(match):
                  or re.match(r"^[A-Za-z]:[\\/]", path)
                  or path.count("/") >= 2 or "." in final
                  or any(segment.casefold() in INITIALISMS for segment in segments))
-    return speak_path(path) if path_like else path
+    return speak_path(path, language) if path_like else path
 
 
 def apply_pronunciations(text, pronunciations):
@@ -164,7 +197,7 @@ def apply_pronunciations(text, pronunciations):
     return text
 
 
-def prepare_speech(text, pronunciations=None):
-    text = PATH_PATTERN.sub(replace_path, text)
+def prepare_speech(text, pronunciations=None, language=None):
+    text = PATH_PATTERN.sub(lambda match: replace_path(match, language), text)
     text = apply_pronunciations(text, pronunciations or {})
     return re.sub(r"\s+", " ", text).strip()
