@@ -86,7 +86,7 @@ def resolve_launcher() -> Path | None:
 def launch_assistant() -> None:
     """Start the desktop without waiting for its services or UI."""
     launcher = resolve_launcher()
-    if launcher is None or not launcher.is_file():
+    if launcher is None or not launcher.exists():
         log.error(tr("wake.launcher_not_found", path=launcher))
         return
     if is_assistant_running():

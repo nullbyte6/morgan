@@ -22,7 +22,7 @@ from pathlib import Path
 import subprocess
 
 from ..base import Platform
-from . import apps, folders, media, notifications, system, windows
+from . import apps, desktop, folders, media, notifications, system, windows
 
 
 class MacX64Platform(Platform):
@@ -48,6 +48,8 @@ class MacX64Platform(Platform):
     media_sessions = staticmethod(media.media_sessions)
     control_media = staticmethod(media.control_media)
     seek_media = staticmethod(media.seek_media)
+    desktop_launcher = staticmethod(desktop.desktop_launcher)
+    launch_command = staticmethod(desktop.launch_command)
 
     def open_path(self, path: Path | str) -> None:
         subprocess.Popen(["open", str(path)])
