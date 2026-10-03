@@ -19,44 +19,26 @@
 """Discover voice references independently of the model and desktop runtime."""
 
 import re
-import sys
 from pathlib import Path
 
 VOICE_DIR = Path(__file__).resolve().parents[1] / "voices"
-OMNI_MODEL_NAME = "MiniCPM-o-4_5-gguf"
-OMNI_MODEL_FILE = "MiniCPM-o-4_5-Q4_K_M.gguf"
-OMNI_MODEL_FILES = (
-    OMNI_MODEL_FILE,
-    "audio/MiniCPM-o-4_5-audio-F16.gguf",
-    "tts/MiniCPM-o-4_5-tts-F16.gguf",
-    "tts/MiniCPM-o-4_5-projector-F16.gguf",
-    "vision/MiniCPM-o-4_5-vision-F16.gguf",
-    "token2wav-gguf/encoder.gguf",
-    "token2wav-gguf/flow_extra.gguf",
-    "token2wav-gguf/flow_matching.gguf",
-    "token2wav-gguf/hifigan2.gguf",
-    "token2wav-gguf/prompt_cache.gguf",
-)
+MODEL_DIR = Path(__file__).resolve().parents[1] / "models"
+VOICE_MODEL_NAME = "Fun-CosyVoice3-0.5B"
 
 
-def omni_model() -> Path:
+def _voice_model() -> Path:
+    bundled = MODEL_DIR / VOICE_MODEL_NAME
+    if (bundled / "cosyvoice3.yaml").is_file():
+        return bundled
     from .config import HOME_PATH
 
-    return HOME_PATH / "models" / OMNI_MODEL_NAME / OMNI_MODEL_FILE
+    return HOME_PATH / "models" / VOICE_MODEL_NAME
 
 
-def omni_server_executable() -> Path:
-    from .config import HOME_PATH, load_config
-
-    configured = load_config().get("omni_server", "")
-    if configured:
-        return Path(configured)
-    name = "llama-omni-server.exe" if sys.platform == "win32" else "llama-omni-server"
-    build = "build-hip2" if sys.platform == "win32" else "build"
-    return HOME_PATH / "llama.cpp-omni" / build / "bin" / name
-
-
+VOICE_MODEL = _voice_model()
 VOICE_REFERENCE = VOICE_DIR / "voice-01.wav"
+VOICE_REFERENCE_TEXT = ("Hola, soy Arlo. Estoy aquí para ayudarte "
+                        "con lo que necesites.")
 VOICE_NAMES = {
     "voice-01.wav": "David",
     "voice-02.wav": "Javier",

@@ -17,6 +17,8 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import io
+import json
+import os
 import sys
 import threading
 import time
@@ -28,6 +30,7 @@ from math import gcd
 from .colors import RESET_COLOR, USER_COLOR
 from .lang import tr
 
+VOICE_MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
 VOICE_BLOCK_SECONDS = 0.1
 VOICE_MAX_SECONDS = 30
 VOICE_START_TIMEOUT_SECONDS = 10
@@ -35,6 +38,7 @@ VOICE_END_SILENCE_SECONDS = 1.8
 VOICE_SILENCE_THRESHOLD = 400
 PLAYBACK_SILENCE_THRESHOLD = 1200
 ECHO_TAIL_SECONDS = 1.5
+_VOICE_MODEL = None
 
 
 class LiveVoiceCapture:
@@ -209,8 +213,49 @@ def record_voice(*, on_audio=None, stop_event=None,
     return b"".join(audio_blocks), sample_rate
 
 
+def get_voice_model():
+    """Load the local multilingual speech model once, on first voice command."""
+    global _VOICE_MODEL
+    if _VOICE_MODEL is None:
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError as error:
+            raise RuntimeError(
+                tr("voice.recognition_missing")
+            ) from error
+        _VOICE_MODEL = WhisperModel(
+            VOICE_MODEL_NAME, device="cpu", compute_type="int8")
+    return _VOICE_MODEL
+
+
+def transcribe_voice(pcm_data: bytes, sample_rate: int, *, model=None,
+                     language=None, beam_size=5, vad_filter=True) -> tuple[str, str]:
+    """Transcribe PCM audio locally and return its text and detected language."""
+    audio_file = io.BytesIO()
+    with wave.open(audio_file, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm_data)
+    audio_file.seek(0)
+
+    segments, information = (model if model is not None else get_voice_model()).transcribe(
+        audio_file,
+        language=language,
+        task="transcribe",
+        beam_size=beam_size,
+        vad_filter=vad_filter,
+        vad_parameters={"min_silence_duration_ms": 500},
+        condition_on_previous_text=False,
+    )
+    transcript = " ".join(
+        segment.text.strip() for segment in segments if segment.text.strip()
+    ).strip()
+    return transcript, information.language
+
+
 def recording_to_wav(pcm_data: bytes, sample_rate: int) -> bytes:
-    """Convert captured mono PCM to a 16 kHz WAV recording for the model."""
+    """Convert captured mono PCM to Gemma's 16 kHz WAV input format."""
     import numpy as np
     from scipy.signal import resample_poly
 

@@ -54,12 +54,18 @@ from src.init.config import (CONFIG_FILE, HOME_PATH, ensure_storage, load_config
                      save_config, load_dev_file, update_config)
 from src.init.app_cache import cached_app, remember_app, forget_app
 from src.init.steam import steam_manager
+from src.init.voice_profiles import (VOICE_DIR, MODEL_DIR, VOICE_MODEL,
+                             VOICE_REFERENCE, VOICE_REFERENCE_TEXT)
 from src.init.desktop.capture import request_screenshot
 from src.platforms import current_platform
 
 VERSION = "no-version-found"
 
 MODEL_OVERRIDE = os.environ.get("MODEL", "")
+MAIN_MODEL_CAPABILITIES = {"completion", "tools"}
+_MODEL_CAPABILITIES: dict[str, set[str]] = {}
+OLLAMA_KEEP_ALIVE = os.environ.get("KEEP_ALIVE",
+                                   load_config().get("keep_alive"))
 GIT_TIMEOUT_SECONDS = int(os.environ.get("GIT_TIMEOUT", "120"))
 NOMINATIM_BASE_URL = os.environ.get(
     "GEOCODER_URL", "https://nominatim.openstreetmap.org").rstrip("/")
@@ -106,19 +112,96 @@ def refresh() -> str:
         return tr('brain.error_at_refresh_attempt', error=error)
 
 
+def _ollama_api(endpoint: str, payload: dict | None = None, timeout: float = 2):
+    request = urllib.request.Request(
+        f"http://127.0.0.1:11434/api/{endpoint}",
+        data=None if payload is None else json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.load(response)
+
+
+def _tagged_model(name: str) -> str:
+    return name if ":" in name.rsplit("/", 1)[-1] else f"{name}:latest"
+
+
 def is_cloud_model(name: str) -> bool:
-    return False
+    tag = name.rsplit("/", 1)[-1].partition(":")[2]
+    return tag == "cloud" or tag.endswith("-cloud")
 
 
 def main_models() -> list[str] | None:
-    """The one model the assistant runs on; None when its gateway is unreachable."""
-    from src.init.omni_server import MODEL_ID, gateway_ready
-    return [MODEL_ID] if gateway_ready() else None
+    """List installed Ollama models usable as the main model; None when Ollama is unreachable.
+
+    Copies left behind by earlier versions (arlo-<model> and arlo-voice-<model>)
+    are never offered.
+    """
+    try:
+        installed = {_tagged_model(entry["name"]): entry.get("digest") or entry["name"]
+                     for entry in _ollama_api("tags")["models"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    reserved = {_tagged_model(f"{prefix}-{name.replace('/', '-')}")
+                for name in installed for prefix in ("arlo", "arlo-voice")}
+    models = []
+    for name, digest in installed.items():
+        if name in reserved:
+            continue
+        if digest not in _MODEL_CAPABILITIES:
+            try:
+                _MODEL_CAPABILITIES[digest] = set(
+                    _ollama_api("show", {"model": name}).get("capabilities") or ())
+            except (OSError, ValueError, TypeError):
+                continue
+        if MAIN_MODEL_CAPABILITIES <= _MODEL_CAPABILITIES[digest]:
+            models.append(name)
+    return sorted(models, key=str.casefold)
 
 
 def get_selected_model(models: list[str] | None = None) -> str:
-    from src.init.omni_server import MODEL_ID
-    return MODEL_OVERRIDE or MODEL_ID
+    """Resolve the main model: user selection, then the configured default, then any installed main model."""
+    if MODEL_OVERRIDE:
+        return MODEL_OVERRIDE
+    default = _tagged_model(load_dev_file()["base_model_name"])
+    selected = _tagged_model(load_config()["model"] or default)
+    models = main_models() if models is None else models
+    if models is None:
+        return selected
+    for candidate in (selected, default):
+        if candidate in models:
+            return candidate
+    return models[0] if models else default
+
+
+def keep_model_loaded() -> None:
+    """Extend Ollama's model lifetime without delaying the next prompt."""
+    model = get_assistant().MODEL_NAME
+    if is_cloud_model(model):
+        return
+    payload = json.dumps({
+        "model": model,
+        "prompt": "",
+        "keep_alive": OLLAMA_KEEP_ALIVE,
+        "stream": False,
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        "http://localhost:11434/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            reply = json.loads(response.read())
+    except (OSError, TimeoutError, ValueError):
+        return
+    from src.init.health import record_model_load
+    record_model_load(model, reply)
+
+
+def refresh_model_keep_alive() -> None:
+    """Refresh Ollama's keep-alive timer in the background."""
+    threading.Thread(target=keep_model_loaded, daemon=True).start()
 
 
 _working_directory_owner = ContextVar("arlo_working_directory_owner", default=None)

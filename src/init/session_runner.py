@@ -18,15 +18,17 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """One conversation session's turn execution, independent of any interface toolkit."""
 import asyncio
+import io
 import itertools
 import logging
 import threading
 import time
+import wave
 from contextlib import nullcontext
 from dataclasses import replace
 
 from src.init.attachments import (DesktopMessage, DesktopVoiceMessage, AttachmentSession,
-    model_capabilities)
+    ollama_capabilities)
 
 from src.init.commands import set_confirmation_handler
 from src.init.config import PermissionMode, load_config
@@ -172,7 +174,7 @@ class SessionRunner:
         attachment_session = None
         try:
             if message.attachments:
-                vision, context = model_capabilities()
+                vision, context = ollama_capabilities(self.assistant.MODEL_NAME)
                 attachment_session = AttachmentSession(
                     message, load_config()["attachments"], vision=vision,
                     context_tokens=context)
@@ -193,9 +195,20 @@ class SessionRunner:
                 self.finished.emit("")
                 return
             if voice_input and not prompt:
-                prompt = self.assistant.transcribe_audio(
-                    message.audio_wav, event_loop=self.event_loop,
-                    context=self.session.context)
+                try:
+                    from src.init.voice import transcribe_voice
+
+                    with wave.open(io.BytesIO(message.audio_wav), "rb") as wav:
+                        prompt, _ = transcribe_voice(
+                            wav.readframes(wav.getnframes()), wav.getframerate(),
+                            beam_size=1, vad_filter=False)
+                    prompt = prompt.strip()
+                except Exception:
+                    logging.getLogger("assistant.voice").exception(
+                        "Local voice transcript unavailable; attempting native transcription")
+                    prompt = self.assistant.transcribe_audio(
+                        message.audio_wav, event_loop=self.event_loop,
+                        context=self.session.context)
             if voice_input:
                 if cancel_event.is_set():
                     self.finished.emit("")

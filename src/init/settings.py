@@ -21,17 +21,18 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QIntValidator, QPainter
+from PySide6.QtCore import QEvent, QFileInfo, QSize, Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QImage, QIntValidator, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractButton, QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
+    QAbstractButton, QApplication, QComboBox, QFileDialog, QFileIconProvider, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListView, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from .choice_dialog import ChoiceDialog
 from .config import CONTEXT_LENGTH_RANGE, load_config, save_config
-from .identity import get_assistant, get_assistant_name
+from .identity import get_assistant_name
 from .indicators import PopupCorners
 from .lang import get_language, tr
+from .ollama_service import ollama_executable, restart_ollama
 from .theme import current_theme, discover_themes, on_theme_changed, seed_user_themes, select_theme
 from .voice_profiles import available_voices, selected_voice, select_voice, VOICE_NAMES
 
@@ -144,6 +145,23 @@ class ToggleSwitch(QAbstractButton):
         painter.end()
 
 
+def ollama_icon(color: QColor) -> QIcon:
+    """The Ollama llama from the installed program, redrawn in the given color; empty when Ollama is missing."""
+    executable = ollama_executable()
+    if executable is None:
+        return QIcon()
+    artwork = executable.with_name("app.ico")
+    source = QIcon(str(artwork)) if artwork.is_file() else QFileIconProvider().icon(QFileInfo(str(executable)))
+    image = source.pixmap(128, 128).toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    rgb = color.rgb() & 0xFFFFFF
+    for y in range(image.height()):
+        for x in range(image.width()):
+            pixel = image.pixel(x, y)
+            gray = (((pixel >> 16) & 255) * 299 + ((pixel >> 8) & 255) * 587 + (pixel & 255) * 114) // 1000
+            image.setPixel(x, y, ((pixel >> 24) & 255) * (255 - gray) // 255 << 24 | rgb)
+    return QIcon(QPixmap.fromImage(image))
+
+
 class ThemeDropdown(QComboBox):
     """Combo box that asks for a fresh theme list before opening."""
     popup_requested = Signal()
@@ -164,7 +182,7 @@ class SettingsView(QWidget):
     language_changed = Signal(str)
     model_changed = Signal(str)
     update_requested = Signal()
-    model_restarted = Signal(str, int)
+    ollama_restarted = Signal(str, int)
     ACTION_COLUMNS = 3
 
     def __init__(self, subtitles_enabled: bool,
@@ -372,22 +390,24 @@ class SettingsView(QWidget):
         self.context_input.setFixedWidth(180)
         self.context_input.setText(str(load_config()["context_length"]))
         self.context_label.setBuddy(self.context_input)
-        self.restart_button = QPushButton("↻")
-        self.restart_button.setObjectName("restartButton")
-        self.restart_button.setCursor(Qt.PointingHandCursor)
+        self.ollama_button = QPushButton()
+        self.ollama_button.setObjectName("ollamaButton")
+        self.ollama_button.setCursor(Qt.PointingHandCursor)
         self.context_input.ensurePolished()
         height = max(self.context_input.sizeHint().height(), self.context_input.minimumSizeHint().height())
-        self.restart_button.setFixedSize(height, height)
+        self.ollama_button.setFixedSize(height, height)
+        self.ollama_button.setIconSize(QSize(height - 12, height - 12))
         context_row = QHBoxLayout()
         context_row.setSpacing(8)
         context_row.addWidget(self.context_label)
         context_row.addStretch()
-        context_row.addWidget(self.restart_button)
+        context_row.addWidget(self.ollama_button)
         context_row.addWidget(self.context_input)
         layout.addLayout(context_row)
         self.context_input.editingFinished.connect(self.change_context_length)
-        self.restart_button.clicked.connect(self.restart_model)
-        self.model_restarted.connect(self.finish_restart_model)
+        self.ollama_button.clicked.connect(self.restart_ollama)
+        self.ollama_restarted.connect(self.finish_restart_ollama)
+        self.refresh_ollama_icon()
 
         layout.addStretch()
 
@@ -468,6 +488,12 @@ class SettingsView(QWidget):
 
     def apply_theme(self, theme):
         self.refresh_themes()
+        self.refresh_ollama_icon()
+
+    def refresh_ollama_icon(self):
+        icon = ollama_icon(current_theme().color("text"))
+        self.ollama_button.setIcon(icon)
+        self.ollama_button.setText("" if not icon.isNull() else "\u21bb")
 
     def change_context_length(self):
         minimum, maximum = CONTEXT_LENGTH_RANGE
@@ -523,34 +549,34 @@ class SettingsView(QWidget):
         refresh_store()
         self.dialog.notify(tr("ui.restore_data"), tr("ui.restore_data_done", **counts))
 
-    def restart_model(self):
+    def restart_ollama(self):
         self.dialog.confirm(
-            tr("ui.restart_model"), tr("ui.restart_model_confirm", context_length=load_config()["context_length"]),
-            self.run_restart_model, danger=False)
+            tr("ui.restart_ollama"), tr("ui.restart_ollama_confirm", context_length=load_config()["context_length"]),
+            self.run_restart_ollama, danger=False)
 
-    def run_restart_model(self):
+    def run_restart_ollama(self):
         length = load_config()["context_length"]
-        self.restart_button.setEnabled(False)
+        self.ollama_button.setEnabled(False)
 
         def work():
             try:
-                get_assistant().restart_model_service()
+                restart_ollama(length)
                 error = ""
             except Exception as failure:
                 error = str(failure) or type(failure).__name__
             try:
-                self.model_restarted.emit(error, length)
+                self.ollama_restarted.emit(error, length)
             except RuntimeError:
                 pass
 
-        threading.Thread(target=work, name="model-restart", daemon=True).start()
+        threading.Thread(target=work, name="ollama-restart", daemon=True).start()
 
-    def finish_restart_model(self, error: str, length: int):
-        self.restart_button.setEnabled(True)
+    def finish_restart_ollama(self, error: str, length: int):
+        self.ollama_button.setEnabled(True)
         if error:
-            self.dialog.notify(tr("ui.restart_model"), tr("ui.error", error=error))
+            self.dialog.notify(tr("ui.restart_ollama"), tr("ui.error", error=error))
         else:
-            self.dialog.notify(tr("ui.restart_model"), tr("ui.restart_model_done", context_length=length))
+            self.dialog.notify(tr("ui.restart_ollama"), tr("ui.restart_ollama_done", context_length=length))
 
     def remove_memories(self):
         self.dialog.confirm(tr("ui.remove_memories"), tr("ui.remove_memories_confirm"), self.run_remove_memories)
@@ -642,9 +668,9 @@ class SettingsView(QWidget):
             self.theme_dropdown.setAccessibleName(tr("ui.theme"))
             self.theme_dropdown.setToolTip(tr("ui.theme_hint"))
             self.themes_folder_button.setText(tr("ui.open_themes_folder"))
-        if hasattr(self, "restart_button"):
-            self.restart_button.setAccessibleName(tr("ui.restart_model"))
-            self.restart_button.setToolTip(tr("ui.restart_model_hint"))
+        if hasattr(self, "ollama_button"):
+            self.ollama_button.setAccessibleName(tr("ui.restart_ollama"))
+            self.ollama_button.setToolTip(tr("ui.restart_ollama_hint"))
         if hasattr(self, "context_label"):
             self.context_label.setText(tr("ui.context_length"))
             self.context_input.setAccessibleName(tr("ui.context_length"))

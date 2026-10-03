@@ -16,16 +16,37 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""The assistant's own health: the omni model and its gateway, the GPU and PyTorch build, and the voice service."""
+"""The assistant's own health: Ollama, the main model, the GPU and PyTorch build, and the voice service."""
 from __future__ import annotations
 
+import json
+import threading
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime
 from importlib import metadata
 
 from src.init.lang import tr
 
+OLLAMA = "http://127.0.0.1:11434"
 OK, WARNING, ERROR = "ok", "warning", "error"
+GIGABYTE = 1024 ** 3
+
+_lock = threading.Lock()
+_model_loads: dict[str, tuple[float, datetime]] = {}
+
+
+def record_model_load(model: str, response: dict) -> None:
+    """Remember how long Ollama took to load model, from the load_duration of one of its replies."""
+    nanoseconds = response.get("load_duration") if isinstance(response, dict) else None
+    if isinstance(nanoseconds, (int, float)) and nanoseconds >= 50_000_000:
+        with _lock:
+            _model_loads[model] = (nanoseconds / 1e9, datetime.now())
+
+
+def model_load(model: str) -> tuple[float, datetime] | None:
+    with _lock:
+        return _model_loads.get(model)
 
 
 @dataclass(frozen=True)
@@ -36,6 +57,15 @@ class Check:
     details: list[str] = field(default_factory=list)
 
 
+def _ollama(path: str, timeout: float = 2) -> dict:
+    with urllib.request.urlopen(OLLAMA + path, timeout=timeout) as response:
+        return json.load(response)
+
+
+def _gigabytes(size: int | float) -> str:
+    return f"{size / GIGABYTE:.1f}"
+
+
 def _assistant():
     try:
         from src.init.identity import get_assistant
@@ -44,13 +74,48 @@ def _assistant():
         return None
 
 
-def omni_check() -> Check:
-    from src.init.omni_server import MODEL_ID, context_length, gateway_ready, omni_ready
-    if not gateway_ready():
-        return Check("omni", ERROR, tr("health.omni.down"))
-    status = OK if omni_ready() else WARNING
-    return Check("omni", status, tr("health.omni.running", model=MODEL_ID),
-                 [tr("health.omni.context", context=context_length())])
+def _model_name() -> str:
+    name = getattr(_assistant(), "MODEL_NAME", None)
+    if name:
+        return name
+    from src.init.brain import get_selected_model
+    return get_selected_model()
+
+
+def ollama_check() -> Check:
+    try:
+        version = _ollama("/api/version").get("version", "?")
+        models = _ollama("/api/tags").get("models", [])
+    except (OSError, ValueError) as error:
+        return Check("ollama", ERROR, tr("health.ollama.down"), [str(error)])
+    return Check("ollama", OK, tr("health.ollama.running", version=version),
+                 [tr("health.ollama.models", count=len(models))])
+
+
+def model_check() -> Check:
+    try:
+        model = _model_name()
+    except Exception as error:
+        return Check("model", ERROR, tr("health.model.unknown"), [str(error)])
+    from src.init.brain import is_cloud_model
+    if is_cloud_model(model):
+        return Check("model", OK, tr("health.model.cloud", model=model))
+    load = model_load(model)
+    details = [tr("health.model.load_time", seconds=f"{load[0]:.1f}", time=f"{load[1]:%H:%M}")] if load else []
+    try:
+        running = _ollama("/api/ps").get("models", [])
+    except (OSError, ValueError) as error:
+        return Check("model", ERROR, tr("health.model.unreachable", model=model), [str(error), *details])
+    entry = next((item for item in running if item.get("name") in (model, f"{model}:latest")), None)
+    if entry is None:
+        return Check("model", WARNING, tr("health.model.idle", model=model), details)
+    size, vram = entry.get("size") or 0, entry.get("size_vram") or 0
+    share = round(100 * vram / size) if size else 0
+    details.insert(0, tr("health.model.memory", size=_gigabytes(size), vram=_gigabytes(vram)))
+    if entry.get("context_length"):
+        details.insert(1, tr("health.model.context", context=entry["context_length"]))
+    status = OK if share >= 99 else WARNING
+    return Check("model", status, tr("health.model.loaded", model=model, share=share), details)
 
 
 def _torch_build() -> tuple[str, str]:
@@ -104,11 +169,13 @@ def voice_check() -> Check:
     if device:
         name = device.get("name") or tr("health.voice.processor")
         details.append(tr("health.voice.device", backend=device.get("backend", "?"), name=name))
+    if info.get("load_seconds") is not None:
+        details.append(tr("health.voice.load_time", seconds=f"{info['load_seconds']:.1f}"))
     status = WARNING if device.get("backend") == "CPU" else OK
     return Check("voice", status, tr("health.voice.connected"), details)
 
 
-CHECKS = (omni_check, gpu_check, voice_check)
+CHECKS = (ollama_check, model_check, gpu_check, voice_check)
 
 
 def report(checks: list[Check], checked_at: datetime) -> str:

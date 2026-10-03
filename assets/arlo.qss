@@ -362,7 +362,7 @@ QLineEdit#contextLengthInput:focus {
     border-color: @accent;
 }
 
-QPushButton#restartButton {
+QPushButton#ollamaButton {
     background-color: @surface;
     color: @text;
     border: 2px solid @border;
@@ -371,16 +371,16 @@ QPushButton#restartButton {
     font-size: 20px;
 }
 
-QPushButton#restartButton:hover,
-QPushButton#restartButton:focus {
+QPushButton#ollamaButton:hover,
+QPushButton#ollamaButton:focus {
     border-color: @accent;
 }
 
-QPushButton#restartButton:pressed {
+QPushButton#ollamaButton:pressed {
     background-color: @surface_selected;
 }
 
-QPushButton#restartButton:disabled {
+QPushButton#ollamaButton:disabled {
     border-color: @border;
     background-color: @surface_sunken;
 }
