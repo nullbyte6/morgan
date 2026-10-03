@@ -19,6 +19,7 @@
 """Operating system services the core requests from the active platform package."""
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -73,6 +74,8 @@ class Platform:
 
     name = sys.platform
     no_window_flags = 0
+    persistent_environment = False
+    elevation_captures_output = False
 
     def unsupported(self, operation: str) -> UnsupportedOperation:
         return UnsupportedOperation(self.name, operation)
@@ -172,3 +175,37 @@ class Platform:
     def record_output_audio(self, seconds: int, sample_rate: int):
         """Record what the default output device is playing as a float array."""
         raise self.unsupported("record_output_audio")
+
+    def user_environment(self, name: str) -> str | None:
+        """Read a per-user environment variable persisted outside this process."""
+        return None
+
+    def set_user_environment(self, name: str, value: str) -> None:
+        """Persist a per-user environment variable where persistent_environment is true."""
+
+    def lock_file(self, file, blocking: bool = True) -> None:
+        """Lock the first byte of an open file, raising OSError when blocking is false and it is held."""
+        import fcntl
+        fcntl.flock(file, fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def unlock_file(self, file) -> None:
+        import fcntl
+        fcntl.flock(file, fcntl.LOCK_UN)
+
+    def remove_link(self, path: Path) -> None:
+        """Remove a link to a directory without touching its target."""
+        path.unlink()
+
+    def is_elevated(self) -> bool:
+        return hasattr(os, "geteuid") and os.geteuid() == 0
+
+    def default_shell(self) -> str:
+        return "sh"
+
+    def elevation_prefix(self, cwd: str) -> list[str]:
+        """Return the command prefix that runs a command with administrator rights in cwd."""
+        from src.init.lang import tr
+        sudo = shutil.which("sudo")
+        if not sudo:
+            raise ValueError(tr("command.sudo_missing"))
+        return [sudo, "--"]

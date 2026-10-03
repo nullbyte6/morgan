@@ -21,12 +21,14 @@
 import subprocess
 
 from ..base import Platform
-from . import apps, folders, media, notifications, system, windows
+from . import apps, environment, folders, media, notifications, system, windows
 
 
 class WinX64Platform(Platform):
     name = "winx64"
     no_window_flags = subprocess.CREATE_NO_WINDOW
+    persistent_environment = True
+    elevation_captures_output = True
 
     list_windows = staticmethod(windows.get_open_windows)
     launch_application = staticmethod(windows.launch_application)
@@ -51,3 +53,11 @@ class WinX64Platform(Platform):
     control_media = staticmethod(media.control_media)
     seek_media = staticmethod(media.seek_media)
     record_output_audio = staticmethod(media.record_output_audio)
+    user_environment = staticmethod(environment.user_environment)
+    set_user_environment = staticmethod(environment.set_user_environment)
+    lock_file = staticmethod(environment.lock_file)
+    unlock_file = staticmethod(environment.unlock_file)
+    remove_link = staticmethod(environment.remove_link)
+    is_elevated = staticmethod(environment.is_elevated)
+    default_shell = staticmethod(environment.default_shell)
+    elevation_prefix = staticmethod(environment.elevation_prefix)

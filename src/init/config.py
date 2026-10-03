@@ -32,6 +32,7 @@ from copy import deepcopy
 from enum import StrEnum
 from pathlib import Path
 from src.init.attachments import DEFAULT_LIMITS
+from src.platforms import current_platform
 
 DEV_FILE = Path(__file__).resolve().parents[2] / "dev" / "core.json"
 LEGACY_CONFIG = Path(__file__).resolve().parents[2] / "config.json"
@@ -171,13 +172,8 @@ def _storage_identifier(name: str) -> str:
 def _located_name() -> str:
     """Name that locates the storage folder before its config.json can be read."""
     name = os.environ.get(LOCATOR, "").strip()
-    if not name and os.name == "nt":
-        import winreg
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-                name = str(winreg.QueryValueEx(key, LOCATOR)[0]).strip()
-        except OSError:
-            name = ""
+    if not name:
+        name = (current_platform().user_environment(LOCATOR) or "").strip()
     if not name or len(name) > 80 or not _storage_identifier(name):
         return DEFAULTS["assistant"]["name"]
     return name
@@ -185,10 +181,7 @@ def _located_name() -> str:
 
 def _persist_locator(name: str) -> None:
     os.environ[LOCATOR] = name
-    if os.name == "nt":
-        import winreg
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-            winreg.SetValueEx(key, LOCATOR, 0, winreg.REG_SZ, name)
+    current_platform().set_user_environment(LOCATOR, name)
 
 
 HOME_PATH = Path.home() / ("." + _storage_identifier(_located_name()))
@@ -436,13 +429,6 @@ def _is_link(path: Path) -> bool:
     return path.is_symlink() or getattr(os.path, "isjunction", lambda _: False)(path)
 
 
-def _remove_link(path: Path) -> None:
-    if os.name == "nt":
-        os.rmdir(path)
-    else:
-        path.unlink()
-
-
 def _migrate_storage() -> Path:
     """Keep the storage folder named after the configured assistant."""
     home = Path.home()
@@ -460,7 +446,7 @@ def _migrate_storage() -> Path:
             name = validate_config(json.loads(config_file.read_text(encoding="utf-8-sig")))["assistant"]["name"]
         desired = home / ("." + _storage_identifier(name))
         if os.path.normcase(str(current)) != os.path.normcase(str(desired)):
-            if os.name != "nt":
+            if not current_platform().persistent_environment:
                 return current
             if current.parent != home.resolve() or desired.parent.resolve() != home.resolve():
                 raise OSError("Assistant storage migration must remain inside the user home directory")
@@ -475,8 +461,7 @@ def _migrate_storage() -> Path:
                 for path in (current / "voice").glob("*.lock"):
                     file = path.open("r+b")
                     locks.append(file)
-                    import msvcrt
-                    msvcrt.locking(file.fileno(), msvcrt.LK_NBLCK, 1)
+                    current_platform().lock_file(file, blocking=False)
             finally:
                 for file in locks:
                     file.close()
@@ -491,7 +476,7 @@ def _migrate_storage() -> Path:
             _persist_locator(name)
         if _is_link(legacy) and os.path.normcase(str(legacy)) != os.path.normcase(str(current)):
             try:
-                _remove_link(legacy)
+                current_platform().remove_link(legacy)
             except OSError:
                 pass
         return current
@@ -509,20 +494,13 @@ def initialize_storage() -> Path:
             lock.write(b"\0")
             lock.flush()
         lock.seek(0)
-        if os.name == "nt":
-            import msvcrt
-            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
-        else:
-            import fcntl
-            fcntl.flock(lock, fcntl.LOCK_EX)
+        platform = current_platform()
+        platform.lock_file(lock)
         try:
             return _migrate_storage()
         finally:
             lock.seek(0)
-            if os.name == "nt":
-                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                fcntl.flock(lock, fcntl.LOCK_UN)
+            platform.unlock_file(lock)
 
 
 HOME_PATH = initialize_storage()

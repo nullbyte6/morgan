@@ -20,14 +20,12 @@
 
 import base64
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
 
 from .identity import get_assistant
 
-import ctypes
 from collections.abc import Callable
 from contextvars import ContextVar
 from .lang import tr
@@ -51,13 +49,7 @@ def set_confirmation_handler(handler: Callable[[str], bool] | None) -> None:
 
 
 def is_elevated() -> bool:
-    if os.name != "nt":
-        return hasattr(os, "geteuid") and os.geteuid() == 0
-
-    try:
-        return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except (AttributeError, OSError):
-        return False
+    return current_platform().is_elevated()
 
 
 
@@ -96,18 +88,6 @@ def _shell_command(command: str, shell: str) -> list[str]:
     return [executable, "-c", command]
 
 
-def _windows_elevated(argv: list[str], cwd: str) -> subprocess.CompletedProcess:
-    """Use Windows sudo in the user's configured mode, without a fallback."""
-    sudo = shutil.which("sudo.exe")
-    if not sudo:
-        raise ValueError(tr("command.sudo_unavailable"))
-    return subprocess.run(
-        [sudo, "--chdir", cwd, "--", *argv], cwd=cwd,
-        stdin=subprocess.DEVNULL, capture_output=True, text=True,
-        errors="replace",
-    )
-
-
 def execute_command(command: str, working_directory: str = ".",
                     shell: str = "auto", elevated: bool = False,
                     timeout_seconds: int = 120) -> str:
@@ -137,10 +117,7 @@ def execute_command(command: str, working_directory: str = ".",
 
         shell = shell.strip().casefold().removesuffix(".exe")
         if shell == "auto":
-            if os.name == "nt":
-                shell = "pwsh" if shutil.which("pwsh") else "powershell"
-            else:
-                shell = "sh"
+            shell = current_platform().default_shell()
 
         if shell not in {"powershell", "pwsh", "cmd", "sh", "bash"}:
             raise ValueError(tr("command.unsupported_shell"))
@@ -159,25 +136,20 @@ def execute_command(command: str, working_directory: str = ".",
         if elevated and not is_elevated():
             if not _confirm(tr("command.elevated")):
                 return result("denied")
+            prefix = current_platform().elevation_prefix(cwd)
             if _terminal_executor is not None:
-                sudo = shutil.which("sudo.exe" if os.name == "nt" else "sudo")
-                if not sudo:
-                    raise ValueError(tr("command.sudo_unavailable" if os.name == "nt"
-                                        else "command.sudo_missing"))
-                prefix = [sudo, "--chdir", cwd, "--"] if os.name == "nt" else [sudo, "--"]
                 return result(**_terminal_executor(prefix + argv, cwd, command, None))
-            if os.name == "nt":
-                completed = _windows_elevated(argv, cwd)
+            if current_platform().elevation_captures_output:
+                completed = subprocess.run(
+                    prefix + argv, cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True,
+                    text=True, errors="replace")
                 return result("completed" if completed.returncode == 0 else "failed",
                               exit_code=completed.returncode,
                               stdout=completed.stdout[-32000:], stderr=completed.stderr[-32000:],
                               output_truncated=max(len(completed.stdout), len(completed.stderr)) > 32000,
                               output_may_be_in_separate_window=True,
                               note=tr("command.sudo_note"))
-            sudo = shutil.which("sudo")
-            if not sudo:
-                raise ValueError(tr("command.sudo_missing"))
-            completed = subprocess.run([sudo, "--", *argv], cwd=cwd)
+            completed = subprocess.run(prefix + argv, cwd=cwd)
             return result("completed" if completed.returncode == 0 else "failed",
                           exit_code=completed.returncode, output_captured=False)
         if _terminal_executor is not None:

@@ -29,6 +29,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from .config import HOME_PATH
 from .identity import get_assistant_identifier
+from src.platforms import current_platform
 
 
 WAKE_RECORD_REQUEST = f"{get_assistant_identifier()}://voice/start-recording"
@@ -57,12 +58,7 @@ class ProcessLock:
                 file.write(b"\0")
                 file.flush()
             file.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(file.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            current_platform().lock_file(file, blocking=False)
         except OSError:
             file.close()
             return False
