@@ -31,11 +31,17 @@ from getpass import getuser
 
 from pydantic_ai import Agent, Tool
 
+from src.init import latency
 from src.init.config import load_config
 from src.init.console import DebugConsole
 from src.init.identity import get_assistant_name
 from src.init.voice_client import VoiceClient
 from src.platforms import current_platform
+
+VOICE_STREAMING = os.environ.get("ARLO_VOICE_STREAMING", "1") != "0"
+DIRECT_STREAM_CHARACTERS = 900
+DIRECT_STREAM_LINES = 18
+
 
 def _tool_payload(value, tool_names):
     try:
@@ -869,6 +875,7 @@ class Assistant:
                 if not resumed.get("accepted"):
                     raise ValueError(resumed["reason"])
             from pydantic_ai.messages import (FunctionToolCallEvent, FunctionToolResultEvent,
+                                              PartDeltaEvent, PartStartEvent, TextPartDelta,
                                               ToolCallPart, ToolReturnPart)
             from src.init.tools import TOOLS
             tool_names = {tool.__name__ for tool in TOOLS} | controller.control_tools.keys()
@@ -885,10 +892,79 @@ class Assistant:
                 if on_chunk is not None:
                     on_chunk(chunk)
 
-            delivery = ResponseDelivery(emit_visible, self.voice.enqueue,
-                                        speech_enabled=speech_enabled, on_surface=on_surface)
+            def speak_phrase(phrase):
+                latency.mark("first_tts_phrase")
+                self.voice.enqueue(phrase)
 
-            def deliver_output(output, *, streamed=""):
+            delivery = ResponseDelivery(emit_visible, speak_phrase,
+                                        speech_enabled=speech_enabled, on_surface=on_surface)
+            direct_stream = None
+            direct_text = ""
+            direct_cut = False
+            direct_failed = not VOICE_STREAMING
+            streamed_total = []
+
+            def direct_open():
+                visible = "".join(streamed_total)
+                return (not direct_failed and not cancel_event.is_set()
+                        and controller.controller is None and controller.final_output is None
+                        and not searches and controller.output_surface in {"auto", "chat"}
+                        and len(visible) < DIRECT_STREAM_CHARACTERS
+                        and visible.count("\n") < DIRECT_STREAM_LINES
+                        and "```" not in visible)
+
+            def emit_direct(chunk):
+                nonlocal direct_text
+                if not direct_text and reply:
+                    delivery.emit("\n\n")
+                direct_text += chunk
+                streamed_total.append(chunk)
+                delivery.emit(chunk)
+
+            def feed_direct(chunk):
+                nonlocal direct_stream, direct_cut, direct_failed
+                if direct_failed or direct_cut:
+                    return
+                try:
+                    if direct_stream is None:
+                        if not direct_open():
+                            return
+                        latency.mark("first_token")
+                        delivery.speech_enabled = delivery.speech_enabled and claim_speech()
+                        direct_stream = AssistantTextStream(tool_names, emit_direct)
+                    elif not direct_open():
+                        direct_cut = True
+                        return
+                    direct_stream.feed(chunk)
+                except Exception:
+                    direct_failed = True
+                    logging.getLogger("assistant.voice").exception(
+                        "Streaming delivery failed; falling back to complete responses")
+
+            def finish_direct():
+                nonlocal direct_stream, direct_text, direct_cut, direct_failed
+                stream, cut = direct_stream, direct_cut
+                direct_stream, direct_cut = None, False
+                try:
+                    if stream is not None and not cut and not direct_failed:
+                        stream.finish()
+                    if direct_text:
+                        delivery.flush_speech(cancel_event)
+                except Exception:
+                    direct_failed = True
+                    logging.getLogger("assistant.voice").exception(
+                        "Streaming delivery failed; falling back to complete responses")
+                streamed, direct_text = direct_text, ""
+                return streamed
+
+            def deliver_output(output, *, streamed=None):
+                if streamed is None:
+                    streamed = finish_direct()
+                if not output.startswith(streamed):
+                    streamed = ""
+                if reply and not streamed:
+                    delivery.emit("\n\n")
+                latency.mark("first_token")
                 delivery.speech_enabled = delivery.speech_enabled and claim_speech()
                 delivery.deliver(output, streamed=streamed,
                                  surface=controller.output_surface, title=controller.output_title,
@@ -946,7 +1022,12 @@ class Assistant:
                 async for event in events:
                     if cancel_event.is_set():
                         return
+                    if isinstance(event, PartStartEvent) and isinstance(event.part, TextPart):
+                        feed_direct(event.part.content)
+                    elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, TextPartDelta):
+                        feed_direct(event.delta.content_delta)
                     if isinstance(event, FunctionToolCallEvent):
+                        finish_direct()
                         tool_arguments[event.part.tool_call_id] = event.part.args
                         logging.getLogger("assistant.tools").info(
                             "Executing %s (%s)", event.part.tool_name, event.part.tool_call_id)
@@ -995,6 +1076,7 @@ class Assistant:
                     current_prompt = None
                     continue
                 except TaskOutputReady as ready:
+                    finish_direct()
                     stream_messages = list(controller.messages)
                     if controller.accept_output():
                         output = str(ready)
@@ -1005,6 +1087,7 @@ class Assistant:
                     current_prompt = None
                     continue
                 except TaskStopped:
+                    finish_direct()
                     stream_messages = list(controller.messages)
                     notice = controller.state.notice if controller.state is not None else controller.notice
                     if on_phase is not None and controller.state is not None:
@@ -1015,6 +1098,7 @@ class Assistant:
                                              ModelResponse(parts=[TextPart(notice)])]
                     break
 
+                streamed_output = finish_direct()
                 output = (
                     result.output
                     if isinstance(result.output, str)
@@ -1041,7 +1125,7 @@ class Assistant:
                 stream_messages = conversation_messages
                 if text_call is None:
                     if controller.accept_output(truncated=result.response.finish_reason == "length", output=visible_output):
-                        deliver_output(visible_output)
+                        deliver_output(visible_output, streamed=streamed_output)
                         break
                     current_prompt = None
                     continue

@@ -37,6 +37,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update media session reading and playback control, the now-playing song reader and system audio capture for song recognition to go through the platform layer
 - Update process termination, shutdown scheduling, installed application discovery, file opening and Recycle Bin emptying to go through the platform layer, so the core no longer requires winshell or winreg to import
 - Update requirements.txt to keep only cross-platform dependencies and include the winx64 package's own requirements, so Windows-only libraries such as pywin32, winshell, winrt, pywinpty, DirectML and MKL install only on Windows
+- Update responses to stream the model's text to the chat and to speech as it is generated, splitting the first spoken phrase at the first comma or sentence end, and falling back to complete responses if streaming fails or ARLO_VOICE_STREAMING is 0
 - Update service startup, Ollama restarts, the updater and the voice service's priority and memory trimming to get the services script, installer, install location and process flags from the platform layer
 - Update system diagnostics to run their PowerShell telemetry through the platform layer, keeping the allowed sources, result parsing and scoring in the core
 - Update the built-in terminal, the TUI shell and the TUI file picker to get the pseudo-terminal, command injection, console encoding and drive list from the platform layer, moving the Windows Ctrl+C bootstrap and console input into winx64

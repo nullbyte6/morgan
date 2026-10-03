@@ -191,25 +191,27 @@ class MarkdownSpeechFilter:
         return ". ".join(cells) + ".\n" if cells else ""
 
 class SpeechBuffer:
-    def __init__(self, *, low_latency=False):
+    def __init__(self, *, low_latency=False, fast_first=False):
         self.buffer = ""
         self.first = True
         self.markdown = MarkdownSpeechFilter()
         self.low_latency = low_latency
+        self.fast_first = fast_first
 
     def feed(self, text):
         self.buffer += self.markdown.feed(text)
         phrases = []
         while self.buffer:
+            fast = self.low_latency or (self.fast_first and self.first)
             pattern = (r'(?<=[.!?])["»”’]?\s+' if self.first
                        else r'(?<=[.!?;:])["»”’]?\s+')
-            minimum = 8 if self.low_latency else 20
-            if self.low_latency:
+            minimum = (12 if self.fast_first and not self.low_latency else 8) if fast else 20
+            if fast:
                 pattern = r'(?<=[.!?;:,])["»”’]?\s+|\n+'
             match = next((m for m in re.finditer(pattern, self.buffer)
                           if m.end() >= minimum), None)
             end = match.end() if match else -1
-            if end <= 0 and self.low_latency and len(self.buffer) >= 160:
+            if end <= 0 and fast and len(self.buffer) >= 160:
                 end = self.buffer.rfind(" ", 80, 160)
             if end <= 0:
                 break
@@ -242,7 +244,7 @@ class ResponseDelivery:
         self.enqueue_speech = enqueue_speech
         self.speech_enabled = speech_enabled
         self.on_surface = on_surface
-        self.buffer = SpeechBuffer()
+        self.buffer = SpeechBuffer(fast_first=True)
         self.delivered_output = None
 
     def emit(self, chunk):
