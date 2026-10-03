@@ -99,7 +99,7 @@ from src.init.config import DEFAULTS, load_dev_file, load_config, save_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
 from src.init.settings import SettingsView
-from src.init.theme import on_theme_changed
+from src.init.theme import current_theme, on_theme_changed
 
 from src.init.voice_ipc import (
     WAKE_RECORD_REQUEST,
@@ -140,6 +140,32 @@ HEALTH_CHECK_DELAY_MS = 45_000
 SONG_PANEL_WIDTH = 440
 
 # noinspection PyBroadException
+def waveform_icon(size: int = 28) -> QIcon:
+    theme = current_theme()
+    icon = QIcon()
+    for mode, role in ((QIcon.Normal, "on_accent"), (QIcon.Disabled, "text")):
+        ratio = 2
+        pixmap = QPixmap(size * ratio, size * ratio)
+        pixmap.setDevicePixelRatio(ratio)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(theme.color(role))
+        heights = (0.38, 0.80, 0.52, 0.92, 0.28, 0.60)
+        bar = size * 0.09
+        gap = size * 0.08
+        left = (size - (len(heights) * bar + (len(heights) - 1) * gap)) / 2
+        for index, height in enumerate(heights):
+            bar_height = size * height
+            painter.drawRoundedRect(
+                QRectF(left + index * (bar + gap), (size - bar_height) / 2, bar, bar_height),
+                bar / 2, bar / 2)
+        painter.end()
+        icon.addPixmap(pixmap, mode)
+    return icon
+
+
 class AssistantWindow(DesktopWindow):
     """Assistant window class, not its brain, which is somewhere else"""
     MAX_SESSIONS = 2
@@ -765,6 +791,7 @@ class AssistantWindow(DesktopWindow):
     def apply_theme(self, theme):
         self.load_stylesheet()
         self.apply_frame_theme(theme)
+        self.update_send_button()
 
     def _orbs(self, session=None):
         session = session or self.session
@@ -1366,13 +1393,18 @@ class AssistantWindow(DesktopWindow):
         live_active = voice_active and self.voice_thread.live
         stopping_available = session.busy and session.speaking and not session.stopping
         ui.send.setText("" if stopping_available or recording or live_active else
-                          "" if has_text else "")
+                          "" if has_text else "")
         mic = not (stopping_available or recording or live_active
                    or has_text)
         if ui.send.property("mic") != mic:
             ui.send.setProperty("mic", mic)
             ui.send.style().unpolish(ui.send)
             ui.send.style().polish(ui.send)
+        if mic:
+            ui.send.setIcon(waveform_icon())
+            ui.send.setIconSize(QSize(28, 28))
+        else:
+            ui.send.setIcon(QIcon())
 
         ui.send.setEnabled(
             session.ready and (live_active or recording or stopping_available or (
