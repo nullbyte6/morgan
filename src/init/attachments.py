@@ -30,7 +30,7 @@ import stat
 import threading
 import urllib.request
 from contextvars import ContextVar
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -98,6 +98,7 @@ class DesktopVoiceMessage:
     audio_wav: bytes
     transcript: str = ""
     live: bool = False
+    partial: object = field(default=None, compare=False, repr=False)
 
     @property
     def text(self):

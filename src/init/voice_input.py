@@ -37,6 +37,7 @@ class VoiceInputRunner:
         self.automatic = automatic
         self.live = live
         self.capture = None
+        self.partial = None
         self.waiting_response = threading.Event()
         self.stop_event = threading.Event()
         self.audio_wav = b""
@@ -71,7 +72,9 @@ class VoiceInputRunner:
 
     def run_live(self):
         import sounddevice as sound
-        from src.init.voice import LiveVoiceCapture, recording_to_wav
+        from src.init import latency
+        from src.init.voice import (LiveVoiceCapture, PartialTranscript,
+                                    recording_to_wav)
 
         device = sound.query_devices(kind="input")
         sample_rate = int(device.get("default_samplerate") or 16000)
@@ -93,11 +96,19 @@ class VoiceInputRunner:
                     return
                 if self.capture.event == "started":
                     self.speech_started.emit()
+                elif self.capture.event == "pause":
+                    self.partial = PartialTranscript(
+                        self.capture.snapshot(), sample_rate)
+                elif self.capture.event == "resumed":
+                    self.partial = None
                 if recording is not None:
+                    partial, self.partial = self.partial, None
+                    latency.begin()
                     self.waiting_response.set()
                     self.processing.emit()
                     self.utterance.emit(DesktopVoiceMessage(
-                        recording_to_wav(recording, sample_rate), live=True))
+                        recording_to_wav(recording, sample_rate), live=True,
+                        partial=partial))
 
     def playback(self, samples, sample_rate):
         capture = self.capture

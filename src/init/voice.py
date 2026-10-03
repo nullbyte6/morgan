@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 import io
 import json
+import logging
 import os
 import sys
 import threading
@@ -38,11 +39,14 @@ VOICE_END_SILENCE_SECONDS = 1.8
 VOICE_SILENCE_THRESHOLD = 400
 PLAYBACK_SILENCE_THRESHOLD = 1200
 ECHO_TAIL_SECONDS = 1.5
+PARTIAL_SILENCE_SECONDS = 0.5
 _VOICE_MODEL = None
+_VOICE_MODEL_LOCK = threading.Lock()
 
 
 class LiveVoiceCapture:
-    def __init__(self, sample_rate, *, silence_seconds=1.8, idle_seconds=30):
+    def __init__(self, sample_rate, *, silence_seconds=1.8, idle_seconds=30,
+                 partial_seconds=PARTIAL_SILENCE_SECONDS):
         import numpy as np
         from scipy.signal import correlate, resample_poly
 
@@ -51,6 +55,8 @@ class LiveVoiceCapture:
         self.sample_rate = sample_rate
         self.silence_seconds = silence_seconds
         self.idle_seconds = idle_seconds
+        self.partial_seconds = partial_seconds
+        self.paused = False
         self.reference = np.empty(0, dtype=np.float32)
         self.reference_time = 0.0
         self.reference_lock = threading.Lock()
@@ -102,6 +108,9 @@ class LiveVoiceCapture:
         gain = np.clip(np.dot(samples, echo) / max(np.dot(echo, echo), 1e-9), -3, 3)
         return samples - gain * echo, recent
 
+    def snapshot(self):
+        return b"".join(self.frames)
+
     def feed(self, pcm_data):
         import numpy as np
 
@@ -127,11 +136,20 @@ class LiveVoiceCapture:
         if not self.started and self.speech_seconds >= (0.6 if playback else 0.15):
             self.started = True
             self.event = "started"
+        if self.started and self.event is None:
+            if speech and self.paused:
+                self.paused = False
+                self.event = "resumed"
+            elif (not speech and not self.paused
+                    and self.silent_seconds >= self.partial_seconds):
+                self.paused = True
+                self.event = "pause"
         if (self.silent_seconds >= self.silence_seconds or
                 sum(map(len, self.frames)) >= self.sample_rate * 2 * VOICE_MAX_SECONDS):
             recording = b"".join(self.frames) if self.started else None
             self.frames.clear()
             self.started = False
+            self.paused = False
             self.speech_seconds = self.silent_seconds = self.idle = 0.0
             if recording is not None:
                 self.event = "utterance"
@@ -216,16 +234,17 @@ def record_voice(*, on_audio=None, stop_event=None,
 def get_voice_model():
     """Load the local multilingual speech model once, on first voice command."""
     global _VOICE_MODEL
-    if _VOICE_MODEL is None:
-        try:
-            from faster_whisper import WhisperModel
-        except ImportError as error:
-            raise RuntimeError(
-                tr("voice.recognition_missing")
-            ) from error
-        _VOICE_MODEL = WhisperModel(
-            VOICE_MODEL_NAME, device="cpu", compute_type="int8")
-    return _VOICE_MODEL
+    with _VOICE_MODEL_LOCK:
+        if _VOICE_MODEL is None:
+            try:
+                from faster_whisper import WhisperModel
+            except ImportError as error:
+                raise RuntimeError(
+                    tr("voice.recognition_missing")
+                ) from error
+            _VOICE_MODEL = WhisperModel(
+                VOICE_MODEL_NAME, device="cpu", compute_type="int8")
+        return _VOICE_MODEL
 
 
 def transcribe_voice(pcm_data: bytes, sample_rate: int, *, model=None,
@@ -275,3 +294,37 @@ def recording_to_wav(pcm_data: bytes, sample_rate: int) -> bytes:
         wav_file.writeframes((samples * 32767).astype("<i2").tobytes())
 
     return wav_buffer.getvalue()
+
+
+class PartialTranscript:
+    """Transcribes the speech heard so far in the background while the user pauses."""
+
+    def __init__(self, pcm_data: bytes, sample_rate: int):
+        self.text = ""
+        self.done = threading.Event()
+        self.started = time.monotonic()
+        threading.Thread(target=self._run, args=(pcm_data, sample_rate),
+                         name="assistant-voice-partial", daemon=True).start()
+
+    def _run(self, pcm_data, sample_rate):
+        log = logging.getLogger("assistant.latency")
+        try:
+            with wave.open(io.BytesIO(recording_to_wav(pcm_data, sample_rate)),
+                           "rb") as wav:
+                text, _ = transcribe_voice(
+                    wav.readframes(wav.getnframes()), wav.getframerate(),
+                    beam_size=1, vad_filter=False)
+            self.text = text.strip()
+            log.info("Voice latency: partial transcript ready %d ms after the pause began",
+                     (time.monotonic() - self.started) * 1000)
+        except Exception:
+            logging.getLogger("assistant.voice").exception(
+                "Partial transcription failed")
+        finally:
+            self.done.set()
+
+    def wait(self, cancel_event=None) -> str:
+        while not self.done.wait(0.05):
+            if cancel_event is not None and cancel_event.is_set():
+                return ""
+        return self.text

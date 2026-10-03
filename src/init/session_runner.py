@@ -34,6 +34,7 @@ from src.init.commands import set_confirmation_handler
 from src.init.config import PermissionMode, load_config
 from src.init.core import Assistant
 from src.init.events import Event
+from src.init import latency
 from src.init.file_tags import expand_file_tags
 from src.init.lang import tr
 from src.init.session_log import SessionLog, is_local_command
@@ -183,6 +184,8 @@ class SessionRunner:
             return
         self.accepted.emit(turn_id)
         prompt = message.transcript.strip() if voice_input else message.text
+        if not voice_input:
+            latency.discard()
         try:
             self.session.context.task_state = None
             cancel_event = self.cancel_event
@@ -194,6 +197,9 @@ class SessionRunner:
             if cancel_event.is_set():
                 self.finished.emit("")
                 return
+            partial = getattr(message, "partial", None) if voice_input else None
+            if partial is not None and not prompt:
+                prompt = partial.wait(cancel_event)
             if voice_input and not prompt:
                 try:
                     from src.init.voice import transcribe_voice
@@ -215,6 +221,7 @@ class SessionRunner:
                     return
                 if not prompt:
                     raise RuntimeError(tr("voice.not_transcribed"))
+                latency.mark("transcript_ready")
                 message = replace(message, transcript=prompt)
             local_command = (not voice_input and not message.attachments
                              and is_local_command(prompt))
@@ -245,6 +252,8 @@ class SessionRunner:
                 return self.show_response_surface(title)
 
             def speaking_changed(speaking):
+                if speaking:
+                    latency.mark("first_audio")
                 if speaking and audio_lease is not None:
                     audio_lease.yield_to_wake_listener()
                 self.speaking.emit(turn_id, speaking)

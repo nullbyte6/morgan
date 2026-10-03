@@ -145,6 +145,9 @@ class SpeechBatch:
         self.played = False
         self.subtitle = ""
         self.error = None
+        self.first_enqueue = None
+        self.chunk_logged = False
+        self.audio_logged = False
 
 
 class VoiceService:
@@ -226,6 +229,8 @@ class VoiceService:
                 self._batch = SpeechBatch(turn_id, language_context)
 
             batch = self._batch
+            if batch.first_enqueue is None:
+                batch.first_enqueue = time.monotonic()
             batch.numbers.observe(subtitle)
             text = prepare_speech(subtitle, load_config().get("pronunciations", {}),
                                   batch.numbers.code)
@@ -369,6 +374,11 @@ class VoiceService:
                                 batch.pending += 1
                                 self._buffered_samples += len(samples)
                                 sample_offset += len(samples)
+                                if not batch.chunk_logged:
+                                    batch.chunk_logged = True
+                                    logger.info(
+                                        "Voice latency: first TTS audio chunk %d ms after the first phrase arrived",
+                                        (time.monotonic() - batch.first_enqueue) * 1000)
                                 break
                         batch.cancelled.wait(0.05)
             except Exception as error:
@@ -442,6 +452,11 @@ class VoiceService:
                         self._set_subtitle(
                             batch, timeline.text_at(sample_offset + start))
                     frame = samples[start:start + frame_size]
+                    if not batch.audio_logged:
+                        batch.audio_logged = True
+                        logger.info(
+                            "Voice latency: first audio frame played %d ms after the first phrase arrived",
+                            (time.monotonic() - batch.first_enqueue) * 1000)
                     stream.write(frame)
                     if not batch.cancelled.is_set() and self.audio_callback is not None:
                         self.audio_callback(frame, self.sample_rate, batch.turn_id)
