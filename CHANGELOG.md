@@ -43,6 +43,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update the startup greeting, the week summary and the song summary to take the language name from one shared table, so they write in every interface language instead of falling back to English
 - Update the terminal version's Nova day and month names, which were hardcoded for English, Spanish and Chinese, to cover every interface language, and the Nova calendar month titles to use the standalone month name that Russian requires
 - Update the storage folder locator, file locks and elevated commands to get registry variables, msvcrt locks, administrator checks, the default shell and sudo from the platform layer
+- Update the voice service to run a silent warm-up sentence when it starts, so the first spoken reply takes about 6 seconds instead of about 24
 
 ## 26.10.2-beta (2026-10-02)
 

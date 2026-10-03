@@ -52,6 +52,7 @@ logger = logging.getLogger(f"{get_assistant_identifier()}.tts")
 
 RESUME_LEAD_SECONDS = 1.5
 RESUME_MAX_WAIT_SECONDS = 2.5
+WARMUP_TEXT = "Hello, I am ready to help you with whatever you need today."
 
 
 def _raise_priority(*, process: bool) -> None:
@@ -176,6 +177,7 @@ class VoiceService:
         self._reference_key = None
         self._instruction_key = None
         self._select_reference(self.voice_reference)
+        self._warm_up()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
@@ -195,6 +197,17 @@ class VoiceService:
         self._tts_worker.start()
         self._player_worker = threading.Thread(target=self._play_loop, daemon=True)
         self._player_worker.start()
+
+    def _warm_up(self) -> None:
+        """Synthesize one silent sentence so the first spoken reply does not pay for the cold start."""
+        started = time.monotonic()
+        try:
+            for _ in self._synthesize(WARMUP_TEXT):
+                pass
+        except Exception:
+            logger.exception("Voice warm-up failed")
+            return
+        logger.info("Voice warm-up finished in %.1f s", time.monotonic() - started)
 
     def enqueue(self, text: str, turn_id=None, voice_reference=None,
                 language_context="") -> None:
