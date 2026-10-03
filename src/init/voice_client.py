@@ -41,6 +41,7 @@ class VoiceClient:
         self.subtitle_callback = None
         self._playback_lock = threading.RLock()
         self._muted = False
+        self._stopped = False
         self._turn_id = uuid.uuid4().hex
         self._language_context = ""
         self.supports_interruptions = False
@@ -186,6 +187,7 @@ class VoiceClient:
         if self._closed:
             raise RuntimeError(tr("voice.disconnected"))
         self._turn_id = uuid.uuid4().hex
+        self._stopped = False
         self._error = None
         self._last_progress = time.monotonic()
         self._done.set()
@@ -201,6 +203,7 @@ class VoiceClient:
             return
         turn_id = self._turn_id
         self._turn_id = uuid.uuid4().hex
+        self._stopped = True
         self._done.set()
         if not self._closed:
             self._send({"type": "stop", "turn_id": turn_id})
@@ -214,7 +217,7 @@ class VoiceClient:
             self._enqueue(text)
 
     def _enqueue(self, text: str) -> None:
-        if not text or not text.strip():
+        if not text or not text.strip() or self._stopped:
             return
 
         if self._error is not None:
