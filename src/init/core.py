@@ -243,12 +243,12 @@ class Assistant:
             if ollama_ready() and server_context_length() != configured:
                 restart_ollama(configured)
 
+        try:
+            align_ollama_context()
+        except Exception:
+            logging.getLogger("assistant.services").exception(
+                "Ollama could not be restarted with the configured context length")
         if services_ready():
-            try:
-                align_ollama_context()
-            except Exception:
-                logging.getLogger("assistant.services").exception(
-                    "Ollama could not be restarted with the configured context length")
             return
         directories = [PROJECT_ROOT / "scripts"]
         if getattr(sys, "frozen", False):
