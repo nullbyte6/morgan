@@ -41,6 +41,7 @@ from src.init.lang import tr
 from .config import load_config
 from .speech_text import SpeechNumbers, prepare_speech
 from .subtitle_timing import StreamingWordTimeline
+from .voice_naturalness import Naturalizer
 from .voice_profiles import selected_voice, resolve_voice
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -145,6 +146,9 @@ class SpeechBatch:
         self.played = False
         self.subtitle = ""
         self.error = None
+        self.naturalizer = Naturalizer()
+        self.last_timeline = None
+        self.last_total = 0
         self.first_enqueue = None
         self.chunk_logged = False
         self.audio_logged = False
@@ -213,7 +217,7 @@ class VoiceService:
         logger.info("Voice warm-up finished in %.1f s", time.monotonic() - started)
 
     def enqueue(self, text: str, turn_id=None, voice_reference=None,
-                language_context="") -> None:
+                language_context="", verbatim=False) -> None:
         subtitle = _clean_for_speech(text)
         if not any(char.isalnum() for char in subtitle):
             return
@@ -237,7 +241,7 @@ class VoiceService:
             text = batch.numbers.normalize(text)
             batch.pending += 1
             batch.done.clear()
-            self._text_queue.put((batch, text, subtitle, reference))
+            self._text_queue.put((batch, text, subtitle, reference, bool(verbatim)))
 
     def _select_reference(self, reference):
         """Only the synthesis worker replaces speaker conditioning after startup."""
@@ -334,7 +338,7 @@ class VoiceService:
         idle_trimmed = False
         while True:
             try:
-                batch, text, subtitle, reference = self._text_queue.get(timeout=15)
+                batch, text, subtitle, reference, verbatim = self._text_queue.get(timeout=15)
             except queue.Empty:
                 with self._state_lock:
                     if (not idle_trimmed and self._batch.pending == 0
@@ -351,6 +355,12 @@ class VoiceService:
                 if batch.cancelled.is_set():
                     continue
                 self._select_reference(reference)
+                pause, text = batch.naturalizer.plan(
+                    text, verbatim, batch.numbers.code, idle=self._audio_queue.empty())
+                if pause > 0 and batch.last_timeline is not None:
+                    self._queue_audio(batch, np.zeros(int(self.sample_rate * pause),
+                                                      dtype=np.float32),
+                                      batch.last_timeline, batch.last_total)
                 generator = self._synthesize(text, batch.numbers.language)
                 for chunk in generator:
                     if batch.cancelled.is_set():
@@ -361,31 +371,19 @@ class VoiceService:
                     samples = np.asarray(audio, dtype=np.float32).reshape(-1)
                     if not samples.size:
                         continue
-                    while not batch.cancelled.is_set():
-                        with self._state_lock:
-                            if batch.cancelled.is_set():
-                                break
-                            try:
-                                self._audio_queue.put_nowait(
-                                    (batch, samples, timeline, sample_offset))
-                            except queue.Full:
-                                pass
-                            else:
-                                batch.pending += 1
-                                self._buffered_samples += len(samples)
-                                sample_offset += len(samples)
-                                if not batch.chunk_logged:
-                                    batch.chunk_logged = True
-                                    logger.info(
-                                        "Voice latency: first TTS audio chunk %d ms after the first phrase arrived",
-                                        (time.monotonic() - batch.first_enqueue) * 1000)
-                                break
-                        batch.cancelled.wait(0.05)
+                    if self._queue_audio(batch, samples, timeline, sample_offset):
+                        sample_offset += len(samples)
+                        if not batch.chunk_logged:
+                            batch.chunk_logged = True
+                            logger.info(
+                                "Voice latency: first TTS audio chunk %d ms after the first phrase arrived",
+                                (time.monotonic() - batch.first_enqueue) * 1000)
             except Exception as error:
                 batch.error = error
                 logger.exception(tr('voice_service.tts_inference_failed'))
             finally:
                 timeline.finalize(sample_offset)
+                batch.last_timeline, batch.last_total = timeline, sample_offset
                 try:
                     if generator is not None:
                         generator.close()
@@ -398,6 +396,23 @@ class VoiceService:
                     self._text_queue.task_done()
                     self._complete(batch)
                     generator = chunk = audio = samples = timeline = None
+
+    def _queue_audio(self, batch, samples, timeline, sample_offset) -> bool:
+        while not batch.cancelled.is_set():
+            with self._state_lock:
+                if batch.cancelled.is_set():
+                    return False
+                try:
+                    self._audio_queue.put_nowait(
+                        (batch, samples, timeline, sample_offset))
+                except queue.Full:
+                    pass
+                else:
+                    batch.pending += 1
+                    self._buffered_samples += len(samples)
+                    return True
+            batch.cancelled.wait(0.05)
+        return False
 
     def _release_idle_memory(self):
         try:

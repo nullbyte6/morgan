@@ -190,16 +190,98 @@ class MarkdownSpeechFilter:
 
         return ". ".join(cells) + ".\n" if cells else ""
 
+class Phrase(str):
+    """A phrase for speech, marked when it is read verbatim rather than spoken."""
+    verbatim = False
+
+
+class VerbatimTracker:
+    """Follow quotations, blockquotes and code in streamed text."""
+
+    OPENING = "“«"
+    CLOSING = "”»"
+
+    def __init__(self):
+        self.fence = False
+        self.inline = False
+        self.blockquote = False
+        self.quote = False
+        self.line_start = True
+        self.newlines = 0
+        self.ticks = 0
+
+    def _finish_ticks(self):
+        if self.ticks >= 3 and self.line_start:
+            self.fence = not self.fence
+        elif self.ticks and not self.fence:
+            self.inline = not self.inline
+        if self.ticks:
+            self.line_start = False
+        self.ticks = 0
+
+    @property
+    def active(self):
+        return self.fence or self.inline or self.blockquote or self.quote
+
+    def split(self, text):
+        segments = []
+        current = []
+        state = self.active
+        for character in text:
+            if character == "`":
+                self.ticks += 1
+            else:
+                self._finish_ticks()
+                if character == "\n":
+                    self.newlines += 1
+                    if self.newlines >= 2:
+                        self.quote = False
+                    self.blockquote = False
+                    self.inline = False
+                    self.line_start = True
+                else:
+                    self.newlines = 0
+                    if character == ">" and self.line_start:
+                        self.blockquote = True
+                    if character in self.OPENING:
+                        self.quote = True
+                    elif character in self.CLOSING:
+                        self.quote = False
+                    elif character == '"':
+                        self.quote = not self.quote
+                    if not character.isspace():
+                        self.line_start = False
+            if self.active != state and current:
+                segments.append(("".join(current), state))
+                current = []
+            state = self.active
+            current.append(character)
+        if current:
+            segments.append(("".join(current), state))
+        return segments
+
+
 class SpeechBuffer:
     def __init__(self, *, low_latency=False, fast_first=False):
         self.buffer = ""
         self.first = True
         self.markdown = MarkdownSpeechFilter()
+        self.tracker = VerbatimTracker()
+        self.verbatim = False
         self.low_latency = low_latency
         self.fast_first = fast_first
 
     def feed(self, text):
-        self.buffer += self.markdown.feed(text)
+        phrases = []
+        for segment, verbatim in self.tracker.split(text):
+            spoken = self.markdown.feed(segment)
+            if spoken.strip() and verbatim:
+                self.verbatim = True
+            self.buffer += spoken
+            phrases.extend(self.extract(verbatim))
+        return phrases
+
+    def extract(self, verbatim):
         phrases = []
         while self.buffer:
             fast = self.low_latency or (self.fast_first and self.first)
@@ -215,18 +297,26 @@ class SpeechBuffer:
                 end = self.buffer.rfind(" ", 80, 160)
             if end <= 0:
                 break
-            phrase = self.buffer[:end].strip()
+            text = self.buffer[:end].strip()
             self.buffer = self.buffer[end:].lstrip()
-            if phrase:
+            if text:
+                phrase = Phrase(text)
+                phrase.verbatim = self.verbatim
                 phrases.append(phrase)
                 self.first = False
+            self.verbatim = verbatim and bool(self.buffer)
         return phrases
 
     def finish(self):
         self.buffer += self.markdown.feed("", final=True)
         remaining = self.buffer.strip()
         self.buffer = ""
-        return [remaining] if remaining else []
+        if not remaining:
+            return []
+        phrase = Phrase(remaining)
+        phrase.verbatim = self.verbatim
+        self.verbatim = False
+        return [phrase]
 
 
 def prefers_response_workspace(text):

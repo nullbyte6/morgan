@@ -164,7 +164,8 @@ class TTSServer:
                             try:
                                 self.voice.enqueue(text, message.get("turn_id"),
                                                    message.get("voice_reference"),
-                                                   message.get("language_context", ""))
+                                                   message.get("language_context", ""),
+                                                   bool(message.get("verbatim")))
                             except (OSError, ValueError) as error:
                                 self._send({"type": "error", "message": str(error),
                                             "turn_id": message.get("turn_id")}, client)
