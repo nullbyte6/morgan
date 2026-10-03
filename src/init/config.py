@@ -45,7 +45,7 @@ class PermissionMode(StrEnum):
 
 
 DEFAULTS = {
-    "assistant": {"name": "Arlo"},
+    "assistant": {"name": "Morgan"},
     "memory": {
         "enabled": True,
         "store_history": True,
