@@ -63,6 +63,16 @@ Configuration and user data are stored in `C:\Users\<username>\.<name>`. Refer
 to the source code and `config.json` to discover additional features and
 configuration options.
 
+The `assistant` section of `config.json` sets the assistant's identity:
+
+```json
+"assistant": { "name": "Morgan", "gender": "auto" }
+```
+
+`gender` controls the grammatical gender Morgan uses about itself in the first
+person (for example "listo" or "lista" in Spanish). It accepts `auto` (inferred
+from the name, the default), `male`, `female` or `neutral`.
+
 To start Morgan, open it from the Start menu or run `Morgan.exe`. See the
 [specs here](docs/SPECS.md) for model and hardware requirements.
 
