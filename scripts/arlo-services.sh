@@ -14,11 +14,13 @@ done
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 python="$root/.venv/bin/python"
 tts_module="src.init.tts_server"
-ollama_url="http://127.0.0.1:11434"
+gateway_module="src.init.omni_gateway"
+gateway_host="127.0.0.1"
+gateway_port=18767
 tts_host="127.0.0.1"
 tts_port=18765
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/Applications/Ollama.app/Contents/Resources:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 export PYTHONPATH="$root:$root/src"
 export TORCH_CPP_LOG_LEVEL="ERROR"
 export TORCH_LOGS="-all"
@@ -31,7 +33,7 @@ if [[ ! -x "$python" ]]; then
     exit 1
 fi
 
-metadata="$("$python" -X utf8 -B -c "from src.init.config import load_config; from src.init.identity import get_assistant_identifier, get_assistant_name; from src.init.lang import tr; print(get_assistant_identifier()); print(get_assistant_name()); print(tr('console.console_title')); print(load_config()['context_length'])")" || {
+metadata="$("$python" -X utf8 -B -c "from src.init.identity import get_assistant_identifier, get_assistant_name; from src.init.lang import tr; print(get_assistant_identifier()); print(get_assistant_name()); print(tr('console.console_title'))")" || {
     printf 'Could not resolve the assistant service namespace.\n' >&2
     exit 1
 }
@@ -39,7 +41,6 @@ metadata="$("$python" -X utf8 -B -c "from src.init.config import load_config; fr
     IFS= read -r identifier
     IFS= read -r assistant_name
     IFS= read -r console_title
-    IFS= read -r model_context
 } <<< "$metadata"
 
 export ASSISTANT_NAME="$assistant_name"
@@ -48,9 +49,10 @@ export ASSISTANT_LOG_DIR="${TMPDIR:-/tmp}"
 ASSISTANT_LOG_DIR="${ASSISTANT_LOG_DIR%/}/$identifier"
 log_dir="$ASSISTANT_LOG_DIR"
 tts_log="$log_dir/tts.log"
+gateway_log="$log_dir/model.log"
 agent_log="$log_dir/agent.log"
 mkdir -p -- "$log_dir"
-touch -- "$tts_log" "$agent_log"
+touch -- "$tts_log" "$gateway_log" "$agent_log"
 
 port_open() {
     (exec 3<>"/dev/tcp/$1/$2") 2>/dev/null
@@ -76,45 +78,19 @@ log_tail() {
 
 printf '%s SERVICES\n-------------\n' "$(printf '%s' "$assistant_name" | tr '[:lower:]' '[:upper:]')"
 
-core_path="$root/dev/core.json"
-if [[ ! -f "$core_path" ]]; then
-    printf '%s model configuration not found: %s\n' "$assistant_name" "$core_path" >&2
-    exit 1
+printf '[1/3] Checking the model service...\n'
+gateway_pid=""
+if port_open "$gateway_host" "$gateway_port"; then
+    printf 'Model service already running; reusing it.\n'
+else
+    printf 'Starting the model service...\n'
+    nohup "$python" -u -m "$gateway_module" >> "$gateway_log" 2>&1 &
+    gateway_pid=$!
 fi
-if ! [[ "$model_context" =~ ^[0-9]+$ ]] || (( model_context < 4096 )); then
-    printf 'Model context is invalid in %s.\n' "$core_path" >&2
-    exit 1
-fi
-
-printf '[1/3] Checking Ollama...\n'
-export OLLAMA_CONTEXT_LENGTH="$model_context"
-if ! port_open 127.0.0.1 11434; then
-    if ! command -v ollama >/dev/null 2>&1; then
-        printf 'Ollama was not found. Install it from https://ollama.com or with brew install ollama.\n' >&2
-        exit 1
-    fi
-    printf 'Starting Ollama...\n'
-    nohup ollama serve >/dev/null 2>&1 &
-    if ! wait_port 127.0.0.1 11434 30; then
-        printf 'Ollama did not start.\n' >&2
-        exit 1
-    fi
-fi
-printf 'Ollama ready.\n'
-
-model_name="${MODEL:-}"
-if [[ -z "${model_name// }" ]]; then
-    model_name="$("$python" -c "import json, sys; print(json.load(open(sys.argv[1], encoding='utf-8')).get('base_model_name') or '')" "$core_path")"
-fi
-if [[ -z "${model_name// }" ]]; then
-    printf 'Model name is missing or invalid in %s. Set base_model_name or MODEL.\n' "$core_path" >&2
-    exit 1
-fi
-keep_alive="${KEEP_ALIVE:-24h}"
 
 tts_pid=""
 if (( ! no_voice )); then
-    printf '[2/3] Checking CosyVoice...\n'
+    printf '[2/3] Checking the voice service...\n'
     "$python" -B - "$root" "$python" "$tts_module" <<'PY'
 import os
 import sys
@@ -146,32 +122,31 @@ PY
     if port_open "$tts_host" "$tts_port"; then
         printf 'TTS port already in use.\nReusing the existing service.\n'
     else
-        printf 'Starting CosyVoice...\n'
+        printf 'Starting the voice service...\n'
         nohup "$python" -u -m "$tts_module" >> "$tts_log" 2>&1 &
         tts_pid=$!
     fi
 fi
 
-model_ready=0
-if running="$(curl -fsS --max-time 5 "$ollama_url/api/ps" 2>/dev/null)"; then
-    if MODEL_NAME="$model_name" "$python" -c "
-import json, os, sys
-name = os.environ['MODEL_NAME']
-aliases = {name} | ({name + ':latest'} if ':' not in name else set())
-models = json.loads(sys.stdin.read() or '{}').get('models') or []
-sys.exit(0 if any(m.get('name') in aliases or m.get('model') in aliases for m in models) else 1)
-" <<< "$running"; then
-        model_ready=1
-    fi
-fi
-
-if (( model_ready )); then
-    printf 'Model already loaded; reusing it.\n'
-else
-    printf 'Preloading model: %s\n' "$model_name"
-    payload="$(MODEL_NAME="$model_name" KEEP_ALIVE_VALUE="$keep_alive" "$python" -c "import json, os; print(json.dumps(dict(model=os.environ['MODEL_NAME'], prompt='', keep_alive=os.environ['KEEP_ALIVE_VALUE'], stream=False)))")"
-    if ! curl -fsS --max-time 300 -H "Content-Type: application/json" -d "$payload" "$ollama_url/api/generate" >/dev/null; then
-        printf 'Model preload failed.\n' >&2
+if [[ -n "$gateway_pid" ]]; then
+    printf 'Waiting for the model to load...\n'
+    deadline=$((SECONDS + 300))
+    ready=0
+    while (( SECONDS < deadline )); do
+        if port_open "$gateway_host" "$gateway_port"; then
+            ready=1
+            break
+        fi
+        if ! kill -0 "$gateway_pid" 2>/dev/null; then
+            log_tail "$gateway_log"
+            printf 'Model service exited. Check %s\n' "$gateway_log" >&2
+            exit 1
+        fi
+        sleep 0.5
+    done
+    if (( ! ready )); then
+        log_tail "$gateway_log"
+        printf 'Model service startup timed out. Check %s\n' "$gateway_log" >&2
         exit 1
     fi
     printf 'Model ready.\n'
@@ -183,7 +158,7 @@ if (( no_voice )); then
 fi
 
 if [[ -n "$tts_pid" ]]; then
-    printf 'Waiting for CosyVoice to load...\n'
+    printf 'Waiting for the voice service to load...\n'
     deadline=$((SECONDS + 180))
     ready=0
     while (( SECONDS < deadline )); do
@@ -200,10 +175,10 @@ if [[ -n "$tts_pid" ]]; then
     done
     if (( ! ready )); then
         log_tail "$tts_log"
-        printf 'CosyVoice startup timed out. Check %s\n' "$tts_log" >&2
+        printf 'Voice service startup timed out. Check %s\n' "$tts_log" >&2
         exit 1
     fi
-    printf 'CosyVoice ready.\n'
+    printf 'Voice service ready.\n'
 fi
 
 printf '[3/3] Preparing debug console...\n'
@@ -211,7 +186,7 @@ if (( ! no_console )); then
     if pgrep -f "tail -n 0 -F $tts_log" >/dev/null 2>&1; then
         printf 'Debug console already running.\n'
     else
-        console_command="printf '\\033]0;%s\\007' $(printf '%q' "$console_title"); tail -n 0 -F $(printf '%q' "$tts_log") $(printf '%q' "$agent_log")"
+        console_command="printf '\\033]0;%s\\007' $(printf '%q' "$console_title"); tail -n 0 -F $(printf '%q' "$gateway_log") $(printf '%q' "$tts_log") $(printf '%q' "$agent_log")"
         osascript -e 'on run argv' -e 'tell application "Terminal" to do script (item 1 of argv)' -e 'end run' "$console_command" >/dev/null
         printf 'Debug console started.\n'
     fi

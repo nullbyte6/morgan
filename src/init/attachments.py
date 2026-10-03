@@ -25,10 +25,8 @@ import importlib.util
 import json
 import mimetypes
 import os
-import re
 import stat
 import threading
-import urllib.request
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -173,37 +171,10 @@ def inspect_attachment(item: Attachment, limits: dict) -> Attachment:
         return replace(item, status="error", error=str(error))
 
 
-def ollama_capabilities(model: str) -> tuple[bool, int]:
-    """Only query the existing local Ollama service; never infer vision by name."""
-    vision, context = False, 4096
-    try:
-        request = urllib.request.Request("http://127.0.0.1:11434/api/show",
-            data=json.dumps({"model": model}).encode(),
-            headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=2) as response:
-            data = json.load(response)
-        vision = "vision" in data.get("capabilities", [])
-        match = re.search(r"(?m)^num_ctx\s+(\d+)", data.get("parameters", ""))
-        if match:
-            context = int(match[1])
-        else:
-            from src.init.brain import is_cloud_model
-            if is_cloud_model(model):
-                advertised = [value for key, value in (data.get("model_info") or {}).items()
-                              if key.endswith(".context_length") and isinstance(value, int)]
-                from src.init.config import load_config
-                return vision, max(512, advertised[0] if advertised else load_config()["context_length"])
-            from src.init.config import load_config
-            context = load_config()["context_length"]
-        with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=2) as response:
-            running = json.load(response)
-        for entry in running.get("models", []):
-            if entry.get("name") in (model, model + ":latest") and entry.get("context_length"):
-                context = int(entry["context_length"])
-                break
-    except (OSError, ValueError, TypeError):
-        pass
-    return vision, max(512, context)
+def model_capabilities() -> tuple[bool, int]:
+    """Vision support and the context length the omni server was started with."""
+    from src.init.omni_server import context_length
+    return True, max(512, context_length())
 
 
 class AttachmentSession:

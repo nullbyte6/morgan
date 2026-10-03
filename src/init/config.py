@@ -58,7 +58,7 @@ DEFAULTS = {
     "lang": "spanish",
     "model": "",
     "keep_alive": "24h",
-    "context_length": 32768,
+    "context_length": 16384,
     "temperature": 0.2,
     "voice_reference": "voice-01.wav",
     "omni_server": "",

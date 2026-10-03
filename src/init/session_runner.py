@@ -28,7 +28,7 @@ from contextlib import nullcontext
 from dataclasses import replace
 
 from src.init.attachments import (DesktopMessage, DesktopVoiceMessage, AttachmentSession,
-    ollama_capabilities)
+    model_capabilities)
 
 from src.init.commands import set_confirmation_handler
 from src.init.config import PermissionMode, load_config
@@ -174,7 +174,7 @@ class SessionRunner:
         attachment_session = None
         try:
             if message.attachments:
-                vision, context = ollama_capabilities(self.assistant.MODEL_NAME)
+                vision, context = model_capabilities()
                 attachment_session = AttachmentSession(
                     message, load_config()["attachments"], vision=vision,
                     context_tokens=context)

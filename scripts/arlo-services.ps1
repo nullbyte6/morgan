@@ -9,8 +9,10 @@ $env:Path = ((@("Machine", "User") | ForEach-Object {
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $ttsModule = "src.init.tts_server"
+$gatewayModule = "src.init.omni_gateway"
 
-$ollamaUrl = "http://127.0.0.1:11434"
+$gatewayHost = "127.0.0.1"
+$gatewayPort = 18767
 $ttsHost = "127.0.0.1"
 $ttsPort = 18765
 
@@ -29,7 +31,7 @@ if (-not (Test-Path -LiteralPath $python)) {
     throw "Python environment not found: $python. The runtime setup did not finish; run the installer again to complete it."
 }
 
-$assistantMetadata = & $python -X utf8 -B -c "import json; from src.init.config import load_config; from src.init.identity import get_assistant_identifier, get_assistant_name; from src.init.lang import tr; print(json.dumps(dict(identifier=get_assistant_identifier(), name=get_assistant_name(), console_title=tr('console.console_title'), context_length=load_config()['context_length'])))"
+$assistantMetadata = & $python -X utf8 -B -c "import json; from src.init.identity import get_assistant_identifier, get_assistant_name; from src.init.lang import tr; print(json.dumps(dict(identifier=get_assistant_identifier(), name=get_assistant_name(), console_title=tr('console.console_title'))))"
 if ($LASTEXITCODE -ne 0 -or -not $assistantMetadata) {
     throw "Could not resolve the assistant service namespace."
 }
@@ -40,13 +42,14 @@ $env:ASSISTANT_CONSOLE_TITLE = $assistantMetadata.console_title
 $env:ASSISTANT_LOG_DIR = Join-Path $env:TEMP $assistantMetadata.identifier
 $logDir = $env:ASSISTANT_LOG_DIR
 $ttsLog = Join-Path $logDir "tts.log"
+$gatewayLog = Join-Path $logDir "model.log"
 $agentLog = Join-Path $logDir "agent.log"
 $consoleScript = Join-Path $logDir "console.ps1"
 
 New-Item -ItemType Directory -Path $logDir -Force |
     Out-Null
 
-foreach ($file in @($ttsLog, $agentLog)) {
+foreach ($file in @($ttsLog, $gatewayLog, $agentLog)) {
     if (-not (Test-Path -LiteralPath $file)) {
         New-Item -ItemType File -Path $file | Out-Null
     }
@@ -120,62 +123,33 @@ function Write-LogTail {
 
 Write-Host "$($assistantName.ToUpper()) SERVICES" -ForegroundColor Cyan
 Write-Host "-------------"
-$corePath = Join-Path $root "dev\core.json"
-if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
-    $corePath = Join-Path $root "_internal\dev\core.json"
+
+Write-Host "[1/3] Checking the model service..."
+$gatewayProcess = $null
+if (Test-TcpPort -Address $gatewayHost -Port $gatewayPort) {
+    Write-Host "Model service already running; reusing it." -ForegroundColor Green
 }
-if (-not (Test-Path -LiteralPath $corePath -PathType Leaf)) {
-    throw "$assistantName model configuration not found: $corePath"
-}
+else {
+    Write-Host "Starting the model service..."
+    $gatewayCommand = @(
+        "/d",
+        "/s",
+        "/c",
+        ('""{0}" -u -m {1} >> "{2}" 2>&1"' -f `
+            $python, $gatewayModule, $gatewayLog)
+    )
 
-$core = Get-Content -LiteralPath $corePath -Raw -Encoding utf8 | ConvertFrom-Json
-$modelContext = $assistantMetadata.context_length
-if (($modelContext -isnot [int] -and $modelContext -isnot [long]) -or
-    $modelContext -lt 4096) {
-    throw "Model context is invalid in $corePath."
-}
-
-Write-Host "[1/3] Checking Ollama..."
-$env:OLLAMA_CONTEXT_LENGTH = [string]$modelContext
-if (-not (Test-TcpPort -Address "127.0.0.1" -Port 11434)) {
-    $ollama = Get-Command "ollama.exe" -ErrorAction SilentlyContinue
-    if (-not $ollama) {
-        throw "Ollama was not found in PATH."
-    }
-
-    Write-Host "Starting Ollama..."
-    Start-Process `
-        -FilePath $ollama.Source `
-        -ArgumentList "serve" `
-        -WindowStyle Hidden
-
-    if (-not (Wait-TcpPort `
-        -Address "127.0.0.1" `
-        -Port 11434 `
-        -TimeoutSeconds 30)) {
-
-        throw "Ollama did not start."
-    }
-}
-
-Write-Host "Ollama ready." -ForegroundColor Green
-$modelName = $env:MODEL
-if ([string]::IsNullOrWhiteSpace($modelName)) {
-    $modelName = $core.base_model_name
-}
-
-if ($modelName -isnot [string] -or [string]::IsNullOrWhiteSpace($modelName)) {
-    throw "Model name is missing or invalid in $corePath. Set base_model_name or MODEL."
-}
-
-$keepAlive = $env:KEEP_ALIVE
-if (-not $keepAlive) {
-    $keepAlive = "24h"
+    $gatewayProcess = Start-Process `
+        -FilePath "cmd.exe" `
+        -ArgumentList $gatewayCommand `
+        -WorkingDirectory $root `
+        -WindowStyle Hidden `
+        -PassThru
 }
 
 $ttsProcess = $null
 if (-not $NoVoice) {
-    Write-Host "[2/3] Checking CosyVoice..."
+    Write-Host "[2/3] Checking the voice service..."
 
     $voiceSources = @(
         "src\init\tts_server.py", "src\init\voice_service.py",
@@ -211,7 +185,7 @@ if (-not $NoVoice) {
 
     }
     else {
-        Write-Host "Starting CosyVoice..."
+        Write-Host "Starting the voice service..."
         $ttsCommand = @(
             "/d",
             "/s",
@@ -229,50 +203,32 @@ if (-not $NoVoice) {
     }
 }
 
-$modelReady = $false
-try {
-    $runningModels = Invoke-RestMethod `
-        -Uri "$ollamaUrl/api/ps" `
-        -Method Get `
-        -TimeoutSec 5
-    $modelAliases = @($modelName)
-    if (-not $modelName.Contains(":")) {
-        $modelAliases += "${modelName}:latest"
-    }
-    $modelReady = @($runningModels.models | Where-Object {
-        $modelAliases -contains $_.name -or
-        $modelAliases -contains $_.model
-    }).Count -gt 0
-}
-catch {
-    # Fall through to the normal preload request.
-}
+if ($gatewayProcess) {
+    Write-Host "Waiting for the model to load..."
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    $ready = $false
 
-if ($modelReady) {
-    Write-Host "Model already loaded; reusing it." -ForegroundColor Green
-}
-else {
-    Write-Host "Preloading model: $modelName"
-    $payload = @{
-        model = $modelName
-        prompt = ""
-        keep_alive = $keepAlive
-        stream = $false
-    } | ConvertTo-Json -Compress
+    while ($timer.Elapsed.TotalSeconds -lt 300) {
 
-    try {
-        $null = Invoke-RestMethod `
-            -Uri "$ollamaUrl/api/generate" `
-            -Method Post `
-            -ContentType "application/json" `
-            -Body $payload `
-            -TimeoutSec 300
+        if (Test-TcpPort -Address $gatewayHost -Port $gatewayPort) {
+            $ready = $true
+            break
+        }
 
-        Write-Host "Model ready." -ForegroundColor Green
+        if ($gatewayProcess.HasExited) {
+            Write-LogTail -Path $gatewayLog
+            throw "Model service exited. Check $gatewayLog"
+        }
+
+        Start-Sleep -Milliseconds 500
     }
-    catch {
-        throw "Model preload failed: $($_.Exception.Message)"
+
+    if (-not $ready) {
+        Write-LogTail -Path $gatewayLog
+        throw "Model service startup timed out. Check $gatewayLog"
     }
+
+    Write-Host "Model ready." -ForegroundColor Green
 }
 
 if ($NoVoice) {
@@ -281,7 +237,7 @@ if ($NoVoice) {
 }
 
 if ($ttsProcess) {
-    Write-Host "Waiting for CosyVoice to load..."
+    Write-Host "Waiting for the voice service to load..."
     $timer = [Diagnostics.Stopwatch]::StartNew()
     $ready = $false
 
@@ -302,10 +258,10 @@ if ($ttsProcess) {
 
     if (-not $ready) {
         Write-LogTail -Path $ttsLog
-        throw "CosyVoice startup timed out. Check $ttsLog"
+        throw "Voice service startup timed out. Check $ttsLog"
     }
 
-    Write-Host "CosyVoice ready." -ForegroundColor Green
+    Write-Host "Voice service ready." -ForegroundColor Green
 }
 
 Write-Host "[3/3] Preparing debug console..."
@@ -317,6 +273,10 @@ $Host.UI.RawUI.WindowTitle = $env:ASSISTANT_CONSOLE_TITLE
 $logDir = $env:ASSISTANT_LOG_DIR
 
 $files = @(
+    @{
+        Name = "MODEL"
+        Path = Join-Path $logDir "model.log"
+    },
     @{
         Name = "TTS"
         Path = Join-Path $logDir "tts.log"

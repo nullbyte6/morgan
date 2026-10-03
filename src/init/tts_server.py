@@ -30,7 +30,6 @@ import time
 
 import numpy as np
 
-from .omni_server import start_omni_server, stop_omni_server
 from .voice_profiles import VOICE_REFERENCE
 from .voice_service import VoiceService, device_info
 
@@ -52,18 +51,12 @@ class TTSServer:
         self._send_lock = threading.Lock()
         self._playback_reference = False
         self._last_audio_update = 0.0
-        logger.info(tr('tts_server.loading_omni'))
-        started = time.monotonic()
-
-        self._omni = start_omni_server()
         self.voice = VoiceService(
             voice_reference=VOICE_REFERENCE,
             audio_callback=self._on_audio,
             speaking_callback=self._on_speaking,
             subtitle_callback=self._on_subtitle)
-        self._load_seconds = round(time.monotonic() - started, 1)
         self._device = device_info()
-        logger.info(tr('tts_server.omni_ready'))
 
     def _send(self, message: dict, client=None) -> None:
         data = (json.dumps(message, ensure_ascii=False) + "\n").encode("utf-8")
@@ -146,8 +139,7 @@ class TTSServer:
                         self._send({"type": "hello", "interruptible": True,
                                     "voice_selection": True,
                                     "playback_reference": True,
-                                    "device": self._device,
-                                    "load_seconds": self._load_seconds}, client)
+                                    "device": self._device}, client)
 
                     elif kind == "playback_reference":
                         with self._client_lock:
@@ -214,8 +206,6 @@ def main():
         server.run()
     except KeyboardInterrupt:
         logger.info(tr('tts_server.stopping_tts_service'))
-    finally:
-        stop_omni_server(server._omni)
 
 
 if __name__ == "__main__":

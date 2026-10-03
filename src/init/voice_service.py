@@ -18,8 +18,8 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-import base64
 import gc
+import http.client
 import json
 import logging
 import queue
@@ -31,12 +31,9 @@ from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
-from websockets.exceptions import ConnectionClosed
-from websockets.sync.client import connect
-
 from src.init.lang import tr
 from .config import load_config
-from .omni_server import WEBSOCKET_URL
+from .omni_server import GATEWAY_HOST, GATEWAY_PORT
 from .speech_text import SpeechNumbers, prepare_speech
 from .subtitle_timing import StreamingWordTimeline
 from .voice_profiles import selected_voice, resolve_voice
@@ -51,14 +48,10 @@ logger = logging.getLogger(f"{get_assistant_identifier()}.tts")
 RESUME_LEAD_SECONDS = 1.5
 RESUME_MAX_WAIT_SECONDS = 2.5
 SAMPLE_RATE = 24000
-SPEAK_PROMPT = ("You are a text-to-speech engine. Repeat the user's text word for word, "
-                "exactly, and say nothing else.")
-MAX_NEW_TOKENS = 400
-SESSION_RETRIES = 40
-SESSION_RETRY_SECONDS = 0.15
-RECEIVE_TIMEOUT_SECONDS = 90
-PHRASE_MIN_CHARS = 40
-PHRASE_MAX_CHARS = 220
+RECEIVE_TIMEOUT_SECONDS = 180
+READ_BYTES = 9600
+PHRASE_MIN_CHARS = 120
+PHRASE_MAX_CHARS = 320
 SENTENCE_END = re.compile(r"(?<=[.!?。！？…;；:\n])\s*")
 
 
@@ -71,7 +64,7 @@ def _raise_priority(*, process: bool) -> None:
 
 def device_info() -> dict:
     """The voice backend reported to the assistant: the omni runtime and its model."""
-    return {"backend": "llama.cpp-omni", "name": "MiniCPM-o 4.5", "torch": ""}
+    return {"backend": "llama.cpp-omni", "name": "MiniCPM-o 4.5"}
 
 
 def _split_phrases(text: str) -> list[str]:
@@ -138,10 +131,6 @@ class VoiceService:
         _raise_priority(process=True)
         self.voice_reference = selected_voice() or Path(voice_reference)
         self.sample_rate = SAMPLE_RATE
-        self._reference_key = None
-        self._reference_audio = ""
-        self._select_reference(self.voice_reference)
-        self._open_session(threading.Event()).close()
 
         self._text_queue = queue.Queue()
         self._audio_queue = queue.Queue(maxsize=4)
@@ -185,18 +174,6 @@ class VoiceService:
             batch.done.clear()
             self._text_queue.put((batch, text, subtitle, reference))
 
-    def _select_reference(self, reference):
-        """Only the synthesis worker replaces the speaker reference after startup."""
-        if reference is None:
-            raise FileNotFoundError("No WAV voice references available")
-        key = (str(reference), reference.stat().st_mtime_ns)
-        if key == self._reference_key:
-            return
-        self._reference_audio = base64.b64encode(reference.read_bytes()).decode("ascii")
-        self.voice_reference = reference
-        self._reference_key = key
-        logger.info("Voice reference applied: %s", reference.name)
-
     def current_batch(self):
         with self._state_lock:
             return self._batch
@@ -235,43 +212,33 @@ class VoiceService:
                     self._set_subtitle(batch, "")
                 batch.done.set()
 
-    def _open_session(self, cancelled):
-        for _ in range(SESSION_RETRIES):
-            if cancelled.is_set():
-                return None
-            connection = connect(WEBSOCKET_URL, max_size=None, open_timeout=10)
-            try:
-                connection.send(json.dumps({"type": "session.init", "payload": {
-                    "mode": "turn_based", "use_tts": True, "system_prompt": SPEAK_PROMPT,
-                    "voice": {"ref_audio": self._reference_audio}}}))
-                if json.loads(connection.recv(timeout=RECEIVE_TIMEOUT_SECONDS)).get("type") == "session.created":
-                    return connection
-            except ConnectionClosed:
-                pass
-            connection.close()
-            cancelled.wait(SESSION_RETRY_SECONDS)
-        raise RuntimeError(tr('voice_service.omni_session_unavailable'))
-
-    def _speak(self, phrase, cancelled):
-        connection = self._open_session(cancelled)
-        if connection is None:
-            return
-        with connection:
-            connection.send(json.dumps({"type": "input.append", "input": {
-                "messages": [{"role": "user", "content": phrase}],
-                "streaming": True, "use_tts_template": True,
-                "generation": {"max_new_tokens": MAX_NEW_TOKENS, "length_penalty": 1.1}}}))
+    def _speak(self, phrase, reference, cancelled):
+        connection = http.client.HTTPConnection(
+            GATEWAY_HOST, GATEWAY_PORT, timeout=RECEIVE_TIMEOUT_SECONDS)
+        try:
+            connection.request(
+                "POST", "/v1/audio/speech",
+                json.dumps({"input": phrase, "voice": reference.name, "response_format": "pcm"}),
+                {"Content-Type": "application/json"})
+            response = connection.getresponse()
+            if response.status != 200:
+                raise RuntimeError(response.read().decode("utf-8", "replace"))
+            remainder = b""
             while not cancelled.is_set():
-                event = json.loads(connection.recv(timeout=RECEIVE_TIMEOUT_SECONDS))
-                kind = event.get("type")
-                if kind == "response.output.delta" and event.get("kind") == "audio":
-                    yield np.frombuffer(base64.b64decode(event["audio"]), dtype=np.float32)
-                elif kind in ("response.done", "session.closed"):
-                    return
+                data = response.read1(READ_BYTES)
+                if not data:
+                    break
+                data = remainder + data
+                usable = len(data) - len(data) % 2
+                remainder = data[usable:]
+                if usable:
+                    yield np.frombuffer(data[:usable], dtype="<i2").astype(np.float32) / 32768
+        finally:
+            connection.close()
 
-    def _synthesize(self, text, cancelled):
+    def _synthesize(self, text, reference, cancelled):
         for phrase in _split_phrases(text):
-            yield from self._speak(phrase, cancelled)
+            yield from self._speak(phrase, reference, cancelled)
 
     def _tts_loop(self) -> None:
         idle_trimmed = False
@@ -293,8 +260,7 @@ class VoiceService:
             try:
                 if batch.cancelled.is_set():
                     continue
-                self._select_reference(reference)
-                generator = self._synthesize(text, batch.cancelled)
+                generator = self._synthesize(text, reference, batch.cancelled)
                 for chunk in generator:
                     if batch.cancelled.is_set():
                         break

@@ -16,14 +16,18 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Starting and stopping the local llama.cpp-omni server that gives Arlo its voice."""
+"""Starting and stopping the local llama.cpp-omni server and the gateway in front of it."""
 import glob
+import json
 import os
 import subprocess
 import time
 import urllib.request
 from pathlib import Path
 
+import psutil
+
+from .config import load_config
 from .lang import tr
 from .voice_profiles import omni_model, omni_server_executable
 from src.platforms import current_platform
@@ -32,16 +36,47 @@ HOST = "127.0.0.1"
 PORT = 18766
 HEALTH_URL = f"http://{HOST}:{PORT}/health"
 WEBSOCKET_URL = f"ws://{HOST}:{PORT}/backend"
-CONTEXT_LENGTH = 4096
+GATEWAY_HOST = "127.0.0.1"
+GATEWAY_PORT = 18767
+GATEWAY_URL = f"http://{GATEWAY_HOST}:{GATEWAY_PORT}"
+MODEL_ID = "minicpm-o-4.5"
+GATEWAY_MODULE = "src.init.omni_gateway"
+SERVER_NAMES = {"llama-omni-server.exe", "llama-omni-server"}
 START_SECONDS = 180
+STOP_SECONDS = 10
+MAX_CONTEXT_LENGTH = 16384
 
 
-def omni_ready() -> bool:
+def _ready(url: str) -> bool:
     try:
-        with urllib.request.urlopen(HEALTH_URL, timeout=1):
+        with urllib.request.urlopen(url, timeout=1):
             return True
     except OSError:
         return False
+
+
+def omni_ready() -> bool:
+    return _ready(HEALTH_URL)
+
+
+def context_length() -> int:
+    """The configured context length, held to what a 16 GB graphics card runs at full speed."""
+    return min(load_config()["context_length"], MAX_CONTEXT_LENGTH)
+
+
+def complete_text(prompt: str, max_tokens: int, timeout: float = 60) -> str:
+    """One plain chat reply from the model, for the assistant's own short writing jobs."""
+    request = urllib.request.Request(
+        f"{GATEWAY_URL}/v1/chat/completions",
+        data=json.dumps({"model": MODEL_ID, "max_tokens": max_tokens,
+                         "messages": [{"role": "user", "content": prompt}]}).encode("utf-8"),
+        headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return str(json.load(response)["choices"][0]["message"]["content"] or "").strip()
+
+
+def gateway_ready() -> bool:
+    return _ready(f"{GATEWAY_URL}/health")
 
 
 def _runtime_directories() -> list[str]:
@@ -65,12 +100,13 @@ def start_omni_server() -> subprocess.Popen | None:
     if not model.is_file():
         raise FileNotFoundError(tr("omni_server.model_not_found", path=model))
 
+    config = load_config()
     environment = {**os.environ, "OMNI_TTS_NGL": "99"}
     environment["PATH"] = os.pathsep.join(
         [str(executable.parent), *_runtime_directories(), environment.get("PATH", "")])
     process = subprocess.Popen(
         [str(executable), "-m", str(model), "--host", HOST, "--port", str(PORT),
-         "-ngl", "99", "-c", str(CONTEXT_LENGTH)],
+         "-ngl", "99", "-c", str(context_length()), "--temp", str(config["temperature"])],
         env=environment, cwd=str(executable.parent),
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         close_fds=True, creationflags=current_platform().detached_flags)
@@ -94,3 +130,27 @@ def stop_omni_server(process: subprocess.Popen | None) -> None:
         process.wait(timeout=10)
     except subprocess.TimeoutExpired:
         process.kill()
+
+
+def stop_gateway() -> None:
+    """Stop the gateway and the omni server it started, so the next start applies the settings."""
+    found = []
+    for process in psutil.process_iter(["name", "cmdline"]):
+        try:
+            name = (process.info["name"] or "").casefold()
+            command = " ".join(process.info["cmdline"] or ())
+        except psutil.Error:
+            continue
+        if name in SERVER_NAMES or GATEWAY_MODULE in command:
+            found.append(process)
+    for process in found:
+        try:
+            process.terminate()
+        except psutil.Error:
+            continue
+    _gone, alive = psutil.wait_procs(found, timeout=STOP_SECONDS)
+    for process in alive:
+        try:
+            process.kill()
+        except psutil.Error:
+            continue

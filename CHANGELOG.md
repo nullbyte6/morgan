@@ -4,6 +4,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.3-beta (2026-10-03)
 
+- Add a local OpenAI-compatible gateway, started by the services launcher, that serves chat with tool calls, image and audio input, speech and short writing jobs from the MiniCPM-o 4.5 omni model, so the agent, image analysis, startup greeting, Nova week review and song summaries all run on the one model
 - Add French, German, Portuguese (Brazil), Japanese, Russian, Korean and Italian as interface languages, selectable in Settings and the terminal version, with translated interface text, localized dates in Nova and wake word detection
 - Add macOS desktop launching for the wake listener, opening Arlo.app when it is installed and the desktop entry from source otherwise
 - Add macOS notifications, reminder dialogs with up to three buttons, and Spotify and Music now-playing, cover art, playback control and seeking through AppleScript to the macx64 package
@@ -29,9 +30,12 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix splitting of spoken text leaving the closing » of a Russian quotation at the start of the next phrase, by keeping it with the sentence it closes
 - Fix spoken file paths always spelling letters and the dot in Spanish, by using the letter names and the word for dot of the language detected in the reply for English, Spanish, Chinese, French, German, Portuguese, Italian, Russian, Japanese and Korean, and by keeping accented and non-Latin parts of a path that were dropped
 - Fix the voice runtime on AMD ROCm installs failing to load audio, by installing TorchCodec 0.16 from PyPI after the ROCm PyTorch and the shared FFmpeg build it loads when only the static one is present, also repairing existing ROCm installs
+- Remove Ollama from Arlo: the runtime setup no longer installs it or downloads gemma4:e4b, the services launchers no longer start or preload it, and its model queries, cloud model handling, keep-alive and load timing are gone
 - Remove the CosyVoice, Matcha-TTS and Triton TensorRT-LLM runtime packages and the Matcha-TTS submodule entry, ahead of replacing the voice model with a single omni model
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
 - Update Arlo to sound more relaxed and natural, with a relaxed conversational default tone, a response rule for everyday wording, and a slightly slower default speech speed
+- Update speech to stream through the gateway's speech endpoint in longer phrases, with the voice service no longer starting the model server itself
+- Update the default context length to 16384 and hold the model server's context to 16384 tokens, since larger contexts made speech several times slower on a 16 GB graphics card
 - Update the installer and the launch and service scripts to stop shipping, importing and watching the removed CosyVoice and Matcha-TTS paths
 - Update the runtime setup to download the MiniCPM-o 4.5 voice model files in place of the CosyVoice model, to check for the voice server program, and to stop installing the cosyvoice package, with the README describing the new voice model
 - Update the end of voice input to wait 1.8 seconds of silence instead of 0.6 to 1.2, so there is room to pause between words and sentences, including the wake silence default and its documentation
@@ -44,6 +48,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Update the built-in terminal, the TUI shell and the TUI file picker to get the pseudo-terminal, command injection, console encoding and drive list from the platform layer, moving the Windows Ctrl+C bootstrap and console input into winx64
 - Update the config.json language check, the interface language table and the Settings and terminal language lists to cover every interface language
 - Update the desktop window frame colors, popup anchoring, taskbar identity and the wake listener's launcher, priority and audio host to come from the platform layer
+- Update the settings restart button, the health check and the startup messages to restart and check the model service instead of Ollama, in every interface language
 - Update the startup greeting, the week summary and the song summary to take the language name from one shared table, so they write in every interface language instead of falling back to English
 - Update the terminal version's Nova day and month names, which were hardcoded for English, Spanish and Chinese, to cover every interface language, and the Nova calendar month titles to use the standalone month name that Russian requires
 - Update the storage folder locator, file locks and elevated commands to get registry variables, msvcrt locks, administrator checks, the default shell and sudo from the platform layer

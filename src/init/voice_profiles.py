@@ -52,7 +52,8 @@ def omni_server_executable() -> Path:
     if configured:
         return Path(configured)
     name = "llama-omni-server.exe" if sys.platform == "win32" else "llama-omni-server"
-    return HOME_PATH / "llama.cpp-omni" / "build-hip2" / "bin" / name
+    build = "build-hip2" if sys.platform == "win32" else "build"
+    return HOME_PATH / "llama.cpp-omni" / build / "bin" / name
 
 
 VOICE_REFERENCE = VOICE_DIR / "voice-01.wav"

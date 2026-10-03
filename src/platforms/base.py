@@ -266,7 +266,7 @@ class Platform:
         return [sudo, "--"]
 
     def service_launchers(self, name: str) -> list[str]:
-        """Return the file names of the script that starts Ollama and the voice service."""
+        """Return the file names of the script that starts the model and voice services."""
         return []
 
     def service_command(self, script: Path, voice: bool) -> list[str]:

@@ -18,7 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
-from src.init.identity import get_assistant, get_assistant_name, get_assistant_environment
+from src.init.identity import get_assistant, get_assistant_name
 from src.init.lang import LANGUAGE_NAMES, get_language
 
 import asyncio
@@ -26,13 +26,13 @@ import os
 from pathlib import Path
 
 from pydantic_ai import Agent, BinaryContent
-from pydantic_ai.models.ollama import OllamaModel
-from pydantic_ai.providers.ollama import OllamaProvider
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from src.init.desktop.capture import request_screen_image
+from src.init.omni_server import GATEWAY_URL
 
-VISION_MODEL = get_assistant_environment("VISION_MODEL")
-VISION_PROVIDER = OllamaProvider(base_url="http://localhost:11434/v1")
+VISION_PROVIDER = OpenAIProvider(base_url=f"{GATEWAY_URL}/v1", api_key="local")
 IMAGE_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -53,8 +53,8 @@ vision_agent = Agent(
 )
 
 
-def vision_model() -> OllamaModel:
-    return OllamaModel(VISION_MODEL or get_assistant().selected_model, provider=VISION_PROVIDER)
+def vision_model() -> OpenAIChatModel:
+    return OpenAIChatModel(get_assistant().selected_model, provider=VISION_PROVIDER)
 
 
 async def analyze_image_async(

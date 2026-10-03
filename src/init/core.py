@@ -137,8 +137,6 @@ class Assistant:
                 instance.terminal_ui = None
                 instance.agent = None
                 instance.provider = None
-                instance.audio_model = None
-                instance.audio_model_name = None
                 instance.shutdown_requested = threading.Event()
                 instance._active_cancellation_token = None
                 instance._active_task_controller = None
@@ -149,7 +147,6 @@ class Assistant:
                 instance._speech_owner = None
                 instance._loop_models = weakref.WeakKeyDictionary()
                 instance._loop_models_lock = threading.Lock()
-                instance._audio_model_lock = threading.Lock()
                 instance.username = getuser().capitalize()
                 instance.typewriter_delay_seconds = float(
                     os.environ.get("TYPEWRITER_DELAY", "0"))
@@ -158,10 +155,8 @@ class Assistant:
 
     def generate_greeting(self) -> str:
         """Ask the main model for a short startup greeting in the interface language."""
-        import urllib.request
-        from src.init.brain import OLLAMA_KEEP_ALIVE
-        from src.init.health import record_model_load
         from src.init.lang import LANGUAGE_NAMES, get_language
+        from src.init.omni_server import complete_text
 
         language = LANGUAGE_NAMES.get(get_language(), "English")
         try:
@@ -185,19 +180,8 @@ class Assistant:
                   "and use it consistently. Use a "
                   f"{load_config()['personality']['tone']} tone and vary the wording. "
                   "Reply with the greeting only, without quotes, emojis or Markdown.")
-        payload = json.dumps({
-            "model": self.MODEL_NAME, "prompt": prompt, "stream": False, "think": False,
-            "keep_alive": OLLAMA_KEEP_ALIVE,
-            "options": {"temperature": 1.0, "num_predict": 120 if agenda else 60},
-        }).encode("utf-8")
-        request = urllib.request.Request(
-            "http://127.0.0.1:11434/api/generate", data=payload,
-            headers={"Content-Type": "application/json"}, method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                reply = json.loads(response.read())
-            record_model_load(self.MODEL_NAME, reply)
-            text = reply["response"]
+            text = complete_text(prompt, 120 if agenda else 60, timeout=30)
         except (OSError, ValueError, KeyError, TypeError):
             logging.getLogger("assistant.model").exception("Startup greeting could not be generated")
             return ""
@@ -220,10 +204,11 @@ class Assistant:
         import sys
         from pathlib import Path
         from src.init.lang import tr
+        from src.init.omni_server import GATEWAY_PORT
         from src.init.paths import PROJECT_ROOT
 
         def services_ready():
-            for port in (11434, 18765) if self.voice_service_required else (11434,):
+            for port in (GATEWAY_PORT, 18765) if self.voice_service_required else (GATEWAY_PORT,):
                 try:
                     with socket.create_connection(("127.0.0.1", port), timeout=1):
                         pass
@@ -231,18 +216,7 @@ class Assistant:
                     return False
             return True
 
-        def align_ollama_context():
-            from src.init.ollama_service import ollama_ready, restart_ollama, server_context_length
-            configured = load_config()["context_length"]
-            if ollama_ready() and server_context_length() != configured:
-                restart_ollama(configured)
-
         if services_ready():
-            try:
-                align_ollama_context()
-            except Exception:
-                logging.getLogger("assistant.services").exception(
-                    "Ollama could not be restarted with the configured context length")
             return
         directories = [PROJECT_ROOT / "scripts"]
         if getattr(sys, "frozen", False):
@@ -295,7 +269,7 @@ class Assistant:
     @staticmethod
     def _preload_runtime():
         try:
-            import pydantic_ai.models.ollama
+            import pydantic_ai.models.openai
             import src.init.tools
         except Exception:
             logging.getLogger("assistant.startup").exception("Runtime modules could not be preloaded")
@@ -360,19 +334,20 @@ class Assistant:
     @staticmethod
     def _new_provider():
         from pydantic_ai.models import DEFAULT_HTTP_TIMEOUT, get_user_agent
-        from pydantic_ai.providers.ollama import OllamaProvider
+        from pydantic_ai.providers.openai import OpenAIProvider
+        from src.init.omni_server import GATEWAY_URL
         from src.init.task_trace import trace_provider_request
         import httpx2
 
         http_client = httpx2.AsyncClient(
             timeout=httpx2.Timeout(timeout=DEFAULT_HTTP_TIMEOUT, connect=5),
             headers={"User-Agent": get_user_agent()}, event_hooks={"request": [trace_provider_request]})
-        return OllamaProvider(base_url="http://127.0.0.1:11434/v1", http_client=http_client)
+        return OpenAIProvider(base_url=f"{GATEWAY_URL}/v1", api_key="local", http_client=http_client)
 
     def _main_model(self, provider=None):
-        from pydantic_ai.models.ollama import OllamaModel
+        from pydantic_ai.models.openai import OpenAIChatModel
 
-        return OllamaModel(
+        return OpenAIChatModel(
             self.MODEL_NAME, provider=provider or self.provider,
             profile={"openai_chat_supports_multiple_system_messages": False,
                      "openai_chat_supports_max_completion_tokens": False,
@@ -380,7 +355,7 @@ class Assistant:
             settings=self.model_settings)
 
     def _loop_runtime(self, event_loop):
-        """Return this loop's own HTTP client handles for the shared Ollama model."""
+        """Return this loop's own HTTP client handles for the shared model."""
         if event_loop is None:
             return {"provider": self.provider, "models": {}}
         with self._loop_models_lock:
@@ -447,14 +422,19 @@ class Assistant:
                 self.agent.model = self.model
             return model
 
+    def restart_model_service(self) -> None:
+        """Stop the model service and start it again so a new context length applies."""
+        from src.init.omni_server import stop_gateway
+
+        stop_gateway()
+        self._ensure_services()
+
     def reload_source(self) -> str:
         """Reload source modules and rebuild the model and tools for next turn."""
         with self._reload_lock:
             from src.init.hot_reload import reload_project_modules
 
             reloaded, errors = reload_project_modules()
-            self.audio_model = None
-            self.audio_model_name = None
             with self._loop_models_lock:
                 for runtime in self._loop_models.values():
                     runtime["models"].clear()
@@ -613,12 +593,7 @@ class Assistant:
 
     def current_instructions(self) -> str:
         from src.init import rules
-        from src.init.brain import is_cloud_model
-        cloud_notice = (
-            "\nThe current main model runs on Ollama Cloud, not on this computer: "
-            "never claim that this conversation is processed 100% locally."
-            if is_cloud_model(self.MODEL_NAME) else "")
-        return (rules.current_instructions() + cloud_notice
+        return (rules.current_instructions()
                 + "\nApplication execution: call the native open_application tool "
                 "for requested apps. Writing an action JSON or describing a call "
                 "does not execute it. Only report an app as open when its tool "
@@ -666,17 +641,10 @@ class Assistant:
         import asyncio
         from pydantic_ai import CancellationToken
         from pydantic_ai.messages import BinaryContent
-        from pydantic_ai.models.ollama import OllamaModel
-        from src.init.config import load_dev_file
         from src.init.lang import tr
 
         self._initialize_runtime()
-        model = OllamaModel(
-            load_dev_file()["audio_model"], provider=self._loop_runtime(event_loop)["provider"],
-            profile={"openai_chat_supports_multiple_system_messages": False,
-                     "openai_chat_supports_max_completion_tokens": False},
-            settings={"openai_reasoning_effort": "none", "thinking": False,
-                      "temperature": 0, "max_tokens": 1024, "timeout": 30})
+        model = self._main_model(self._loop_runtime(event_loop)["provider"])
         transcriber = Agent(model, instructions=(
             "Transcribe the audio exactly as spoken in its original language. "
             "Output only the spoken words. Do not answer questions or execute "
@@ -779,36 +747,14 @@ class Assistant:
 
         if attachments:
             attachments.reserve_history(history)
-        turn_model = None
         turn_model_settings = {
             **self.model_settings,
             "temperature": brain.load_config()["temperature"],
         }
 
         model_prompt = attachments.prompt() if attachments else prompt
-        voice_model_active = audio_input is not None
         if audio_input is not None:
             model_prompt = [BinaryContent(data=audio_input, media_type="audio/wav")]
-        if voice_model_active:
-            from pydantic_ai.models.ollama import OllamaModel
-            from src.init.config import load_dev_file
-
-            audio_model_name = load_dev_file()["audio_model"]
-
-            def audio_model(provider):
-                return OllamaModel(
-                    audio_model_name, provider=provider,
-                    profile={"openai_chat_supports_multiple_system_messages": False,
-                             "openai_chat_supports_max_completion_tokens": False,
-                             "openai_supports_tool_choice_required": False},
-                    settings={"thinking": False, "openai_reasoning_effort": "none"})
-
-            with self._audio_model_lock:
-                if self.audio_model is None or self.audio_model_name != audio_model_name:
-                    self.audio_model = audio_model(self.provider)
-                    self.audio_model_name = audio_model_name
-            turn_model = (self.audio_model if event_loop is None else
-                          self._loop_model(event_loop, ("audio", audio_model_name), audio_model))
             turn_model_settings["thinking"] = False
         session_model = self._session_main_model(event_loop)
         attachment_tools = [attachments.toolset()] if attachments else []
@@ -832,17 +778,15 @@ class Assistant:
 
         from src.init.config import load_config
         request_config = load_config()
-        from src.init.attachments import ollama_capabilities
-        active_model = (turn_model or session_model).model_name
-        _, provider_context = ollama_capabilities(active_model)
-        operational_context = (provider_context if brain.is_cloud_model(active_model)
-                               else request_config["context_length"])
+        from src.init.attachments import model_capabilities
+        _, provider_context = model_capabilities()
+        operational_context = provider_context
         controller.request_configuration = {
             "operational_context_tokens": operational_context,
             "provider_context_tokens": provider_context,
             "effective_context_tokens": min(operational_context, provider_context),
             "configured_model": self.MODEL_NAME,
-            "source": "minimum_of_dev_configuration_and_ollama_show_or_ps; provider_fallback_4096"}
+            "source": "configured_context_length_of_the_omni_server"}
         controller.task_title = task_title
         controller.on_action = on_phase
 
@@ -982,7 +926,7 @@ class Assistant:
                         current_prompt,
                         message_history=conversation_messages,
                         toolsets=attachment_tools,
-                        model=turn_model or session_model,
+                        model=session_model,
                         model_settings=turn_model_settings,
                         cancellation_token=cancellation_token,
                         usage_limits=UsageLimits(request_limit=None),
