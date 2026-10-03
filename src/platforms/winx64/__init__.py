@@ -21,7 +21,7 @@
 import subprocess
 
 from ..base import Platform
-from . import apps, folders, notifications, system, windows
+from . import apps, folders, media, notifications, system, windows
 
 
 class WinX64Platform(Platform):
@@ -45,3 +45,9 @@ class WinX64Platform(Platform):
     package_command = staticmethod(apps.package_command)
     app_data_roots = staticmethod(apps.app_data_roots)
     steam_path = staticmethod(apps.steam_path)
+    media_reader = staticmethod(media.WinMediaReader)
+    current_media = staticmethod(media.current_media)
+    media_sessions = staticmethod(media.media_sessions)
+    control_media = staticmethod(media.control_media)
+    seek_media = staticmethod(media.seek_media)
+    record_output_audio = staticmethod(media.record_output_audio)

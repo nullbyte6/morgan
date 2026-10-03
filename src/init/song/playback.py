@@ -16,17 +16,15 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Find the song that is playing: Windows media sessions first, the Spotify Web API when it is authorized."""
-import asyncio
+"""Find the song that is playing: system media sessions first, the Spotify Web API when it is authorized."""
 import json
 import logging
-import os
 import time
 import urllib.request
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
 
 from src.init import media
+from src.platforms import UnsupportedOperation, current_platform
 
 log = logging.getLogger("assistant.song")
 
@@ -86,30 +84,6 @@ def looks_like_song(source: str, title: str, artist: str, album: str) -> bool:
     return bool(album) or artist.casefold().endswith("- topic")
 
 
-def _seconds(value) -> float:
-    try:
-        return max(0.0, value.total_seconds())
-    except AttributeError:
-        return 0.0
-
-
-async def _thumbnail(properties) -> bytes:
-    from winrt.windows.storage.streams import Buffer, DataReader, InputStreamOptions
-
-    reference = properties.thumbnail
-    if reference is None:
-        return b""
-    stream = await reference.open_read_async()
-    if not stream.size or stream.size > MAX_COVER_BYTES:
-        return b""
-    buffer = Buffer(int(stream.size))
-    await stream.read_async(buffer, buffer.capacity, InputStreamOptions.READ_AHEAD)
-    reader = DataReader.from_buffer(buffer)
-    data = bytearray(reader.unconsumed_buffer_length)
-    reader.read_bytes(data)
-    return bytes(data)
-
-
 def _download(url: str) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(request, timeout=10) as response:
@@ -117,11 +91,10 @@ def _download(url: str) -> bytes:
 
 
 class SongReader:
-    """Reads the current song on every call; keep it on one thread, it owns an event loop."""
+    """Reads the current song on every call; keep it on one thread, it owns a media reader."""
 
     def __init__(self):
-        self._loop = None
-        self._manager = None
+        self._sessions = None
         self._client = None
         self._client_checked = float("-inf")
         self._blocked_until = 0.0
@@ -133,20 +106,17 @@ class SongReader:
         self._remote_at = float("-inf")
 
     def close(self) -> None:
-        if self._loop is not None:
-            self._loop.close()
-            self._loop = None
+        if self._sessions is not None:
+            self._sessions.close()
+            self._sessions = None
 
     def read(self) -> Song | None:
-        if os.name != "nt":
-            return self._read_remote()
-        if self._loop is None:
-            self._loop = asyncio.new_event_loop()
-            from winrt.windows.media.control import (
-                GlobalSystemMediaTransportControlsSessionManager as Manager,
-            )
-            self._manager = self._loop.run_until_complete(Manager.request_async())
-        song = self._loop.run_until_complete(self._read_local())
+        if self._sessions is None:
+            try:
+                self._sessions = current_platform().media_reader()
+            except UnsupportedOperation:
+                return self._read_remote()
+        song = self._read_local()
         if song is not None and SPOTIFY in song.source.casefold():
             song = self._verified(song)
         if song is None:
@@ -154,57 +124,31 @@ class SongReader:
         self._remote = None
         return song
 
-    async def _read_local(self) -> Song | None:
-        from winrt.windows.media.control import (
-            GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
-        )
-
-        current = self._manager.get_current_session()
-        current_source = current.source_app_user_model_id if current is not None else ""
+    def _read_local(self) -> Song | None:
         best = None
-        for session in self._manager.get_sessions():
-            source = session.source_app_user_model_id
-            if not is_song_source(source):
+        for session in self._sessions.sessions(accept=is_song_source):
+            if not looks_like_song(session.source, session.title, session.artist, session.album):
                 continue
-            try:
-                properties = await session.try_get_media_properties_async()
-            except Exception:
-                continue
-            if not looks_like_song(source, properties.title or "", properties.artist or "",
-                                   properties.album_title or ""):
-                continue
-            playback = session.get_playback_info()
-            playing = playback.playback_status == Status.PLAYING
-            rank = (not playing, source != current_source)
+            rank = (not session.playing, not session.current)
             if best is None or rank < best[0]:
-                best = (rank, session, properties, playback, playing)
+                best = (rank, session)
         if best is None:
             return None
-        _, session, properties, playback, playing = best
-        source = session.source_app_user_model_id
-        timeline = session.get_timeline_properties()
-        duration = max(0.0, _seconds(timeline.end_time) - _seconds(timeline.start_time))
-        position = _seconds(timeline.position) - _seconds(timeline.start_time)
-        updated = timeline.last_updated_time
-        if playing and updated is not None and updated.year > 2000:
-            position += max(0.0, (datetime.now(timezone.utc) - updated).total_seconds())
-        if duration > 0:
-            position = min(position, duration)
-        title, artist = properties.title.strip(), properties.artist.strip()
+        session = best[1]
+        title, artist = session.title.strip(), session.artist.strip()
         key = f"{title}\n{artist}".casefold()
         cover = self._covers.get(key, b"")
         if not cover and self._attempts.get(key, 0) < THUMBNAIL_ATTEMPTS:
             self._attempts[key] = self._attempts.get(key, 0) + 1
             try:
-                cover = await _thumbnail(properties)
+                cover = self._sessions.cover(session)
             except Exception:
                 cover = b""
             if cover:
                 self._covers[key] = cover
-        return Song(source=source, title=title, artist=artist, album=(properties.album_title or "").strip(),
-                    duration=duration, position=max(0.0, position), playing=playing,
-                    seekable=bool(playback.controls.is_playback_position_enabled),
-                    stamp=time.monotonic(), cover=cover)
+        return Song(source=session.source, title=title, artist=artist, album=session.album.strip(),
+                    duration=session.duration, position=session.position, playing=session.playing,
+                    seekable=session.seekable, stamp=time.monotonic(), cover=cover)
 
     def _spotify(self):
         """The Spotify client when the user already authorized it; it never opens the browser."""

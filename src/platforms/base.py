@@ -18,10 +18,12 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Operating system services the core requests from the active platform package."""
 
+from dataclasses import dataclass
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+from typing import Any, Callable
 
 
 class UnsupportedOperation(OSError):
@@ -33,6 +35,37 @@ class UnsupportedOperation(OSError):
                             operation=operation, platform=platform))
         self.platform = platform
         self.operation = operation
+
+
+@dataclass(frozen=True)
+class MediaSession:
+    """One media session as the system reports it, with position measured when it was read."""
+
+    source: str
+    title: str
+    artist: str
+    album: str
+    playing: bool
+    current: bool
+    duration: float
+    position: float
+    seekable: bool
+    handle: Any = None
+
+
+class MediaReader:
+    """Reads media sessions repeatedly; keep it on the thread that created it."""
+
+    def sessions(self, accept: Callable[[str], bool] | None = None) -> list[MediaSession]:
+        """Return sessions whose source is accepted, without cover art."""
+        return []
+
+    def cover(self, session: MediaSession) -> bytes:
+        """Return the cover art of a session read by this reader."""
+        return b""
+
+    def close(self) -> None:
+        pass
 
 
 class Platform:
@@ -115,3 +148,27 @@ class Platform:
     def steam_path(self) -> Path | None:
         """Return the local Steam installation folder."""
         return None
+
+    def media_reader(self) -> MediaReader:
+        """Return a reader of the system media sessions."""
+        raise self.unsupported("media_reader")
+
+    def current_media(self) -> dict | None:
+        """Describe the current system media session, or None when there is none."""
+        raise self.unsupported("current_media")
+
+    def media_sessions(self) -> list[dict]:
+        """Describe every system media session."""
+        raise self.unsupported("media_sessions")
+
+    def control_media(self, action: str, source: str = "") -> str | None:
+        """Send play, pause, next or previous to a media session; None when no session is active."""
+        raise self.unsupported("control_media")
+
+    def seek_media(self, seconds: float, source: str = "") -> str:
+        """Move the playback position of a media session."""
+        raise self.unsupported("seek_media")
+
+    def record_output_audio(self, seconds: int, sample_rate: int):
+        """Record what the default output device is playing as a float array."""
+        raise self.unsupported("record_output_audio")

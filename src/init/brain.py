@@ -1344,46 +1344,28 @@ def open_application(application: str) -> str:
 
 def identify_playing_song(seconds: int = 8) -> str:
     """Listen to the computer's current output audio and identify the song."""
-    if os.name != "nt":
-        return tr('brain.error_system_audio_recognition_is_currently_only_supported_on_wi')
-
     if not 5 <= seconds <= 20:
         return tr('brain.error_seconds_must_be_between_5_and_20')
 
     try:
         import asyncio
         import numpy as np
-        import soundcard as sc
         from shazamio import Shazam
     except ImportError:
         return (
             tr('brain.error_music_recognition_dependencies_are_not_installed_run_pip_i')
         )
 
-    speaker = sc.default_speaker()
-    if speaker is None:
-        return tr('brain.error_no_default_audio_output_device_was_found')
-    loopbacks = sc.all_microphones(include_loopback=True)
-
-    loopback = next(
-        (microphone
-            for microphone in loopbacks
-            if speaker.name.casefold() in microphone.name.casefold()
-               or microphone.name.casefold() in speaker.name.casefold()),
-        None,
-    )
-
-    if loopback is None:
-        return tr('brain.error_no_loopback_device_found_for', value0=speaker.name)
-
     sample_rate = 44100
-    frames = sample_rate * seconds
 
     try:
-        with loopback.recorder(samplerate=sample_rate) as recorder:
-            audio = recorder.record(numframes=frames)
-    except Exception as error:
-        return tr('brain.error_capturing_system_audio', error=error)
+        audio = current_platform().record_output_audio(seconds, sample_rate)
+    except ImportError:
+        return (
+            tr('brain.error_music_recognition_dependencies_are_not_installed_run_pip_i')
+        )
+    except OSError as error:
+        return str(error)
 
     if audio.size == 0:
         return tr('brain.no_system_audio_was_captured')
@@ -1443,13 +1425,16 @@ def identify_playing_song(seconds: int = 8) -> str:
 
 async def media_is_playing() -> bool:
     """Is media playing? Checks whether is media playing"""
-    from winrt.windows.media.control import (
-        GlobalSystemMediaTransportControlsSessionManager as Manager,
-        GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status)
+    import asyncio
 
-    manager = await Manager.request_async()
-    return any(session.get_playback_info().playback_status == Status.PLAYING
-               for session in manager.get_sessions())
+    def read():
+        reader = current_platform().media_reader()
+        try:
+            return any(session.playing for session in reader.sessions())
+        finally:
+            reader.close()
+
+    return await asyncio.to_thread(read)
 
 def get_current_media() -> str:
     """
@@ -1458,53 +1443,12 @@ def get_current_media() -> str:
     Works with applications such as Spotify and browsers when they expose
     a System Media Transport Controls session.
     """
-    if os.name != "nt":
-        return tr('brain.error_gsmtc_media_information_is_only_supported_on_windows')
-
     try:
-        import asyncio
-        from winrt.windows.media.control import (
-            GlobalSystemMediaTransportControlsSessionManager as MediaManager,
-        )
+        result = current_platform().current_media()
     except ImportError:
         return (
             tr('brain.error_windows_media_control_support_is_not_installed_run_pip_ins')
         )
-
-    async def read_media():
-        manager = await MediaManager.request_async()
-
-        session = manager.get_current_session()
-
-        if session is None:
-            return None
-
-        properties = await session.try_get_media_properties_async()
-        playback = session.get_playback_info()
-        timeline = session.get_timeline_properties()
-
-        return {
-            "source": session.source_app_user_model_id,
-            "title": properties.title or None,
-            "artist": properties.artist or None,
-            "album_title": properties.album_title or None,
-            "album_artist": properties.album_artist or None,
-            "track_number": properties.track_number or None,
-            "playback_status": str(playback.playback_status),
-            "position_seconds": (
-                timeline.position.total_seconds()
-                if timeline is not None
-                else None
-            ),
-            "duration_seconds": (
-                timeline.end_time.total_seconds()
-                if timeline is not None
-                else None
-            ),
-        }
-
-    try:
-        result = asyncio.run(read_media())
     except Exception as error:
         return tr('brain.error_reading_windows_media_session', error=error)
 
@@ -1516,47 +1460,12 @@ def get_current_media() -> str:
 
 def list_media_sessions() -> str:
     """List every media session currently exposed through Windows GSMTC."""
-    if os.name != "nt":
-        return tr('brain.error_gsmtc_media_information_is_only_supported_on_windows')
-
     try:
-        import asyncio
-        from winrt.windows.media.control import (
-            GlobalSystemMediaTransportControlsSessionManager as MediaManager,
-        )
+        sessions = current_platform().media_sessions()
     except ImportError:
         return (
             tr('brain.error_windows_media_control_support_is_not_installed_run_pip_ins')
         )
-
-    async def read_sessions():
-        manager = await MediaManager.request_async()
-
-        result = []
-
-        for session in manager.get_sessions():
-            try:
-                properties = await session.try_get_media_properties_async()
-                playback = session.get_playback_info()
-
-                result.append({
-                    "source": session.source_app_user_model_id,
-                    "title": properties.title or None,
-                    "artist": properties.artist or None,
-                    "album": properties.album_title or None,
-                    "playback_status": str(playback.playback_status),
-                })
-
-            except Exception as error:
-                result.append({
-                    "source": session.source_app_user_model_id,
-                    "error": str(error),
-                })
-
-        return result
-
-    try:
-        sessions = asyncio.run(read_sessions())
     except Exception as error:
         return tr('brain.error_reading_windows_media_sessions', error=error)
 

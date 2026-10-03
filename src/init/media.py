@@ -19,7 +19,6 @@
 """Local Windows playback control and free YouTube search from Python."""
 
 from src.init.lang import tr
-import asyncio
 import hashlib
 import json
 import os
@@ -246,45 +245,11 @@ def control_media(action: Literal["play", "pause", "next", "previous"],
     """
     if source.strip().casefold() == "spotify":
         return _spotify_control(action)
-    if os.name != "nt":
-        return tr('media.error_media_control_requires_windows')
-    operations = {
-        "play": ("is_play_enabled", "try_play_async"),
-        "pause": ("is_pause_enabled", "try_pause_async"),
-        "next": ("is_next_enabled", "try_skip_next_async"),
-        "previous": ("is_previous_enabled", "try_skip_previous_async"),
-    }
-    if action not in operations:
+    if action not in ("play", "pause", "next", "previous"):
         return tr('media.error_choose_play_pause_next_or_previous')
 
-    async def apply():
-        from winrt.windows.media.control import (
-            GlobalSystemMediaTransportControlsSessionManager as Manager,
-        )
-        manager = await Manager.request_async()
-        if source:
-            matches = [session for session in manager.get_sessions()
-                       if session.source_app_user_model_id == source]
-            if len(matches) != 1:
-                return tr('media.error_source_is_absent_or_matches_multiple_sessions_list_media_s')
-            session = matches[0]
-        else:
-            session = manager.get_current_session()
-        if session is None:
-            return None
-        flag, method = operations[action]
-        if not getattr(session.get_playback_info().controls, flag):
-            return tr('media.error_this_media_session_does_not_support', action=action)
-        accepted = await getattr(session, method)()
-        return json.dumps({"action": action, "accepted": bool(accepted),
-                           "source": session.source_app_user_model_id,
-                           "error": None if accepted else tr('media.application_rejected_the_command')})
-
-    async def bounded():
-        return await asyncio.wait_for(apply(), timeout=10)
-
     try:
-        result = asyncio.run(bounded())
+        result = current_platform().control_media(action, source)
         if result is None and not source and spotify_is_configured():
             return _spotify_control(action)
         return result or tr('media.error_no_active_media_session')
@@ -303,35 +268,8 @@ def seek_media(seconds: float, source: str = "") -> str:
             return json.dumps({"action": "seek", "accepted": True, "source": "spotify"})
         except Exception as error:
             return _spotify_error("seek", error)
-    if os.name != "nt":
-        return tr('media.error_media_control_requires_windows')
-
-    async def apply():
-        from winrt.windows.media.control import (
-            GlobalSystemMediaTransportControlsSessionManager as Manager,
-        )
-        manager = await Manager.request_async()
-        if source:
-            matches = [session for session in manager.get_sessions()
-                       if session.source_app_user_model_id == source]
-            if len(matches) != 1:
-                return tr('media.error_source_is_absent_or_matches_multiple_sessions_list_media_s')
-            session = matches[0]
-        else:
-            session = manager.get_current_session()
-        if session is None:
-            return tr('media.error_no_active_media_session')
-        if not session.get_playback_info().controls.is_playback_position_enabled:
-            return tr('media.error_this_media_session_does_not_support', action="seek")
-        accepted = await session.try_change_playback_position_async(round(seconds * 10_000_000))
-        return json.dumps({"action": "seek", "accepted": bool(accepted),
-                           "source": session.source_app_user_model_id})
-
-    async def bounded():
-        return await asyncio.wait_for(apply(), timeout=10)
-
     try:
-        return asyncio.run(bounded())
+        return current_platform().seek_media(seconds, source)
     except Exception as error:
         return tr('media.error_controlling_media', value0=error or type(error).__name__)
 
