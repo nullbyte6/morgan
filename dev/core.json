@@ -1,5 +1,5 @@
 {
-  "version": "26.10.3-beta",
+  "version": "26.10.4-beta",
   "base_model_name": "gemma4:e4b",
   "audio_model": "gemma4:e4b"
 }
