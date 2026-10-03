@@ -12,7 +12,7 @@ Ollama to run tools and automate tasks on Windows.
 - Local multimodal model (`gemma4:e4b` through Ollama) for text, images and
   voice, with tool calling to run commands, read and edit files and automate
   tasks on the PC.
-- Spoken replies with the MiniCPM-o omni model, hands-free wake phrase activation and live
+- Spoken replies with CosyVoice, hands-free wake phrase activation and live
   voice input. See [wake voice](docs/WAKE-VOICE.md).
 - Persistent local memory in SQLite, with pinned memories that are always in
   context. See [memory](docs/MEMORY.md).
@@ -49,14 +49,14 @@ required. The installer:
   `gemma4:e4b` model (about 6.6 GB), which handles both text and voice input;
 - creates the data directory `C:\Users\<username>\.<name>` (`.arlo` for the
   default name), saves the chosen name in its `config.json`, and downloads the
-  MiniCPM-o 4.5 voice model (Q4_K_M GGUF files, about 8.7 GB) from Hugging
-  Face into `models\MiniCPM-o-4_5-gguf` inside it if it is missing. Interrupted
+  CosyVoice voice model (`Fun-CosyVoice3-0.5B-2512`, about 6.3 GB) from Hugging
+  Face into `models\Fun-CosyVoice3-0.5B` inside it if it is missing. Interrupted
   downloads resume on the next run, and files already present are skipped;
 - installs FFmpeg and Python 3.12 through WinGet if they are missing, and
   creates the voice runtime (`.venv` inside the installation folder) with
   PyTorch (CUDA build on NVIDIA GPUs, ROCm build on AMD Radeon GPUs together
   with TorchCodec and the shared FFmpeg libraries it loads, CPU build
-  otherwise) and the voice dependencies. No repository clone is needed; when a cloned repository is
+  otherwise) and the CosyVoice dependencies. No repository clone is needed; when a cloned repository is
   found through `ARLO_HOME`, this step is skipped and its `.venv` is used.
 
 Configuration and user data are stored in `C:\Users\<username>\.<name>`. Refer
@@ -109,7 +109,7 @@ platform layer in `src/platforms`:
   macOS still has no song recognition from system audio and no diagnostics.
   `scripts/arlo-services.sh` is the macOS counterpart of
   `scripts\arlo-services.ps1`: it starts Ollama (from `PATH`, Homebrew or
-  `Ollama.app`), preloads the model, starts the voice service from the repository's
+  `Ollama.app`), preloads the model, starts CosyVoice from the repository's
   `.venv`, restarting it when its sources changed, and opens a Terminal window
   that follows the TTS and agent logs (`--no-console` and `--no-voice` skip
   them). Arlo runs it at startup on macOS; a packaged app finds it through
@@ -184,5 +184,5 @@ version must publish its source under the same license.
 
 Arlo builds on third-party software that keeps its own licenses. Their license
 texts are in the [licenses](licenses) directory and are installed with Arlo.
-Models such as MiniCPM-o, Whisper and the Ollama models are covered by their own
+Models such as CosyVoice, Whisper and the Ollama models are covered by their own
 terms, which may restrict some uses.
