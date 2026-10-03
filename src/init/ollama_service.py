@@ -77,6 +77,20 @@ def ollama_ready() -> bool:
         return False
 
 
+def server_context_length() -> int | None:
+    """The OLLAMA_CONTEXT_LENGTH of the running server; None when it is unset or unreadable."""
+    for process in _processes():
+        try:
+            if (process.info["name"] or "").casefold() not in SERVER_NAMES:
+                continue
+            value = process.environ().get("OLLAMA_CONTEXT_LENGTH")
+        except psutil.Error:
+            continue
+        if value and value.isdigit():
+            return int(value)
+    return None
+
+
 def _stop(processes: list[psutil.Process]) -> None:
     for process in processes:
         try:

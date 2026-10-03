@@ -228,7 +228,18 @@ class Assistant:
                     return False
             return True
 
+        def align_ollama_context():
+            from src.init.ollama_service import ollama_ready, restart_ollama, server_context_length
+            configured = load_config()["context_length"]
+            if ollama_ready() and server_context_length() != configured:
+                restart_ollama(configured)
+
         if services_ready():
+            try:
+                align_ollama_context()
+            except Exception:
+                logging.getLogger("assistant.services").exception(
+                    "Ollama could not be restarted with the configured context length")
             return
         name: str = load_config()["assistant"]["name"]
         launchers = dict.fromkeys((f"{name}-services.ps1", "arlo-services.ps1"))
