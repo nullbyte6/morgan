@@ -43,7 +43,8 @@ from .speech_text import SpeechNumbers, prepare_speech
 from .subtitle_timing import StreamingWordTimeline
 from .voice_naturalness import Naturalizer
 from .voice_prosody import ProsodyTracker
-from .voice_profiles import selected_voice, resolve_voice
+from .voice_profiles import (selected_voice, resolve_voice, VOICE_REFERENCE_INSTRUCTION,
+                             VOICE_REFERENCE_LANGUAGE)
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -173,7 +174,7 @@ class VoiceService:
         self.voice_reference = selected_voice() or Path(voice_reference)
         reference_text = reference_text.strip()
         if "<|endofprompt|>" not in reference_text:
-            reference_text = "You are a helpful assistant.<|endofprompt|>" + reference_text
+            reference_text = VOICE_REFERENCE_INSTRUCTION + reference_text
 
         self.reference_text = reference_text
         self.speed = speed
@@ -257,7 +258,7 @@ class VoiceService:
         text = (transcript.read_text(encoding="utf-8-sig").strip()
                 if transcript.is_file() else self.reference_text)
         if "<|endofprompt|>" not in text:
-            text = "You are a helpful assistant.<|endofprompt|>" + text
+            text = VOICE_REFERENCE_INSTRUCTION + text
         try:
             self.voice.add_zero_shot_spk(text, str(reference), get_assistant_identifier())
         finally:
@@ -311,7 +312,8 @@ class VoiceService:
         instruction = ""
         if language is not None:
             prefix, transcript = self._reference_prompt.split("<|endofprompt|>", 1)
-            instruction = (f"{prefix.rstrip()} Please speak in "
+            prefix = prefix.rstrip().removesuffix(f"Please speak in {VOICE_REFERENCE_LANGUAGE}.").rstrip()
+            instruction = (f"{prefix} Please speak in "
                            f"{language.name.replace('_', ' ').lower()}."
                            f"<|endofprompt|>{transcript}")
             instruction_key = (self._reference_key, language)
