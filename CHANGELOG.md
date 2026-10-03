@@ -11,6 +11,8 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add platform layer with winx64 and macx64 packages behind a shared interface, moving window listing, launching, closing and minimizing, known folders, local drives and notifications out of the core so other operating systems can provide their own implementations
 - Add scripts/arlo-services.sh, the macOS services launcher that starts Ollama, preloads the model, starts CosyVoice and opens a Terminal debug console following its logs, and run it at startup on macOS through the macx64 package
 - Add scripts/build-dmg.sh, which builds Arlo.app with PyInstaller on an Apple Silicon Mac, with the app version and the microphone and automation permission prompts, and packs it into a build/installer/Arlo-<version>.dmg disk image
+- Add scripts/build-tui-dmg.sh, which builds the terminal version on an Apple Silicon Mac and packs it with an Arlo Terminal.command launcher into a build/installer/ArloTUI-<version>.dmg disk image
+- Add scripts/rebuild.sh, which builds both macOS disk images, stops at the first failure and opens build/installer
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
 - Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
 - Fix every request failing on computers where Ollama was already running with its own small default context, by restarting Ollama at startup with the configured context length when the running server was started with a different one

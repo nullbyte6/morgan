@@ -116,9 +116,13 @@ platform layer in `src/platforms`:
   `scripts/build-dmg.sh`, run on an Apple Silicon Mac with the dependencies
   from `requirements.txt` in `.venv`, builds `Arlo.app` with PyInstaller
   (in `build/packaging-macos/dist`) and packs it into
-  `build/installer/Arlo-<version>.dmg`. The app is only ad-hoc signed, so
-  macOS asks for confirmation the first time it opens until it is signed and
-  notarized with an Apple Developer ID.
+  `build/installer/Arlo-<version>.dmg`. `scripts/build-tui-dmg.sh` builds the
+  terminal version the same way (in `build/packaging-tui-macos/dist`) into
+  `build/installer/ArloTUI-<version>.dmg`, with an `ArloTUI` folder and an
+  `Arlo Terminal.command` launcher to copy together. `scripts/rebuild.sh` runs
+  both builds, stops at the first failure and opens `build/installer`. The
+  builds are only ad-hoc signed, so macOS asks for confirmation the first time
+  they open until they are signed and notarized with an Apple Developer ID.
 - `current_platform()` in `src/platforms/__init__.py` selects the package from
   `sys.platform` and falls back to the portable defaults elsewhere.
 
