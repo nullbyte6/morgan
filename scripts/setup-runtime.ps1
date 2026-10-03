@@ -70,6 +70,8 @@ $TorchCudaIndex = "https://download.pytorch.org/whl/cu128"
 $TorchRocmVersion = "2.12.0+rocm7.14.1"
 $TorchaudioRocmVersion = "2.11.0+rocm7.14.1"
 $TorchRocmIndex = "https://repo.amd.com/rocm/whl-multi-arch/"
+$TorchcodecRocmVersion = "0.16.0"
+$TorchcodecProbe = "import io, wave; b = io.BytesIO(); w = wave.open(b, 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(bytes(3200)); w.close(); from torchcodec.decoders import AudioDecoder; AudioDecoder(b.getvalue()).get_all_samples()"
 $VoicePackages = @(
     "antlr4-python3-runtime==4.9.3",
     "attrs==26.1.0",
@@ -731,6 +733,48 @@ function Test-TorchBackend {
     }
 }
 
+function Test-TorchCodec {
+    try {
+        & $VenvPython -c $TorchcodecProbe *> $null
+
+        return ($LASTEXITCODE -eq 0)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Ensure-TorchCodec {
+    param(
+        [hashtable]$Backend,
+        [string[]]$Pip
+    )
+
+    if (($Backend.Name -ne "rocm") -or (Test-TorchCodec)) {
+        return
+    }
+
+    Write-Host "Installing TorchCodec for the ROCm torchaudio..."
+
+    if ((Invoke-Native -File $VenvPython -Arguments ($Pip + @("torchcodec==$TorchcodecRocmVersion"))) -ne 0) {
+        throw "Failed to install TorchCodec."
+    }
+
+    if (Test-TorchCodec) {
+        return
+    }
+
+    Write-Host "TorchCodec needs the shared FFmpeg libraries. Installing..."
+
+    Install-WinGetPackage -Id "Gyan.FFmpeg.Shared"
+
+    Update-SessionPath
+
+    if (-not (Test-TorchCodec)) {
+        throw "TorchCodec was installed but could not load the shared FFmpeg libraries."
+    }
+}
+
 function Ensure-Ffmpeg {
     Write-Step "Checking FFmpeg..."
 
@@ -762,6 +806,7 @@ function Ensure-VoiceRuntime {
         if (Test-TorchBackend $Backend) {
             Write-Host "Voice runtime found:"
             Write-Host "  $VenvDir"
+            Ensure-TorchCodec $Backend $Pip
             return
         }
 
@@ -782,6 +827,7 @@ function Ensure-VoiceRuntime {
         }
 
         Write-Host "PyTorch updated successfully."
+        Ensure-TorchCodec $Backend $Pip
         return
     }
 
@@ -823,6 +869,8 @@ function Ensure-VoiceRuntime {
     if ((Invoke-Native -File $VenvPython -Arguments ($Pip + $VoicePackages)) -ne 0) {
         throw "Failed to install the voice dependencies."
     }
+
+    Ensure-TorchCodec $Backend $Pip
 
     if (-not (Test-VoiceRuntime)) {
         throw "The voice runtime was installed but could not be verified."
