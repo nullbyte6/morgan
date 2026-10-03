@@ -98,6 +98,8 @@ from cosyvoice.cli.cosyvoice import AutoModel
 from cosyvoice.utils.frontend_utils import contains_chinese, split_paragraph
 _silence_tts_loggers()
 
+KANA = re.compile(r"[぀-ヿ]")
+
 import shutil
 
 if shutil.which("ffmpeg") is None:
@@ -302,7 +304,7 @@ class VoiceService:
         tokenize = partial(self.voice.frontend.tokenizer.encode,
                            allowed_special=self.voice.frontend.allowed_special)
         phrases = split_paragraph(text, tokenize,
-                                  "zh" if contains_chinese(text) else "en",
+                                  "zh" if contains_chinese(text) or KANA.search(text) else "en",
                                   token_max_n=80, token_min_n=60,
                                   merge_len=20, comma_split=False)
         for phrase in phrases:
