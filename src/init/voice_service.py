@@ -155,7 +155,7 @@ class VoiceService:
     """
 
     def __init__(self, model_path, voice_reference, reference_text,
-                 speed=1.0,
+                 speed=0.95,
                  audio_callback=None, speaking_callback=None,
                  subtitle_callback=None):
         _raise_priority(process=True)

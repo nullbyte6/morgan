@@ -16,6 +16,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add scripts/rebuild.sh, which builds both macOS disk images, stops at the first failure and opens build/installer
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
 - Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
+- Fix Marina's voice cutting off while speaking, by fading out the end of her reference clip, which stopped abruptly, and adding silence after it
 - Fix every request failing on computers where Ollama was already running with its own small default context, by restarting Ollama at startup with the configured context length when the running server was started with a different one
 - Fix image analysis always answering in Spanish unless asked otherwise, by answering in the interface language
 - Fix installed copies failing to start their services, because the installer did not ship the platform layer that config.py and the voice service now import
@@ -27,6 +28,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Fix spoken file paths always spelling letters and the dot in Spanish, by using the letter names and the word for dot of the language detected in the reply for English, Spanish, Chinese, French, German, Portuguese, Italian, Russian, Japanese and Korean, and by keeping accented and non-Latin parts of a path that were dropped
 - Fix the voice runtime on AMD ROCm installs failing to load audio, by installing TorchCodec 0.16 from PyPI after the ROCm PyTorch and the shared FFmpeg build it loads when only the static one is present, also repairing existing ROCm installs
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
+- Update Arlo to sound more relaxed and natural, with a relaxed conversational default tone, a response rule for everyday wording, and a slightly slower default speech speed
 - Update media session reading and playback control, the now-playing song reader and system audio capture for song recognition to go through the platform layer
 - Update process termination, shutdown scheduling, installed application discovery, file opening and Recycle Bin emptying to go through the platform layer, so the core no longer requires winshell or winreg to import
 - Update requirements.txt to keep only cross-platform dependencies and include the winx64 package's own requirements, so Windows-only libraries such as pywin32, winshell, winrt, pywinpty, DirectML and MKL install only on Windows
