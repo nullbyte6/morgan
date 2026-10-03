@@ -308,7 +308,7 @@
   "config.error_updating_configuration_updates_must_be_a_non_empty_object": "Error al actualizar la configuración: updates debe ser un objeto no vacío",
   "config.configuration_updated_immediately": "Configuración actualizada inmediatamente: {changed}",
   "config.config_json_must_contain_a_json_object": "config.json debe contener un objeto JSON",
-  "config.lang_must_be_english_or_spanish": "lang debe ser 'english', 'spanish' o 'chinese'",
+  "config.lang_must_be_english_or_spanish": "lang debe ser 'english', 'spanish', 'chinese', 'french', 'german', 'portuguese', 'japanese', 'russian', 'korean' o 'italian'",
   "config.weather_location_must_be_text": "weather_location debe ser texto",
   "config.temperature_must_be_a_number_between_0_and_2": "temperature debe ser un número entre 0 y 2",
   "config.personality_must_be_an_object": "personality debe ser un objeto",

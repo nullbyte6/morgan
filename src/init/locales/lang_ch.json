@@ -308,7 +308,7 @@
   "config.error_updating_configuration_updates_must_be_a_non_empty_object": "更新配置出错：updates 必须是非空对象",
   "config.configuration_updated_immediately": "配置已立即更新：{changed}",
   "config.config_json_must_contain_a_json_object": "config.json 必须包含一个 JSON 对象",
-  "config.lang_must_be_english_or_spanish": "lang 必须是 'english'、'spanish' 或 'chinese'",
+  "config.lang_must_be_english_or_spanish": "lang 必须是 'english'、'spanish'、'chinese'、'french'、'german'、'portuguese'、'japanese'、'russian'、'korean' 或 'italian'",
   "config.weather_location_must_be_text": "weather_location 必须是文本",
   "config.temperature_must_be_a_number_between_0_and_2": "temperature 必须是介于 0 到 2 之间的数字",
   "config.personality_must_be_an_object": "personality 必须是对象",

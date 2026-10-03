@@ -21,13 +21,12 @@ import json
 import urllib.request
 from datetime import date, datetime, time, timedelta, timezone
 
-from src.init.lang import get_language, tr
+from src.init.lang import LANGUAGE_NAMES as LANGUAGES, get_language, tr
 
 from .entries import Reminder
 
 TOPIC_LIMIT = 140
 WEEK_TOPIC_LIMIT = 40
-LANGUAGES = {"english": "English", "spanish": "European Spanish", "chinese": "Simplified Chinese"}
 
 
 def day_bounds(day: date) -> tuple[str, str]:

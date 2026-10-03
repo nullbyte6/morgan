@@ -25,12 +25,13 @@ from PySide6.QtCore import QDate, QLocale, QTime
 
 from src.init.lang import get_language, tr
 
-LOCALES = {"english": "en_GB", "spanish": "es_ES", "chinese": "zh_CN"}
+LOCALES = {"english": "en_GB", "spanish": "es_ES", "chinese": "zh_CN", "french": "fr_FR", "german": "de_DE",
+           "portuguese": "pt_BR", "japanese": "ja_JP", "russian": "ru_RU", "korean": "ko_KR", "italian": "it_IT"}
 NAME_STYLES = {"long": QLocale.FormatType.LongFormat, "short": QLocale.FormatType.ShortFormat,
                "narrow": QLocale.FormatType.NarrowFormat}
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=len(LOCALES))
 def _locale(name: str) -> QLocale:
     return QLocale(name)
 
@@ -62,7 +63,7 @@ def weekday_name(index: int, style: str = "short") -> str:
 
 
 def month_name(month: int, style: str = "long") -> str:
-    return capitalized(locale().monthName(month, NAME_STYLES[style]).rstrip("."))
+    return capitalized(locale().standaloneMonthName(month, NAME_STYLES[style]).rstrip("."))
 
 
 def qdate(day: date) -> QDate:
@@ -90,7 +91,8 @@ def day_heading(day: date, today: date | None = None) -> str:
 
 
 def month_title(day: date) -> str:
-    return format_day(day, "nova.format.month")
+    pattern = tr("nova.format.month").replace("MMMM", f"'{month_name(day.month)}'")
+    return capitalized(locale().toString(qdate(day), pattern))
 
 
 def week_title(first: date, last: date) -> str:

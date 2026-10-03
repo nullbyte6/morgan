@@ -46,6 +46,57 @@ NAMES = {
                    "十二月"),
         "short_months": tuple(f"{month}月" for month in range(1, 13)),
     },
+    "french": {
+        "days": ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"),
+        "short_days": ("lun", "mar", "mer", "jeu", "ven", "sam", "dim"),
+        "months": ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre",
+                   "octobre", "novembre", "décembre"),
+        "short_months": ("janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"),
+    },
+    "german": {
+        "days": ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"),
+        "short_days": ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"),
+        "months": ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September",
+                   "Oktober", "November", "Dezember"),
+        "short_months": ("Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"),
+    },
+    "portuguese": {
+        "days": ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado",
+                 "domingo"),
+        "short_days": ("seg", "ter", "qua", "qui", "sex", "sáb", "dom"),
+        "months": ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
+                   "outubro", "novembro", "dezembro"),
+        "short_months": ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"),
+    },
+    "japanese": {
+        "days": ("月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"),
+        "short_days": ("月", "火", "水", "木", "金", "土", "日"),
+        "months": tuple(f"{month}月" for month in range(1, 13)),
+        "short_months": tuple(f"{month}月" for month in range(1, 13)),
+    },
+    "russian": {
+        "days": ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"),
+        "short_days": ("пн", "вт", "ср", "чт", "пт", "сб", "вс"),
+        "months": ("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября",
+                   "октября", "ноября", "декабря"),
+        "standalone_months": ("январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август",
+                              "сентябрь", "октябрь", "ноябрь", "декабрь"),
+        "short_months": ("янв", "февр", "март", "апр", "май", "июнь", "июль", "авг", "сент", "окт", "нояб",
+                         "дек"),
+    },
+    "korean": {
+        "days": ("월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"),
+        "short_days": ("월", "화", "수", "목", "금", "토", "일"),
+        "months": tuple(f"{month}월" for month in range(1, 13)),
+        "short_months": tuple(f"{month}월" for month in range(1, 13)),
+    },
+    "italian": {
+        "days": ("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"),
+        "short_days": ("lun", "mar", "mer", "gio", "ven", "sab", "dom"),
+        "months": ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre",
+                   "ottobre", "novembre", "dicembre"),
+        "short_months": ("gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"),
+    },
 }
 TOKEN = re.compile(r"'[^']*'|d{1,4}|M{1,4}|y{4}|y{2}")
 REPEAT = "↻"
@@ -68,6 +119,10 @@ def weekday_name(index: int, style: str = "short") -> str:
 def format_day(day: date, pattern_key: str) -> str:
     """The day written with one of the desktop's date patterns, such as dddd, d MMMM."""
     table = names()
+    pattern = t(pattern_key)
+    months = table["months"]
+    if not any(match.group().startswith("d") for match in TOKEN.finditer(pattern)):
+        months = table.get("standalone_months", months)
 
     def token(match) -> str:
         text = match.group()
@@ -75,11 +130,11 @@ def format_day(day: date, pattern_key: str) -> str:
             return text[1:-1]
         values = {"d": str(day.day), "dd": f"{day.day:02d}", "ddd": table["short_days"][day.weekday()],
                   "dddd": table["days"][day.weekday()], "M": str(day.month), "MM": f"{day.month:02d}",
-                  "MMM": table["short_months"][day.month - 1], "MMMM": table["months"][day.month - 1],
+                  "MMM": table["short_months"][day.month - 1], "MMMM": months[day.month - 1],
                   "yy": f"{day.year % 100:02d}", "yyyy": str(day.year)}
         return values[text]
 
-    return capitalized(TOKEN.sub(token, t(pattern_key)))
+    return capitalized(TOKEN.sub(token, pattern))
 
 
 def time_text(moment: datetime) -> str:

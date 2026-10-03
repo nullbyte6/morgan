@@ -161,9 +161,9 @@ class Assistant:
         import urllib.request
         from src.init.brain import OLLAMA_KEEP_ALIVE
         from src.init.health import record_model_load
-        from src.init.lang import get_language
+        from src.init.lang import LANGUAGE_NAMES, get_language
 
-        language = {"english": "English", "spanish": "European Spanish", "chinese": "Simplified Chinese"}.get(get_language(), "English")
+        language = LANGUAGE_NAMES.get(get_language(), "English")
         try:
             from src.init.nova.tools import agenda_brief
             agenda = agenda_brief()

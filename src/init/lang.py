@@ -23,8 +23,13 @@ from functools import lru_cache
 from pathlib import Path
 
 LOCALES = Path(__file__).with_name("locales")
-LANGUAGES = {"english": "en", "spanish": "es", "chinese": "ch"}
-SPEECH_LANGUAGES = {"english": "en", "spanish": "es", "chinese": "zh"}
+LANGUAGES = {"english": "en", "spanish": "es", "chinese": "ch", "french": "fr", "german": "de",
+             "portuguese": "pt", "japanese": "ja", "russian": "ru", "korean": "ko", "italian": "it"}
+SPEECH_LANGUAGES = {"english": "en", "spanish": "es", "chinese": "zh", "french": "fr", "german": "de",
+                    "portuguese": "pt", "japanese": "ja", "russian": "ru", "korean": "ko", "italian": "it"}
+LANGUAGE_NAMES = {"english": "English", "spanish": "European Spanish", "chinese": "Simplified Chinese",
+                  "french": "French", "german": "German", "portuguese": "Brazilian Portuguese",
+                  "japanese": "Japanese", "russian": "Russian", "korean": "Korean", "italian": "Italian"}
 
 
 def get_language() -> str:
@@ -47,7 +52,7 @@ def set_language(language: str) -> None:
     save_config(config)
 
 
-@lru_cache(maxsize=3)
+@lru_cache(maxsize=len(LANGUAGES))
 def catalog(language: str) -> dict[str, str]:
     return json.loads((LOCALES / f"lang_{LANGUAGES[language]}.json").read_text(
         encoding="utf-8"))
