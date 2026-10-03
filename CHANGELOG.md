@@ -9,6 +9,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background
 - Add Toggle Arlo orb switch to Settings that turns off the floating orb, so closing the window sends Arlo to the system tray instead, remembered between sessions
 - Fix every request failing on computers where Ollama was already running with its own small default context, by restarting Ollama at startup with the configured context length when the running server was started with a different one
+- Fix installing from requirements.txt failing on torchcodec 0.1.2, a version that was never published, by pinning torchcodec 0.7.0, the release that matches the pinned torch and torchaudio 2.8
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
 - Update media session reading and playback control, the now-playing song reader and system audio capture for song recognition to go through the platform layer
 - Update process termination, shutdown scheduling, installed application discovery, file opening and Recycle Bin emptying to go through the platform layer, so the core no longer requires winshell or winreg to import
