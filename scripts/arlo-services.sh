@@ -19,7 +19,7 @@ tts_host="127.0.0.1"
 tts_port=18765
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/Applications/Ollama.app/Contents/Resources:$PATH"
-export PYTHONPATH="$root:$root/src:$root/src/third_party/Matcha-TTS"
+export PYTHONPATH="$root:$root/src"
 export TORCH_CPP_LOG_LEVEL="ERROR"
 export TORCH_LOGS="-all"
 export PYTHONUNBUFFERED="1"
@@ -124,8 +124,7 @@ import psutil
 
 root, python, module = Path(sys.argv[1]), os.path.realpath(sys.argv[2]), sys.argv[3]
 sources = ["src/init/tts_server.py", "src/init/voice_service.py", "src/init/voice_profiles.py",
-           "src/init/voice_client.py", "src/cosyvoice/cli/cosyvoice.py", "src/cosyvoice/cli/frontend.py",
-           "src/cosyvoice/cli/model.py"]
+           "src/init/voice_client.py"]
 latest = max((root / source).stat().st_mtime for source in sources)
 for process in psutil.process_iter(["cmdline", "create_time"]):
     command = process.info["cmdline"] or []

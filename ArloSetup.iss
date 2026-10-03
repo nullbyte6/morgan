@@ -61,8 +61,6 @@ Source: "src\init\locales\*"; DestDir: "{app}\src\init\locales"; Flags: ignoreve
 Source: "src\platforms\__init__.py"; DestDir: "{app}\src\platforms"; Flags: ignoreversion
 Source: "src\platforms\base.py"; DestDir: "{app}\src\platforms"; Flags: ignoreversion
 Source: "src\platforms\winx64\*.py"; DestDir: "{app}\src\platforms\winx64"; Flags: ignoreversion
-Source: "src\cosyvoice\*"; DestDir: "{app}\src\cosyvoice"; Excludes: "__pycache__"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "src\third_party\Matcha-TTS\*"; DestDir: "{app}\src\third_party\Matcha-TTS"; Excludes: "__pycache__"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "src\voices\*"; DestDir: "{app}\src\voices"; Flags: ignoreversion
 Source: "scripts\setup-runtime.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
 

@@ -15,7 +15,6 @@ foreach ($path in @($python, $services)) {
 $env:PYTHONPATH = @(
     $root
     (Join-Path $root "src")
-    (Join-Path $root "src\third_party\Matcha-TTS")
 ) -join [IO.Path]::PathSeparator
 
 $env:ASSISTANT_EXTERNAL_CONSOLE = "1"

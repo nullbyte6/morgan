@@ -17,7 +17,6 @@ $ttsPort = 18765
 $env:PYTHONPATH = @(
     $root
     (Join-Path $root "src")
-    (Join-Path $root "src\third_party\Matcha-TTS")
 ) -join [IO.Path]::PathSeparator
 
 $env:TORCH_CPP_LOG_LEVEL = "ERROR"
@@ -180,9 +179,7 @@ if (-not $NoVoice) {
 
     $voiceSources = @(
         "src\init\tts_server.py", "src\init\voice_service.py",
-        "src\init\voice_profiles.py", "src\init\voice_client.py",
-        "src\cosyvoice\cli\cosyvoice.py", "src\cosyvoice\cli\frontend.py",
-        "src\cosyvoice\cli\model.py"
+        "src\init\voice_profiles.py", "src\init\voice_client.py"
     )
     $latestVoiceChange = ($voiceSources | ForEach-Object {
         (Get-Item -LiteralPath (Join-Path $root $_)).LastWriteTime

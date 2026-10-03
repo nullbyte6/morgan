@@ -31,6 +31,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 - Remove the CosyVoice, Matcha-TTS and Triton TensorRT-LLM runtime packages and the Matcha-TTS submodule entry, ahead of replacing the voice model with a single omni model
 - Update app installation, removal and residue scanning and the Steam library lookup to get winget commands, app data folders and the Steam folder from the platform layer
 - Update Arlo to sound more relaxed and natural, with a relaxed conversational default tone, a response rule for everyday wording, and a slightly slower default speech speed
+- Update the installer and the launch and service scripts to stop shipping, importing and watching the removed CosyVoice and Matcha-TTS paths
 - Update the end of voice input to wait 1.8 seconds of silence instead of 0.6 to 1.2, so there is room to pause between words and sentences, including the wake silence default and its documentation
 - Update source files to remove inline comments
 - Update media session reading and playback control, the now-playing song reader and system audio capture for song recognition to go through the platform layer
