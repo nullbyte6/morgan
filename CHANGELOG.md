@@ -4,6 +4,7 @@ All notable changes to Arlo, grouped by version with the most recent first. Entr
 
 ## 26.10.3-beta (2026-10-03)
 
+- Add macOS window listing, app launching, quitting and hiding, mounted volumes, process termination, shutdown scheduling, installed apps, Trash emptying, Homebrew app management and the Steam folder to the macx64 package, with the pyobjc Cocoa and Quartz bindings it needs
 - Add macx64 requirements, included from requirements.txt, with onnxruntime for the voice service on macOS in place of the Windows DirectML build
 - Add platform layer with winx64 and macx64 packages behind a shared interface, moving window listing, launching, closing and minimizing, known folders, local drives and notifications out of the core so other operating systems can provide their own implementations
 - Add themed native window frame with a title bar and resizable borders in place of the frameless transparent window, colored from the active theme with the dark or light title bar chosen from the theme, and a solid themed window background

@@ -1,1 +1,4 @@
 onnxruntime==1.24.4; sys_platform == "darwin"
+pyobjc-core==12.2.2; sys_platform == "darwin"
+pyobjc-framework-Cocoa==12.2.2; sys_platform == "darwin"
+pyobjc-framework-Quartz==12.2.2; sys_platform == "darwin"

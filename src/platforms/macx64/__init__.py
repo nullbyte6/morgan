@@ -16,16 +16,31 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""macOS services for Arlo; operations not yet implemented fall back to the portable defaults."""
+"""macOS services for Arlo, backed by AppKit, Quartz, AppleScript and the system tools."""
 
 from pathlib import Path
 import subprocess
 
 from ..base import Platform
+from . import apps, folders, system, windows
 
 
 class MacX64Platform(Platform):
     name = "macx64"
 
-    def open_path(self, path: Path) -> None:
+    list_windows = staticmethod(windows.get_open_windows)
+    launch_application = staticmethod(windows.launch_application)
+    request_window_close = staticmethod(windows.request_window_close)
+    minimize_window = staticmethod(windows.minimize_window)
+    local_drives = staticmethod(folders.local_drives)
+    terminate_process = staticmethod(system.terminate_process)
+    schedule_shutdown = staticmethod(system.schedule_shutdown)
+    cancel_shutdown = staticmethod(system.cancel_shutdown)
+    installed_applications = staticmethod(system.installed_applications)
+    empty_recycle_bin = staticmethod(system.empty_recycle_bin)
+    package_command = staticmethod(apps.package_command)
+    app_data_roots = staticmethod(apps.app_data_roots)
+    steam_path = staticmethod(apps.steam_path)
+
+    def open_path(self, path: Path | str) -> None:
         subprocess.Popen(["open", str(path)])
