@@ -29,6 +29,9 @@ COUGH_CHANCE = 0.03
 COUGH_SPACING = 12
 GIGGLE_CHANCE = 0.25
 GIGGLE_SPACING = 6
+SOUND_SPACING = 3
+SERIOUS_GRAVITY = 0.5
+GIGGLE_MAXIMUM_GRAVITY = 0.2
 BREATH_SPACING = 3
 MINIMUM_FILLER_CHARACTERS = 25
 LONG_PHRASE_CHARACTERS = 90
@@ -43,6 +46,7 @@ LIGHT_CUES = re.compile(
     r"\b(?:funny|joke|hilarious|gracios[oa]s?|chiste|broma|divertid[oa]s?|drôle|lustig|divertente|engraçad[oa])\b",
     re.IGNORECASE)
 COUGH_CUES = re.compile(r"\b(?:ahem|coughs?|carraspe\w*)\b|\*coughs?\*", re.IGNORECASE)
+SCOFF_CUES = re.compile(r"\b(?:p+f+t*|psh+|tsk|hmph|bah)\b", re.IGNORECASE)
 
 PAUSES = (
     (".…。", (0.28, 0.46)),
@@ -67,6 +71,11 @@ FILLERS = {
 }
 
 
+def tidy(text):
+    text = re.sub(r"\s+([,.;:!?])", r"\1", re.sub(r"\s+", " ", text)).strip()
+    return re.sub(r"\.{4,}", "...", re.sub(r"^[\s,;:]+", "", text))
+
+
 def pause_range(text):
     ending = text.rstrip(CLOSERS)[-1:]
     return next((limits for marks, limits in PAUSES if ending in marks),
@@ -83,12 +92,17 @@ class Naturalizer:
         self.since_breath = 0
         self.since_cough = 0
         self.since_giggle = 0
+        self.since_sound = SOUND_SPACING
+        self.laughed = False
 
-    def plan(self, text, verbatim, language=None, idle=False):
+    def plan(self, text, verbatim, language=None, idle=False, prosody=None):
         """Return the seconds of silence to play first and the text to synthesize."""
         previous, self.previous = self.previous, (text, verbatim)
+        self.laughed = False
+        energy = prosody.energy if prosody else 0.0
+        gravity = prosody.gravity if prosody else 0.0
         if ENABLED and not verbatim:
-            text = self._expressions(text)
+            text = self._expressions(text, energy, gravity)
         if not ENABLED or verbatim or previous is None:
             return 0.0, text
         previous_text, _ = previous
@@ -98,9 +112,10 @@ class Naturalizer:
         self.since_breath += 1
         self.since_cough += 1
         fillers = FILLERS.get(language or "")
+        hesitation = FILLER_CHANCE * (1.0 + 0.4 * max(0.0, gravity) - 0.3 * max(0.0, energy))
         if (fillers and len(text) >= MINIMUM_FILLER_CHARACTERS
                 and self.since_filler > FILLER_SPACING
-                and self.rng.random() < FILLER_CHANCE):
+                and self.rng.random() < hesitation):
             spoken = f"{self.rng.choice(fillers)} {text}"
             pause += FILLER_PAUSE_SECONDS
             self.since_filler = 0
@@ -109,21 +124,38 @@ class Naturalizer:
                 and self.rng.random() < BREATH_CHANCE):
             spoken = f"[breath] {text}"
             self.since_breath = 0
-        elif (self.since_cough > COUGH_SPACING and self.rng.random() < COUGH_CHANCE
+        elif (self.since_cough > COUGH_SPACING and self.since_sound > SOUND_SPACING
+                and self.rng.random() < COUGH_CHANCE
                 and len(text) >= MINIMUM_FILLER_CHARACTERS):
             spoken = f"[cough] {text}"
             self.since_cough = 0
+            self.since_sound = 0
         return pause * (IDLE_PAUSE_SCALE if idle else 1.0), spoken
 
-    def _expressions(self, text):
+    def _expressions(self, text, energy, gravity):
         self.since_giggle += 1
-        text = COUGH_CUES.sub("[cough]", text)
-        text, laughs = LAUGH_CUES.subn("[laughter]", text)
+        self.since_sound += 1
+        free = self.since_sound > SOUND_SPACING
+        light = gravity < SERIOUS_GRAVITY
+        text, coughs = COUGH_CUES.subn("[cough]" if free else "", text)
+        text, scoffs = SCOFF_CUES.subn("[breath]" if free and light else "", text)
+        if coughs or scoffs:
+            if free:
+                self.since_sound = 0
+                free = False
+            text = tidy(text) or text
+        text, laughs = LAUGH_CUES.subn("[laughter]" if free and light else "", text)
         if laughs:
+            if free and light:
+                self.since_giggle = 0
+                self.since_sound = 0
+                self.laughed = True
+            return tidy(text) or text
+        if (free and LIGHT_CUES.search(text) and self.since_giggle > GIGGLE_SPACING
+                and gravity < GIGGLE_MAXIMUM_GRAVITY
+                and self.rng.random() < GIGGLE_CHANCE * (1.0 + 0.5 * max(0.0, energy))):
             self.since_giggle = 0
-            return text
-        if (LIGHT_CUES.search(text) and self.since_giggle > GIGGLE_SPACING
-                and self.rng.random() < GIGGLE_CHANCE):
-            self.since_giggle = 0
+            self.since_sound = 0
+            self.laughed = True
             return f"{text} [laughter]"
         return text

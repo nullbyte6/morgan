@@ -359,8 +359,11 @@ class VoiceService:
                 self._select_reference(reference)
                 prosody = batch.prosody.analyze(text, verbatim)
                 pause, text = batch.naturalizer.plan(
-                    prosody.text, verbatim, batch.numbers.code, idle=self._audio_queue.empty())
+                    prosody.text, verbatim, batch.numbers.code,
+                    idle=self._audio_queue.empty(), prosody=prosody)
                 pause *= prosody.pause_scale
+                if batch.naturalizer.laughed:
+                    batch.prosody.nudge(energy=0.25, gravity=-0.2)
                 if pause > 0 and batch.last_timeline is not None:
                     self._queue_audio(batch, np.zeros(int(self.sample_rate * pause),
                                                       dtype=np.float32),
