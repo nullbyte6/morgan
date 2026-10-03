@@ -23,7 +23,7 @@ from .models import (
     DeviceProblem, EventSummary, PhysicalDisk, SecurityHealth, ServiceState,
     SourceError, UpdateSummary,
 )
-from .powershell import rows
+from .queries import rows
 from .telemetry import read
 
 

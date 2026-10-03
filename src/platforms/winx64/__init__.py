@@ -21,7 +21,8 @@
 import subprocess
 
 from ..base import Platform
-from . import apps, desktop, environment, folders, media, notifications, services, system, terminal, windows
+from . import (apps, desktop, environment, folders, media, notifications, services, system, telemetry,
+               terminal, windows)
 
 
 class WinX64Platform(Platform):
@@ -33,6 +34,7 @@ class WinX64Platform(Platform):
     installer_name = "ArloSetup.exe"
     has_drive_letters = True
     preferred_audio_host = "Windows WASAPI"
+    telemetry_sources = frozenset(telemetry.SCRIPTS)
 
     list_windows = staticmethod(windows.get_open_windows)
     launch_application = staticmethod(windows.launch_application)
@@ -80,3 +82,4 @@ class WinX64Platform(Platform):
     set_app_id = staticmethod(desktop.set_app_id)
     desktop_launcher = staticmethod(desktop.desktop_launcher)
     launch_command = staticmethod(desktop.launch_command)
+    telemetry_query = staticmethod(telemetry.telemetry_query)

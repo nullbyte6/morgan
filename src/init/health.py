@@ -135,7 +135,7 @@ def _torch_build() -> tuple[str, str]:
 
 
 def gpu_check() -> Check:
-    from src.diagnostics.powershell import query, rows
+    from src.diagnostics.queries import query, rows
     result = query("graphics")
     adapters = [row for row in rows(result.data) if isinstance(row, dict) and row.get("name")]
     version, build = _torch_build()

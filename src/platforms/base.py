@@ -40,6 +40,14 @@ class UnsupportedOperation(OSError):
         self.operation = operation
 
 
+class TelemetryError(OSError):
+    """Raised when a system telemetry query fails, with a short code such as query_failed."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
 @dataclass(frozen=True)
 class MediaSession:
     """One media session as the system reports it, with position measured when it was read."""
@@ -122,6 +130,7 @@ class Platform:
     installer_name = ""
     has_drive_letters = False
     preferred_audio_host = ""
+    telemetry_sources: frozenset[str] = frozenset()
 
     def unsupported(self, operation: str) -> UnsupportedOperation:
         return UnsupportedOperation(self.name, operation)
@@ -314,3 +323,7 @@ class Platform:
     def launch_command(self, launcher: Path, root: Path) -> tuple[list[str], Path]:
         """Return the command and working folder that run a desktop launcher."""
         return [str(launcher)], launcher.parent
+
+    def telemetry_query(self, source: str, full: bool = False):
+        """Answer one source from telemetry_sources with JSON-like data, raising TelemetryError on failure."""
+        raise self.unsupported("telemetry_query")

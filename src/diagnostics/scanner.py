@@ -24,7 +24,8 @@ from datetime import datetime, timezone
 import time
 from typing import Literal
 
-from . import powershell, telemetry, windows
+from . import telemetry, windows
+from .queries import QueryResult, query
 from .models import HealthReport, SourceError
 from .scoring import evaluate
 
@@ -76,12 +77,12 @@ class SystemHealthScanner:
                 except Exception as error:
                     for component in (report.cpu, report.memory, report.processes):
                         component.errors.append(SourceError(source="resources", code=type(error).__name__))
-            futures = {source: pool.submit(powershell.query, source, full=full) for source in queries}
+            futures = {source: pool.submit(query, source, full=full) for source in queries}
             for source, future in futures.items():
                 try:
                     results[source] = future.result()
                 except Exception as error:
-                    results[source] = powershell.QueryResult(
+                    results[source] = QueryResult(
                         error=SourceError(source=source, code=type(error).__name__))
         if scope in ("system", "security"):
             report.security = windows.security(results)

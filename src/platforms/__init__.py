@@ -21,9 +21,9 @@
 from functools import lru_cache
 import sys
 
-from .base import Platform, UnsupportedOperation
+from .base import Platform, TelemetryError, UnsupportedOperation
 
-__all__ = ["Platform", "UnsupportedOperation", "current_platform"]
+__all__ = ["Platform", "TelemetryError", "UnsupportedOperation", "current_platform"]
 
 
 @lru_cache(maxsize=1)

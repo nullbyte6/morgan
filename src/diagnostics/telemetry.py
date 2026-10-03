@@ -20,13 +20,14 @@
 
 import logging
 import ntpath
-import os
 import platform
 import time
 from datetime import datetime, timezone
 from statistics import mean
 
 import psutil
+
+from src.platforms import current_platform
 
 from .models import (
     CPUHealth, DiskHealth, MemoryHealth, ProcessHealth, ProcessUsage,
@@ -150,7 +151,8 @@ def volumes():
         if partition.mountpoint in seen:
             continue
         seen.add(partition.mountpoint)
-        drive = ntpath.splitdrive(partition.mountpoint)[0] if os.name == "nt" else f"volume_{index}"
+        drive = (ntpath.splitdrive(partition.mountpoint)[0] if current_platform().has_drive_letters
+                 else f"volume_{index}")
         volume = VolumeHealth(drive=drive or f"volume_{index}", filesystem=partition.fstype)
         usage = read(result, f"volume:{volume.drive}", lambda: psutil.disk_usage(partition.mountpoint))
         if usage is not None:
@@ -166,7 +168,7 @@ def volumes():
 
 def windows_baseline():
     result = WindowsHealth()
-    if os.name != "nt":
+    if not current_platform().telemetry_sources:
         result.errors.append(SourceError(source="windows", code="unsupported"))
         return result
     result.version = platform.version()

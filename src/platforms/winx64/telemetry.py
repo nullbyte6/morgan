@@ -16,20 +16,13 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Allowlisted, bounded local Windows queries. Never accepts command text."""
+"""Allowlisted, bounded local Windows queries through PowerShell. Never accepts command text."""
 
-from src.init.lang import tr
 import base64
 import json
-import logging
-import os
 import subprocess
-from dataclasses import dataclass
 
-from .models import SourceError
-
-logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHandler())
+from ..base import TelemetryError
 
 DEFENDER = r"""
 $s = Get-MpComputerStatus -ErrorAction Stop
@@ -172,18 +165,7 @@ SCRIPTS = {
 }
 
 
-@dataclass
-class QueryResult:
-    data: object = None
-    error: SourceError | None = None
-
-
-def query(source: str, *, full: bool = False) -> QueryResult:
-    """Run exactly one approved query with an 8s/15s timeout; no elevation."""
-    if source not in SCRIPTS:
-        raise ValueError(tr('powershell.unknown_telemetry_source'))
-    if os.name != "nt":
-        return QueryResult(error=SourceError(source=source, code="unsupported"))
+def telemetry_query(source, full=False):
     script = (
         "$ErrorActionPreference = 'Stop'\n"
         "$ProgressPreference = 'SilentlyContinue'\n"
@@ -191,28 +173,14 @@ def query(source: str, *, full: bool = False) -> QueryResult:
         "$result = & {\n" + SCRIPTS[source] + "\n}\n"
         "ConvertTo-Json -InputObject $result -Depth 6 -Compress\n"
     )
-    try:
-        result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-             "-EncodedCommand", base64.b64encode(script.encode("utf-16-le")).decode("ascii")],
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=15 if full else 8, creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        if result.returncode:
-            code = "access_denied" if "UnauthorizedAccess" in result.stderr else "query_failed"
-            logger.debug("Telemetry %s failed: exit=%s code=%s", source, result.returncode, code)
-            return QueryResult(error=SourceError(source=source, code=code))
-        if len(result.stdout) > 262144:
-            return QueryResult(error=SourceError(source=source, code="output_limit"))
-        return QueryResult(data=json.loads(result.stdout.lstrip("\ufeff")))
-    except (OSError, subprocess.TimeoutExpired, ValueError) as error:
-        code = "timeout" if isinstance(error, subprocess.TimeoutExpired) else type(error).__name__
-        logger.debug("Telemetry %s unavailable: %s", source, code)
-        return QueryResult(error=SourceError(source=source, code=code))
-
-
-def rows(data):
-    """PowerShell unwraps singleton arrays; normalize without inventing objects."""
-    if data is None:
-        return []
-    return data if isinstance(data, list) else [data]
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+         "-EncodedCommand", base64.b64encode(script.encode("utf-16-le")).decode("ascii")],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=15 if full else 8, creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    if result.returncode:
+        raise TelemetryError("access_denied" if "UnauthorizedAccess" in result.stderr else "query_failed")
+    if len(result.stdout) > 262144:
+        raise TelemetryError("output_limit")
+    return json.loads(result.stdout.lstrip("﻿"))
