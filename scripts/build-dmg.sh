@@ -11,7 +11,7 @@ if [[ "$(uname -m)" != "arm64" ]]; then
 fi
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-python="${ARLO_BUILD_PYTHON:-$root/.venv/bin/python}"
+python="${MORGAN_BUILD_PYTHON:-$root/.venv/bin/python}"
 build="$root/build/packaging-macos"
 dist="$build/dist"
 installer="$root/build/installer"
@@ -44,9 +44,9 @@ PY
 )
 
 "$python" -B -m PyInstaller.utils.cliutils.makespec \
-    --onedir --windowed --noupx --name Arlo \
-    --icon "$root/assets/arlo.png" \
-    --osx-bundle-identifier com.xdg.arlo \
+    --onedir --windowed --noupx --name Morgan \
+    --icon "$root/assets/morgan.png" \
+    --osx-bundle-identifier com.xdg.morgan \
     --paths "$root" \
     --specpath "$build" \
     --add-data "$root/assets:assets" \
@@ -67,7 +67,7 @@ PY
     --exclude-module lingua --exclude-module babel --exclude-module num2words \
     "${hidden[@]}" "$root/entry/desktop.py"
 
-"$python" -B - "$build/Arlo.spec" "$version" <<'PY'
+"$python" -B - "$build/Morgan.spec" "$version" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -86,14 +86,14 @@ text = text.replace('pyz = PYZ(a.pure)',
     "a.datas = [entry for entry in a.datas if not entry[0].startswith('timezonefinder_data/data/')]\n"
     "pyz = PYZ(a.pure)")
 plist = {
-    'CFBundleName': 'Arlo',
-    'CFBundleDisplayName': 'Arlo',
+    'CFBundleName': 'Morgan',
+    'CFBundleDisplayName': 'Morgan',
     'CFBundleShortVersionString': version,
     'CFBundleVersion': version,
     'LSMinimumSystemVersion': '14.0',
     'NSHighResolutionCapable': True,
-    'NSMicrophoneUsageDescription': 'Arlo listens for its wake phrase and records voice input.',
-    'NSAppleEventsUsageDescription': 'Arlo controls Spotify, Music, Finder and System Events when you ask it to.',
+    'NSMicrophoneUsageDescription': 'Morgan listens for its wake phrase and records voice input.',
+    'NSAppleEventsUsageDescription': 'Morgan controls Spotify, Music, Finder and System Events when you ask it to.',
 }
 text, count = re.subn(r"(    bundle_identifier=[^\n]*\n)",
                       lambda match: match.group(1) + f"    version={version!r},\n    info_plist={plist!r},\n",
@@ -103,16 +103,16 @@ if count != 1:
 path.write_text(text, encoding='utf-8')
 PY
 
-"$python" -B -m PyInstaller --noconfirm --distpath "$dist" --workpath "$build/work" "$build/Arlo.spec" "$@"
+"$python" -B -m PyInstaller --noconfirm --distpath "$dist" --workpath "$build/work" "$build/Morgan.spec" "$@"
 
 staging="$build/dmg"
 rm -rf -- "$staging"
 mkdir -p -- "$staging"
-cp -R -- "$dist/Arlo.app" "$staging/"
+cp -R -- "$dist/Morgan.app" "$staging/"
 ln -s /Applications "$staging/Applications"
-image="$installer/Arlo-$version.dmg"
+image="$installer/Morgan-$version.dmg"
 rm -f -- "$image"
-hdiutil create -volname "Arlo $version" -srcfolder "$staging" -fs HFS+ -format UDZO -ov "$image"
+hdiutil create -volname "Morgan $version" -srcfolder "$staging" -fs HFS+ -format UDZO -ov "$image"
 rm -rf -- "$staging"
 
-printf '\nApplication: %s/Arlo.app\nDisk image: %s\n' "$dist" "$image"
+printf '\nApplication: %s/Morgan.app\nDisk image: %s\n' "$dist" "$image"

@@ -1,6 +1,6 @@
 ## AI Model Requirements
 
-Arlo uses Gemma 4 E4B as its single local multimodal model through Ollama. It
+Morgan uses Gemma 4 E4B as its single local multimodal model through Ollama. It
 is both the main model and the audio model, so only one model is loaded.
 
 ### Model
@@ -25,7 +25,7 @@ Gemma does not define fixed minimum CPU, RAM or VRAM requirements for running
 Gemma 4 E4B through Ollama. Actual memory requirements depend on quantization,
 context length, KV cache configuration, multimodal inputs and hardware acceleration.
 
-#### Practical requirements for Arlo
+#### Practical requirements for Morgan
 
 Minimum:
 - RAM: 16 GB
@@ -52,13 +52,13 @@ Ideal:
 The Q4_K_M model occupies approximately 6.6 GB, leaving substantial VRAM
 headroom on a 16 GB GPU for the context cache, multimodal processing and
 other runtime allocations. A 16 GB GPU can therefore run Gemma 4 E4B fully
-GPU-accelerated with Arlo's recommended 32,768-token context on supported
+GPU-accelerated with Morgan's recommended 32,768-token context on supported
 hardware.
 
-Gemma 4 E4B provides native text, image and audio processing, so Arlo does not
+Gemma 4 E4B provides native text, image and audio processing, so Morgan does not
 require a separate vision-language or audio model when multimodal input is
-routed directly to the primary model. Arlo does not create derived Ollama
+routed directly to the primary model. Morgan does not create derived Ollama
 models; when it starts Ollama it sets `OLLAMA_CONTEXT_LENGTH` to the
 `context_length` of the user configuration, which Settings edits (32,768 by
 default). An Ollama service that was already running
-keeps its own context length, and Arlo budgets against the context Ollama reports.
+keeps its own context length, and Morgan budgets against the context Ollama reports.

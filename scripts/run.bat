@@ -1,3 +1,3 @@
 @echo off
-schtasks -Run /TN "ARLO_WAKE"
+schtasks -Run /TN "MORGAN_WAKE"
 exit /b %errorlevel%

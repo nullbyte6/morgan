@@ -1,14 +1,14 @@
 # Persistent memory
-Arlo stores local conversation history and explicitly requested long-term memories
+Morgan stores local conversation history and explicitly requested long-term memories
 in SQLite. It uses the existing Python environment, SQLite FTS5 and the existing
 Pydantic AI/Ollama agent. There is no vector database, additional model, background
 extraction job, cloud synchronization, telemetry or network memory endpoint.
 
-Restart Arlo after updating. New non-private conversations are persisted by default.
+Restart Morgan after updating. New non-private conversations are persisted by default.
 Existing Markdown logs are not automatically imported.
 
 ## Configuration and location
-Configuration belongs in the existing `%USERPROFILE%\.arlo\json\config.json`:
+Configuration belongs in the existing `%USERPROFILE%\.morgan\json\config.json`:
 
 ```json
 {
@@ -23,9 +23,9 @@ Configuration belongs in the existing `%USERPROFILE%\.arlo\json\config.json`:
 }
 ```
 
-Relative database paths resolve under Arlo's user-data directory, independently
+Relative database paths resolve under Morgan's user-data directory, independently
 of the agent's working directory. The default is
-`%USERPROFILE%\.arlo\memory\memory.sqlite3`. An absolute local path is supported;
+`%USERPROFILE%\.morgan\memory\memory.sqlite3`. An absolute local path is supported;
 UNC paths and relative parent traversal are rejected. Use a local disk, not a
 network drive or a folder synchronized by third-party software. Changing the path
 selects another database; it does not move or merge existing data.
@@ -72,7 +72,7 @@ Different paraphrases without a shared key are not semantically deduplicated.
 
 ### Recovering conversations and word occurrences
 
-After restarting Arlo, requests such as these use the same local memory store:
+After restarting Morgan, requests such as these use the same local memory store:
 
 - “Busca la frase jardín azul en nuestras conversaciones.”
 - “¿Cuántas veces dije café? Muéstrame cada aparición y su contexto.”
@@ -185,7 +185,7 @@ Initialization is lazy. Normal writes run on the existing assistant worker,
 before or after a turn, never per generated token. Synchronous agent tools execute
 through Pydantic AI's tool execution machinery. Short independent connections
 avoid sharing a SQLite connection across threads; write lock waits are bounded at
-500 ms. Database failures are logged under `arlo.memory`, exposed through
+500 ms. Database failures are logged under `morgan.memory`, exposed through
 `SessionLog.memory_error`, and returned as unsuccessful tool results. Markdown
 logging and current conversational state continue. A failed SQLite message write
 can later be recovered through explicit log import.
@@ -229,14 +229,14 @@ returned by normal memory retrieval.
 
 Run from the repository root, supplying actual speaker names explicitly:
 ```powershell
-.venv\Scripts\python.exe -B -m src.init.memory import "$env:USERPROFILE\.arlo\.log" --speaker "Diego=user" --speaker "Arlo=assistant" --speaker "System=system"
+.venv\Scripts\python.exe -B -m src.init.memory import "$env:USERPROFILE\.morgan\.log" --speaker "Diego=user" --speaker "Morgan=assistant" --speaker "System=system"
 ```
 
 The command accepts individual files or directories of daily `.md` files.
 It reports imported counts, warnings and errors as JSON. Use `--database PATH`
 before the subcommand to operate on another database.
 
-The parser accepts the actual `YYYY-MM-DD.md` format: the `Arlo Log — DATE`
+The parser accepts the actual `YYYY-MM-DD.md` format: the `Morgan Log — DATE`
 header, `[HH:MM:SS ±HHMM]` lines, and following `Speaker: content` records.
 It preserves filenames, byte offsets and known timestamps, supports UTF-8/BOM
 and Windows CRLF, and ignores apparent message headers inside fenced code.
@@ -248,7 +248,7 @@ files are not followed or executed.
 By default the final record is deferred because this format has no end marker.
 A subsequent record seals it, allowing repeated incremental synchronization.
 For a closed historical file, add `--include-tail` to accept its final record.
-Do not use that option on a file Arlo is still writing. Unterminated fences remain
+Do not use that option on a file Morgan is still writing. Unterminated fences remain
 deferred even with this option. Previously imported prefixes are hashed; rewrites,
 truncation, or changes to an already accepted record require manual review rather
 than silently replacing history. Fix malformed inputs in a separate copy if
@@ -297,13 +297,13 @@ not a guarantee of forensic erasure from FTS segments, WAL files, SSDs or backup
 
 ```powershell
 .venv\Scripts\python.exe -B -m src.init.memory check
-.venv\Scripts\python.exe -B -m src.init.memory backup "D:\Backups\arlo-memory.sqlite3"
+.venv\Scripts\python.exe -B -m src.init.memory backup "D:\Backups\morgan-memory.sqlite3"
 .venv\Scripts\python.exe -B -m unittest discover -s tests -v
 ```
 
 Backup uses SQLite's online backup API, includes committed WAL content and refuses
 to overwrite an existing destination. Back up Markdown separately. For recovery,
-stop all Arlo processes and maintenance commands, retain the damaged database and
+stop all Morgan processes and maintenance commands, retain the damaged database and
 its `-wal`/`-shm` companions for investigation, and select a verified backup copy
 through `memory.database`. Run `check` on the restored copy before normal use.
 Do not overwrite an open database or manually edit migration records. Missing
@@ -323,9 +323,9 @@ updates while it is open and keeps unfolded conversations and your scroll positi
 
 Conversations come from the database. When it holds none for the selected day, for
 example with `memory.enabled=false`, `memory.store_history=false` or days before
-persistence existed, the diary shows that day's Markdown log from `~/.arlo/.log`
+persistence existed, the diary shows that day's Markdown log from `~/.morgan/.log`
 instead. The diary only reads: private conversations are never in it, nothing is sent
-anywhere, and removing a memory still goes through a request to Arlo.
+anywhere, and removing a memory still goes through a request to Morgan.
 
 Tests use temporary databases and logs, including migration rollback, FTS,
 concurrent writes, CRUD, supersession, deletion, imports, privacy, Pydantic AI tool

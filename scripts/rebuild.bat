@@ -4,7 +4,7 @@ set "bash=%ProgramFiles%\Git\bin\bash.exe"
 if errorlevel 1 exit /b %errorlevel%
 "%bash%" "%~dp0build-tui.sh"
 if errorlevel 1 exit /b %errorlevel%
-"C:\Inno Setup 7\ISCC.exe" "%~dp0..\ArloSetup.iss"
+"C:\Inno Setup 7\ISCC.exe" "%~dp0..\MorganSetup.iss"
 if errorlevel 1 exit /b %errorlevel%
-start "" "%~dp0..\build\installer\ArloSetup.exe"
+start "" "%~dp0..\build\installer\MorganSetup.exe"
 exit /b %errorlevel%

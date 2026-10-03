@@ -1,5 +1,5 @@
 # Workspaces
-Arlo features an embedded tiling workspace system for displaying interactive content alongside the assistant. Workspaces live inside the main application window, without opening additional windows or creating separate Arlo instances.
+Morgan features an embedded tiling workspace system for displaying interactive content alongside the assistant. Workspaces live inside the main application window, without opening additional windows or creating separate Morgan instances.
 
 ## Keyboard shortcuts
 Workspaces are managed entirely through keyboard shortcuts, keeping the interface clean and free of unnecessary toolbars.
@@ -40,13 +40,13 @@ default browser.
 
 ## Nova
 
-Nova is Arlo's reminders, events and agenda workspace. Open it from the command
+Nova is Morgan's reminders, events and agenda workspace. Open it from the command
 palette (`Ctrl + K`, then "Nova") or with `Ctrl + Alt + N`. `Ctrl + L`, or "Open diary" in the palette, opens it straight on the
 Diary, reusing a Nova panel that is already open. It lives inside a
-workspace panel and uses Arlo's theme, fonts and animations.
+workspace panel and uses Morgan's theme, fonts and animations.
 
 A new workspace shows a single Nova star in place of the row of buttons. Press it to
-slide out the workspace buttons (Arlo, Editor, Settings and Terminal) and
+slide out the workspace buttons (Morgan, Editor, Settings and Terminal) and
 press it again to fold them. `Ctrl + click` on the star opens Nova in that panel instead.
 
 Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar and Diary,
@@ -57,7 +57,7 @@ panels it folds by itself.
   something on it.
 - **Reminders** keeps pending and completed reminders. Tick the circle to complete one.
 - **Events** lists upcoming and past events, with a time or all day.
-- **Diary** is Arlo's memory one day at a time, with that day's agenda, what Arlo
+- **Diary** is Morgan's memory one day at a time, with that day's agenda, what Morgan
   remembers and the conversations held (see [MEMORY.md](MEMORY.md)).
 - **Calendar** shows a week, month or year. Click a day in the month or year to drill
   into its week, click a month name in the year to open that month, and double-click a
@@ -67,11 +67,11 @@ The **+** button, or clicking any entry, opens an overlay to create, edit or del
 reminder or an event. Reminders take a date and an `HH:mm` time; events take a start
 and an end, or last all day. Dates are picked from a month picker.
 
-Reminders live in `~/.arlo/nova/reminders.sqlite3` and events in
-`~/.arlo/nova/events.sqlite3`, two independent SQLite databases that use only Python's
-standard library. Times are stored as local wall-clock times. While Arlo runs, a due
+Reminders live in `~/.morgan/nova/reminders.sqlite3` and events in
+`~/.morgan/nova/events.sqlite3`, two independent SQLite databases that use only Python's
+standard library. Times are stored as local wall-clock times. While Morgan runs, a due
 reminder is announced as a Windows notification within about 30 seconds; reminders
-that were already more than a day overdue when Arlo started are not announced, but stay
+that were already more than a day overdue when Morgan started are not announced, but stay
 marked as overdue.
 
 ## Song
@@ -82,13 +82,13 @@ different song starts or the player is closed and opened again.
 Turn off "Open the song panel" in Settings to stop it from opening by itself; the song
 detection keeps running but no panel is opened.
 
-Only songs count, not videos or podcasts. Arlo reads the Windows media session of
+Only songs count, not videos or podcasts. Morgan reads the Windows media session of
 Spotify, or of a browser playing YouTube Music or an auto-generated "Topic" track, and
 ignores entries that carry no album, such as ordinary YouTube videos, plus Spotify ads.
-When Spotify is authorized (see the Spotify settings in `~/.arlo/json/config.json`), Arlo
+When Spotify is authorized (see the Spotify settings in `~/.morgan/json/config.json`), Morgan
 also asks the Spotify Web API once per song to confirm that it is a track rather than a
 podcast episode, to take its exact album art, and it follows songs that play on another
-Spotify device, such as a phone. Arlo never opens the browser to authorize Spotify for
+Spotify device, such as a phone. Morgan never opens the browser to authorize Spotify for
 this; it only uses an authorization that already exists, which any Spotify action
 requested from the assistant creates.
 
@@ -104,11 +104,11 @@ Web API for songs on another device.
   one page about the song, and never quotes the lyrics beyond a few words. Summaries are
   kept for the songs of the open panel.
 
-Song detection runs in the background while Arlo is open, once per second on this
+Song detection runs in the background while Morgan is open, once per second on this
 computer, and queries the Spotify Web API only when it is authorized.
 
 ## How tiling works
-Arlo uses a binary tiling layout built with Qt splitters. Each new panel divides an existing workspace into two regions, alternating between horizontal and vertical splits.
+Morgan uses a binary tiling layout built with Qt splitters. Each new panel divides an existing workspace into two regions, alternating between horizontal and vertical splits.
 Panels automatically share the available space. You can drag the separators between them to resize individual regions without affecting their content.
 Opening and closing panels triggers smooth size transitions. When a panel closes, its neighboring panel expands into the available space, and the layout reorganizes without leaving an empty region.
 
@@ -122,7 +122,7 @@ Moving a panel preserves its embedded content and internal state, including any 
 ## Independent content
 
 Each panel acts as an independent container for interactive content, such as flowcharts and other visual tools.
-Panels can be focused, resized, moved, and closed individually. Their content remains embedded in Arlo's main window, allowing multiple visualizations to coexist without interrupting the conversation.
+Panels can be focused, resized, moved, and closed individually. Their content remains embedded in Morgan's main window, allowing multiple visualizations to coexist without interrupting the conversation.
 
 ### Terminal
 
@@ -130,7 +130,7 @@ The Terminal button sits immediately to the right of Settings in a new workspace
 It opens an independent, persistent shell inside the panel: PowerShell 7 (`pwsh.exe`) on Windows,
 starting in `%USERPROFILE%`, or the user's shell in their home directory on Unix.
 Directory changes and environment variables persist within that terminal only.
-Commands run with the same permissions as Arlo.
+Commands run with the same permissions as Morgan.
 
 Type directly in the terminal; Enter submits input, Up/Down recall shell history,
 and Tab is passed to the shell for completion. ANSI colors and cursor updates are
@@ -139,7 +139,7 @@ Use Ctrl+Shift+C/V or the context menu to copy/paste. Ctrl+C interrupts the runn
 command (or copies a selection); the Ctrl+C button always sends an interrupt.
 Scroll up to browse the last 1,000 lines. After `exit`, Restart opens a fresh shell
 in the home directory. Closing the panel ends its shell and running child processes;
-hiding Arlo in mascot mode keeps the terminal running.
+hiding Morgan in mascot mode keeps the terminal running.
 
 Install the terminal dependencies from `requirements.txt`: `pyte` and `pywinpty`
 on Windows, or `pyte` and `ptyprocess` on Unix. The terminal supports ordinary shell

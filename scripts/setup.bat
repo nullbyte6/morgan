@@ -9,7 +9,7 @@ if not exist "%PYTHON%" exit /b 1
 if not exist "%WAKE%" exit /b 1
 
 schtasks /Create /F ^
-    /TN "ARLO_WAKE" ^
+    /TN "MORGAN_WAKE" ^
     /SC ONLOGON ^
     /TR "\"%PYTHON%\" \"%WAKE%\"" ^
     /RL LIMITED

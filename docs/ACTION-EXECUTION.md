@@ -9,11 +9,11 @@ the registered tools; the transcript is not used as an intermediate command.
 Gemma also handles subsequent turns while the conversation contains audio.
 Image attachments alone do not select the audio model. Gemma uses low reasoning
 effort to select and chain tools; reasoning events are never displayed or spoken.
-The provider combines Arlo's dynamic instructions into one system message.
+The provider combines Morgan's dynamic instructions into one system message.
 
 The agent consumes the complete model/tool loop. Native tool calls execute the
 registered functions, tool results return to the model, and response text goes to
-the desktop and TTS. `arlo.tools` logs each dispatched tool name and returned
+the desktop and TTS. `morgan.tools` logs each dispatched tool name and returned
 result event without logging arguments. General shell commands retain their
 existing confirmation callback; shell names such as `PowerShell` and `PWSH.EXE`
 are normalized before validation.
@@ -21,7 +21,7 @@ are normalized before validation.
 Power requests follow this same model/tool path. `shutdown_computer()` means
 immediate shutdown; a delayed request supplies seconds after the model converts
 the requested duration. A scheduled notification only displays a message.
-`kill_self` and `close_application("Arlo")` request a graceful Arlo exit after the
+`kill_self` and `close_application("Morgan")` request a graceful Morgan exit after the
 turn. Substring matching no
 longer bypasses the model or defaults unrecognized durations to immediate power
 off.

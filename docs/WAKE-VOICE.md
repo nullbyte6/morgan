@@ -1,6 +1,6 @@
 # Hands-free wake commands
 
-Run `scripts\setup.bat` to register the `ARLO_WAKE` logon task, or keep
+Run `scripts\setup.bat` to register the `MORGAN_WAKE` logon task, or keep
 `.venv\Scripts\python.exe -B -m entry.wake` running for interactive diagnostics.
 The task runs `entry\wake.py` through the existing virtual environment. Restart
 both the wake task and desktop after updating; an old desktop cannot consume the
@@ -10,21 +10,21 @@ service ports are required.
 Say any of the following, wait for recording to begin, and then dictate the
 request:
 
-- “Arlo.”
-- “Hola Arlo.”
-- “Hey Arlo.”
-- “Oye Arlo.”
+- “Morgan.”
+- “Hola Morgan.”
+- “Hey Morgan.”
+- “Oye Morgan.”
 
 Matching requires a complete wake phrase at the beginning of the recognized
 utterance. Case, leading punctuation, punctuation between words, and the merged
-recognition `HolaArlo` are accepted. `Carlos`, `hablarlo`, `Arlophone`, and mentions
-of Arlo inside unrelated sentences do not activate it.
+recognition `HolaMorgan` are accepted. `Carlos`, `hablarlo`, `Morganphone`, and mentions
+of Morgan inside unrelated sentences do not activate it.
 
 If the desktop is closed, the wake listener launches it and starts normal voice
 recording as soon as it is ready. If it is already open, recording begins
 automatically. This works while the window is visible, minimized, hidden, or in
 mascot mode.
-Recording stops after end silence, then the transcript is submitted so Arlo can
+Recording stops after end silence, then the transcript is submitted so Morgan can
 execute the request or answer conversationally. In mascot mode the mascot stays
 in the corner: no full window is shown, restored, or focused, and the mascot
 shrinks or grows with microphone intensity. Pending typed text and attachments
@@ -53,7 +53,7 @@ retains its existing lazily loaded
 `WHISPER_MODEL` (default `small`). As before, Whisper weights must be available
 locally for fully offline use; first use of an uncached model may download them.
 
-OS file locks in `%USERPROFILE%\.arlo\voice` coordinate microphone ownership.
+OS file locks in `%USERPROFILE%\.morgan\voice` coordinate microphone ownership.
 Manual recording and the desktop agent request priority while processing. During
 TTS playback, the desktop yields microphone ownership so the wake listener can
 hear a new activation. A wake activation during speech stops the current response
@@ -66,7 +66,7 @@ immediately through an OS lock.
 
 ## Local delivery and recovery
 
-`%USERPROFILE%\.arlo\voice\inbox.sqlite3` is the durable IPC inbox. There is no
+`%USERPROFILE%\.morgan\voice\inbox.sqlite3` is the durable IPC inbox. There is no
 network command endpoint or socket authentication to configure. It uses the
 current Windows user's profile permissions; run both processes as the same user
 and keep this directory private and on a local disk.
@@ -95,19 +95,19 @@ locally; normal desktop session logging applies after dictated text is submitted
 ## Configuration
 
 Set these environment variables for the user running the logon task, then restart
-that task. For a foreground test, set `$env:ARLO_WAKE_WAIT_SECONDS = '8'` in
+that task. For a foreground test, set `$env:MORGAN_WAKE_WAIT_SECONDS = '8'` in
 PowerShell before starting `wake.py`.
 
 | Variable                        | Default | Meaning                                                                                             |
 |---------------------------------|---------|-----------------------------------------------------------------------------------------------------|
-| `ARLO_WAKE_WAIT_SECONDS`        | `6`     | Internal capture timeout after detection.                                                           |
-| `ARLO_WAKE_SILENCE_SECONDS`     | `1.8`   | Silence threshold used by wake detection.                                                           |
-| `ARLO_WAKE_MAX_SECONDS`         | `120`   | Safety limit for a listener capture.                                                                |
-| `ARLO_WAKE_PRE_ROLL_SECONDS`    | `0.3`   | Audio retained before speech onset; `0` disables it.                                                |
-| `ARLO_WAKE_THRESHOLD`           | `400`   | RMS speech threshold in signed 16-bit PCM units. Tune for microphone/noise level.                   |
-| `ARLO_WAKE_DELIVERY_SECONDS`    | `300`   | Lifetime of an unclaimed recording request while the open app becomes ready.                        |
-| `ARLO_WAKE_RECOGNITION_SECONDS` | `60`    | Maximum wait for an individual transcription.                                                       |
-| `ARLO_WAKE_MODEL`               | `tiny`  | Listener's multilingual faster-whisper model; e.g. `small` for greater accuracy at higher CPU cost. |
+| `MORGAN_WAKE_WAIT_SECONDS`        | `6`     | Internal capture timeout after detection.                                                           |
+| `MORGAN_WAKE_SILENCE_SECONDS`     | `1.8`   | Silence threshold used by wake detection.                                                           |
+| `MORGAN_WAKE_MAX_SECONDS`         | `120`   | Safety limit for a listener capture.                                                                |
+| `MORGAN_WAKE_PRE_ROLL_SECONDS`    | `0.3`   | Audio retained before speech onset; `0` disables it.                                                |
+| `MORGAN_WAKE_THRESHOLD`           | `400`   | RMS speech threshold in signed 16-bit PCM units. Tune for microphone/noise level.                   |
+| `MORGAN_WAKE_DELIVERY_SECONDS`    | `300`   | Lifetime of an unclaimed recording request while the open app becomes ready.                        |
+| `MORGAN_WAKE_RECOGNITION_SECONDS` | `60`    | Maximum wait for an individual transcription.                                                       |
+| `MORGAN_WAKE_MODEL`               | `tiny`  | Listener's multilingual faster-whisper model; e.g. `small` for greater accuracy at higher CPU cost. |
 
 Numeric values must be finite and positive except pre-roll, which may be zero.
 Maximum duration must exceed end silence. Recognition quality and the RMS
@@ -122,9 +122,9 @@ exclusive desktop lifetime locking. They do not measure physical microphone,
 Whisper, speaker echo, or Qt rendering behavior.
 
 For a live acceptance check, restart the updated listener and close the desktop.
-Say a wake phrase and confirm that Arlo opens and recording starts once it is
+Say a wake phrase and confirm that Morgan opens and recording starts once it is
 ready. Repeat with the full app already open and in mascot mode; in mascot mode,
 verify that the full window stays hidden while the mascot changes size with your
-voice. Also try the manual mic button and a response that speaks the name Arlo.
+voice. Also try the manual mic button and a response that speaks the name Morgan.
 Check that there is one desktop instance, one agent request, no self-activation,
 and that listening resumes after the reply.

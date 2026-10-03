@@ -11,7 +11,7 @@ if [[ "$(uname -m)" != "arm64" ]]; then
 fi
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-python="${ARLO_BUILD_PYTHON:-$root/.venv/bin/python}"
+python="${MORGAN_BUILD_PYTHON:-$root/.venv/bin/python}"
 build="$root/build/packaging-tui-macos"
 dist="$build/dist"
 installer="$root/build/installer"
@@ -47,8 +47,8 @@ PY
 )
 
 "$python" -B -m PyInstaller.utils.cliutils.makespec \
-    --onedir --console --noupx --name ArloTUI \
-    --osx-bundle-identifier com.xdg.arlo.terminal \
+    --onedir --console --noupx --name MorganTUI \
+    --osx-bundle-identifier com.xdg.morgan.terminal \
     --paths "$root" \
     --specpath "$build" \
     --add-data "$root/assets:assets" \
@@ -72,7 +72,7 @@ PY
     --exclude-module lingua --exclude-module babel --exclude-module num2words \
     "${hidden[@]}" "$root/entry/tui.py"
 
-"$python" -B - "$build/ArloTUI.spec" <<'PY'
+"$python" -B - "$build/MorganTUI.spec" <<'PY'
 import sys
 from pathlib import Path
 
@@ -92,22 +92,22 @@ path.write_text(text, encoding='utf-8')
 PY
 
 rm -rf -- "$dist"
-"$python" -B -m PyInstaller --noconfirm --distpath "$dist" --workpath "$build/work" "$build/ArloTUI.spec" "$@"
+"$python" -B -m PyInstaller --noconfirm --distpath "$dist" --workpath "$build/work" "$build/MorganTUI.spec" "$@"
 
 staging="$build/dmg"
 rm -rf -- "$staging"
 mkdir -p -- "$staging"
-cp -R -- "$dist/ArloTUI" "$staging/"
-launcher="$staging/Arlo Terminal.command"
+cp -R -- "$dist/MorganTUI" "$staging/"
+launcher="$staging/Morgan Terminal.command"
 cat > "$launcher" <<'SH'
 #!/bin/bash
-exec "$(cd -- "$(dirname -- "$0")" && pwd)/ArloTUI/ArloTUI" "$@"
+exec "$(cd -- "$(dirname -- "$0")" && pwd)/MorganTUI/MorganTUI" "$@"
 SH
 chmod +x "$launcher"
 ln -s /Applications "$staging/Applications"
-image="$installer/ArloTUI-$version.dmg"
+image="$installer/MorganTUI-$version.dmg"
 rm -f -- "$image"
-hdiutil create -volname "Arlo Terminal $version" -srcfolder "$staging" -fs HFS+ -format UDZO -ov "$image"
+hdiutil create -volname "Morgan Terminal $version" -srcfolder "$staging" -fs HFS+ -format UDZO -ov "$image"
 rm -rf -- "$staging"
 
-printf '\nExecutable: %s/ArloTUI/ArloTUI\nDisk image: %s\n' "$dist" "$image"
+printf '\nExecutable: %s/MorganTUI/MorganTUI\nDisk image: %s\n' "$dist" "$image"

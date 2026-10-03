@@ -15,7 +15,7 @@ Attachments remain available for the duration of the submitted request; they are
 - UTF-8, UTF-16 with BOM, and Windows-1252 text; source code, Markdown, JSON, XML, YAML, CSV/TSV, and common configuration formats. Empty files, binary content, and unsupported formats are rejected.
 - PDF: Page-by-page text extraction **only if `pypdf` is installed**. It is neither installed automatically nor required for other functionality. OCR and encrypted PDFs are not supported. `pypdf` is not installed in the current development environment.
 - PNG, JPEG, WebP, and GIF: Visual input through PydanticAI's `BinaryContent`, only when Ollama's `/api/show` confirms the `vision` capability. If vision support cannot be confirmed, image submission is rejected and the draft is preserved. GIF animation analysis is not guaranteed. Image processing also consumes the context budget.
-The following values can be configured in the `attachments` object in `~/.arlo/json/config.json`, including through `update_config`:
+The following values can be configured in the `attachments` object in `~/.morgan/json/config.json`, including through `update_config`:
 
 ```json
 {

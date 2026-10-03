@@ -6,18 +6,18 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     root="$(cygpath -m "$root")"
 fi
-python="${ARLO_BUILD_PYTHON:-$root/.venv/Scripts/pythonw.exe}"
+python="${MORGAN_BUILD_PYTHON:-$root/.venv/Scripts/pythonw.exe}"
 if [[ "${python##*/}" == "python.exe" ]]; then
     python="${python%/*}/pythonw.exe"
 fi
-output="${ARLO_BUILD_OUTPUT:-C:/}"
-arlo="${ARLO:-${output%/}/Arlo}"
+output="${MORGAN_BUILD_OUTPUT:-C:/}"
+morgan="${MORGAN:-${output%/}/Morgan}"
 if command -v cygpath >/dev/null 2>&1; then
-    arlo="$(cygpath -am "$arlo")"
+    morgan="$(cygpath -am "$morgan")"
 else
-    arlo="${arlo//\\//}"
+    morgan="${morgan//\\//}"
 fi
-arlo="${arlo%/}"
+morgan="${morgan%/}"
 build="$root/build/packaging-tui"
 
 if [[ ! -x "$python" ]]; then
@@ -46,8 +46,8 @@ from PyInstaller.utils.win32.versioninfo import (
 
 version = json.loads(Path('dev/core.json').read_text(encoding='utf-8'))['version']
 numbers = tuple((list(map(int, re.findall(r'\d+', version))) + [0] * 4)[:4])
-strings = dict(FileDescription='Arlo Terminal', ProductName='Arlo', InternalName='ArloTUI',
-               OriginalFilename='ArloTUI.exe', FileVersion=version, ProductVersion=version)
+strings = dict(FileDescription='Morgan Terminal', ProductName='Morgan', InternalName='MorganTUI',
+               OriginalFilename='MorganTUI.exe', FileVersion=version, ProductVersion=version)
 resource = VSVersionInfo(
     ffi=FixedFileInfo(filevers=numbers, prodvers=numbers, fileType=1),
     kids=[StringFileInfo([StringTable('040904B0', [StringStruct(k, v) for k, v in strings.items()])]),
@@ -75,8 +75,8 @@ PY
 )
 
 command=("$python" -B -m PyInstaller.utils.cliutils.makespec
-    --onedir --console --noupx --name ArloTUI
-    --icon "$root/assets/arlo.ico"
+    --onedir --console --noupx --name MorganTUI
+    --icon "$root/assets/morgan.ico"
     --version-file "$build/version-info"
     --paths "$root"
     --specpath "$build"
@@ -105,7 +105,7 @@ printf 'Executing:'
 printf ' %q' "${command[@]}"
 printf '\n'
 run_python "${command[@]:1}"
-run_python -B - "$build/ArloTUI.spec" <<'PY'
+run_python -B - "$build/MorganTUI.spec" <<'PY'
 import sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -121,23 +121,23 @@ text = text.replace('pyz = PYZ(a.pure)',
     "a.datas = [entry for entry in a.datas if not entry[0].replace('\\\\', '/').startswith('timezonefinder_data/data/')]\n"
     "pyz = PYZ(a.pure)")
 head, separator, collection = text.rpartition('coll = COLLECT(')
-collection = collection.replace("name='ArloTUI',", "name='tui',", 1)
+collection = collection.replace("name='MorganTUI',", "name='tui',", 1)
 text = head + separator + collection
 path.write_text(text, encoding='utf-8')
 PY
 rm -rf -- "$build/dist"
-run_python -B -m PyInstaller --noconfirm --distpath "$build/dist" --workpath "$build/work" "$build/ArloTUI.spec" "$@"
+run_python -B -m PyInstaller --noconfirm --distpath "$build/dist" --workpath "$build/work" "$build/MorganTUI.spec" "$@"
 
-mkdir -p -- "$arlo/_internal"
-cp -f -- "$build/dist/tui/ArloTUI.exe" "$arlo/ArloTUI.exe"
-cp -rn -- "$build/dist/tui/_internal/." "$arlo/_internal/"
+mkdir -p -- "$morgan/_internal"
+cp -f -- "$build/dist/tui/MorganTUI.exe" "$morgan/MorganTUI.exe"
+cp -rn -- "$build/dist/tui/_internal/." "$morgan/_internal/"
 
 system32="${SYSTEMROOT:-C:\\Windows}"
 system32="${system32//\\//}/System32"
 for runtime in vcruntime140 vcruntime140_1 msvcp140 msvcp140_1 msvcp140_2 \
         msvcp140_atomic_wait msvcp140_codecvt_ids concrt140 vcomp140; do
     if [[ -f "$system32/$runtime.dll" ]]; then
-        cp -f -- "$system32/$runtime.dll" "$arlo/_internal/"
+        cp -f -- "$system32/$runtime.dll" "$morgan/_internal/"
     fi
 done
-printf '\nExecutable: %s/ArloTUI.exe\n' "$arlo"
+printf '\nExecutable: %s/MorganTUI.exe\n' "$morgan"

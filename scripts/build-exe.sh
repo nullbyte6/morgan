@@ -6,20 +6,20 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v cygpath >/dev/null 2>&1; then
     root="$(cygpath -m "$root")"
 fi
-python="${ARLO_BUILD_PYTHON:-$root/.venv/Scripts/pythonw.exe}"
+python="${MORGAN_BUILD_PYTHON:-$root/.venv/Scripts/pythonw.exe}"
 if [[ "${python##*/}" == "python.exe" ]]; then
     python="${python%/*}/pythonw.exe"
 fi
-output="${ARLO_BUILD_OUTPUT:-C:/}"
-arlo="${ARLO:-${output%/}/Arlo}"
+output="${MORGAN_BUILD_OUTPUT:-C:/}"
+morgan="${MORGAN:-${output%/}/Morgan}"
 if command -v cygpath >/dev/null 2>&1; then
-    arlo="$(cygpath -am "$arlo")"
+    morgan="$(cygpath -am "$morgan")"
 else
-    arlo="${arlo//\\//}"
+    morgan="${morgan//\\//}"
 fi
-arlo="${arlo%/}"
-output="${arlo%/*}/"
-package="${arlo##*/}"
+morgan="${morgan%/}"
+output="${morgan%/*}/"
+package="${morgan##*/}"
 build="$root/build/packaging"
 
 if [[ ! -x "$python" ]]; then
@@ -48,8 +48,8 @@ from PyInstaller.utils.win32.versioninfo import (
 
 version = json.loads(Path('dev/core.json').read_text(encoding='utf-8'))['version']
 numbers = tuple((list(map(int, re.findall(r'\d+', version))) + [0] * 4)[:4])
-strings = dict(FileDescription='Arlo', ProductName='Arlo', InternalName='Arlo',
-               OriginalFilename='Arlo.exe', FileVersion=version, ProductVersion=version)
+strings = dict(FileDescription='Morgan', ProductName='Morgan', InternalName='Morgan',
+               OriginalFilename='Morgan.exe', FileVersion=version, ProductVersion=version)
 resource = VSVersionInfo(
     ffi=FixedFileInfo(filevers=numbers, prodvers=numbers, fileType=1),
     kids=[StringFileInfo([StringTable('040904B0', [StringStruct(k, v) for k, v in strings.items()])]),
@@ -74,8 +74,8 @@ PY
 )
 
 command=("$python" -B -m PyInstaller.utils.cliutils.makespec
-    --onedir --windowed --noupx --name Arlo
-    --icon "$root/assets/arlo.ico"
+    --onedir --windowed --noupx --name Morgan
+    --icon "$root/assets/morgan.ico"
     --version-file "$build/version-info"
     --paths "$root"
     --specpath "$build"
@@ -102,7 +102,7 @@ printf 'Executing:'
 printf ' %q' "${command[@]}"
 printf '\n'
 run_python "${command[@]:1}"
-run_python -B - "$build/Arlo.spec" "$package" <<'PY'
+run_python -B - "$build/Morgan.spec" "$package" <<'PY'
 import sys
 from pathlib import Path
 path = Path(sys.argv[1])
@@ -126,9 +126,9 @@ a.datas = [entry for entry in a.datas if not unused.match(entry[0].replace('\\',
 '''
 text = text.replace('pyz = PYZ(a.pure)', unused_qt + 'pyz = PYZ(a.pure)')
 head, separator, collection = text.rpartition('coll = COLLECT(')
-collection = collection.replace("name='Arlo',", f'name={sys.argv[2]!r},', 1)
+collection = collection.replace("name='Morgan',", f'name={sys.argv[2]!r},', 1)
 text = head + separator + collection
 path.write_text(text, encoding='utf-8')
 PY
-run_python -B -m PyInstaller --noconfirm --distpath "$output" --workpath "$build/work" "$build/Arlo.spec" "$@"
-printf '\nExecutable: %s/Arlo.exe\n' "$arlo"
+run_python -B -m PyInstaller --noconfirm --distpath "$output" --workpath "$build/work" "$build/Morgan.spec" "$@"
+printf '\nExecutable: %s/Morgan.exe\n' "$morgan"
