@@ -19,7 +19,7 @@
 """Minimal bootstrap instructions; configurable behavior belongs in config.json."""
 
 from src.init.lang import tr
-from .identity import get_assistant_name
+from .identity import get_assistant_gender_instruction, get_assistant_name
 
 
 def current_instructions() -> str:
@@ -30,8 +30,11 @@ def current_instructions() -> str:
     name = get_assistant_name(config)
     personality = config["personality"]
     instructions = config["instructions"]
+    gender = get_assistant_gender_instruction(config)
+    if "{assistant_gender}" not in instructions.get("identity", "") and config["assistant"].get("gender", "auto") != "auto":
+        instructions = {**instructions, "identity": f"{instructions.get('identity', '')} {{assistant_gender}}".strip()}
     sections = "\n".join(
-        f"{key}: {value.replace('{assistant_name}', name)}"
+        f"{key}: {value.replace('{assistant_name}', name).replace('{assistant_gender}', gender)}"
         for key, value in instructions.items() if value)
     style = "\n".join(
         f"{key}: {value}" for key, value in personality.items() if value)

@@ -34,7 +34,7 @@ from pydantic_ai import Agent, Tool
 from src.init import latency
 from src.init.config import load_config
 from src.init.console import DebugConsole
-from src.init.identity import get_assistant_name
+from src.init.identity import get_assistant_gender_instruction, get_assistant_name
 from src.init.voice_client import VoiceClient
 from src.platforms import current_platform
 
@@ -187,8 +187,7 @@ class Assistant:
         prompt = (f"You are {self.name}, a personal desktop assistant that has just started. "
                   f"{request_text}Start with a simple salutation in {language} and the user's name, like \"Hi {self.username}, ...\", "
                   "and do not introduce yourself or mention your own name, since the user already knows you. "
-                  "Infer your grammatical gender from your name "
-                  "and use it consistently. Use a "
+                  f"{get_assistant_gender_instruction()} Use it consistently. Use a "
                   f"{load_config()['personality']['tone']} tone and vary the wording. "
                   "Reply with the greeting only, without quotes, emojis or Markdown.")
         payload = json.dumps({

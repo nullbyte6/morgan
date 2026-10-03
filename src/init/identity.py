@@ -49,6 +49,22 @@ def get_assistant_name(config: dict | None = None) -> str:
     return config["assistant"]["name"]
 
 
+GENDER_INSTRUCTIONS = {
+    "auto": "Infer your gender from your name: if your name is a male name you are male and must use masculine forms about yourself (he/him, and masculine adjectives, participles and articles in gendered languages, such as \"listo\" in Spanish); if it is a female name you are female and must use feminine forms (she/her, \"lista\"). Never default to feminine forms. If the name is neutral or ambiguous, avoid gendered self-reference.",
+    "male": "You are male: always use masculine forms about yourself (he/him, and masculine adjectives, participles and articles in gendered languages, such as \"listo\" in Spanish), whatever your name suggests.",
+    "female": "You are female: always use feminine forms about yourself (she/her, and feminine adjectives, participles and articles in gendered languages, such as \"lista\" in Spanish), whatever your name suggests.",
+    "neutral": "You have no gender: avoid gendered self-reference, using neutral wording and, in gendered languages, phrasing that needs no masculine or feminine form about yourself.",
+}
+
+
+def get_assistant_gender_instruction(config: dict | None = None) -> str:
+    """Return the first-person gender guidance for the configured gender."""
+    if config is None:
+        from .config import load_config
+        config = load_config()
+    return GENDER_INSTRUCTIONS[config["assistant"].get("gender", "auto")]
+
+
 def get_assistant_identifier() -> str:
     """Return the name namespace shared by the running storage and services."""
     from .config import HOME_PATH
