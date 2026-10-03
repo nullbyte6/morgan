@@ -1,9 +1,9 @@
 param(
     [Parameter(Mandatory = $false)]
-    [string]$InstallDir = "C:\Arlo",
+    [string]$InstallDir = "C:\Morgan",
 
     [Parameter(Mandatory = $false)]
-    [string]$AssistantName = "Arlo",
+    [string]$AssistantName = "Morgan",
 
     [Parameter(Mandatory = $false)]
     [switch]$SkipVoiceRuntime
@@ -30,10 +30,10 @@ function Get-AssistantIdentifier {
 $AssistantName = $AssistantName.Trim()
 
 if (-not $AssistantName) {
-    $AssistantName = "Arlo"
+    $AssistantName = "Morgan"
 }
 
-$LegacyDir = Join-Path $env:USERPROFILE ".arlo"
+$LegacyDir = Join-Path $env:USERPROFILE ".morgan"
 $DataDir = Join-Path $env:USERPROFILE ("." + (Get-AssistantIdentifier $AssistantName))
 
 $ConfigFile = Join-Path $DataDir "json\config.json"

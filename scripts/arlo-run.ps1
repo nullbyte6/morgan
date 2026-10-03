@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $root ".venv\Scripts\python.exe"
-$services = Join-Path $PSScriptRoot "arlo-services.ps1"
+$services = Join-Path $PSScriptRoot "morgan-services.ps1"
 if ($Mode -eq "Tui") { $module = "entry.tui" } else { $module = "entry.desktop" }
 
 foreach ($path in @($python, $services)) {
@@ -37,8 +37,8 @@ Write-Host "Starting $env:ASSISTANT_NAME`: $Mode"
 
 if ($Mode -eq "Desktop") {
     $desktopDir = [Environment]::GetEnvironmentVariable($env:ASSISTANT_NAME.ToUpperInvariant())
-    if ([string]::IsNullOrWhiteSpace($desktopDir)) { $desktopDir = "C:\Arlo" }
-    $desktopExe = Join-Path $desktopDir "Arlo.exe"
+    if ([string]::IsNullOrWhiteSpace($desktopDir)) { $desktopDir = "C:\Morgan" }
+    $desktopExe = Join-Path $desktopDir "Morgan.exe"
     if (Test-Path -LiteralPath $desktopExe -PathType Leaf) {
         Start-Process -FilePath $desktopExe -WorkingDirectory $root -WindowStyle Hidden
     }
