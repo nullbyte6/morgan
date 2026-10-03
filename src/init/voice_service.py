@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -156,8 +156,8 @@ class SpeechBatch:
 
 class VoiceService:
     """
-    Arlo's multilingual voice service using Fun-CosyVoice3.
-    The model is loaded once and kept alive for the entire Arlo session.
+    Morgan's multilingual voice service using Fun-CosyVoice3.
+    The model is loaded once and kept alive for the entire Morgan session.
     Speech synthesis runs on a background worker so it does not block
     text generation.
     """

@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Deterministic supervision of Arlo's single model agent."""
+"""Deterministic supervision of Morgan's single model agent."""
 
 import asyncio
 import copy
@@ -946,7 +946,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
             return False
         if part.content == self.state.objective:
             return False
-        return part.content.startswith(("Arlo supervisor snapshot task=", "Supervisor task state: "))
+        return part.content.startswith(("Morgan supervisor snapshot task=", "Supervisor task state: "))
 
     def active_history(self, messages):
         result = []
@@ -1053,7 +1053,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         history = self.active_history(request_context.messages)
 
         def with_snapshot(messages):
-            text = "Arlo supervisor snapshot task=" + self.state.id + "\n" + encoded(self.snapshot_view(snapshot))
+            text = "Morgan supervisor snapshot task=" + self.state.id + "\n" + encoded(self.snapshot_view(snapshot))
             if self._task_stalls >= 6:
                 text += "\nRecord evidence-backed findings, continue remaining coverage, or finish; do not repeat unchanged reads."
             return [*messages, ModelRequest(parts=[UserPromptPart(text)])]
@@ -1539,7 +1539,7 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
         for message in copy.deepcopy(messages):
             message.parts = [part for part in message.parts if not (
                 part.part_kind == "user-prompt" and isinstance(part.content, str) and part.content != self.objective and part.content.startswith((
-                    "Arlo supervisor snapshot task=", "Supervisor task state: ", "Interrupted task state (")))]
+                    "Morgan supervisor snapshot task=", "Supervisor task state: ", "Interrupted task state (")))]
             if message.parts:
                 result.append(message)
         return result

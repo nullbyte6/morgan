@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -70,6 +70,6 @@ def get_stylesheet():
     """Returns the global stylesheet"""
     from pathlib import Path
     stylesheet_path = resource_path(
-        (Path(__file__).resolve().parent.parent.parent / "assets" / "arlo.qss"))
+        (Path(__file__).resolve().parent.parent.parent / "assets" / "morgan.qss"))
     from .theme import current_theme
     return current_theme().render(stylesheet_path.read_text(encoding="utf-8"))

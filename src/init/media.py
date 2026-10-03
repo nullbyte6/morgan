@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -122,7 +122,7 @@ def _spotify_error(action: str, error: Exception) -> str:
 
 def _spotify_target_device(client) -> str:
     """Choose a safe playback target when Spotify has no active device.
-    An explicitly configured device wins. Otherwise, Arlo uses the device whose
+    An explicitly configured device wins. Otherwise, Morgan uses the device whose
     name equals this Windows computer name. It never guesses among unrelated
     Spotify Connect devices such as speakers in another room.
     """

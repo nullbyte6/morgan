@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -43,7 +43,7 @@ def close_application(application: str, force: bool = False) -> str:
     running processes; return candidates if ambiguous. force=True is only for
     explicitly requested forced termination. Normal window closure can leave
     save dialogs or a tray process running; report requested, not terminated.
-    Closing Arlo itself requests a graceful exit after the current turn.
+    Closing Morgan itself requests a graceful exit after the current turn.
     """
     def result(status, **values):
         return json.dumps(dict(status=status, **values), ensure_ascii=False)

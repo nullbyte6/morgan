@@ -85,7 +85,7 @@
   "console.error_pwsh_not_found": "O PowerShell 7 (pwsh.exe) não foi encontrado.",
   "console.error_wt_not_found": "O Windows Terminal (wt.exe) não foi encontrado",
   "status.waking": "Acordando",
-  "startup.services_missing": "O iniciador dos serviços locais não foi encontrado. Reinstale o Arlo ou, ao executar a partir do repositório, defina ARLO_HOME com a pasta scripts dele.",
+  "startup.services_missing": "O iniciador dos serviços locais não foi encontrado. Reinstale o Morgan ou, ao executar a partir do repositório, defina MORGAN_HOME com a pasta scripts dele.",
   "startup.powershell_missing": "O PowerShell não foi encontrado. Ele é necessário para iniciar os serviços locais.",
   "startup.services_timeout": "Os serviços locais não terminaram de iniciar. Verifique o serviço Ollama e o log do TTS.",
   "startup.services_failed": "Os serviços locais não puderam ser iniciados: {error}",

@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Reload live Arlo source modules while preserving process-owned state."""
+"""Reload live Morgan source modules while preserving process-owned state."""
 from __future__ import annotations
 
 import importlib
@@ -28,7 +28,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-STYLESHEET_PATH = PROJECT_ROOT / "assets" / "arlo.qss"
+STYLESHEET_PATH = PROJECT_ROOT / "assets" / "morgan.qss"
 _stylesheet_bridge = None
 
 _PRESERVED = {
@@ -169,5 +169,5 @@ def reload_project_modules() -> tuple[list[str], list[str]]:
         except Exception as error:
             errors.append(f"{name}: {error}")
     if _reload_stylesheet(errors):
-        reloaded.append("assets/arlo.qss")
+        reloaded.append("assets/morgan.qss")
     return reloaded, errors

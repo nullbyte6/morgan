@@ -60,7 +60,7 @@ def version_key(version: str) -> tuple:
 def _request(url: str, accept: str) -> urllib.request.Request:
     from src.init.brain import get_version
     return urllib.request.Request(url, headers={
-        "Accept": accept, "User-Agent": f"Arlo/{get_version()}", "X-GitHub-Api-Version": "2022-11-28"})
+        "Accept": accept, "User-Agent": f"Morgan/{get_version()}", "X-GitHub-Api-Version": "2022-11-28"})
 
 
 def available_releases(current: str | None = None) -> list[Release]:
@@ -120,7 +120,7 @@ def download(release: Release, progress: Callable[[int, int], None],
 
 
 def relaunch_command(terminal: bool = False) -> tuple[list[str], Path]:
-    """The command and folder that start Arlo again once the installer has finished."""
+    """The command and folder that start Morgan again once the installer has finished."""
     if getattr(sys, "frozen", False):
         return [sys.executable], Path(sys.executable).parent
     installed = current_platform().installed_executable(terminal)
@@ -144,5 +144,5 @@ def _environment() -> dict[str, str]:
 
 
 def install(setup: Path, command: list[str], directory: Path) -> None:
-    """Once this process exits, run the installer, delete it from Downloads and start Arlo again."""
+    """Once this process exits, run the installer, delete it from Downloads and start Morgan again."""
     current_platform().run_installer_after_exit(setup, command, directory, _environment())

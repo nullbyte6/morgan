@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -111,7 +111,7 @@ def schedule_notification(delay_seconds: int, message: str, title: str | None = 
                 del _timers[timer_id]
                 raise
         return json.dumps({"id": timer_id, "status": "pending", "delay_seconds": delay_seconds,
-                           "requires_arlo_running": True})
+                           "requires_morgan_running": True})
     except (OSError, ValueError, RuntimeError) as error:
         return tr('notifications.error_scheduling_notification', error=error)
 

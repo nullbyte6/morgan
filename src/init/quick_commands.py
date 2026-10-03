@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -144,7 +144,7 @@ def _result_failed(value) -> bool:
 
 
 def run_quick_command(name: str) -> str:
-    """Run one commands.json group through Arlo's registered tools in order.
+    """Run one commands.json group through Morgan's registered tools in order.
 
     All actions are resolved and their arguments validated before execution.
     Existing tool safeguards and confirmations remain active. Runtime failures

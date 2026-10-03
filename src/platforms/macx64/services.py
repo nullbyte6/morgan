@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -20,7 +20,7 @@
 
 
 def service_launchers(name):
-    return list(dict.fromkeys((f"{name}-services.sh", "arlo-services.sh")))
+    return list(dict.fromkeys((f"{name}-services.sh", "morgan-services.sh")))
 
 
 def service_command(script, voice):

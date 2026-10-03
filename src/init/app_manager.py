@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -81,7 +81,7 @@ def _start(operation, package, option=False, mutation=False):
 
 
 def get_app_operation(job_id: str) -> str:
-    """Check a winget operation in this Arlo session. Only completed means exit code zero."""
+    """Check a winget operation in this Morgan session. Only completed means exit code zero."""
     with _lock:
         job = _jobs.get(job_id)
         if not job:

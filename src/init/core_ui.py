@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -17,7 +17,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""Arlo desktop interface using PySide6."""
+"""Morgan desktop interface using PySide6."""
 import html
 import itertools
 import logging
@@ -173,7 +173,7 @@ class AssistantWindow(DesktopWindow):
         subtitles_enabled = self.settings.value("subtitles", True, type=bool)
         orb_speech_pulse = self.settings.value("orb_speech_pulse", True, type=bool)
         self.setWindowTitle(f"{get_assistant_name()} {load_dev_file()["version"]}")
-        icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "arlo.ico")
+        icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "morgan.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
 
         self.mascot = Orb(size=120, floating=True, line_width=4.2, fill_ratio=0.54)
@@ -679,7 +679,7 @@ class AssistantWindow(DesktopWindow):
                                 lambda: self.session.ready and not self.session.busy
                                 and self.session.submitting is None))
         commands.append(Command("app.exit", "palette.exit", self.exit_app,
-                                ("exit", "quit", "salir", "cerrar arlo", "退出")))
+                                ("exit", "quit", "salir", "cerrar morgan", "退出")))
         self.command_palette = CommandPalette(CommandRegistry(commands), self)
         self.workspace.panel_focused.connect(
             lambda _panel_id: self.command_palette.dismiss(restore_focus=False))
@@ -1828,7 +1828,7 @@ class AssistantWindow(DesktopWindow):
 
     @Slot()
     def request_quit(self):
-        """Explicitly stop Arlo; ordinary window closes only hide it."""
+        """Explicitly stop Morgan; ordinary window closes only hide it."""
         if self.quitting:
             return
         self.quitting = True
@@ -2415,7 +2415,7 @@ def main():
     try:
         app.setStyle("Fusion")
         assets = Path(__file__).resolve().parent.parent.parent / "assets"
-        app_icon = QIcon(str(assets / "arlo.ico"))
+        app_icon = QIcon(str(assets / "morgan.ico"))
         app.setWindowIcon(app_icon)
         fonts = assets / "fonts"
 

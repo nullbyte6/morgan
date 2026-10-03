@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Windows x64 services for Arlo, backed by Win32, the Shell and PowerShell."""
+"""Windows x64 services for Morgan, backed by Win32, the Shell and PowerShell."""
 
 import subprocess
 
@@ -31,7 +31,7 @@ class WinX64Platform(Platform):
     detached_flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
     persistent_environment = True
     elevation_captures_output = True
-    installer_name = "ArloSetup.exe"
+    installer_name = "MorganSetup.exe"
     has_drive_letters = True
     preferred_audio_host = "Windows WASAPI"
     telemetry_sources = frozenset(telemetry.SCRIPTS)

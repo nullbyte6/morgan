@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -26,7 +26,7 @@ import sys
 
 import psutil
 
-SHUTDOWN_MARKER = "arlo-shutdown"
+SHUTDOWN_MARKER = "morgan-shutdown"
 APPLICATION_FOLDERS = ("/Applications", "/Applications/Utilities", "/System/Applications",
                        "/System/Applications/Utilities", "~/Applications")
 PROTECTED_PROCESSES = {"kernel_task", "launchd", "windowserver", "loginwindow", "logd",

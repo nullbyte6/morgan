@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Dates, times and day names rendered in Arlo's interface language."""
+"""Dates, times and day names rendered in Morgan's interface language."""
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from time import monotonic

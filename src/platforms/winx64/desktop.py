@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -57,8 +57,8 @@ def set_app_id(app_id):
 
 def desktop_launcher(installation, root):
     if installation is not None:
-        return installation / "Arlo.exe"
-    return root / "scripts" / "arlo-start.bat"
+        return installation / "Morgan.exe"
+    return root / "scripts" / "morgan-start.bat"
 
 
 def launch_command(launcher, root):

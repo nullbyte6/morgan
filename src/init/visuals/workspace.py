@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Embedded tiling workspace for Arlo's desktop interface."""
+"""Embedded tiling workspace for Morgan's desktop interface."""
 from __future__ import annotations
 
 import uuid
@@ -37,7 +37,7 @@ class WorkspacePanel(QFrame):
     move_requested = Signal(str, str)
     title_changed = Signal(str, str)
     palette_requested = Signal(str)
-    MIME_TYPE = "application/x-arlo-workspace-panel"
+    MIME_TYPE = "application/x-morgan-workspace-panel"
 
     def __init__(
         self,

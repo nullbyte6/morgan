@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -16,14 +16,14 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Desktop launching on macOS: the Arlo.app bundle, or the desktop entry from source."""
+"""Desktop launching on macOS: the Morgan.app bundle, or the desktop entry from source."""
 
 import sys
 
 
 def desktop_launcher(installation, root):
-    if installation is not None and (installation / "Arlo.app").is_dir():
-        return installation / "Arlo.app"
+    if installation is not None and (installation / "Morgan.app").is_dir():
+        return installation / "Morgan.app"
     return root / "entry" / "desktop.py"
 
 

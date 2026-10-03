@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -253,7 +253,7 @@ def run_listener(microphone):
                 try:
                     launch_assistant()
                 except OSError:
-                    log.exception("Unable to launch Arlo")
+                    log.exception("Unable to launch Morgan")
             if audio_requested() or not microphone.acquire():
                 time.sleep(0.1)
                 continue

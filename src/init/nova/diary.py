@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Arlo's diary: a day's agenda, memories and conversations, with every message shown as a log card."""
+"""Morgan's diary: a day's agenda, memories and conversations, with every message shown as a log card."""
 from datetime import date, datetime, timedelta
 from getpass import getuser
 from pathlib import Path
@@ -87,7 +87,7 @@ def _label(text: str, name: str, wrap: bool = True) -> QLabel:
 
 
 class MemoryCard(QFrame):
-    """One thing Arlo remembers, with its kind and when it was last written."""
+    """One thing Morgan remembers, with its kind and when it was last written."""
 
     def __init__(self, memory: dict, parent: QWidget | None = None):
         super().__init__(parent)
@@ -181,7 +181,7 @@ class ConversationCard(QFrame):
 
 
 class DiaryView(QWidget):
-    """One day of Arlo's life with you: the agenda, what it learned and every message exchanged."""
+    """One day of Morgan's life with you: the agenda, what it learned and every message exchanged."""
 
     entry_activated = Signal(object)
 

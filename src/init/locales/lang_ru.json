@@ -85,7 +85,7 @@
   "console.error_pwsh_not_found": "PowerShell 7 (pwsh.exe) не найден.",
   "console.error_wt_not_found": "Windows Terminal (wt.exe) не найден",
   "status.waking": "Пробуждение",
-  "startup.services_missing": "Средство запуска локальных служб не найдено. Переустановите Arlo или, если запуск идёт из репозитория, задайте ARLO_HOME с путём к его папке scripts.",
+  "startup.services_missing": "Средство запуска локальных служб не найдено. Переустановите Morgan или, если запуск идёт из репозитория, задайте MORGAN_HOME с путём к его папке scripts.",
   "startup.powershell_missing": "PowerShell не найден. Он необходим для запуска локальных служб.",
   "startup.services_timeout": "Локальные службы не завершили запуск. Проверьте службу Ollama и журнал TTS.",
   "startup.services_failed": "Не удалось запустить локальные службы: {error}",

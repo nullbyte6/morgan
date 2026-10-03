@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -42,7 +42,7 @@ class MemoryTurn:
     writes: list = field(default_factory=list)
 
 
-active_memory = ContextVar("arlo_memory_turn", default=MemoryTurn())
+active_memory = ContextVar("morgan_memory_turn", default=MemoryTurn())
 
 CLAIM_AUDIT = (
     "You audit one reply of an assistant. During this turn no long-term memory tool succeeded, so nothing was "

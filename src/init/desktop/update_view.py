@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -35,7 +35,7 @@ def _megabytes(size: int) -> str:
 
 
 class UpdateView(QWidget):
-    """Download progress of one release, then the installing state until Arlo closes."""
+    """Download progress of one release, then the installing state until Morgan closes."""
 
     progressed = Signal(int, int)
     downloaded = Signal(object)

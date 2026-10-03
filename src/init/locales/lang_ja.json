@@ -85,7 +85,7 @@
   "console.error_pwsh_not_found": "PowerShell 7(pwsh.exe)が見つかりませんでした。",
   "console.error_wt_not_found": "Windows Terminal(wt.exe)が見つかりません",
   "status.waking": "起動中",
-  "startup.services_missing": "ローカルサービスのランチャーが見つかりませんでした。Arloを再インストールするか、リポジトリから実行している場合はARLO_HOMEにscriptsフォルダーを設定してください。",
+  "startup.services_missing": "ローカルサービスのランチャーが見つかりませんでした。Morganを再インストールするか、リポジトリから実行している場合はMORGAN_HOMEにscriptsフォルダーを設定してください。",
   "startup.powershell_missing": "PowerShellが見つかりませんでした。ローカルサービスの起動に必要です。",
   "startup.services_timeout": "ローカルサービスの起動が完了しませんでした。Ollamaサービスと、TTSのログを確認してください。",
   "startup.services_failed": "ローカルサービスを起動できませんでした: {error}",

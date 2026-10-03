@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -33,7 +33,7 @@ from .voice_profiles import selected_voice
 
 # noinspection PyBroadException
 class VoiceClient:
-    """Client for Arlo's persistent TTS service."""
+    """Client for Morgan's persistent TTS service."""
     def __init__(self, audio_callback=None, host: str = "127.0.0.1",
             port: int = 18765):
         self.audio_callback = audio_callback

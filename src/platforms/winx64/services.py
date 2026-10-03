@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -29,7 +29,7 @@ INSTALLER_SWITCHES = ("/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLI
 
 
 def service_launchers(name):
-    return list(dict.fromkeys((f"{name}-services.ps1", "arlo-services.ps1")))
+    return list(dict.fromkeys((f"{name}-services.ps1", "morgan-services.ps1")))
 
 
 def service_command(script, voice):
@@ -54,8 +54,8 @@ def unbundled_libraries(bundle):
 def installed_executable(terminal=False):
     import winreg
     try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Arlo\Installer") as key:
-            return Path(winreg.QueryValueEx(key, "InstallPath")[0]) / ("ArloTUI.exe" if terminal else "Arlo.exe")
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Morgan\Installer") as key:
+            return Path(winreg.QueryValueEx(key, "InstallPath")[0]) / ("MorganTUI.exe" if terminal else "Morgan.exe")
     except OSError:
         return None
 

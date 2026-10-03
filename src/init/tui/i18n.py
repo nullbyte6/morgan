@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -22,7 +22,7 @@ import time
 from src.init.lang import catalog, get_language
 from src.init.identity import get_assistant_name
 
-_state = {"at": -10.0, "language": "spanish", "name": "Arlo"}
+_state = {"at": -10.0, "language": "spanish", "name": "Morgan"}
 
 
 def refresh() -> bool:

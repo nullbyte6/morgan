@@ -85,7 +85,7 @@
   "console.error_pwsh_not_found": "PowerShell 7 (pwsh.exe) est introuvable.",
   "console.error_wt_not_found": "Windows Terminal (wt.exe) est introuvable",
   "status.waking": "Réveil",
-  "startup.services_missing": "Le lanceur des services locaux est introuvable. Réinstallez Arlo ou, depuis le dépôt, définissez ARLO_HOME sur son dossier scripts.",
+  "startup.services_missing": "Le lanceur des services locaux est introuvable. Réinstallez Morgan ou, depuis le dépôt, définissez MORGAN_HOME sur son dossier scripts.",
   "startup.powershell_missing": "PowerShell est introuvable. Il est nécessaire pour démarrer les services locaux.",
   "startup.services_timeout": "Les services locaux n’ont pas fini de démarrer. Vérifiez le service Ollama et le journal TTS.",
   "startup.services_failed": "Les services locaux n’ont pas pu démarrer : {error}",

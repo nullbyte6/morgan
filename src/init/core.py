@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -38,7 +38,7 @@ from src.init.identity import get_assistant_name
 from src.init.voice_client import VoiceClient
 from src.platforms import current_platform
 
-VOICE_STREAMING = os.environ.get("ARLO_VOICE_STREAMING", "1") != "0"
+VOICE_STREAMING = os.environ.get("MORGAN_VOICE_STREAMING", "1") != "0"
 DIRECT_STREAM_CHARACTERS = 900
 DIRECT_STREAM_LINES = 18
 

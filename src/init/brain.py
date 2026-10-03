@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -133,7 +133,7 @@ def is_cloud_model(name: str) -> bool:
 def main_models() -> list[str] | None:
     """List installed Ollama models usable as the main model; None when Ollama is unreachable.
 
-    Copies left behind by earlier versions (arlo-<model> and arlo-voice-<model>)
+    Copies left behind by earlier versions (morgan-<model> and morgan-voice-<model>)
     are never offered.
     """
     try:
@@ -142,7 +142,7 @@ def main_models() -> list[str] | None:
     except (OSError, ValueError, KeyError, TypeError):
         return None
     reserved = {_tagged_model(f"{prefix}-{name.replace('/', '-')}")
-                for name in installed for prefix in ("arlo", "arlo-voice")}
+                for name in installed for prefix in ("morgan", "morgan-voice")}
     models = []
     for name, digest in installed.items():
         if name in reserved:
@@ -204,7 +204,7 @@ def refresh_model_keep_alive() -> None:
     threading.Thread(target=keep_model_loaded, daemon=True).start()
 
 
-_working_directory_owner = ContextVar("arlo_working_directory_owner", default=None)
+_working_directory_owner = ContextVar("morgan_working_directory_owner", default=None)
 
 
 def set_working_directory_owner(owner) -> None:
@@ -477,7 +477,7 @@ def read_file(path: str, offset: int = 0, limit: int = 2000) -> dict:
     """Read a bounded text page; continue with next_offset until exhausted."""
     try:
         file_path = resolve_safe_path(path)
-        if _is_arlo_source_path(file_path):
+        if _is_morgan_source_path(file_path):
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 "Use search_code/read_code for source inspection. "
@@ -517,7 +517,7 @@ def create_file(path: str, content: str = "", encoding: str = "utf-8") -> dict:
     """Create a new text file and fail rather than overwrite an existing file."""
     try:
         file_path = resolve_safe_path(path)
-        if _is_arlo_source_path(file_path):
+        if _is_morgan_source_path(file_path):
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use create_code to create {get_assistant_name()} source. "
@@ -537,7 +537,7 @@ def write_file(path: str, content: str) -> str:
     """Create or completely overwrite a UTF-8 text file."""
     try:
         file_path = resolve_safe_path(path)
-        if _is_arlo_source_path(file_path):
+        if _is_morgan_source_path(file_path):
             return (
                 f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
@@ -559,7 +559,7 @@ def edit_file(path: str, content: str) -> dict:
     """
     try:
         file_path = resolve_safe_path(path)
-        if _is_arlo_source_path(file_path):
+        if _is_morgan_source_path(file_path):
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
@@ -580,7 +580,7 @@ def append_file(path: str, content: str) -> dict:
     """Append text to a file, preserving its existing text encoding."""
     try:
         file_path = resolve_safe_path(path)
-        if _is_arlo_source_path(file_path):
+        if _is_morgan_source_path(file_path):
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
@@ -603,7 +603,7 @@ def replace_in_file(path: str, old_text: str, new_text: str) -> dict:
     """Replace matching text in an existing file without changing its encoding."""
     try:
         file_path = resolve_safe_path(path)
-        if _is_arlo_source_path(file_path):
+        if _is_morgan_source_path(file_path):
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
@@ -787,7 +787,7 @@ def read_binary_file(path: str) -> dict:
     """Read any binary file and return its bytes encoded as Base64."""
     try:
         file_path = resolve_safe_path(path)
-        if _is_arlo_source_path(file_path):
+        if _is_morgan_source_path(file_path):
             return ActionResult(Outcome.REJECTED, f"Use read_code for {get_assistant_name()} source.", "self_code_required").payload()
         if not file_path.exists():
             return ActionResult(Outcome.NEGATIVE, tr('brain.file_does_not_exist', file_path=file_path), "missing_resource").payload()
@@ -804,7 +804,7 @@ def write_binary_file(path: str, base64_content: str,
     """Create a binary file from Base64; set overwrite only for an existing file."""
     try:
         file_path = resolve_safe_path(path)
-        if _is_arlo_source_path(file_path):
+        if _is_morgan_source_path(file_path):
             return (
                 ActionResult(Outcome.REJECTED, f"SELF_CODE_REQUIRED: This path belongs to {get_assistant_name()}'s own repository. "
                 f"Use edit_code to modify {get_assistant_name()} source. "
@@ -1482,7 +1482,7 @@ def resolve_entry_path(path: str) -> Path:
     """Resolve a directory entry without following its final symbolic link."""
     return Path(os.path.abspath(Path(get_working_directory()).joinpath(Path(path).expanduser())))
 
-def _is_arlo_source_path(path: Path) -> bool:
+def _is_morgan_source_path(path: Path) -> bool:
     from src.init.paths import PROJECT_ROOT
 
     try:

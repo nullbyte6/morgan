@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-active_model_request = ContextVar("arlo_model_request_trace", default=None)
+active_model_request = ContextVar("morgan_model_request_trace", default=None)
 
 
 def serialized_metrics(raw):

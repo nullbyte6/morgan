@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Log messages: parsing Arlo's daily Markdown log and showing each message as a card."""
+"""Log messages: parsing Morgan's daily Markdown log and showing each message as a card."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ class LogMessage:
 
 
 def parse_log(content: str) -> list[LogMessage]:
-    """Parse Arlo's daily Markdown log into individual messages.
+    """Parse Morgan's daily Markdown log into individual messages.
     A timestamp is treated as a message delimiter only when followed
     by a valid author line and when outside a fenced code block.
     """

@@ -85,7 +85,7 @@
   "console.error_pwsh_not_found": "未找到 PowerShell 7 (pwsh.exe)。",
   "console.error_wt_not_found": "未找到 Windows 终端 (wt.exe)",
   "status.waking": "正在唤醒",
-  "startup.services_missing": "未找到本地服务启动器。请重新安装 Arlo；如果从代码仓库运行，请将 ARLO_HOME 设置为其 scripts 文件夹。",
+  "startup.services_missing": "未找到本地服务启动器。请重新安装 Morgan；如果从代码仓库运行，请将 MORGAN_HOME 设置为其 scripts 文件夹。",
   "startup.powershell_missing": "未找到 PowerShell。启动本地服务需要它。",
   "startup.services_timeout": "本地服务未能完成启动。请检查 Ollama 服务和 TTS 日志。",
   "startup.services_failed": "无法启动本地服务：{error}",

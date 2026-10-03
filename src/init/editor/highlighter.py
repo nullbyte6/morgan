@@ -2,7 +2,7 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 #
-#  This file is part of arlo.
+#  This file is part of morgan.
 #
 #  This program is free software: you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -43,7 +43,7 @@ from PySide6.QtGui import (
 
 from ..theme import Theme, current_theme, on_theme_changed
 
-_LEXER_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="arlo-lexer")
+_LEXER_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="morgan-lexer")
 
 TOKEN_ROLES = (
     (Comment, "syntax_comment"), (Keyword, "syntax_keyword"),
@@ -79,7 +79,7 @@ def pygments_style(theme: Theme) -> type[Style]:
         styles[token] = ("bold " if token in Keyword or token in Generic.Heading else "") + theme.hex(role)
     styles[Generic.Strong] = "bold"
     styles[Generic.Emph] = "italic"
-    return type("ArloThemeStyle", (Style,), {
+    return type("MorganThemeStyle", (Style,), {
         "background_color": theme.hex("code_block_background"),
         "styles": styles,
     })
@@ -282,7 +282,7 @@ class PygmentsHighlighter(QSyntaxHighlighter):
 
 
 class PythonHighlighter(QSyntaxHighlighter):
-    """Python syntax highlighting for Arlo."""
+    """Python syntax highlighting for Morgan."""
 
     def __init__(self, document):
         super().__init__(document)
