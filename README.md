@@ -34,6 +34,8 @@ Ollama to run tools and automate tasks on Windows.
   and to check for updates from the GitHub releases.
 - A lightweight terminal version that shares the desktop's runtime.
 
+[morgan-img1](assets/img1.png)
+
 ## Installation
 
 Run `MorganSetup.exe` (Windows 10 or later, 64-bit). No administrator rights are
@@ -75,6 +77,8 @@ from the name, the default), `male`, `female` or `neutral`.
 
 To start Morgan, open it from the Start menu or run `Morgan.exe`. See the
 [specs here](docs/SPECS.md) for model and hardware requirements.
+
+[morgan-img2](assets/img2.png)
 
 ## Running from source
 
