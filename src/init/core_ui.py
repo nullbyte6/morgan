@@ -467,7 +467,7 @@ class AssistantWindow(DesktopWindow):
         )
         input_frame.setMinimumHeight(48)
         input_layout = QHBoxLayout(input_frame)
-        input_layout.setContentsMargins(16, 2, 2, 2)
+        input_layout.setContentsMargins(16, 2, 4, 2)
         input_layout.setSpacing(0)
 
         ui.input.submitted.connect(lambda: self.send_message(session))
@@ -1418,7 +1418,7 @@ class AssistantWindow(DesktopWindow):
             ui.send.style().polish(ui.send)
         if mic:
             ui.send.setIcon(waveform_icon())
-            ui.send.setIconSize(QSize(25, 25))
+            ui.send.setIconSize(QSize(28, 28))
         else:
             ui.send.setIcon(QIcon())
 
