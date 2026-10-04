@@ -592,8 +592,7 @@ class AssistantWindow(DesktopWindow):
         navigation.setSpacing(8)
         tray_buttons = []
 
-        buttons = [(options["icon"], f"{view_key}Nav", options["title"], view_key)
-                   for view_key, options in WORKSPACE_VIEW_CONFIG.items() if view_key != "nova"]
+        buttons = [(options["icon"], f"{view_key}Nav", options["title"], view_key) for view_key, options in WORKSPACE_VIEW_CONFIG.items() if view_key != "nova"]
 
         for icon, object_name, tooltip, view_key in buttons:
             button = QPushButton(icon, content)
