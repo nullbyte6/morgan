@@ -539,14 +539,6 @@ class AssistantWindow(DesktopWindow):
         input_row.setContentsMargins(0, 0, 0, 0)
         input_row.setSpacing(12)
         input_row.addWidget(input_frame, 1)
-        ui.palette_button = QPushButton("\U000f0349")
-        ui.palette_button.setObjectName("workspacePanelPalette")
-        ui.palette_button.setFixedSize(31, 31)
-        ui.palette_button.setCursor(Qt.PointingHandCursor)
-        ui.palette_button.setFocusPolicy(Qt.NoFocus)
-        ui.palette_button.clicked.connect(
-            lambda: self.open_command_palette_from_panel(session.panel_id))
-        input_row.addWidget(ui.palette_button, 0, Qt.AlignVCenter)
         input_column.addLayout(input_row)
 
         input_group = QWidget()
@@ -1634,8 +1626,6 @@ class AssistantWindow(DesktopWindow):
         ui.task_progress.refresh_language(language)
         ui.activity_trail.refresh_language(language)
         ui.permission_selector.refresh_language()
-        ui.palette_button.setToolTip(tr("palette.button"))
-        ui.palette_button.setAccessibleName(tr("palette.button"))
         ui.attachment_tray.refresh()
         self.set_status(session.status_key, session)
 
