@@ -152,6 +152,9 @@ Opening and closing panels triggers smooth size transitions. When a panel closes
 
 ## Moving panels
 Drag a panel by its title bar and drop it onto another panel to exchange their positions.
+The main panel has no title bar, since the Nova star takes its place, so it cannot be dragged
+itself, but dropping another panel onto it swaps the two, sidebar included. The command
+palette button of the main panel sits to the right of its input.
 The entire panel follows the pointer at its original size during the drag, anchored
 to the point where its title bar was grabbed. The destination highlight remains
 visible to indicate where it can be dropped.
