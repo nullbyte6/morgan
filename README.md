@@ -155,6 +155,12 @@ background. On desktops with a system tray, use the Morgan icon to reopen it or
 quit it completely. On other desktops, launch Morgan again to restore the existing
 instance instead of starting another one.
 
+<p align="center">
+  <img src="assets/img6.png" alt="The Morgan widget shown when the main window is minimized or closed">
+  <br>
+  <sub>The widget Morgan leaves on screen when the main window is minimized or closed.</sub>
+</p>
+
 After updating, restart both the desktop app and its persistent TTS service so
 they use the same interruption protocol. Morgan can also check for newer versions
 from Settings or the command palette, download the installer and install it.
