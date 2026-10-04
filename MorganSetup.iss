@@ -40,7 +40,6 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 [Files]
 Source: "{#MorganSourceDir}\Morgan.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MorganSourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#MorganSourceDir}\MorganTUI.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "scripts\morgan-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
@@ -75,6 +74,8 @@ Root: HKCU; Subkey: "Software\Morgan\Installer"; ValueType: string; ValueName: "
 
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\tui"
+Type: files; Name: "{app}\MorganTUI.exe"
+Type: files; Name: "{autoprograms}\{code:GetAssistantName} Terminal.lnk"
 Type: filesandordirs; Name: "{app}\src\init"
 Type: filesandordirs; Name: "{app}\dev"
 
@@ -85,7 +86,6 @@ Type: filesandordirs; Name: "{app}\src"
 [Icons]
 Name: "{autoprograms}\{code:GetAssistantName}"; Filename: "{app}\Morgan.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\{code:GetAssistantName}"; Filename: "{app}\Morgan.exe"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{autoprograms}\{code:GetAssistantName} Terminal"; Filename: "{app}\MorganTUI.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Morgan.exe"
 
 [Code]
 var

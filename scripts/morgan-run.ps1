@@ -1,10 +1,10 @@
-param([ValidateSet("Desktop", "Tui")] [string]$Mode = "Desktop", [switch]$NoVoice)
+param([string]$Mode = "Desktop")
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $python = Join-Path $root ".venv\Scripts\python.exe"
 $services = Join-Path $PSScriptRoot "morgan-services.ps1"
-if ($Mode -eq "Tui") { $module = "entry.tui" } else { $module = "entry.desktop" }
+$module = "entry.desktop"
 
 foreach ($path in @($python, $services)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -22,12 +22,7 @@ $env:ASSISTANT_EXTERNAL_CONSOLE = "1"
 
 Set-Location -LiteralPath $root
 
-if ($Mode -eq "Tui" -and $NoVoice) {
-    & $services -NoConsole -NoVoice
-}
-else {
-    & $services -NoConsole
-}
+& $services -NoConsole
 
 if (-not $?) {
     throw "Assistant services failed to start."
@@ -54,11 +49,6 @@ if ($Mode -eq "Desktop") {
     exit 0
 }
 
-if ($Mode -eq "Tui" -and $NoVoice) {
-    & $python -m $module --no-voice
-}
-else {
-    & $python -m $module
-}
+& $python -m $module
 
 exit $LASTEXITCODE
