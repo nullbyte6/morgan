@@ -137,6 +137,7 @@ QFrame#overlayCard {
 
 QFrame#overlayCard QFrame#inputFrame {
     background-color: @surface_sunken;
+    border: none;
     border-radius: 20px;
 }
 
