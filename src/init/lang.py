@@ -32,6 +32,23 @@ LANGUAGE_NAMES = {"english": "English", "spanish": "European Spanish", "chinese"
                   "japanese": "Japanese", "russian": "Russian", "korean": "Korean", "italian": "Italian"}
 
 
+@lru_cache(maxsize=1)
+def _language_detector():
+    from lingua import IsoCode639_1, LanguageDetectorBuilder
+    return (LanguageDetectorBuilder.from_iso_codes_639_1(
+        *(getattr(IsoCode639_1, code.upper()) for code in SPEECH_LANGUAGES.values()))
+        .with_minimum_relative_distance(0.1).build())
+
+
+def detect_language(text: str) -> str | None:
+    """Return the interface language a text is written in, or None when it is unclear."""
+    language = _language_detector().detect_language_of(text)
+    if language is None:
+        return None
+    code = language.iso_code_639_1.name.lower()
+    return next((key for key, value in SPEECH_LANGUAGES.items() if value == code), None)
+
+
 def get_language() -> str:
     from . import config
     fallback = config._last_valid.get("lang", "spanish")

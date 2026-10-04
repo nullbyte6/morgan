@@ -152,14 +152,29 @@ class Assistant:
                 cls._instance = instance
             return cls._instance
 
+    @staticmethod
+    def _last_spoken_language() -> str | None:
+        from src.init.lang import detect_language
+        from src.init.memory.integration import configured_service
+
+        try:
+            service = configured_service()
+            for text in service.recent_user_messages() if service is not None else ():
+                language = detect_language(text)
+                if language:
+                    return language
+        except Exception:
+            logging.getLogger("assistant.memory").exception("The last spoken language could not be read for the greeting")
+        return None
+
     def generate_greeting(self) -> str:
-        """Ask the main model for a short startup greeting in the interface language."""
+        """Ask the main model for a short startup greeting in the language the user last spoke, else the interface language."""
         import urllib.request
         from src.init.brain import OLLAMA_KEEP_ALIVE
         from src.init.health import record_model_load
         from src.init.lang import LANGUAGE_NAMES, get_language
 
-        language = LANGUAGE_NAMES.get(get_language(), "English")
+        language = LANGUAGE_NAMES.get(self._last_spoken_language() or get_language(), "English")
         try:
             from src.init.nova.tools import agenda_brief
             agenda = agenda_brief()

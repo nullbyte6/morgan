@@ -121,6 +121,12 @@ class MemoryService:
                 WHERE session_id=? AND sequence > ? ORDER BY sequence LIMIT ?""",
                                                    (session_id, after, min(max(1, limit), 500)))]
 
+    def recent_user_messages(self, limit=5):
+        with self.db.connect() as db:
+            return [row["content"] for row in db.execute(
+                "SELECT content FROM messages WHERE role='user' ORDER BY created_at DESC, sequence DESC LIMIT ?",
+                (min(max(1, limit), 50),))]
+
     @staticmethod
     def _validate_memory(content, category, key, expires_at, confidence):
         content = content.strip()
