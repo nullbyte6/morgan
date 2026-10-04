@@ -28,14 +28,3 @@ off.
 Restart the desktop application after updating this flow. Ordinary window close
 hides the app; use the tray's quit action before launching it again. Future
 hot reloads rebuild tools and the cached models.
-
-## Verification
-
-Run `.venv/Scripts/python.exe -B -m unittest discover -s test -v`.
-The suite covers streamed tool dispatch, multiple actions, file writes and reads, a harmless real PowerShell command,
-confirmation denial, cancellation, memory lookup, and reload. Power calls are
-mocked so the tests never shut down Windows.
-
-Live checks use the installed Ollama and Qwen with the full tool registry and
-muted speech playback. File creation and command execution can be checked in a
-temporary directory; power tool bodies must be substituted during these checks.
