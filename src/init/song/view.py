@@ -137,10 +137,43 @@ class SeekSlider(QSlider):
         super().mouseReleaseEvent(event)
 
 
+class SongSummaryView(QWidget):
+    """The summary of the song that is playing, shown in a panel of its own below the song."""
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setObjectName("songSummaryView")
+        self.setProperty("workspaceEmpty", False)
+        self.text = _label("songSummary", align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.text.setTextFormat(Qt.TextFormat.RichText)
+        self.text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        column = QVBoxLayout()
+        column.setContentsMargins(SIDE_MARGIN, 22, SIDE_MARGIN, 22)
+        column.addWidget(self.text)
+        column.addStretch(1)
+        body = QWidget()
+        body.setObjectName("novaEntryBody")
+        body.setLayout(column)
+        scroll = QScrollArea()
+        scroll.setObjectName("novaScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.viewport().setAutoFillBackground(False)
+        scroll.setWidget(body)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(scroll)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(300, 120)
+
+
 class SongView(QWidget):
     """The song that is playing, with its cover, a progress bar, playback controls, copy buttons and a summary."""
 
     summarized = Signal(str, str, bool)
+    summary_requested = Signal(object)
     command_finished = Signal(bool)
 
     def __init__(self, monitor: SongMonitor, parent: QWidget | None = None):
@@ -154,6 +187,7 @@ class SongView(QWidget):
         self._cover_side = 0
         self._summaries: dict[str, tuple[str, bool]] = {}
         self._pending: set[str] = set()
+        self._summary_view: SongSummaryView | None = None
 
         self.empty = _label("songEmpty", align=Qt.AlignmentFlag.AlignCenter)
 
@@ -201,10 +235,6 @@ class SongView(QWidget):
         controls.addLayout(actions, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         controls.addLayout(transport, 0, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self.summary_heading = _label("novaGroup", wrap=False, align=Qt.AlignmentFlag.AlignLeft)
-        self.summary_text = _label("songSummary", align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
-        self.summary_text.setTextFormat(Qt.TextFormat.RichText)
-        self.summary_text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         column = QVBoxLayout()
         column.setContentsMargins(SIDE_MARGIN, 22, SIDE_MARGIN, 22)
@@ -217,13 +247,10 @@ class SongView(QWidget):
         names.addWidget(self.artist)
         names.addWidget(self.album)
         column.addLayout(names)
-        column.addSpacing(6)
-        column.addWidget(self.summary_heading)
-        column.addWidget(self.summary_text)
         column.addStretch(1)
         column.addLayout(progress)
         column.addLayout(controls)
-        column.addSpacing(44)
+        column.addSpacing(64)
         body = QWidget()
         body.setObjectName("novaEntryBody")
         body.setLayout(column)
@@ -264,7 +291,6 @@ class SongView(QWidget):
         self.empty.setText(tr("song.empty"))
         self.previous_button.setToolTip(tr("song.previous"))
         self.next_button.setToolTip(tr("song.next"))
-        self.summary_heading.setText(tr("song.summary"))
         self._label_copies()
         self._render()
 
@@ -392,6 +418,7 @@ class SongView(QWidget):
         key, title, artist, album = song.key, song.title, song.artist, song.album
         self._pending.add(key)
         self._summaries.pop(key, None)
+        self._open_summary()
         self._render_summary()
 
         def run() -> None:
@@ -412,6 +439,17 @@ class SongView(QWidget):
         self._summaries[key] = (text, failed)
         self._render_summary()
 
+    def _open_summary(self) -> None:
+        if self._summary_view is not None:
+            return
+        view = SongSummaryView()
+        view.destroyed.connect(self._summary_closed)
+        self._summary_view = view
+        self.summary_requested.emit(view)
+
+    def _summary_closed(self) -> None:
+        self._summary_view = None
+
     def _render_summary(self) -> None:
         song = self._song
         if song is None:
@@ -419,13 +457,17 @@ class SongView(QWidget):
         busy = song.key in self._pending
         self.summarize_button.setEnabled(not busy)
         self.summarize_button.setToolTip(tr("song.summarizing" if busy else "song.summarize"))
-        result = self._summaries.get(song.key)
-        self.summary_heading.setVisible(result is not None)
-        self.summary_text.setVisible(result is not None)
-        if result is None:
+        view = self._summary_view
+        if view is None:
             return
-        text, failed = result
-        self.summary_text.setText(self._markup(tr("song.summary_error", error=text) if failed else text, failed))
+        result = self._summaries.get(song.key)
+        if busy:
+            view.text.setText(tr("song.summarizing"))
+        elif result is None:
+            view.text.setText("")
+        else:
+            text, failed = result
+            view.text.setText(self._markup(tr("song.summary_error", error=text) if failed else text, failed))
 
     @staticmethod
     def _markup(text: str, plain: bool) -> str:

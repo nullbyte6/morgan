@@ -138,6 +138,7 @@ from src.init.terminal import TerminalBridge
 
 HEALTH_CHECK_DELAY_MS = 45_000
 SONG_PANEL_WIDTH = 440
+SONG_SUMMARY_PANEL_HEIGHT = 320
 
 # noinspection PyBroadException
 def waveform_icon(size: int = 28) -> QIcon:
@@ -1147,12 +1148,27 @@ class AssistantWindow(DesktopWindow):
         self.song_panel_key = song.key
         view = SongView(self.song_monitor)
         view.setProperty("workspaceViewKey", "song")
+        view.summary_requested.connect(self.open_song_summary)
         try:
             self.workspace.open_panel(title=tr("song.title"), content=view, direction=Qt.Key_Right,
                                       size=SONG_PANEL_WIDTH)
         except Exception:
             view.deleteLater()
             logging.getLogger("assistant.workspace").exception("Failed to open the song view")
+
+    def open_song_summary(self, summary) -> None:
+        """Open the song summary in a panel split below the song panel."""
+        panel = self.sender()
+        while panel is not None and not isinstance(panel, WorkspacePanel):
+            panel = panel.parentWidget()
+        summary.setProperty("workspaceViewKey", "song_summary")
+        try:
+            self.workspace.open_panel(title=tr("song.summary"), content=summary,
+                                      target_id=panel.panel_id if panel is not None else None,
+                                      direction=Qt.Key_Down, size=SONG_SUMMARY_PANEL_HEIGHT)
+        except Exception:
+            summary.deleteLater()
+            logging.getLogger("assistant.workspace").exception("Failed to open the song summary")
 
     def open_nova_diary(self) -> None:
         """Show the Nova diary, reusing an open Nova panel when there is one."""
