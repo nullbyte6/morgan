@@ -49,9 +49,21 @@ A new workspace shows a single Nova star in place of the row of buttons. Press i
 slide out the workspace buttons (Morgan, Editor, Settings and Terminal) and
 press it again to fold them. `Ctrl + click` on the star opens Nova in that panel instead.
 
-Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar, Diary, Journal, Week, Memories and Search,
-and folds to an icon strip with a slide when you click the Nova star. In narrow
-panels it folds by itself.
+Its sidebar is part of the panel and has four buttons: Home, Notifications, Me and Search.
+It folds to an icon strip with a slide when you click the Nova star, and in narrow
+panels it folds by itself. Nova opens on Home.
+
+Home, Notifications and Me each open a grid of square tiles, one per section, with the
+section's icon and its name below. The grid has up to three columns and reflows as the
+panel is resized, to two and then one column with scrolling when it gets narrow. Click a
+tile to open its section, and the small "‹ Home" line above the section's title, or the
+active sidebar button, returns to the grid. Search opens directly.
+
+- **Home** holds Agenda, Events, Calendar and Week.
+- **Notifications** holds Reminders.
+- **Me** holds Diary, Journal and Memories.
+
+The sections:
 
 - **Agenda** lists overdue reminders, then each of the next 14 days that has
   something on it.
