@@ -12,7 +12,8 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$MainModel = "gemma4:e4b"
+$MainModel = "qwen3.5:4b"
+$CodingModel = "qwen3.5:9b"
 
 function Get-AssistantIdentifier {
     param([string]$Name)
@@ -989,6 +990,10 @@ try {
     Ensure-OllamaModel `
         -Ollama $Ollama `
         -Model $MainModel
+
+    Ensure-OllamaModel `
+        -Ollama $Ollama `
+        -Model $CodingModel
 
     Ensure-CosyVoice
 
