@@ -48,7 +48,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import *
 
 from src.init.orb import Orb
-from src.init.orb_subtitles import MascotSubtitleBubble
+from src.init.orb_subtitles import MascotSubtitleBubble, SlidingSubtitleLabel
 from src.init.audio_visualizer import AudioVisualizer
 from src.init.core import Assistant
 from src.init.worker import AssistantWorker, VoiceInputWorker
@@ -400,7 +400,7 @@ class AssistantWindow(DesktopWindow):
         ui.activity_trail = ActivityTrail(
             session.presentation, steps_enabled=self.settings.value("ephemeral_steps", True, type=bool))
         ui.status = QLabel()
-        ui.subtitles = QLabel()
+        ui.subtitles = SlidingSubtitleLabel()
         ui.command_output = QPlainTextEdit()
         ui.input = ChatInput(directory=lambda: session.worker.session.context.working_directory)
         ui.composer_widget = QWidget()
@@ -436,7 +436,7 @@ class AssistantWindow(DesktopWindow):
         main.addWidget(ui.status)
 
         ui.subtitles.setObjectName("subtitles")
-        ui.subtitles.setAlignment(Qt.AlignCenter)
+        ui.subtitles.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         ui.subtitles.setWordWrap(True)
         ui.subtitles.setTextFormat(Qt.RichText)
         ui.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -1582,7 +1582,7 @@ class AssistantWindow(DesktopWindow):
         indicator_target = ui.indicator_row.sizeHint().height()
         input_target = max(ui.input_group.sizeHint().height()
                            + indicator_target, 48)
-        subtitle_target = 90
+        subtitle_target = ui.subtitles.sizeHint().height()
         targets = (
             (ui.input_group, input_target),
             (ui.indicator_row, indicator_target),
@@ -1693,7 +1693,7 @@ class AssistantWindow(DesktopWindow):
         subtitles = session.ui.subtitles
         font = subtitles.font()
         metrics = QFontMetrics(font)
-        max_width = metrics.horizontalAdvance("M" * 56)
+        max_width = metrics.horizontalAdvance("M" * 40)
         available = max(1, subtitles.contentsRect().width() - 24)
 
         width = min(max_width, available)
@@ -1717,7 +1717,10 @@ class AssistantWindow(DesktopWindow):
                 lines.append(paragraph[start:end])
             layout.endLayout()
 
-        subtitles.setText(self.render_subtitle("\n".join(lines[-3:])))
+        if not text:
+            subtitles.reset_lines()
+        subtitles.set_lines(
+            self.render_subtitle("\n".join(lines[-3:])), len(lines))
         if session is self.session:
             self.sync_mascot_subtitle()
 

@@ -28,6 +28,56 @@ def compact_mascot_subtitle(text: str, limit: int = 64) -> str:
     return compact[:limit - 1].rstrip() + "…"
 
 
+class SlidingSubtitleLabel(QLabel):
+    """Fixed-height subtitle area that slides its lines up when one is added."""
+    LINES = 3
+    ANIMATION_MS = 220
+
+    def __init__(self):
+        super().__init__()
+        self._total_lines = 0
+        self._slide = 0.0
+        self.animation = QPropertyAnimation(self, b"slide", self)
+        self.animation.setDuration(self.ANIMATION_MS)
+        self.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+    @Property(float)
+    def slide(self):
+        return self._slide
+
+    @slide.setter
+    def slide(self, value):
+        self._slide = float(value)
+        self.setContentsMargins(0, int(round(self._slide)), 0, 0)
+
+    def sizeHint(self):
+        height = self.fontMetrics().lineSpacing() * self.LINES + 8
+        return QSize(super().sizeHint().width(), height)
+
+    def minimumSizeHint(self):
+        return QSize(0, self.sizeHint().height())
+
+    def set_lines(self, markup: str, total_lines: int):
+        scrolled = total_lines > max(self._total_lines, self.LINES)
+        self._total_lines = total_lines
+        self.animation.stop()
+        self.setText(markup)
+
+        if scrolled:
+            distance = float(self.fontMetrics().lineSpacing())
+            self.slide = distance
+            self.animation.setStartValue(distance)
+            self.animation.setEndValue(0.0)
+            self.animation.start()
+        else:
+            self.slide = 0.0
+
+    def reset_lines(self):
+        self.animation.stop()
+        self._total_lines = 0
+        self.slide = 0.0
+
+
 class MascotSubtitleBubble(QWidget):
     """Animated, right-anchored subtitle ticker for the floating mascot."""
     WIDTH = 320
