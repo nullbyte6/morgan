@@ -8,6 +8,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix the subtitles under the main Orb moving it up and down, by giving them a fixed three-line area where lines slide up on their own and wrap narrower to show more lines
 - Update .gitignore to allow the voice transcript text files
 - Update the CosyVoice instruction for non-default languages to leave out the language, accent and dialect, so the accent follows the spoken text instead of the hardcoded European Spanish, Simplified Chinese and Brazilian Portuguese names
+- Update the Now playing summary to open in its own Summary panel below the song panel, to no longer greet or introduce Morgan, and the playback area to sit higher
 - Update the Now playing workspace to replace the copy name and summarize buttons with two round icon buttons, copy that turns into a tick and a scroll, placed left of the playback controls, with the progress bar and playback controls moved to the bottom, tighter spacing between the song, artist and album, and a 15% larger cover
 - Update the waveform icon on the send button to have 5 bars instead of 6
 

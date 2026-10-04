@@ -97,10 +97,12 @@ duration, and a progress bar. Click or drag the bar to seek. The previous, play 
 pause and next buttons control the player that is playing the song, with Spotify's
 Web API for songs on another device.
 
-- **Song**, **Album** and **Artist** copy that name to the clipboard.
-- **Summarize this song** asks the main model for a summary of at most 500 words, in the
+- The copy button, left of the playback controls, copies the name of the song to the
+  clipboard and shows a tick for a moment.
+- The scroll button asks the main model for a summary of at most 500 words, in the
   interface language, with the song's lyrics, themes and fun facts such as interviews
-  with the singer or band and the history of the album. It reads web search results and
+  with the singer or band and the history of the album. It opens in a Summary panel below
+  the song panel, without greeting or introducing itself. It reads web search results and
   one page about the song, and never quotes the lyrics beyond a few words. Summaries are
   kept for the songs of the open panel.
 
