@@ -630,7 +630,6 @@
   "nova.dialog.delete": "삭제",
   "nova.error.time": "시간은 HH:mm 형식으로 입력하세요(예: 09:30).",
   "nova.error.order": "이벤트는 시작하기 전에 끝날 수 없습니다.",
-  "nova.nav.tooltip": "Nova: 클릭하면 작업 공간을 표시하고, Ctrl+클릭하면 Nova를 엽니다",
   "nova.row.edit": "제목과 시간 편집",
   "nova.section.diary": "일기",
   "nova.section.diary.tagline": "{assistant_name}이(가) 기억하는 것을 하루하루.",

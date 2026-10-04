@@ -232,17 +232,6 @@ QWidget#windowContainer {
     background-color: transparent;
 }
 
-QPushButton#settingsNav,
-QPushButton#editorNav,
-QPushButton#terminalNav,
-QPushButton#novaNav {
-    background-color: transparent;
-    color: @text_muted;
-    border: 2px solid transparent;
-    border-radius: 10px;
-    font-size: 32px;
-}
-
 QPushButton#logCopyNav,
 QPushButton#logRemoveNav {
     background-color: transparent;
@@ -255,14 +244,6 @@ QPushButton#logRemoveNav {
     max-width: 20px;
     min-height: 20px;
     max-height: 20px;
-}
-
-QPushButton#settingsNav:hover,
-QPushButton#editorNav:hover,
-QPushButton#terminalNav:hover,
-QPushButton#novaNav:hover {
-    background-color: @surface_raised;
-    color: @text;
 }
 
 QPushButton#logCopyNav:hover,
@@ -1476,23 +1457,6 @@ QPushButton#novaDangerButton {
 
 QPushButton#novaDangerButton:hover {
     background-color: @error/30;
-}
-
-QWidget#novaNavigation,
-QWidget#novaTray {
-    background: transparent;
-}
-
-QPushButton#novaNav {
-    color: @accent;
-}
-
-QPushButton#novaNav:hover {
-    color: @accent_hover;
-}
-
-QPushButton#novaNav[expanded="true"] {
-    background-color: @surface_selected;
 }
 
 QWidget#novaDiary,

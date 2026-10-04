@@ -630,7 +630,6 @@
   "nova.dialog.delete": "Supprimer",
   "nova.error.time": "Saisissez l’heure au format HH:mm, par exemple 09:30.",
   "nova.error.order": "L’événement ne peut pas se terminer avant de commencer.",
-  "nova.nav.tooltip": "Nova : cliquez pour afficher les espaces de travail, Ctrl+clic pour ouvrir Nova",
   "nova.row.edit": "Modifier le titre et l’heure",
   "nova.section.diary": "Journal",
   "nova.section.diary.tagline": "Ce dont {assistant_name} se souvient, jour après jour.",

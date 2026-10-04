@@ -630,7 +630,6 @@
   "nova.dialog.delete": "Удалить",
   "nova.error.time": "Введите время в формате ЧЧ:мм, например 09:30.",
   "nova.error.order": "Событие не может закончиться раньше, чем начнётся.",
-  "nova.nav.tooltip": "Nova: щёлкните, чтобы показать рабочие пространства, Ctrl+щелчок — открыть Nova",
   "nova.row.edit": "Изменить название и время",
   "nova.section.diary": "Дневник",
   "nova.section.diary.tagline": "Что помнит {assistant_name}, день за днём.",

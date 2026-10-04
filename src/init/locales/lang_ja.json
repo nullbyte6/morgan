@@ -630,7 +630,6 @@
   "nova.dialog.delete": "削除",
   "nova.error.time": "時刻は HH:mm の形式で入力してください(例: 09:30)。",
   "nova.error.order": "イベントは開始前に終了できません。",
-  "nova.nav.tooltip": "Nova: クリックでワークスペースを表示、Ctrl+クリックでNovaを開く",
   "nova.row.edit": "タイトルと時刻を編集",
   "nova.section.diary": "日記",
   "nova.section.diary.tagline": "{assistant_name}が覚えていることを、日ごとに。",

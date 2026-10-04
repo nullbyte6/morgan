@@ -630,7 +630,6 @@
   "nova.dialog.delete": "Delete",
   "nova.error.time": "Enter the time as HH:mm, for example 09:30.",
   "nova.error.order": "The event cannot end before it starts.",
-  "nova.nav.tooltip": "Nova: click to show the workspaces, Ctrl+click to open Nova",
   "nova.row.edit": "Edit title and time",
   "nova.section.diary": "Diary",
   "nova.section.diary.tagline": "What {assistant_name} remembers, day by day.",

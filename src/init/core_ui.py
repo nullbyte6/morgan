@@ -72,17 +72,14 @@ WORKSPACE_VIEW_CONFIG = {
     "editor": {
         "title": "Editor",
         "shortcut": "Ctrl+E",
-        "icon": "󰨞",
     },
     "settings": {
         "title": "Settings",
         "shortcut": "Ctrl+Alt+S",
-        "icon": "",
     },
     "terminal": {
         "title": "Terminal",
         "shortcut": "Ctrl+T",
-        "icon": "",
     },
 }
 

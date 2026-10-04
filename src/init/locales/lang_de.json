@@ -630,7 +630,6 @@
   "nova.dialog.delete": "Löschen",
   "nova.error.time": "Geben Sie die Uhrzeit als HH:mm ein, zum Beispiel 09:30.",
   "nova.error.order": "Der Termin kann nicht enden, bevor er beginnt.",
-  "nova.nav.tooltip": "Nova: Klicken, um die Arbeitsbereiche anzuzeigen, Strg+Klick, um Nova zu öffnen",
   "nova.row.edit": "Titel und Uhrzeit bearbeiten",
   "nova.section.diary": "Tagebuch",
   "nova.section.diary.tagline": "Woran sich {assistant_name} erinnert, Tag für Tag.",

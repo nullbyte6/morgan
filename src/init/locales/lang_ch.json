@@ -630,7 +630,6 @@
   "nova.dialog.delete": "删除",
   "nova.error.time": "请以 HH:mm 格式输入时间，例如 09:30。",
   "nova.error.order": "事件的结束时间不能早于开始时间。",
-  "nova.nav.tooltip": "Nova：单击显示工作区，Ctrl+单击打开 Nova",
   "nova.row.edit": "编辑标题和时间",
   "nova.section.diary": "日记",
   "nova.section.diary.tagline": "{assistant_name} 每天记住的事。",
