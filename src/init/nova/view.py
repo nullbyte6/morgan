@@ -16,10 +16,10 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Nova as a workspace view: a sidebar folded into the panel, with the agenda beside it."""
+"""Nova as the main window's sidebar: icons, then labels, then the section of the chosen hub."""
 from datetime import datetime
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QEasingCurve, Qt, QTimer, QVariantAnimation
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStackedWidget,
                                QVBoxLayout, QWidget)
 
@@ -38,17 +38,30 @@ from .review import ReviewView
 from .rows import EntryList
 from .search import SearchView
 from .sections import Hub, Section
-from .sidebar import NovaSidebar
+from .sidebar import SLIDE_MS, NovaSidebar
 from .store import NovaStore
 
 PLUS = "\U000f0415"
-NARROW_WIDTH = 560
-MINIMUM_FOR_LABELS = 420
+CONTENT_WIDTH = 360
 REFRESH_MS = 30_000
 
 
+class SlidingPane(QWidget):
+    """A pane whose body keeps its full width while the pane itself slides open or shut."""
+
+    def __init__(self, body: QWidget, width: int, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._body = body
+        self._body_width = width
+        body.setParent(self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._body.setGeometry(0, 0, self._body_width, self.height())
+
+
 class NovaView(QWidget):
-    """Nova's four hubs and their sections inside one workspace panel."""
+    """Nova's four hubs and their sections, docked at the left of the main window."""
 
     def __init__(self, store: NovaStore, parent: QWidget | None = None):
         super().__init__(parent)
@@ -57,12 +70,18 @@ class NovaView(QWidget):
         self._store = store
         self._hub = Hub.HOME
         self._section: Section | None = None
-        self._user_collapsed: bool | None = None
+        self._content_open = False
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Ignored)
 
         self.sidebar = NovaSidebar(self._hub)
-        divider = QFrame()
-        divider.setObjectName("novaDivider")
-        divider.setFixedWidth(1)
+        self.sidebar.set_collapsed(True, animate=False)
+        self.inner_divider = QFrame()
+        self.inner_divider.setObjectName("novaDivider")
+        self.inner_divider.setFixedWidth(1)
+        self.inner_divider.hide()
+        end_divider = QFrame()
+        end_divider.setObjectName("novaDivider")
+        end_divider.setFixedWidth(1)
 
         self.title = QLabel()
         self.title.setObjectName("novaTitle")
@@ -108,26 +127,38 @@ class NovaView(QWidget):
         for grid in self.grids.values():
             self.pages.addWidget(grid)
 
-        content = QVBoxLayout()
+        body = QWidget()
+        body.setObjectName("novaContent")
+        content = QVBoxLayout(body)
         content.setContentsMargins(28, 22, 28, 22)
         content.setSpacing(18)
         content.addLayout(top)
         content.addWidget(self.pages, 1)
+        self.content_area = SlidingPane(body, CONTENT_WIDTH)
+        self.content_area.setFixedWidth(0)
+        self.content_area.hide()
+
+        self._reveal = QVariantAnimation(self)
+        self._reveal.setDuration(SLIDE_MS)
+        self._reveal.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._reveal.valueChanged.connect(lambda width: self.content_area.setFixedWidth(int(width)))
+        self._reveal.finished.connect(self._reveal_settled)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.sidebar)
-        layout.addWidget(divider)
-        layout.addLayout(content, 1)
+        layout.addWidget(self.inner_divider)
+        layout.addWidget(self.content_area)
+        layout.addWidget(end_divider)
 
         self.dialog = NovaEntryDialog(store, self)
 
-        self.sidebar.hub_selected.connect(self.show_hub)
+        self.sidebar.hub_selected.connect(self._hub_clicked)
         self.back.clicked.connect(lambda: self.show_hub(self._hub))
         for grid in self.grids.values():
             grid.section_selected.connect(self.show_section)
-        self.sidebar.toggle_requested.connect(self._toggle_sidebar)
+        self.sidebar.toggle_requested.connect(self.toggle)
         self.add_button.clicked.connect(self._add)
         for entries in self.lists.values():
             entries.activated.connect(self.dialog.open_edit)
@@ -146,9 +177,6 @@ class NovaView(QWidget):
         self.clock.timeout.connect(self._refresh)
         self.show_hub(Hub.HOME)
         self.refresh_language()
-
-    def minimumSizeHint(self) -> QSize:
-        return QSize(360, 260)
 
     @property
     def hub(self) -> Hub:
@@ -182,6 +210,57 @@ class NovaView(QWidget):
         self._refresh()
         if section is Section.SEARCH:
             self.search.focus()
+
+    def open_hub(self, hub: Hub) -> None:
+        """Show a hub's page, or shut the content when that hub is already showing."""
+        if self._content_open and self._hub is hub and (self._section is None or hub is Hub.SEARCH):
+            self._set_content_open(False)
+            return
+        self.sidebar.set_collapsed(False)
+        self._set_content_open(True)
+        self.show_hub(hub)
+
+    def open_section(self, section: Section) -> None:
+        self.sidebar.set_collapsed(False)
+        self._set_content_open(True)
+        self.show_section(section)
+
+    def toggle(self) -> None:
+        """Unfold the sidebar to its labels, or fold it back to icons with its content shut."""
+        if self.sidebar.collapsed:
+            self.sidebar.set_collapsed(False)
+            return
+        self._set_content_open(False)
+        self.sidebar.set_collapsed(True)
+
+    def _hub_clicked(self, hub: Hub) -> None:
+        if self.sidebar.collapsed:
+            self.sidebar.set_collapsed(False)
+            self.sidebar.select(hub)
+            return
+        self.open_hub(hub)
+
+    def _set_content_open(self, opened: bool) -> None:
+        if opened == self._content_open:
+            return
+        self._content_open = opened
+        target = CONTENT_WIDTH if opened else 0
+        self._reveal.stop()
+        if opened:
+            self.inner_divider.show()
+            self.content_area.show()
+        if not self.isVisible():
+            self.content_area.setFixedWidth(target)
+            self._reveal_settled()
+            return
+        self._reveal.setStartValue(self.content_area.width())
+        self._reveal.setEndValue(target)
+        self._reveal.start()
+
+    def _reveal_settled(self) -> None:
+        if not self._content_open:
+            self.inner_divider.hide()
+            self.content_area.hide()
 
     def _open_day(self, day) -> None:
         self.diary.set_day(day)
@@ -223,23 +302,6 @@ class NovaView(QWidget):
     def _toggle_reminder(self, entry: Entry, done: bool) -> None:
         if isinstance(entry, Reminder):
             self._store.set_reminder_completed(entry.id, done)
-
-    def _toggle_sidebar(self) -> None:
-        self._user_collapsed = not self.sidebar.collapsed
-        self._apply_sidebar()
-
-    def _apply_sidebar(self) -> None:
-        if self.width() < MINIMUM_FOR_LABELS:
-            collapsed = True
-        elif self._user_collapsed is not None:
-            collapsed = self._user_collapsed
-        else:
-            collapsed = self.width() < NARROW_WIDTH
-        self.sidebar.set_collapsed(collapsed)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._apply_sidebar()
 
     def showEvent(self, event):
         super().showEvent(event)

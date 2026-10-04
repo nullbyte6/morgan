@@ -60,7 +60,7 @@ from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
 from src.init.nova import formatting as nova_formatting
 from src.init.nova.navigation import WorkspaceNavigation
-from src.init.nova.sections import Section
+from src.init.nova.sections import Hub, Section
 from src.init.nova.store import NovaStore
 from src.init.nova.tools import use_store as use_nova_store
 from src.init.nova.view import NovaView
@@ -84,11 +84,6 @@ WORKSPACE_VIEW_CONFIG = {
         "title": "Terminal",
         "shortcut": "Ctrl+T",
         "icon": "",
-    },
-    "nova": {
-        "title": "Nova",
-        "shortcut": "Ctrl+Alt+N",
-        "icon": "󰫢",
     },
 }
 
@@ -275,6 +270,16 @@ class AssistantWindow(DesktopWindow):
         self.journal_shortcut = QShortcut(QKeySequence("Ctrl+J"), self)
         self.journal_shortcut.setContext(Qt.ApplicationShortcut)
         self.journal_shortcut.activated.connect(self.open_nova_journal)
+        self.nova_shortcuts = []
+        for sequence, action in (("Ctrl+B", self.toggle_nova_dock),
+                                 ("Ctrl+H", lambda: self.open_nova_hub(Hub.HOME)),
+                                 ("Ctrl+Alt+N", lambda: self.open_nova_hub(Hub.NOTIFICATIONS)),
+                                 ("Ctrl+M", lambda: self.open_nova_hub(Hub.ME)),
+                                 ("Ctrl+S", self.save_or_search)):
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(Qt.ApplicationShortcut)
+            shortcut.activated.connect(action)
+            self.nova_shortcuts.append(shortcut)
 
         self._workspace_chord_pending = False
         self._workspace_chord_timer = QTimer(self)
@@ -369,6 +374,15 @@ class AssistantWindow(DesktopWindow):
         session = self.session
         session.panel_id = "main"
         main_content = self.build_session_view(session)
+        self.nova_dock = self.build_nova_dock()
+        if self.nova_dock is not None:
+            body = QWidget()
+            body_layout = QHBoxLayout(body)
+            body_layout.setContentsMargins(0, 0, 0, 0)
+            body_layout.setSpacing(0)
+            body_layout.addWidget(self.nova_dock)
+            body_layout.addWidget(main_content, 1)
+            main_content = body
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=self._session_title(session),
             content=main_content,
@@ -395,6 +409,14 @@ class AssistantWindow(DesktopWindow):
         on_theme_changed(self.apply_theme)
         self.refresh_language()
         self.set_status("")
+
+    def build_nova_dock(self) -> NovaView | None:
+        """Nova's sidebar for the main workspace, or nothing when its storage is unavailable."""
+        try:
+            return NovaView(self.get_nova_store())
+        except Exception:
+            logging.getLogger("assistant.nova").exception("Nova storage is unavailable")
+            return None
 
     def build_session_view(self, session):
         """Create one session's chat surface; its widgets only ever show that session."""
@@ -590,7 +612,7 @@ class AssistantWindow(DesktopWindow):
         navigation.setSpacing(8)
         tray_buttons = []
 
-        buttons = [(options["icon"], f"{view_key}Nav", options["title"], view_key) for view_key, options in WORKSPACE_VIEW_CONFIG.items() if view_key != "nova"]
+        buttons = [(options["icon"], f"{view_key}Nav", options["title"], view_key) for view_key, options in WORKSPACE_VIEW_CONFIG.items()]
 
         for icon, object_name, tooltip, view_key in buttons:
             button = QPushButton(icon, content)
@@ -605,7 +627,7 @@ class AssistantWindow(DesktopWindow):
 
         workspace_navigation = WorkspaceNavigation(tray_buttons, content)
         workspace_navigation.nova_requested.connect(
-            lambda source: self.open_workspace_view("nova", source))
+            lambda _source: self.open_nova_hub(Hub.HOME))
         navigation.addWidget(workspace_navigation)
         navigation.addStretch()
         layout.addLayout(navigation)
@@ -722,6 +744,8 @@ class AssistantWindow(DesktopWindow):
             Command(f"workspace.{key}", f"palette.{key}",
                     lambda key=key: self.open_workspace_view(key), (key,))
             for key in WORKSPACE_VIEW_CONFIG)
+        commands.append(Command("workspace.nova", "palette.nova", lambda: self.open_nova_hub(Hub.HOME),
+                                ("nova", "sidebar", "barra lateral")))
         commands.append(Command("workspace.diary", "palette.diary", self.open_nova_diary,
                                 ("diary", "diario")))
         commands.append(Command("workspace.journal", "palette.journal", self.open_nova_journal,
@@ -1032,8 +1056,6 @@ class AssistantWindow(DesktopWindow):
         if view_key == "terminal":
             from src.init.terminal import TerminalView
             return TerminalView()
-        if view_key == "nova":
-            return NovaView(self.get_nova_store())
         if view_key == "settings":
             view = SettingsView(
                 self.subtitles_enabled,
@@ -1251,20 +1273,34 @@ class AssistantWindow(DesktopWindow):
         self.open_nova_section(Section.JOURNAL)
 
     def open_nova_section(self, section: Section) -> None:
-        """Show one section of Nova, reusing an open Nova panel when there is one."""
-        view = next(iter(self.workspace.findChildren(NovaView)), None)
-        if view is None:
-            self.open_workspace_view("nova")
-            panel = self.workspace.get_panel(self.workspace.active_panel_id)
-            view = panel.content if panel is not None else None
+        """Show one section of Nova in the sidebar of the main workspace."""
+        if self.nova_dock is not None:
+            self.nova_dock.open_section(section)
+
+    def open_nova_hub(self, hub: Hub) -> None:
+        if self.nova_dock is not None:
+            self.nova_dock.open_hub(hub)
+
+    def toggle_nova_dock(self) -> None:
+        if self.nova_dock is not None:
+            self.nova_dock.toggle()
+
+    def focused_editor(self) -> EditorView | None:
+        widget = QApplication.focusWidget()
+        while widget is not None:
+            if isinstance(widget, EditorView):
+                return widget
+            widget = widget.parentWidget()
+        panel = self.workspace.get_panel(self.workspace.active_panel_id)
+        return panel.content if panel is not None and isinstance(panel.content, EditorView) else None
+
+    def save_or_search(self) -> None:
+        """Save the file of the focused editor, or open Nova's search from any other workspace."""
+        editor = self.focused_editor()
+        if editor is not None:
+            editor.save_current()
         else:
-            panel = view.parentWidget()
-            while panel is not None and not isinstance(panel, WorkspacePanel):
-                panel = panel.parentWidget()
-            if panel is not None:
-                self.workspace.focus_panel(panel.panel_id)
-        if isinstance(view, NovaView):
-            view.show_section(section)
+            self.open_nova_hub(Hub.SEARCH)
 
     def get_nova_store(self) -> NovaStore:
         """Open Nova's databases on first use and keep one store for every Nova view."""

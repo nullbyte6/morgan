@@ -28,8 +28,8 @@ from .calendar_paint import ALIGN_CENTER, ALIGN_LEFT, color, draw_text, glyph_fo
 from .sections import Hub
 
 STAR = "\U000f0ae2"
-EXPANDED_WIDTH = 208
-COLLAPSED_WIDTH = 62
+EXPANDED_WIDTH = 172
+COLLAPSED_WIDTH = 48
 SLIDE_MS = 220
 ITEM_HEIGHT = 42
 ICON_WIDTH = 40
@@ -61,7 +61,7 @@ class NavItem(QPushButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(color("surface_selected" if active else "surface_raised"))
             painter.drawRoundedRect(QRectF(self.rect()), 10, 10)
-        draw_text(painter, QRect(0, 0, ICON_WIDTH + 4, self.height()), self.hub.glyph, glyph_font(23),
+        draw_text(painter, QRect(0, 0, ICON_WIDTH, self.height()), self.hub.glyph, glyph_font(23),
                   "accent" if active else ("text" if hover else "text_muted"), ALIGN_CENTER)
         label = QRect(ICON_WIDTH + 6, 0, max(0, self.width() - ICON_WIDTH - 14), self.height())
         if label.width() > 12:
@@ -89,7 +89,7 @@ class NovaSidebar(QWidget):
 
         self.star = QPushButton(STAR)
         self.star.setObjectName("novaStar")
-        self.star.setFixedSize(42, 42)
+        self.star.setFixedSize(ICON_WIDTH, ITEM_HEIGHT)
         self.star.setCursor(Qt.CursorShape.PointingHandCursor)
         self.star.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.star.clicked.connect(self.toggle_requested)
@@ -98,7 +98,7 @@ class NovaSidebar(QWidget):
         self._group.setExclusive(True)
         self._items: dict[Hub, NavItem] = {}
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 12, 10, 12)
+        layout.setContentsMargins(4, 12, 4, 12)
         layout.setSpacing(14)
         layout.addWidget(self.star)
         navigation = QVBoxLayout()
