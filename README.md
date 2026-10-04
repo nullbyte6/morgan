@@ -148,6 +148,8 @@ To support another system, add a package next to these that subclasses
 
 ## Usage
 
+![Morgan working on a request](assets/img2.png)
+
 Closing the desktop window keeps Morgan and its local services running in the
 background. On desktops with a system tray, use the Morgan icon to reopen it or
 quit it completely. On other desktops, launch Morgan again to restore the existing
@@ -170,7 +172,7 @@ preserved so reloading does not require restarting the application.
 For native voice input, tool execution, and action regression checks, see
 [desktop action execution](docs/ACTION-EXECUTION.md).
 
-![morgan-img5](assets/img5.png)
+![Settings with themes and interface language next to the now playing panel](assets/img5.png)
 
 ## License
 
