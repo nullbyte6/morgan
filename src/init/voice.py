@@ -39,6 +39,8 @@ VOICE_END_SILENCE_SECONDS = 1.8
 VOICE_SILENCE_THRESHOLD = 400
 PLAYBACK_SILENCE_THRESHOLD = 900
 ECHO_TAIL_SECONDS = 1.5
+ECHO_FLOOR_BLOCKS = 40
+ECHO_FLOOR_FACTOR = 2.5
 PARTIAL_SILENCE_SECONDS = 0.5
 BARGE_IN_SECONDS = 0.6
 BARGE_IN_GAP_SECONDS = 0.4
@@ -63,6 +65,7 @@ class LiveVoiceCapture:
         self.reference_time = 0.0
         self.reference_lock = threading.Lock()
         self.pre_roll = deque(maxlen=4)
+        self.echo_levels = deque(maxlen=ECHO_FLOOR_BLOCKS)
         self.frames = []
         self.started = False
         self.speech_seconds = 0.0
@@ -110,6 +113,17 @@ class LiveVoiceCapture:
         gain = np.clip(np.dot(samples, echo) / max(np.dot(echo, echo), 1e-9), -3, 3)
         return samples - gain * echo, recent
 
+    def speech_threshold(self, level, playback):
+        if not playback:
+            self.echo_levels.clear()
+            return VOICE_SILENCE_THRESHOLD
+        import numpy as np
+
+        self.echo_levels.append(level)
+        floor = float(np.median(self.echo_levels))
+        return min(PLAYBACK_SILENCE_THRESHOLD,
+                   max(VOICE_SILENCE_THRESHOLD, ECHO_FLOOR_FACTOR * floor))
+
     def snapshot(self):
         return b"".join(self.frames)
 
@@ -121,8 +135,8 @@ class LiveVoiceCapture:
         samples, playback = self.suppress_echo(samples)
         pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2").tobytes()
         duration = len(samples) / self.sample_rate
-        speech = pcm_rms(pcm) >= (PLAYBACK_SILENCE_THRESHOLD if playback
-                                 else VOICE_SILENCE_THRESHOLD)
+        level = pcm_rms(pcm)
+        speech = level >= self.speech_threshold(level, playback)
         if not self.frames:
             self.idle = 0.0 if playback else self.idle + duration
             if not speech:
