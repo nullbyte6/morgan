@@ -30,7 +30,7 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.chat import ChatInput
 from src.init.orb import Orb
 
-WIDTH = 292
+WIDTH = 248
 MARGIN = 0
 ORB_SIZE = 40
 EDGE_GAP = 16
