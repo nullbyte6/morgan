@@ -26,7 +26,7 @@ from dataclasses import replace
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
+from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
                                QSlider, QStackedWidget, QStyle, QVBoxLayout, QWidget)
 
 from src.init.lang import tr
@@ -188,14 +188,18 @@ class SongView(QWidget):
         self.copy_reset.setSingleShot(True)
         self.copy_reset.setInterval(COPIED_MS)
         self.copy_reset.timeout.connect(self._label_copies)
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        actions.addWidget(self.copy_button)
+        actions.addWidget(self.summarize_button)
         transport = QHBoxLayout()
-        transport.setSpacing(8)
-        transport.addWidget(self.copy_button)
-        transport.addWidget(self.summarize_button)
-        transport.addStretch(1)
+        transport.setSpacing(14)
         for button in (self.previous_button, self.play_button, self.next_button):
             transport.addWidget(button)
-        transport.addStretch(1)
+        controls = QGridLayout()
+        controls.setContentsMargins(0, 0, 0, 0)
+        controls.addLayout(actions, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        controls.addLayout(transport, 0, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.summary_heading = _label("novaGroup", wrap=False, align=Qt.AlignmentFlag.AlignLeft)
         self.summary_text = _label("songSummary", align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
@@ -218,7 +222,7 @@ class SongView(QWidget):
         column.addWidget(self.summary_text)
         column.addStretch(1)
         column.addLayout(progress)
-        column.addLayout(transport)
+        column.addLayout(controls)
         body = QWidget()
         body.setObjectName("novaEntryBody")
         body.setLayout(column)
