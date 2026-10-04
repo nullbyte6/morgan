@@ -5,6 +5,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.4-beta (2026-10-04)
 
 - Add per-voice reference transcripts, a text file beside each voice's recorded clip, so every reference text matches what is said in its clip
+- Fix the subtitles under the main Orb moving it up and down, by giving them a fixed three-line area where lines slide up on their own and wrap narrower to show more lines
 - Update .gitignore to allow the voice transcript text files
 - Update the CosyVoice instruction for non-default languages to leave out the language, accent and dialect, so the accent follows the spoken text instead of the hardcoded European Spanish, Simplified Chinese and Brazilian Portuguese names
 - Update the waveform icon on the send button to have 5 bars instead of 6
