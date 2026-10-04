@@ -551,9 +551,9 @@ class AssistantWindow(DesktopWindow):
         composer_row.setContentsMargins(20, 0, 20, 12)
         composer_row.setSpacing(0)
 
-        composer_row.addStretch(1)
-        composer_row.addWidget(composer_container, 2)
-        composer_row.addStretch(1)
+        composer_row.addStretch(11)
+        composer_row.addWidget(composer_container, 18)
+        composer_row.addStretch(11)
 
         composer_area.addLayout(composer_row)
         ui.composer_widget.setLayout(composer_area)
