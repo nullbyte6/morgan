@@ -13,6 +13,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix barge-in not triggering on speakers, where the reply kept playing because the fixed volume of 900 needed to count as the user speaking over Morgan was louder than quiet speech, by lowering the volume gate toward the normal 400 while the echo left after cancellation is quiet and keeping 900 when it is loud
 - Fix the input box changing height while recording in the main window and the compact overlay, by sizing the waveform to the same height as the text input
 - Fix the subtitles under the main Orb moving it up and down, by giving them a fixed three-line area where lines slide up on their own and wrap narrower to show more lines
+- Remove the open_in_editor tool that launched Neovim in the terminal, with its translations, since the desktop has its own live editor
 - Remove the terminal version, MorganTUI.exe, its Start menu entry, build scripts for Windows and macOS, launcher, screenshot, translations and the prompt_toolkit and pyfiglet dependencies, which only the desktop interface needs to keep up with, along with the debug console and ASCII banner they used, and have the installer delete a previous terminal version when upgrading
 - Update .gitignore to allow the voice transcript text files
 - Update audio visualizer to minimalist live waveform bars

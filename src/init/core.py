@@ -484,9 +484,6 @@ class Assistant:
                 summary += "; the refreshed tools will be used on the next turn."
             return summary
 
-    def suspend_terminal(self):
-        return nullcontext()
-
     def speak(self, chunks) -> str:
         """Stream LLM output invisibly and feed complete phrases to TTS."""
         from src.init.streaming import SpeechBuffer
