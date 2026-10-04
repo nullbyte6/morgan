@@ -19,6 +19,7 @@
 """Framed desktop window whose title bar follows the active theme."""
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QMainWindow
 
 from src.init.theme import current_theme
@@ -36,11 +37,19 @@ class DesktopWindow(QMainWindow):
         super().__init__(parent)
         self.setObjectName("assistantWindow")
         self.setAttribute(Qt.WA_StyledBackground)
+        self.setAutoFillBackground(True)
+        self._fill_background(current_theme())
         self.setWindowState(Qt.WindowMaximized)
+
+    def _fill_background(self, theme):
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, theme.color("surface_sunken"))
+        self.setPalette(palette)
 
     def apply_frame_theme(self, theme):
         """Match the native title bar and border to the theme's surface colors."""
         background = theme.color("surface_sunken")
+        self._fill_background(theme)
         current_platform().style_window_frame(
             int(self.winId()), background.lightness() < 128, _rgb(background),
             _rgb(theme.color("border")), _rgb(theme.color("text")))
