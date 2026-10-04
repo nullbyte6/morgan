@@ -24,7 +24,7 @@ from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
                                QSizePolicy, QVBoxLayout, QWidget)
 
-from src.init.health import Check, collect, report
+from src.init.health import Check, apply_fix, collect, report
 from src.init.lang import tr
 
 COPIED_MS = 1200
@@ -41,7 +41,10 @@ def _label(text: str, name: str, wrap: bool = True) -> QLabel:
 class CheckCard(QFrame):
     """One area of the health report: its state, a summary and the measured details."""
 
-    def __init__(self, check: Check, parent: QWidget | None = None):
+    fix_requested = Signal(str)
+
+    def __init__(self, check: Check, parent: QWidget | None = None, error: str = "",
+                 fixing: bool = False):
         super().__init__(parent)
         self.setObjectName("novaRow")
         marker = _label(GLYPHS.get(check.status, GLYPHS["error"]), "healthStatus", wrap=False)
@@ -54,23 +57,35 @@ class CheckCard(QFrame):
         column.addWidget(_label(check.summary, "novaRowTitle"))
         for detail in check.details:
             column.addWidget(_label(detail, "novaRowNotes"))
+        if error:
+            column.addWidget(_label(tr("health.fix_failed", error=error), "novaRowNotes"))
         row = QHBoxLayout(self)
         row.setContentsMargins(16, 13, 16, 13)
         row.setSpacing(14)
         row.addWidget(marker, 0, Qt.AlignmentFlag.AlignTop)
         row.addLayout(column, 1)
+        if check.fix:
+            button = QPushButton(tr("health.fixing") if fixing else tr(f"health.fix.{check.fix}"))
+            button.setObjectName("novaTodayButton")
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setEnabled(not fixing)
+            button.clicked.connect(lambda: self.fix_requested.emit(check.fix))
+            row.addWidget(button, 0, Qt.AlignmentFlag.AlignTop)
 
 
 class HealthView(QWidget):
     """Ollama, the main model, the GPU and PyTorch build and the voice service at a glance."""
 
     collected = Signal(object)
+    fixed = Signal(str, str)
 
     def __init__(self, parent: QWidget | None = None, checks: list[Check] | None = None):
         super().__init__(parent)
         self.setObjectName("healthView")
         self.setProperty("workspaceEmpty", False)
         self._running = False
+        self._fixing = ""
+        self._fix_errors: dict[str, str] = {}
         self._checks: list[Check] = []
         self._checked_at = datetime.now()
 
@@ -127,6 +142,7 @@ class HealthView(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         self.copy_button.clicked.connect(self._copy)
         self.collected.connect(self._show, Qt.ConnectionType.QueuedConnection)
+        self.fixed.connect(self._fix_done, Qt.ConnectionType.QueuedConnection)
         self.refresh_language()
         if checks is None:
             self.refresh()
@@ -157,6 +173,30 @@ class HealthView(QWidget):
         self.refresh_language()
         threading.Thread(target=self._collect, name="health-check", daemon=True).start()
 
+    def _fix(self, name: str) -> None:
+        if self._fixing:
+            return
+        self._fixing = name
+        self._fix_errors = {}
+        self._render()
+        threading.Thread(target=self._run_fix, args=(name,), name="health-fix", daemon=True).start()
+
+    def _run_fix(self, name: str) -> None:
+        try:
+            apply_fix(name)
+            error = ""
+        except Exception as failure:
+            error = str(failure) or type(failure).__name__
+        try:
+            self.fixed.emit(name, error)
+        except RuntimeError:
+            pass
+
+    def _fix_done(self, name: str, error: str) -> None:
+        self._fixing = ""
+        self._fix_errors = {name: error} if error else {}
+        self.refresh()
+
     def _collect(self) -> None:
         checks = collect()
         try:
@@ -171,12 +211,18 @@ class HealthView(QWidget):
         self.refresh_button.setEnabled(True)
         self.copy_button.setEnabled(True)
         self.refresh_language()
+        self._render()
+
+    def _render(self) -> None:
         while self._rows.count() > 1:
             widget = self._rows.takeAt(0).widget()
             widget.setParent(None)
             widget.deleteLater()
-        for check in checks:
-            self._rows.insertWidget(self._rows.count() - 1, CheckCard(check))
+        for check in self._checks:
+            card = CheckCard(check, error=self._fix_errors.get(check.fix, ""),
+                             fixing=bool(self._fixing) and check.fix == self._fixing)
+            card.fix_requested.connect(self._fix)
+            self._rows.insertWidget(self._rows.count() - 1, card)
         self._rows.insertWidget(self._rows.count() - 1,
                                 _label(tr("health.checked_at", time=f"{self._checked_at:%H:%M:%S}"),
                                        "novaRowCaption", wrap=False))

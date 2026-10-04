@@ -55,6 +55,7 @@ class Check:
     status: str
     summary: str
     details: list[str] = field(default_factory=list)
+    fix: str = ""
 
 
 def _ollama(path: str, timeout: float = 2) -> dict:
@@ -87,7 +88,7 @@ def ollama_check() -> Check:
         version = _ollama("/api/version").get("version", "?")
         models = _ollama("/api/tags").get("models", [])
     except (OSError, ValueError) as error:
-        return Check("ollama", ERROR, tr("health.ollama.down"), [str(error)])
+        return Check("ollama", ERROR, tr("health.ollama.down"), [str(error)], "start_ollama")
     return Check("ollama", OK, tr("health.ollama.running", version=version),
                  [tr("health.ollama.models", count=len(models))])
 
@@ -108,7 +109,7 @@ def model_check() -> Check:
         return Check("model", ERROR, tr("health.model.unreachable", model=model), [str(error), *details])
     entry = next((item for item in running if item.get("name") in (model, f"{model}:latest")), None)
     if entry is None:
-        return Check("model", WARNING, tr("health.model.idle", model=model), details)
+        return Check("model", WARNING, tr("health.model.idle", model=model), details, "load_model")
     size, vram = entry.get("size") or 0, entry.get("size_vram") or 0
     share = round(100 * vram / size) if size else 0
     details.insert(0, tr("health.model.memory", size=_gigabytes(size), vram=_gigabytes(vram)))
@@ -162,7 +163,8 @@ def voice_check() -> Check:
         return Check("voice", OK, tr("health.voice.silent"))
     if getattr(voice, "_closed", False) or getattr(voice, "_error", None) is not None:
         error = getattr(voice, "_error", None)
-        return Check("voice", ERROR, tr("health.voice.disconnected"), [str(error)] if error else [])
+        return Check("voice", ERROR, tr("health.voice.disconnected"), [str(error)] if error else [],
+                     "restart_voice")
     info = getattr(voice, "service_info", {}) or {}
     details = []
     device = info.get("device") or {}
@@ -176,6 +178,43 @@ def voice_check() -> Check:
 
 
 CHECKS = (ollama_check, model_check, gpu_check, voice_check)
+
+
+def _start_ollama() -> None:
+    from src.init.config import load_config
+    from src.init.ollama_service import restart_ollama
+    restart_ollama(load_config()["context_length"])
+
+
+def _load_model() -> None:
+    from src.init.brain import OLLAMA_KEEP_ALIVE
+    model = _model_name()
+    payload = json.dumps({"model": model, "prompt": "", "keep_alive": OLLAMA_KEEP_ALIVE,
+                          "stream": False}).encode("utf-8")
+    request = urllib.request.Request(OLLAMA + "/api/generate", data=payload, method="POST",
+                                     headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=300) as response:
+        record_model_load(model, json.load(response))
+
+
+def _restart_voice() -> None:
+    assistant = _assistant()
+    if assistant is None or getattr(assistant, "voice", None) is None:
+        raise RuntimeError(tr("health.voice.not_started"))
+    from src.init.voice_client import VoiceClient
+    previous = assistant.voice
+    assistant._ensure_services()
+    previous.close()
+    assistant.voice = VoiceClient()
+    assistant.voice.set_muted(getattr(previous, "_muted", False))
+
+
+FIXES = {"start_ollama": _start_ollama, "load_model": _load_model, "restart_voice": _restart_voice}
+
+
+def apply_fix(name: str) -> None:
+    """Run one of the one-click repairs; raises with the reason when it fails."""
+    FIXES[name]()
 
 
 def report(checks: list[Check], checked_at: datetime) -> str:
