@@ -150,8 +150,10 @@ class RemoveButton(QPushButton):
 
     confirmed = Signal()
 
-    def __init__(self, font_family: str, parent=None):
+    def __init__(self, font_family: str, parent=None, tooltips: tuple[str, str] = ("nova.diary.remove",
+                                                                                 "nova.diary.remove_confirm")):
         super().__init__(REMOVE_GLYPH, parent)
+        self.tooltips = tooltips
         self.setObjectName("logRemoveNav")
         icon_font = QFont(font_family)
         icon_font.setPixelSize(16)
@@ -167,7 +169,7 @@ class RemoveButton(QPushButton):
 
     def set_armed(self, armed: bool) -> None:
         self.setProperty("armed", armed)
-        self.setToolTip(tr("nova.diary.remove_confirm" if armed else "nova.diary.remove"))
+        self.setToolTip(tr(self.tooltips[1] if armed else self.tooltips[0]))
         self.style().unpolish(self)
         self.style().polish(self)
 

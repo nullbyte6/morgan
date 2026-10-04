@@ -1507,6 +1507,7 @@ QPushButton#novaNav[expanded="true"] {
 }
 
 QWidget#novaDiary,
+QWidget#novaJournal,
 QWidget#novaSearch,
 QWidget#novaMemories,
 QWidget#healthView,

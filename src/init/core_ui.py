@@ -726,6 +726,8 @@ class AssistantWindow(DesktopWindow):
             for key in WORKSPACE_VIEW_CONFIG)
         commands.append(Command("workspace.diary", "palette.diary", self.open_nova_diary,
                                 ("diary", "diario")))
+        commands.append(Command("workspace.journal", "palette.journal", self.open_nova_journal,
+                                ("journal", "cuaderno", "diario personal")))
         commands.append(Command("workspace.health", "palette.health", self.open_health_view,
                                 ("health", "diagnostics", "salud", "diagnóstico", "estado")))
         commands.append(Command("app.update", "palette.update", self.check_for_updates,
@@ -1248,6 +1250,10 @@ class AssistantWindow(DesktopWindow):
     def open_nova_diary(self) -> None:
         """Show the Nova diary, reusing an open Nova panel when there is one."""
         self.open_nova_section(Section.DIARY)
+
+    def open_nova_journal(self) -> None:
+        """Show the Nova journal, reusing an open Nova panel when there is one."""
+        self.open_nova_section(Section.JOURNAL)
 
     def open_nova_section(self, section: Section) -> None:
         """Show one section of Nova, reusing an open Nova panel when there is one."""
