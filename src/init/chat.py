@@ -107,7 +107,8 @@ class ChatInput(QTextEdit):
 
     def update_file_tags(self):
         cursor = self.textCursor()
-        if cursor.hasSelection() or not self.hasFocus():
+        if (not getattr(self, "file_tags_enabled", True)
+                or cursor.hasSelection() or not self.hasFocus()):
             self.hide_file_tags()
             return
         block = cursor.block()

@@ -48,7 +48,8 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import *
 
 from src.init.orb import Orb
-from src.init.orb_subtitles import MascotSubtitleBubble, SlidingSubtitleLabel
+from src.init.orb_subtitles import SlidingSubtitleLabel
+from src.init.compact_overlay import CompactOverlay
 from src.init.audio_visualizer import AudioVisualizer
 from src.init.core import Assistant
 from src.init.worker import AssistantWorker, VoiceInputWorker
@@ -203,14 +204,11 @@ class AssistantWindow(DesktopWindow):
         icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "morgan.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
 
-        self.mascot = Orb(size=120, floating=True, line_width=4.2, fill_ratio=0.54)
-        self.mascot.set_speech_pulse_enabled(orb_speech_pulse)
-        self.mascot.hide()
-        self.mascot_subtitles = MascotSubtitleBubble(self.mascot)
+        self.overlay = CompactOverlay()
+        self.overlay.input.textChanged.connect(self.on_overlay_text_changed)
+        self.overlay.input.submitted.connect(lambda: self.send_message())
+        self.overlay.send.clicked.connect(lambda: self.on_send_clicked())
         self.subtitles_enabled = subtitles_enabled
-
-        self.mascot.record_requested.connect(self.on_mascot_record)
-        self.mascot.restore_requested.connect(self.restore_from_mascot)
 
         self.recording = False
         self.voice_thread = None
@@ -759,14 +757,6 @@ class AssistantWindow(DesktopWindow):
         if event.type() == QEvent.WindowDeactivate and watched is self:
             self._workspace_chord_timer.stop()
             self._workspace_chord_pending = False
-        if (event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress) and
-                event.key() == Qt.Key_M and
-                event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier)):
-            if (event.type() == QEvent.KeyPress and not event.isAutoRepeat()
-                    and not self.quitting):
-                self.toggle_mascot()
-            event.accept()
-            return True
         if (event.type() == QEvent.ShortcutOverride and
                 QApplication.activeWindow() == self and
                 ((event.key() in (Qt.Key_N, Qt.Key_K) and event.modifiers() == Qt.ControlModifier)
@@ -831,10 +821,7 @@ class AssistantWindow(DesktopWindow):
 
     def _orbs(self, session=None):
         session = session or self.session
-        orbs = [session.ui.orb] if session.ui is not None else []
-        if session is self.session:
-            orbs.append(self.mascot)
-        return orbs
+        return [session.ui.orb] if session.ui is not None else []
 
     def clear_orbs(self, session=None):
         for orb in self._orbs(session):
@@ -935,7 +922,7 @@ class AssistantWindow(DesktopWindow):
             self.workspace.close_panel(session.panel_id)
         self.workspace.focus_panel(self.session.panel_id)
         logging.getLogger("assistant.sessions").info("Closed session %d", session.index + 1)
-        self.sync_mascot()
+        self.sync_overlay()
         self.refresh_session_titles()
         self._update_response_timer()
         self.update_send_button()
@@ -974,18 +961,36 @@ class AssistantWindow(DesktopWindow):
         if session is None or session is self.session:
             return
         self.session = session
-        self.sync_mascot()
+        self.sync_overlay()
 
-    def sync_mascot(self):
-        session = self.session
-        view = session.presentation.view
-        self.mascot.clear()
-        self.mascot.set_thinking(view.active and view.orb_state == Orb.State.PROCESSING)
-        if session.ready:
-            self.mascot.set_visual_state(view.orb_state)
-        self.mascot.set_speaking(session.speaking)
-        self.mascot.set_listening(self.recording and self.voice_session is session)
-        self.sync_mascot_subtitle()
+    def sync_overlay(self):
+        ui = self.session.ui
+        if ui is None:
+            return
+        overlay = self.overlay
+        overlay.sync_text(ui.input.toPlainText())
+        overlay.set_recording(not ui.input_meter.isHidden())
+        overlay.send.setText(ui.send.text())
+        overlay.send.setIcon(ui.send.icon())
+        overlay.send.setIconSize(ui.send.iconSize())
+        overlay.send.setEnabled(ui.send.isEnabled())
+        overlay.send.setToolTip(ui.send.toolTip())
+        overlay.send.setAccessibleName(ui.send.accessibleName())
+        mic = ui.send.property("mic")
+        if overlay.send.property("mic") != mic:
+            overlay.send.setProperty("mic", mic)
+            overlay.send.style().unpolish(overlay.send)
+            overlay.send.style().polish(overlay.send)
+        overlay.input.setEnabled(ui.input.isEnabled())
+        overlay.input.setPlaceholderText(ui.input.placeholderText())
+
+    def on_overlay_text_changed(self):
+        ui = self.session.ui
+        if ui is None:
+            return
+        text = self.overlay.input.toPlainText()
+        if ui.input.toPlainText() != text:
+            ui.input.setPlainText(text)
 
     @Slot()
     def open_workspace(self, direction: Qt.Key | None = None) -> None:
@@ -1341,16 +1346,16 @@ class AssistantWindow(DesktopWindow):
         if request.completed.is_set():
             return
 
-        mascot_visible = self.mascot.isVisible()
-        if mascot_visible:
-            self.mascot.hide()
+        overlay_visible = self.overlay.isVisible()
+        if overlay_visible:
+            self.overlay.hide()
 
         QTimer.singleShot(180,
                           lambda: self.finish_screenshot(request,
-                                                         mascot_visible))
+                                                         overlay_visible))
 
-    def finish_screenshot(self, request: CaptureRequest, mascot_visible: bool):
-        """Capture the screen, restore the mascot and report the result."""
+    def finish_screenshot(self, request: CaptureRequest, overlay_visible: bool):
+        """Capture the screen, restore the overlay and report the result."""
         try:
             result = capture_to_clipboard(return_image=request.return_image)
             if request.return_image:
@@ -1365,6 +1370,8 @@ class AssistantWindow(DesktopWindow):
             request.success = False
         finally:
             request.completed.set()
+            if overlay_visible and not self.quitting:
+                self.overlay.show()
 
     @Slot(object)
     def on_clipboard_requested(self, request: ClipboardRequest):
@@ -1481,6 +1488,8 @@ class AssistantWindow(DesktopWindow):
             tr("ui.stop_hint") if stopping_available else label)
         ui.input.setPlaceholderText(
             tr("ui.steering_input" if session.busy else "ui.input"))
+        if session is self.session:
+            self.sync_overlay()
 
     @Slot(str)
     def change_language(self, language):
@@ -1507,7 +1516,7 @@ class AssistantWindow(DesktopWindow):
             actions = tray.contextMenu().actions()
             actions[0].setText(tr("tray.open"))
             actions[1].setText(tr("tray.quit"))
-        for orb in (self.mascot, *(session.ui.orb for session in self._views())):
+        for orb in (session.ui.orb for session in self._views()):
             orb.setToolTip(name)
         if hasattr(self, "command_palette"):
             self.command_palette.refresh_language()
@@ -1656,7 +1665,6 @@ class AssistantWindow(DesktopWindow):
         self.subtitles_enabled = enabled
         for session in self._views():
             session.ui.subtitles.setVisible(enabled and session.ready)
-        self.sync_mascot_subtitle()
         self.settings.setValue("subtitles", enabled)
         self.refresh_settings_workspaces()
 
@@ -1674,11 +1682,10 @@ class AssistantWindow(DesktopWindow):
                 self.on_speaking(session, session.turn_id, False)
             for session in self._views():
                 session.ui.orb.clear()
-            self.mascot.clear()
         self.refresh_settings_workspaces()
 
     def toggle_orb_speech_pulse(self, enabled: bool):
-        for orb in (self.mascot, *(session.ui.orb for session in self._views())):
+        for orb in (session.ui.orb for session in self._views()):
             orb.set_speech_pulse_enabled(enabled)
         self.settings.setValue("orb_speech_pulse", enabled)
         self.refresh_settings_workspaces()
@@ -1715,13 +1722,12 @@ class AssistantWindow(DesktopWindow):
     def toggle_orb_enabled(self, enabled: bool):
         self.settings.setValue("orb_enabled", enabled)
         if not enabled:
-            self.mascot.pop_out()
+            self.overlay.close_animated()
         self.refresh_settings_workspaces()
 
     def set_orbs_speaking(self, speaking: bool, session=None):
         for orb in self._orbs(session):
             orb.set_speaking(speaking)
-        self.sync_mascot_subtitle()
 
     def set_orbs_listening(self, listening: bool, session=None):
         for orb in self._orbs(session):
@@ -1730,11 +1736,6 @@ class AssistantWindow(DesktopWindow):
     def set_orbs_visual_state(self, state, session=None, *, fade_in=180, fade_out=180):
         for orb in self._orbs(session):
             orb.set_visual_state(state, fade_in=fade_in, fade_out=fade_out)
-
-    def sync_mascot_subtitle(self):
-        self.mascot_subtitles.set_subtitle(
-            self.session.subtitle_text,
-            self.subtitles_enabled and self.session.speaking)
 
     def update_subtitles(self, text, session=None):
         from PySide6.QtGui import QTextLayout
@@ -1773,8 +1774,6 @@ class AssistantWindow(DesktopWindow):
             subtitles.reset_lines()
         subtitles.set_lines(
             self.render_subtitle("\n".join(lines[-3:])), len(lines))
-        if session is self.session:
-            self.sync_mascot_subtitle()
 
     @staticmethod
     def render_subtitle(text: str) -> str:
@@ -1853,50 +1852,18 @@ class AssistantWindow(DesktopWindow):
         self.update_send_button()
         ChoiceDialog.of(self).notify(tr("ui.attach_files"), error)
 
-    @Slot()
-    def on_mascot_record(self):
-        """Start or stop microphone recording from compact mode."""
-        session = self.session
-        if self.recording or self.voice_thread is not None:
-            self.on_send_clicked(self.voice_session or session)
-            return
-
-        if session.busy and session.speaking and not session.stopping:
-            session.pending_voice_barge = True
-            self.stop_response(session)
-            return
-
-        if (not session.ready or session.busy or
-                self.voice_thread is not None):
-            return
-
-        self.start_recording(session=session)
-
     @property
     def orb_enabled(self) -> bool:
         return self.settings.value("orb_enabled", True, type=bool)
 
-    def toggle_mascot(self):
-        """Switch between the full window and compact mode."""
-        if self.isVisible() and not self._workspace_hiding:
-            self.show_mascot()
-        else:
-            self.restore_from_mascot()
-
-    def show_mascot(self):
-        """Switch to compact desktop mode when the orb is enabled."""
-        if self.orb_enabled:
-            self.enter_background(show_orb=True)
-
-    def enter_background(self, show_orb=False):
-        """Hide the window, leaving the orb on screen only when requested."""
+    def enter_background(self):
+        """Hide the window, leaving the compact overlay on screen when enabled."""
         if self.quitting or self._workspace_hiding:
             return
         self.command_palette.dismiss(restore_focus=False)
-        if show_orb and self.orb_enabled:
-            if not self.mascot.isVisible():
-                self.mascot.move_mascot()
-            self.mascot.pop_in()
+        if self.orb_enabled:
+            self.sync_overlay()
+            self.overlay.open()
         if self.isVisible():
             self._workspace_hiding = True
             self.workspace.animate_visibility(False, on_finished=self._hide_workspace)
@@ -1907,11 +1874,11 @@ class AssistantWindow(DesktopWindow):
         if self.quitting:
             self.close()
 
-    def restore_from_mascot(self):
+    def restore_window(self):
         """Restore the full assistant interface."""
         if self.quitting:
             return
-        self.mascot.pop_out()
+        self.overlay.close_animated()
         if self._workspace_hiding:
             self._workspace_hiding = False
             self.workspace.animate_visibility(True)
@@ -2033,6 +2000,8 @@ class AssistantWindow(DesktopWindow):
         session = self.voice_session or self.session
         if session.ui is not None and (not session.busy or session.stopping):
             session.ui.input_meter.set_levels(levels)
+            if session is self.session:
+                self.overlay.set_levels(levels)
             for orb in self._orbs(session):
                 orb.set_levels(levels)
 
@@ -2049,6 +2018,8 @@ class AssistantWindow(DesktopWindow):
         if session.ui is not None:
             session.ui.input.hide()
             session.ui.input_meter.show()
+            if session is self.session:
+                self.sync_overlay()
 
     @Slot(object)
     def on_voice_utterance(self, message):
@@ -2082,7 +2053,6 @@ class AssistantWindow(DesktopWindow):
         self.recording = False
         self.set_orbs_visual_state(Orb.State.PROCESSING, session)
         self.set_orbs_listening(False, session)
-        self.mascot.clear()
         if session.ui is not None:
             session.ui.input_meter.hide()
             session.ui.input.show()
@@ -2103,7 +2073,6 @@ class AssistantWindow(DesktopWindow):
             logging.getLogger("assistant.voice").exception("Unable to stop playback reference")
         self.recording = False
         self.set_orbs_listening(False, session)
-        self.mascot.clear()
         ui = session.ui
         if ui is not None:
             ui.input_meter.hide()
@@ -2197,13 +2166,9 @@ class AssistantWindow(DesktopWindow):
     def capture_screen(self):
         try:
             success = capture_to_clipboard()
-            if success:
-                self.mascot.setToolTip("Check!")
-            else:
-                self.mascot.setToolTip(":(")
-
-        except Exception as error:
-            self.mascot.setToolTip(f"{error}")
+            logging.getLogger("assistant.capture").info("Screen capture success: %s", success)
+        except Exception:
+            logging.getLogger("assistant.capture").exception("Unable to capture the screen")
 
     def on_permission_denied(self, session, turn_id):
         if turn_id == session.turn_id:
@@ -2410,7 +2375,7 @@ class AssistantWindow(DesktopWindow):
         for thread in threads:
             thread.wait()
 
-        self.mascot.close()
+        self.overlay.close()
         event.accept()
         QTimer.singleShot(0, QApplication.instance().quit)
 
@@ -2473,7 +2438,7 @@ def install_tray_icon(app: QApplication, window: AssistantWindow, icon: QIcon):
     menu = QMenu(window)
     open_action = menu.addAction(tr("tray.open"))
     quit_action = menu.addAction(tr("tray.quit"))
-    open_action.triggered.connect(window.restore_from_mascot)
+    open_action.triggered.connect(window.restore_window)
     quit_action.triggered.connect(window.request_quit)
     tray.setContextMenu(menu)
 
@@ -2481,7 +2446,7 @@ def install_tray_icon(app: QApplication, window: AssistantWindow, icon: QIcon):
         if reason in (
                 QSystemTrayIcon.ActivationReason.Trigger,
                 QSystemTrayIcon.ActivationReason.DoubleClick):
-            window.restore_from_mascot()
+            window.restore_window()
 
     tray.activated.connect(activate)
     tray.show()
@@ -2551,7 +2516,7 @@ def main():
                 connection.readAll()
                 connection.disconnectFromServer()
                 connection.deleteLater()
-            window.restore_from_mascot()
+            window.restore_window()
 
         instance_server.newConnection.connect(activate_existing_window)
         if instance_server.hasPendingConnections():
