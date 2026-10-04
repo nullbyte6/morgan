@@ -25,10 +25,6 @@ turn. Substring matching no
 longer bypasses the model or defaults unrecognized durations to immediate power
 off.
 
-If local transcription is unavailable, the voice log falls back to `[Voice input]`.
-That marker is not a semantic memory query. Voice turns receive saved preferences
-without automatically retrieving unrelated voice commands from previous sessions.
-
 Restart the desktop application after updating this flow. Ordinary window close
 hides the app; use the tray's quit action before launching it again. Future
 hot reloads rebuild tools and the cached models.
