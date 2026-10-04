@@ -76,10 +76,6 @@ class NovaView(QWidget):
 
         self.sidebar = NovaSidebar(self._hub)
         self.sidebar.set_collapsed(True, animate=False)
-        self.inner_divider = QFrame()
-        self.inner_divider.setObjectName("novaDivider")
-        self.inner_divider.setFixedWidth(1)
-        self.inner_divider.hide()
         end_divider = QFrame()
         end_divider.setObjectName("novaDivider")
         end_divider.setFixedWidth(1)
@@ -149,7 +145,6 @@ class NovaView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.sidebar)
-        layout.addWidget(self.inner_divider)
         layout.addWidget(self.content_area)
         layout.addSpacing(EDGE_GAP)
         layout.addWidget(end_divider)
@@ -249,7 +244,6 @@ class NovaView(QWidget):
         target = CONTENT_WIDTH if opened else 0
         self._reveal.stop()
         if opened:
-            self.inner_divider.show()
             self.content_area.show()
         if not self.isVisible():
             self.content_area.setFixedWidth(target)
@@ -261,7 +255,6 @@ class NovaView(QWidget):
 
     def _reveal_settled(self) -> None:
         if not self._content_open:
-            self.inner_divider.hide()
             self.content_area.hide()
 
     def _open_day(self, day) -> None:
