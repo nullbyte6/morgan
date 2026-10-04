@@ -111,6 +111,7 @@ QToolTip {
     background-color: @surface;
     color: @text;
     border: 2px solid @border;
+    border-radius: 16px;
     padding: 2px 6px;
     font-family: "Inter";
     font-size: 16px;
@@ -125,8 +126,8 @@ QWidget#mascotSubtitleBubble {
 }
 
 QFrame#inputFrame {
-    background: transparent;
-    border: 2px solid @border;
+    background: @border;
+    border: none;
     border-radius: 24px;
 }
 
