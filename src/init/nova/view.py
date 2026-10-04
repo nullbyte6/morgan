@@ -79,9 +79,6 @@ class NovaView(QWidget):
         self.inner_divider.setObjectName("novaDivider")
         self.inner_divider.setFixedWidth(1)
         self.inner_divider.hide()
-        end_divider = QFrame()
-        end_divider.setObjectName("novaDivider")
-        end_divider.setFixedWidth(1)
 
         self.title = QLabel()
         self.title.setObjectName("novaTitle")
@@ -150,7 +147,6 @@ class NovaView(QWidget):
         layout.addWidget(self.sidebar)
         layout.addWidget(self.inner_divider)
         layout.addWidget(self.content_area)
-        layout.addWidget(end_divider)
 
         self.dialog = NovaEntryDialog(store, self)
 

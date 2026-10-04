@@ -690,12 +690,14 @@ class Workspace(QWidget):
             self._panels[previous].closable = True
             self._panels[previous].set_renamable(True)
             self._panels[previous].close_button.setVisible(True)
+            self._panels[previous].header.show()
 
         self._primary_panel_id = panel_id
         panel = self._panels[panel_id]
         panel.closable = False
         panel.set_renamable(False)
         panel.close_button.setVisible(False)
+        panel.header.hide()
         return True
 
 
