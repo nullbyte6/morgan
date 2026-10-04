@@ -120,6 +120,7 @@ class NovaView(QWidget):
         self.diary.entry_activated.connect(self.dialog.open_edit)
         self.search.entry_activated.connect(self.dialog.open_edit)
         self.search.day_selected.connect(self._open_day)
+        self.search.journal_selected.connect(self._open_journal_day)
         self.review.day_selected.connect(self._open_day)
         self.calendar.create_requested.connect(lambda moment: self.dialog.open_new(EVENT, moment))
         store.changed.connect(self._refresh)
@@ -149,6 +150,10 @@ class NovaView(QWidget):
     def _open_day(self, day) -> None:
         self.diary.set_day(day)
         self.show_section(Section.DIARY)
+
+    def _open_journal_day(self, day) -> None:
+        self.journal.set_day(day)
+        self.show_section(Section.JOURNAL)
 
     def refresh_language(self) -> None:
         self.sidebar.refresh_language()

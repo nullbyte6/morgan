@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Nova search: one box over reminders, events and the days of the diary."""
+"""Nova search: one box over reminders, events, the days of the diary and journal entries."""
 from datetime import date, datetime
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -27,12 +27,14 @@ from src.init.memory.integration import configured_service
 
 from . import formatting
 from .diary import clipped, local_moment, message_count
-from .entries import Entry, Reminder
+from .entries import Entry, JournalEntry, Reminder
+from .journal import TOPIC_LIMIT
 from .rows import EntryRow
 from .store import NovaStore
 
 DELAY_MS = 250
 MESSAGE_LIMIT = 300
+CONTEXT_BEFORE = 40
 
 
 def _label(text: str, name: str, wrap: bool = True) -> QLabel:
@@ -65,11 +67,49 @@ class DayResult(QFrame):
         super().mouseReleaseEvent(event)
 
 
+def excerpt(text: str, query: str) -> str:
+    """The part of text around the first of the query words it contains, in at most TOPIC_LIMIT characters."""
+    flat = " ".join(text.split())
+    if len(flat) <= TOPIC_LIMIT:
+        return flat
+    lowered = flat.casefold()
+    found = [lowered.find(word) for word in query.casefold().split()]
+    start = max(0, min((at for at in found if at >= 0), default=0) - CONTEXT_BEFORE)
+    piece = flat[start:start + TOPIC_LIMIT].strip()
+    return ("…" if start else "") + piece + ("…" if start + TOPIC_LIMIT < len(flat) else "")
+
+
+class JournalResult(QFrame):
+    """A journal entry matching the search, opened in the journal on its day when clicked."""
+
+    activated = Signal(object)
+
+    def __init__(self, entry: JournalEntry, query: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.day = entry.day
+        self.setObjectName("novaRow")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        author = tr("nova.journal.by_user" if entry.author == "user" else "nova.journal.by_assistant")
+        column = QVBoxLayout(self)
+        column.setContentsMargins(16, 13, 16, 13)
+        column.setSpacing(3)
+        column.addWidget(_label(formatting.day_heading(entry.day), "novaRowTitle"))
+        column.addWidget(_label(excerpt(entry.text, query), "novaRowNotes"))
+        column.addWidget(_label(f"{author} · {formatting.time_text(local_moment(entry.created_at))}",
+                                "novaRowCaption", wrap=False))
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.activated.emit(self.day)
+        super().mouseReleaseEvent(event)
+
+
 class SearchView(QWidget):
-    """A search box with the reminders, events and diary days that match it."""
+    """A search box with the reminders, events, diary days and journal entries that match it."""
 
     entry_activated = Signal(object)
     day_selected = Signal(object)
+    journal_selected = Signal(object)
 
     def __init__(self, store: NovaStore, memory=configured_service, parent: QWidget | None = None):
         super().__init__(parent)
@@ -165,6 +205,13 @@ class SearchView(QWidget):
                 row.activated.connect(self.entry_activated)
                 row.toggled.connect(self._toggle_reminder)
                 self._add(row)
+        journal = self._store.search_journal(query)
+        if journal:
+            self._add(_label(tr("nova.search.journal"), "novaGroup"))
+            for entry in journal:
+                result = JournalResult(entry, query)
+                result.activated.connect(self.journal_selected)
+                self._add(result)
         days, error = self._days(query)
         if days:
             self._add(_label(tr("nova.search.days"), "novaGroup"))
@@ -174,7 +221,7 @@ class SearchView(QWidget):
                 self._add(result)
         if error is not None:
             self._add(_label(tr("nova.diary.error", error=error), "novaDiaryNote"))
-        elif not (entries or days):
+        elif not (entries or days or journal):
             self._add(_label(tr("nova.search.empty", query=query), "novaDiaryNote"))
 
     def _toggle_reminder(self, entry: Entry, done: bool) -> None:

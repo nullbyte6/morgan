@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""The week in review: what got done, what is pending and what was talked about, summarised by the model."""
+"""The week in review: what got done, what is pending, what was written and talked about, summarised by the model."""
 import threading
 from datetime import date, datetime, timedelta
 
@@ -69,7 +69,7 @@ class DayRow(QFrame):
 
 
 class ReviewView(QWidget):
-    """One week at a time: reminders done and missed, events, conversations, memories and a model summary."""
+    """One week at a time: reminders done and missed, events, journal entries, conversations, memories and a model summary."""
 
     day_selected = Signal(object)
     summarized = Signal(object, str, bool)
@@ -162,10 +162,11 @@ class ReviewView(QWidget):
     def _heading(self, text: str) -> None:
         self._add(_label(text, "novaGroup"))
 
-    def _week(self) -> tuple[list, list, dict, str | None]:
+    def _week(self) -> tuple[list, list, list, dict, str | None]:
         last = self._first + timedelta(days=6)
         reminders = self._store.reminders(day_start(self._first), day_start(last + timedelta(days=1)))
         events = self._store.events(self._first, last)
+        journal = self._store.journal_entries(self._first, last)
         data, error = {"sessions": [], "memories": []}, None
         try:
             service = self._memory()
@@ -173,7 +174,7 @@ class ReviewView(QWidget):
                 data = service.diary(day_bounds(self._first)[0], day_bounds(last)[1])
         except Exception as failure:
             error = str(failure)
-        return reminders, events, data, error
+        return reminders, events, journal, data, error
 
     def refresh(self) -> None:
         now = datetime.now()
@@ -186,11 +187,11 @@ class ReviewView(QWidget):
             widget.hide()
             widget.setParent(None)
             widget.deleteLater()
-        reminders, events, data, error = self._week()
+        reminders, events, journal, data, error = self._week()
         sessions = data["sessions"]
-        active = bool(reminders or events or sessions or data["memories"])
+        active = bool(reminders or events or journal or sessions or data["memories"])
         self.summarize_button.setEnabled(active and not busy)
-        self._facts = describe_week(self._first, reminders, events, data, now) if active else ""
+        self._facts = describe_week(self._first, reminders, events, data, now, journal) if active else ""
 
         summary = self._summaries.get(self._first)
         if summary is not None:
@@ -216,6 +217,7 @@ class ReviewView(QWidget):
             for text in (tr("nova.review.reminders", done=done, pending=pending,
                             missed=len(reminders) - done - pending),
                          tr("nova.review.events", count=len(events)),
+                         tr("nova.review.journal", count=len(journal)),
                          tr("nova.review.conversations", count=len(sessions),
                             messages=sum(session["messages"] for session in sessions)),
                          tr("nova.review.memories", count=len(data["memories"]))):
@@ -225,21 +227,33 @@ class ReviewView(QWidget):
         days: dict[date, dict] = {}
         for session in sessions:
             day = local_moment(session["started_at"]).date()
-            info = days.setdefault(day, {"conversations": 0, "messages": 0, "entries": 0, "topic": ""})
+            info = days.setdefault(day, {"conversations": 0, "messages": 0, "entries": 0, "journal": 0, "topic": ""})
             info["conversations"] += 1
             info["messages"] += session["messages"]
             info["topic"] = info["topic"] or session["topic"]
         for entry in [*reminders, *events]:
             for day in entry.days():
                 if self._first <= day <= last:
-                    days.setdefault(day, {"conversations": 0, "messages": 0, "entries": 0, "topic": ""})
+                    days.setdefault(day, {"conversations": 0, "messages": 0, "entries": 0, "journal": 0,
+                                          "topic": ""})
                     days[day]["entries"] += 1
+        for entry in journal:
+            info = days.setdefault(entry.day, {"conversations": 0, "messages": 0, "entries": 0, "journal": 0,
+                                               "topic": ""})
+            info["journal"] += 1
+            info["topic"] = info["topic"] or entry.text
         if days:
             self._heading(tr("nova.review.days"))
             for day in sorted(days):
                 info = days[day]
-                row = DayRow(day, tr("nova.review.day_caption", conversations=info["conversations"],
-                                     messages=info["messages"], entries=info["entries"]), info["topic"])
+                parts = []
+                if info["conversations"] or info["entries"] or not info["journal"]:
+                    parts.append(tr("nova.review.day_caption", conversations=info["conversations"],
+                                    messages=info["messages"], entries=info["entries"]))
+                if info["journal"]:
+                    parts.append(tr("nova.review.day_journal", count=info["journal"]))
+                caption = " · ".join(parts)
+                row = DayRow(day, caption, info["topic"])
                 row.activated.connect(self.day_selected)
                 self._add(row)
         if error is not None:
