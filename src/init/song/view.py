@@ -41,14 +41,18 @@ PREVIOUS = "\U000f04ae"
 NEXT = "\U000f04ad"
 PLAY = "\U000f040a"
 PAUSE = "\U000f03e4"
+COPY = "\U000f018f"
+COPIED = "\U000f012c"
+SUMMARY = "\U000f0bc2"
 SEEK_STEPS = 1000
 TICK_MS = 250
 COPIED_MS = 1200
-COVER_MAX = 280
+COVER_MAX = 322
 COVER_MIN = 96
 COVER_RADIUS = 16
 CONTENT_BELOW_COVER = 400
 SIDE_MARGIN = 28
+ACTION_SIZE = 36
 
 
 def clock(seconds: float) -> str:
@@ -177,26 +181,22 @@ class SongView(QWidget):
         self.play_button = _button("songPlay", 56)
         self.next_button = _button("songTransport", 44)
         self.next_button.setText(NEXT)
+        self.copy_button = _button("songAction", ACTION_SIZE)
+        self.summarize_button = _button("songAction", ACTION_SIZE)
+        self.summarize_button.setText(SUMMARY)
+        self.copy_reset = QTimer(self)
+        self.copy_reset.setSingleShot(True)
+        self.copy_reset.setInterval(COPIED_MS)
+        self.copy_reset.timeout.connect(self._label_copies)
         transport = QHBoxLayout()
-        transport.setSpacing(14)
+        transport.setSpacing(8)
+        transport.addWidget(self.copy_button)
+        transport.addWidget(self.summarize_button)
         transport.addStretch(1)
         for button in (self.previous_button, self.play_button, self.next_button):
             transport.addWidget(button)
         transport.addStretch(1)
 
-        self.copy_heading = _label("novaGroup", wrap=False, align=Qt.AlignmentFlag.AlignLeft)
-        self.copy_buttons = {field: _button("novaTodayButton") for field in ("title", "album", "artist")}
-        copies = QHBoxLayout()
-        copies.setSpacing(8)
-        for button in self.copy_buttons.values():
-            button.setMinimumWidth(0)
-            copies.addWidget(button, 1)
-        self.copy_reset = QTimer(self)
-        self.copy_reset.setSingleShot(True)
-        self.copy_reset.setInterval(COPIED_MS)
-        self.copy_reset.timeout.connect(self._label_copies)
-
-        self.summarize_button = _button("novaTodayButton")
         self.summary_heading = _label("novaGroup", wrap=False, align=Qt.AlignmentFlag.AlignLeft)
         self.summary_text = _label("songSummary", align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.summary_text.setTextFormat(Qt.TextFormat.RichText)
@@ -207,20 +207,18 @@ class SongView(QWidget):
         column.setSpacing(12)
         column.addWidget(self.cover, 0, Qt.AlignmentFlag.AlignHCenter)
         column.addSpacing(6)
-        column.addWidget(self.title)
-        column.addWidget(self.artist)
-        column.addWidget(self.album)
+        names = QVBoxLayout()
+        names.setSpacing(0)
+        names.addWidget(self.title)
+        names.addWidget(self.artist)
+        names.addWidget(self.album)
+        column.addLayout(names)
         column.addSpacing(6)
-        column.addLayout(progress)
-        column.addLayout(transport)
-        column.addSpacing(6)
-        column.addWidget(self.copy_heading)
-        column.addLayout(copies)
-        column.addSpacing(6)
-        column.addWidget(self.summarize_button)
         column.addWidget(self.summary_heading)
         column.addWidget(self.summary_text)
         column.addStretch(1)
+        column.addLayout(progress)
+        column.addLayout(transport)
         body = QWidget()
         body.setObjectName("novaEntryBody")
         body.setLayout(column)
@@ -250,8 +248,7 @@ class SongView(QWidget):
         self.next_button.clicked.connect(lambda: self._command("next"))
         self.play_button.clicked.connect(self._toggle)
         self.seek.seek_requested.connect(self._seek)
-        for field, button in self.copy_buttons.items():
-            button.clicked.connect(lambda _checked=False, field=field: self._copy(field))
+        self.copy_button.clicked.connect(self._copy)
         self.summarize_button.clicked.connect(self._summarize)
         self.refresh_language()
 
@@ -262,15 +259,13 @@ class SongView(QWidget):
         self.empty.setText(tr("song.empty"))
         self.previous_button.setToolTip(tr("song.previous"))
         self.next_button.setToolTip(tr("song.next"))
-        self.copy_heading.setText(tr("song.copy"))
         self.summary_heading.setText(tr("song.summary"))
         self._label_copies()
         self._render()
 
     def _label_copies(self) -> None:
-        for field, button in self.copy_buttons.items():
-            button.setText(tr(f"song.copy_{field}"))
-            button.setToolTip(tr(f"song.copy_{field}_tooltip"))
+        self.copy_button.setText(COPY)
+        self.copy_button.setToolTip(tr("song.copy_title_tooltip"))
 
     def _on_song(self, song: Song | None) -> None:
         self._song = song
@@ -293,8 +288,7 @@ class SongView(QWidget):
         self.play_button.setToolTip(tr("song.pause" if song.playing else "song.play"))
         self.length.setText(clock(song.duration) if song.duration > 0 else "")
         self.seek.setEnabled(song.seekable and song.duration > 0)
-        for field, value in (("title", song.title), ("album", song.album), ("artist", song.artist)):
-            self.copy_buttons[field].setEnabled(bool(value))
+        self.copy_button.setEnabled(bool(song.title))
         self._render_cover()
         self._render_summary()
         self._tick()
@@ -378,12 +372,12 @@ class SongView(QWidget):
             self._song = self._monitor.current
             self._render()
 
-    def _copy(self, field: str) -> None:
+    def _copy(self) -> None:
         song = self._song
         if song is None:
             return
-        QApplication.clipboard().setText(getattr(song, field))
-        self.copy_buttons[field].setText(tr("nova.diary.copied"))
+        QApplication.clipboard().setText(song.title)
+        self.copy_button.setText(COPIED)
         self.copy_reset.start()
 
     def _summarize(self) -> None:
@@ -419,7 +413,7 @@ class SongView(QWidget):
             return
         busy = song.key in self._pending
         self.summarize_button.setEnabled(not busy)
-        self.summarize_button.setText(tr("song.summarizing" if busy else "song.summarize"))
+        self.summarize_button.setToolTip(tr("song.summarizing" if busy else "song.summarize"))
         result = self._summaries.get(song.key)
         self.summary_heading.setVisible(result is not None)
         self.summary_text.setVisible(result is not None)

@@ -1575,6 +1575,25 @@ QPushButton#songTransport:hover {
     color: @text;
 }
 
+QPushButton#songAction {
+    background-color: transparent;
+    color: @text_muted;
+    border: 2px solid @border;
+    border-radius: 18px;
+    font-family: "JetBrainsMonoNL NFM";
+    font-size: 18px;
+    padding: 0;
+}
+
+QPushButton#songAction:hover {
+    background-color: @surface_raised;
+    color: @text;
+}
+
+QPushButton#songAction:disabled {
+    color: @text_disabled;
+}
+
 QPushButton#songPlay {
     background-color: @accent;
     color: @on_accent;
