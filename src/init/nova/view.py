@@ -31,12 +31,13 @@ from .calendar_view import CalendarView
 from .dialog import EVENT, REMINDER, NovaEntryDialog
 from .diary import DiaryView
 from .entries import Entry, Reminder
+from .hub_view import HubGrid
 from .journal_view import JournalView
 from .memories import MemoriesView
 from .review import ReviewView
 from .rows import EntryList
 from .search import SearchView
-from .sections import Section
+from .sections import Hub, Section
 from .sidebar import NovaSidebar
 from .store import NovaStore
 
@@ -47,17 +48,18 @@ REFRESH_MS = 30_000
 
 
 class NovaView(QWidget):
-    """Agenda, reminders, events and calendar inside one workspace panel."""
+    """Nova's four hubs and their sections inside one workspace panel."""
 
     def __init__(self, store: NovaStore, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("novaView")
         self.setProperty("workspaceEmpty", False)
         self._store = store
-        self._section = Section.AGENDA
+        self._hub = Hub.HOME
+        self._section: Section | None = None
         self._user_collapsed: bool | None = None
 
-        self.sidebar = NovaSidebar(self._section)
+        self.sidebar = NovaSidebar(self._hub)
         divider = QFrame()
         divider.setObjectName("novaDivider")
         divider.setFixedWidth(1)
@@ -69,8 +71,16 @@ class NovaView(QWidget):
         for label in (self.title, self.tagline):
             label.setMinimumWidth(0)
             label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.back = QPushButton()
+        self.back.setObjectName("novaBack")
+        self.back.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.back.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        policy = self.back.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.back.setSizePolicy(policy)
         heading = QVBoxLayout()
         heading.setSpacing(3)
+        heading.addWidget(self.back, 0, Qt.AlignmentFlag.AlignLeft)
         heading.addWidget(self.title)
         heading.addWidget(self.tagline)
         self.add_button = QPushButton(PLUS)
@@ -89,11 +99,14 @@ class NovaView(QWidget):
         self.search = SearchView(store)
         self.memories = MemoriesView()
         self.review = ReviewView(store)
+        self.grids = {hub: HubGrid(hub) for hub in Hub if hub.is_grid}
         pages = {Section.CALENDAR: self.calendar, Section.DIARY: self.diary, Section.JOURNAL: self.journal,
                  Section.MEMORIES: self.memories, Section.SEARCH: self.search, Section.REVIEW: self.review}
         self.pages = QStackedWidget()
         for section in Section:
             self.pages.addWidget(pages.get(section) or self.lists[section])
+        for grid in self.grids.values():
+            self.pages.addWidget(grid)
 
         content = QVBoxLayout()
         content.setContentsMargins(28, 22, 28, 22)
@@ -110,7 +123,10 @@ class NovaView(QWidget):
 
         self.dialog = NovaEntryDialog(store, self)
 
-        self.sidebar.section_selected.connect(self.show_section)
+        self.sidebar.hub_selected.connect(self.show_hub)
+        self.back.clicked.connect(lambda: self.show_hub(self._hub))
+        for grid in self.grids.values():
+            grid.section_selected.connect(self.show_section)
         self.sidebar.toggle_requested.connect(self._toggle_sidebar)
         self.add_button.clicked.connect(self._add)
         for entries in self.lists.values():
@@ -128,20 +144,40 @@ class NovaView(QWidget):
         self.clock = QTimer(self)
         self.clock.setInterval(REFRESH_MS)
         self.clock.timeout.connect(self._refresh)
+        self.show_hub(Hub.HOME)
         self.refresh_language()
 
     def minimumSizeHint(self) -> QSize:
         return QSize(360, 260)
 
     @property
-    def section(self) -> Section:
+    def hub(self) -> Hub:
+        return self._hub
+
+    @property
+    def section(self) -> Section | None:
         return self._section
+
+    def show_hub(self, hub: Hub) -> None:
+        """Show the grid of a hub, or straight the search page for the search hub."""
+        if hub is Hub.SEARCH:
+            self.show_section(Section.SEARCH)
+            return
+        self._hub = hub
+        self._section = None
+        self.sidebar.select(hub)
+        self.add_button.hide()
+        self.back.hide()
+        self.pages.setCurrentWidget(self.grids[hub])
+        self._refresh()
 
     def show_section(self, section: Section) -> None:
         self._section = section
-        self.sidebar.select(section)
+        self._hub = section.hub
+        self.sidebar.select(self._hub)
         self.add_button.setVisible(section not in (Section.DIARY, Section.JOURNAL, Section.REVIEW,
                                                    Section.MEMORIES, Section.SEARCH))
+        self.back.setVisible(self._hub.is_grid)
         self.pages.setCurrentIndex(list(Section).index(section))
         self._refresh()
         if section is Section.SEARCH:
@@ -157,6 +193,8 @@ class NovaView(QWidget):
 
     def refresh_language(self) -> None:
         self.sidebar.refresh_language()
+        for grid in self.grids.values():
+            grid.refresh_language()
         self.dialog.refresh_language()
         self.calendar.refresh_language()
         self.diary.refresh_language()
@@ -169,8 +207,10 @@ class NovaView(QWidget):
 
     def _refresh(self) -> None:
         now = datetime.now()
-        self.title.setText(self._section.title)
-        self.tagline.setText(self._section.tagline)
+        page = self._section or self._hub
+        self.title.setText(page.title)
+        self.tagline.setText(page.tagline)
+        self.back.setText(f"‹  {self._hub.title}")
         self.lists[Section.AGENDA].set_groups(agenda_groups(self._store, now, formatting.day_heading), tr("nova.empty.agenda"))
         self.lists[Section.REMINDERS].set_groups(reminder_groups(self._store), tr("nova.empty.reminders"))
         self.lists[Section.EVENTS].set_groups(event_groups(self._store, now), tr("nova.empty.events"))

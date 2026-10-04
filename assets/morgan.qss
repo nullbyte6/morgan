@@ -1187,6 +1187,7 @@ QScrollArea#novaScroll QScrollBar:horizontal {
 
 QWidget#novaView,
 QWidget#novaSidebar,
+QWidget#novaHub,
 QWidget#novaEntryList,
 QWidget#novaEntryBody,
 QWidget#novaWelcome {
@@ -1217,6 +1218,19 @@ QLabel#novaTitle {
     color: @text;
     font-size: 24px;
     background: transparent;
+}
+
+QPushButton#novaBack {
+    color: @accent;
+    background: transparent;
+    border: none;
+    font-size: 14px;
+    padding: 0;
+    text-align: left;
+}
+
+QPushButton#novaBack:hover {
+    color: @accent_hover;
 }
 
 QLabel#novaTagline {

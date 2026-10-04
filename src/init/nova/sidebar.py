@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""Nova's sidebar: a star that folds it to icons, and one entry per section."""
+"""Nova's sidebar: a star that folds it to icons, and one entry per hub."""
 from PySide6.QtCore import QEasingCurve, QRect, QRectF, Qt, QVariantAnimation, Signal
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QButtonGroup, QPushButton, QVBoxLayout, QWidget
@@ -25,7 +25,7 @@ from src.init.lang import tr
 from src.init.theme import on_theme_changed
 
 from .calendar_paint import ALIGN_CENTER, ALIGN_LEFT, color, draw_text, glyph_font, text_font
-from .sections import Section
+from .sections import Hub
 
 STAR = "\U000f0ae2"
 EXPANDED_WIDTH = 208
@@ -36,11 +36,11 @@ ICON_WIDTH = 40
 
 
 class NavItem(QPushButton):
-    """A section entry drawn with the theme: icon always visible, label while there is room."""
+    """A hub entry drawn with the theme: icon always visible, label while there is room."""
 
-    def __init__(self, section: Section, parent: QWidget | None = None):
+    def __init__(self, hub: Hub, parent: QWidget | None = None):
         super().__init__(parent)
-        self.section = section
+        self.hub = hub
         self.setObjectName("novaNavItem")
         self.setCheckable(True)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
@@ -61,22 +61,22 @@ class NavItem(QPushButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(color("surface_selected" if active else "surface_raised"))
             painter.drawRoundedRect(QRectF(self.rect()), 10, 10)
-        draw_text(painter, QRect(0, 0, ICON_WIDTH + 4, self.height()), self.section.glyph, glyph_font(23),
+        draw_text(painter, QRect(0, 0, ICON_WIDTH + 4, self.height()), self.hub.glyph, glyph_font(23),
                   "accent" if active else ("text" if hover else "text_muted"), ALIGN_CENTER)
         label = QRect(ICON_WIDTH + 6, 0, max(0, self.width() - ICON_WIDTH - 14), self.height())
         if label.width() > 12:
-            draw_text(painter, label, self.section.title, text_font(self.font(), 15),
+            draw_text(painter, label, self.hub.title, text_font(self.font(), 15),
                       "text" if active or hover else "text_muted", ALIGN_LEFT)
         painter.end()
 
 
 class NovaSidebar(QWidget):
-    """Section navigation that slides between a labelled column and an icon strip."""
+    """Hub navigation that slides between a labelled column and an icon strip."""
 
-    section_selected = Signal(object)
+    hub_selected = Signal(object)
     toggle_requested = Signal()
 
-    def __init__(self, initial: Section = Section.AGENDA, parent: QWidget | None = None):
+    def __init__(self, initial: Hub = Hub.HOME, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("novaSidebar")
         self._collapsed = False
@@ -96,19 +96,19 @@ class NovaSidebar(QWidget):
 
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
-        self._items: dict[Section, NavItem] = {}
+        self._items: dict[Hub, NavItem] = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 12, 10, 12)
         layout.setSpacing(14)
         layout.addWidget(self.star)
         navigation = QVBoxLayout()
         navigation.setSpacing(4)
-        for section in Section:
-            item = NavItem(section)
-            item.toggled.connect(lambda checked, section=section: checked and self.section_selected.emit(section))
+        for hub in Hub:
+            item = NavItem(hub)
+            item.clicked.connect(lambda _checked=False, hub=hub: self.hub_selected.emit(hub))
             self._group.addButton(item)
             navigation.addWidget(item)
-            self._items[section] = item
+            self._items[hub] = item
         layout.addLayout(navigation)
         layout.addStretch(1)
         self._items[initial].setChecked(True)
@@ -118,8 +118,8 @@ class NovaSidebar(QWidget):
     def collapsed(self) -> bool:
         return self._collapsed
 
-    def select(self, section: Section) -> None:
-        self._items[section].setChecked(True)
+    def select(self, hub: Hub) -> None:
+        self._items[hub].setChecked(True)
 
     def set_collapsed(self, collapsed: bool, animate: bool = True) -> None:
         if collapsed == self._collapsed:

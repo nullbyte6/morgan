@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""The areas of Nova, in sidebar order."""
+"""The areas of Nova: four hubs in the sidebar, each opening a grid of sections."""
 from enum import Enum
 
 from src.init.lang import tr
@@ -44,3 +44,42 @@ class Section(Enum):
     @property
     def tagline(self) -> str:
         return tr(f"nova.section.{self.key}.tagline")
+
+    @property
+    def hub(self) -> "Hub":
+        return next(hub for hub in Hub if self in hub.sections)
+
+
+class Hub(Enum):
+    HOME = ("home", "\U000f02dc")
+    NOTIFICATIONS = ("notifications", "\U000f009a")
+    ME = ("me", "\U000f0004")
+    SEARCH = ("search", "\U000f0349")
+
+    def __init__(self, key: str, glyph: str):
+        self.key = key
+        self.glyph = glyph
+
+    @property
+    def title(self) -> str:
+        return tr(f"nova.hub.{self.key}")
+
+    @property
+    def tagline(self) -> str:
+        return tr(f"nova.hub.{self.key}.tagline")
+
+    @property
+    def sections(self) -> tuple[Section, ...]:
+        return HUB_SECTIONS[self]
+
+    @property
+    def is_grid(self) -> bool:
+        return self is not Hub.SEARCH
+
+
+HUB_SECTIONS = {
+    Hub.HOME: (Section.AGENDA, Section.EVENTS, Section.CALENDAR, Section.REVIEW),
+    Hub.NOTIFICATIONS: (Section.REMINDERS,),
+    Hub.ME: (Section.DIARY, Section.JOURNAL, Section.MEMORIES),
+    Hub.SEARCH: (Section.SEARCH,),
+}
