@@ -19,7 +19,7 @@
 """Nova as the main window's sidebar: icons, then labels, then the section of the chosen hub."""
 from datetime import datetime
 
-from PySide6.QtCore import QEasingCurve, Qt, QTimer, QVariantAnimation
+from PySide6.QtCore import QEasingCurve, QEvent, Qt, QTimer, QVariantAnimation, Signal
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStackedWidget,
                                QVBoxLayout, QWidget)
 
@@ -38,7 +38,7 @@ from .review import ReviewView
 from .rows import EntryList
 from .search import SearchView
 from .sections import Hub, Section
-from .sidebar import SLIDE_MS, NovaSidebar
+from .sidebar import COLLAPSED_WIDTH, EXPANDED_WIDTH, SLIDE_MS, NovaSidebar
 from .store import NovaStore
 
 PLUS = "\U000f0415"
@@ -61,6 +61,46 @@ class SlidingPane(QWidget):
         self._body.setGeometry(0, 0, self._body_width, self.height())
 
 
+class DockedBody(QWidget):
+    """Puts Nova's sidebar beside the main content, floating its sections over the content when it is too narrow."""
+
+    base_changed = Signal(int)
+
+    def __init__(self, dock: "NovaView", main: QWidget, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._dock = dock
+        self._main = main
+        self._overlay = False
+        self._base = -1
+        dock.setParent(self)
+        main.setParent(self)
+
+    def event(self, event):
+        result = super().event(event)
+        if event.type() == QEvent.Type.LayoutRequest:
+            self._arrange()
+        return result
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._arrange()
+
+    def _arrange(self) -> None:
+        dock, main = self._dock, self._main
+        base = dock.base_width()
+        if dock.content_open:
+            self._overlay = self.width() - dock.target_width() < main.minimumSizeHint().width()
+        full = dock.sizeHint().width()
+        dock.set_overlay(self._overlay and full > base)
+        dock.setGeometry(0, 0, full, self.height())
+        left = base if self._overlay else full
+        main.setGeometry(left, 0, max(0, self.width() - left), self.height())
+        dock.raise_()
+        if base != self._base:
+            self._base = base
+            self.base_changed.emit(base)
+
+
 class NovaView(QWidget):
     """Nova's four hubs and their sections, docked at the left of the main window."""
 
@@ -73,6 +113,7 @@ class NovaView(QWidget):
         self._section: Section | None = None
         self._content_open = False
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Ignored)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         self.sidebar = NovaSidebar(self._hub)
         self.sidebar.set_collapsed(True, animate=False)
@@ -178,6 +219,26 @@ class NovaView(QWidget):
     @property
     def hub(self) -> Hub:
         return self._hub
+
+    @property
+    def content_open(self) -> bool:
+        return self._content_open
+
+    def base_width(self) -> int:
+        """The width the sidebar takes by itself, with its gap and edge line."""
+        return self.sidebar.width() + EDGE_GAP + 1
+
+    def target_width(self) -> int:
+        """The width the sidebar and its sections will have once they finish sliding."""
+        sidebar = COLLAPSED_WIDTH if self.sidebar.collapsed else EXPANDED_WIDTH
+        return sidebar + (CONTENT_WIDTH if self._content_open else 0) + EDGE_GAP + 1
+
+    def set_overlay(self, overlay: bool) -> None:
+        if self.property("overlay") == overlay:
+            return
+        self.setProperty("overlay", overlay)
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     @property
     def section(self) -> Section | None:

@@ -63,7 +63,7 @@ from src.init.nova.navigation import WorkspaceNavigation
 from src.init.nova.sections import Hub, Section
 from src.init.nova.store import NovaStore
 from src.init.nova.tools import use_store as use_nova_store
-from src.init.nova.view import NovaView
+from src.init.nova.view import DockedBody, NovaView
 from src.init.notifications import ask_notification, send_notification
 from src.init.song.monitor import SongMonitor
 from src.init.song.view import SongView
@@ -376,13 +376,9 @@ class AssistantWindow(DesktopWindow):
         main_content = self.build_session_view(session)
         self.nova_dock = self.build_nova_dock()
         if self.nova_dock is not None:
-            body = QWidget()
-            body_layout = QHBoxLayout(body)
-            body_layout.setContentsMargins(0, 0, 0, 0)
-            body_layout.setSpacing(0)
-            body_layout.addWidget(self.nova_dock)
-            body_layout.addWidget(main_content, 1)
-            main_content = body
+            main_content = DockedBody(self.nova_dock, main_content)
+            main_content.base_changed.connect(
+                lambda _base, session=session: self._refresh_session_minimum(session))
         self.main_workspace_panel_id = self.workspace.open_panel(
             title=self._session_title(session),
             content=main_content,
@@ -643,9 +639,18 @@ class AssistantWindow(DesktopWindow):
             self._workspace_hiding = False
             self.workspace.animate_visibility(True, restart=True)
 
+    def _refresh_session_minimum(self, session):
+        size = getattr(session.ui, "content_minimum", None)
+        if size is not None:
+            self._update_session_minimum(session, size)
+
     def _update_session_minimum(self, session, size):
         panel = self.workspace.get_panel(session.panel_id) if session.panel_id else None
         if panel is not None:
+            session.ui.content_minimum = size
+            dock = getattr(self, "nova_dock", None)
+            if dock is not None and session.panel_id == "main":
+                size = QSize(size.width() + dock.base_width(), size.height())
             margins = panel.layout().contentsMargins()
             header = 0 if panel.header.isHidden() else panel.header.height() + panel.layout().spacing()
             minimum = QSize(size.width() + margins.left() + margins.right(),

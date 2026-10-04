@@ -1165,6 +1165,10 @@ QWidget#novaWelcome {
     background: transparent;
 }
 
+QWidget#novaView[overlay="true"] {
+    background-color: @surface;
+}
+
 QFrame#novaDivider {
     background-color: @border;
     border: none;
