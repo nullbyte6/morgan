@@ -274,44 +274,49 @@ QToolButton#directory {
 
 QToolButton#directory:hover,
 QToolButton#directory:pressed {
-    border: 2px solid @accent;
+    background-color: @surface_raised;
     color: @text;
 }
 
 QComboBox#modelSelector {
     combobox-popup: 0;
     background-color: transparent;
-    border: 2px solid transparent;
+    border: none;
     border-radius: 16px;
-    color: @text_muted;
-    padding: 6px 28px 6px 12px;
+    color: transparent;
+    padding: 0;
 }
 
 QComboBox#modelSelector:hover,
 QComboBox#modelSelector:on {
-    border: 2px solid @accent;
+    background-color: @surface_raised;
+}
+
+QLabel#languageDropdownArrow {
+    background: transparent;
+    color: @text_muted;
+}
+
+QComboBox#modelSelector:hover QLabel#languageDropdownArrow,
+QComboBox#modelSelector:on QLabel#languageDropdownArrow {
     color: @text;
 }
 
 QToolButton#permissionSelector {
     background-color: transparent;
-    border: 2px solid transparent;
+    border: none;
     border-radius: 16px;
-    color: @text_muted;
-    padding: 4px 26px 4px 10px;
+    padding: 0;
 }
 
 QWidget#indicatorRow[resting="true"] QLabel#responseTimer,
-QWidget#indicatorRow[resting="true"] QToolButton#directory,
-QWidget#indicatorRow[resting="true"] QToolButton#permissionSelector,
-QWidget#indicatorRow[resting="true"] QComboBox#modelSelector {
+QWidget#indicatorRow[resting="true"] QToolButton#directory {
     color: @text_muted/140;
 }
 
 QToolButton#permissionSelector:hover,
 QToolButton#permissionSelector:pressed {
-    border: 2px solid @accent;
-    color: @text;
+    background-color: @surface_raised;
 }
 
 QFrame#permissionOptions {
@@ -471,6 +476,7 @@ QComboBox#themeDropdown QAbstractItemView {
 
 QComboBox#modelSelector QAbstractItemView {
     font-size: 16px;
+    border-radius: 12px;
 }
 
 QComboBoxPrivateContainer {
@@ -480,16 +486,14 @@ QComboBoxPrivateContainer {
 
 QComboBox#languageDropdown QAbstractItemView[opens="up"],
 QComboBox#modelDropdown QAbstractItemView[opens="up"],
-QComboBox#themeDropdown QAbstractItemView[opens="up"],
-QComboBox#modelSelector QAbstractItemView[opens="up"] {
+QComboBox#themeDropdown QAbstractItemView[opens="up"] {
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
 }
 
 QComboBox#languageDropdown QAbstractItemView[opens="down"],
 QComboBox#modelDropdown QAbstractItemView[opens="down"],
-QComboBox#themeDropdown QAbstractItemView[opens="down"],
-QComboBox#modelSelector QAbstractItemView[opens="down"] {
+QComboBox#themeDropdown QAbstractItemView[opens="down"] {
     border-bottom-left-radius: 12px;
     border-bottom-right-radius: 12px;
 }
@@ -850,11 +854,10 @@ QSplitter#workspaceSplitter::handle:hover {
 }
 
 QPushButton#privacyIndicator {
-    color: @private_indicator;
-    background-color: @private_indicator/20;
-    border: 2px solid @private_indicator/89~surface;
+    background-color: transparent;
+    border: none;
     border-radius: 16px;
-    padding: 6px 12px;
+    padding: 0;
 }
 
 QToolButton#branchIndicator {
@@ -866,8 +869,7 @@ QToolButton#branchIndicator {
 }
 
 QPushButton#privacyIndicator:hover {
-    background-color: @private_indicator/31;
-    border-color: @private_indicator/140~surface;
+    background-color: @surface_raised;
 }
 
 QWidget#mainWorkspaceContent,

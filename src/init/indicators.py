@@ -26,7 +26,57 @@ from PySide6.QtWidgets import *
 
 from src.init.config import PermissionMode
 from src.init.lang import tr
+from src.init.theme import current_theme, on_theme_changed
 from src.platforms import current_platform
+
+
+def _draw_chevron(painter):
+    painter.drawPolyline([QPointF(6, 9), QPointF(12, 15), QPointF(18, 9)])
+
+
+def _draw_shield(painter):
+    outline = QPainterPath()
+    outline.moveTo(12, 3)
+    outline.lineTo(4, 6)
+    outline.lineTo(4, 12)
+    outline.cubicTo(4, 16.5, 7.2, 20, 12, 21)
+    outline.cubicTo(16.8, 20, 20, 16.5, 20, 12)
+    outline.lineTo(20, 6)
+    outline.closeSubpath()
+    painter.drawPath(outline)
+    painter.drawPolyline([QPointF(9, 12), QPointF(11, 14), QPointF(15, 10)])
+
+
+def _draw_lock(painter):
+    painter.drawRoundedRect(QRectF(4, 11, 16, 10), 2, 2)
+    shackle = QPainterPath()
+    shackle.moveTo(8, 11)
+    shackle.lineTo(8, 7)
+    shackle.arcTo(QRectF(8, 3, 8, 8), 180, -180)
+    shackle.lineTo(16, 11)
+    painter.drawPath(shackle)
+
+
+def line_icon(draw, normal_role, active_role, size=18) -> QIcon:
+    theme = current_theme()
+    icon = QIcon()
+    ratio = 2
+    for mode, role in ((QIcon.Mode.Normal, normal_role), (QIcon.Mode.Active, active_role)):
+        pixmap = QPixmap(size * ratio, size * ratio)
+        pixmap.setDevicePixelRatio(ratio)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.scale(size / 24, size / 24)
+        pen = QPen(theme.color(role), 2.2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        draw(painter)
+        painter.end()
+        icon.addPixmap(pixmap, mode)
+    return icon
 
 
 class WorkingDirectory(QToolButton):
@@ -111,7 +161,7 @@ class PopupCorners(QObject):
 
 class ModelSelector(QComboBox):
     model_selected = Signal(str)
-    POPUP_GAP = 0
+    POPUP_GAP = 6
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -130,36 +180,16 @@ class ModelSelector(QComboBox):
         arrow.setObjectName("languageDropdownArrow")
         arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        arrow.setFixedWidth(24)
-        arrow.hide()
-        self.arrow = arrow
+        arrow.setFixedWidth(32)
         arrow_layout = QHBoxLayout(self)
-        arrow_layout.setContentsMargins(0, 0, 4, 0)
-        arrow_layout.addStretch()
+        arrow_layout.setContentsMargins(0, 0, 0, 0)
         arrow_layout.addWidget(arrow)
+        self.setFixedSize(32, 32)
         self.currentIndexChanged.connect(self.updateGeometry)
         self.activated.connect(lambda index: self.model_selected.emit(self.itemData(index) or ""))
 
-    def enterEvent(self, event):
-        self.arrow.show()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        if not self.view().isVisible():
-            self.arrow.hide()
-        super().leaveEvent(event)
-
-    def hidePopup(self):
-        super().hidePopup()
-        self.arrow.setVisible(self.underMouse())
-
     def sizeHint(self):
-        option = QStyleOptionComboBox()
-        self.initStyleOption(option)
-        metrics = self.fontMetrics()
-        return self.style().sizeFromContents(
-            QStyle.ContentsType.CT_ComboBox, option,
-            QSize(metrics.horizontalAdvance(self.currentText()), metrics.height()), self)
+        return QSize(32, 32)
 
     def minimumSizeHint(self):
         return self.sizeHint()
@@ -230,18 +260,27 @@ class ModelSelector(QComboBox):
             shift = round(target - frame.top() - height / popup.devicePixelRatioF())
         return shift
 
+    def _popup_shift_x(self, popup):
+        proxy = popup.graphicsProxyWidget()
+        if proxy is not None:
+            right = self.mapTo(self.window(), QPoint(self.width(), 0)).x()
+            return round(right - proxy.x() - popup.width())
+        right = self.mapToGlobal(QPoint(self.width(), 0)).x()
+        return right - (popup.frameGeometry().right() + 1)
+
     def _anchor_popup(self, popup):
         if self.mapToGlobal(QPoint(0, 0)).y() <= self.screen().availableGeometry().top():
             return
         for _ in range(4):
             shift = self._popup_shift(popup)
-            if not shift:
+            shift_x = self._popup_shift_x(popup)
+            if not shift and not shift_x:
                 break
             proxy = popup.graphicsProxyWidget()
             if proxy is not None:
-                proxy.moveBy(0, shift)
+                proxy.moveBy(shift_x, shift)
             else:
-                popup.move(popup.x(), popup.y() + shift)
+                popup.move(popup.x() + shift_x, popup.y() + shift)
 
     def eventFilter(self, watched, event):
         if (watched is self.view().window() and watched.isVisible()
@@ -254,7 +293,12 @@ class PrivacyIndicator(QPushButton):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("privacyIndicator")
-        self.setText(tr("status.private"))
+        self.setToolTip(tr("status.private"))
+        self.setAccessibleName(tr("status.private"))
+        self.setIconSize(QSize(18, 18))
+        self.setFixedSize(32, 32)
+        self.apply_theme()
+        on_theme_changed(self.apply_theme)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(
@@ -263,6 +307,9 @@ class PrivacyIndicator(QPushButton):
         )
 
         self.hide()
+
+    def apply_theme(self, *_):
+        self.setIcon(line_icon(_draw_lock, "private_indicator", "private_indicator"))
 
     def private_toggle(self, worker):
         worker.session.private = False
@@ -280,16 +327,9 @@ class PermissionSelector(QToolButton):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.mode = PermissionMode.ASK
-        self.arrow = QLabel("", self)
-        self.arrow.setObjectName("languageDropdownArrow")
-        self.arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.arrow.setFixedWidth(24)
-        self.arrow.hide()
-        arrow_layout = QHBoxLayout(self)
-        arrow_layout.setContentsMargins(0, 0, 4, 0)
-        arrow_layout.addStretch()
-        arrow_layout.addWidget(self.arrow)
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.setIconSize(QSize(18, 18))
+        self.setFixedSize(32, 32)
         self.options = QFrame(self, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
                               | Qt.WindowType.NoDropShadowWindowHint)
         self.options.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -313,7 +353,12 @@ class PermissionSelector(QToolButton):
             track_layout.addWidget(button)
         self.group.buttonClicked.connect(self._select)
         self.clicked.connect(self.show_options)
+        self.apply_theme()
+        on_theme_changed(self.apply_theme)
         self.set_mode(self.mode)
+
+    def apply_theme(self, *_):
+        self.setIcon(line_icon(_draw_shield, "text_muted", "text"))
 
     def set_mode(self, mode):
         self.mode = PermissionMode(mode)
@@ -322,19 +367,9 @@ class PermissionSelector(QToolButton):
         self.refresh_language()
 
     def refresh_language(self):
-        self.setText(f" {tr('ui.permissions')} · {self.mode.name} ")
-        self.setToolTip(tr("ui.permissions_hint"))
+        self.setToolTip(f"{tr('ui.permissions')} · {self.mode.name}\n{tr('ui.permissions_hint')}")
         self.setAccessibleName(tr("ui.permissions"))
         self.updateGeometry()
-
-    def enterEvent(self, event):
-        self.arrow.show()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        if not self.options.isVisible():
-            self.arrow.hide()
-        super().leaveEvent(event)
 
     def show_options(self):
         self.options.adjustSize()
@@ -345,7 +380,6 @@ class PermissionSelector(QToolButton):
 
     def _select(self, button):
         self.options.hide()
-        self.arrow.setVisible(self.underMouse())
         mode = PermissionMode(button.property("mode"))
         if mode is not self.mode:
             self.set_mode(mode)
