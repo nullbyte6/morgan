@@ -64,7 +64,9 @@ def _turn():
 @_logged
 def remember(content: str, category: Category = "fact", key: str | None = None,
              memory_id: str | None = None, expires_at: str | None = None, pinned: bool = False) -> dict:
-    """Store explicitly requested durable information. Reuse key to supersede a preference;
+    """Store explicitly requested durable information. Write content in the third person about the
+    user, naming them, never as I, me or my: "Diego has a Golden Retriever named Rudiger", not "My dog
+    is Rudiger". Reuse key to supersede a preference;
     pass memory_id to update that exact memory. Never store credentials or inferred facts.
     pinned true keeps it always in context, for requests such as "always remember that ...".
     """

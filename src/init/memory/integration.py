@@ -26,6 +26,7 @@ import zipfile
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import lru_cache
+from getpass import getuser
 from pathlib import Path
 
 from .service import MemoryService
@@ -183,12 +184,18 @@ def memory_instructions():
     turn = active_memory.get()
     if turn.private or turn.service is None:
         return "Persistent memory is unavailable for this turn. Do not claim to store or retrieve memories."
+    user = getuser().capitalize()
     policy = (
         "The active conversation history is the authoritative context for the current task. "
         "Persistent memory is separate supplementary evidence: never use it to replace, reconstruct, "
         "reinterpret, or override an active request or its tool results. "
         "Use remember only for an explicit current-user request to store or update durable information; "
-        "never consolidate ordinary conversation automatically. When the user asks to remember, update, "
+        "never consolidate ordinary conversation automatically. "
+        f"Write the content of each memory in the third person about the user, whose name is {user}, never in "
+        f"the first person: \"{user} has a Golden Retriever named Rudiger\", not \"My dog is Rudiger\", and "
+        f"\"{user} prefers answers in Spanish\", not \"I prefer Spanish\". Replace I, me, my and mine with the "
+        "user's name, keep the user's language and keep each memory a self-contained statement. "
+        "When the user asks to remember, update, "
         "forget or pin something, in any wording or language, call the matching tool in that same turn "
         "before replying, and never answer as if it were done without calling it. "
         "Reuse a semantic key such as response_language "
@@ -219,8 +226,9 @@ def memory_instructions():
         return policy
     return (policy + " The confirmed memories below are already stored about the user; use them to answer "
             "personal questions directly, without calling recall, but never to override the current request. "
-            "Memories are written from the user's point of view, often in the user's own words: first-person "
-            "words such as I, me, my or mine in a memory refer to the user, never to you. When using a memory, "
-            "address the user in the second person, so a memory saying \"My mother's name is Ana\" answers "
-            "\"What's my mother's name?\" with \"Your mother's name is Ana\", never \"My mother's name is Ana\".\n"
+            "Memories are written in the third person about the user, but older ones may be in the user's own "
+            "words: first-person words such as I, me, my or mine in a memory refer to the user, never to you. "
+            "When using a memory, address the user in the second person, so a memory saying \"Diego's mother is "
+            "named Ana\" or \"My mother's name is Ana\" answers \"What's my mother's name?\" with \"Your mother's "
+            "name is Ana\", never \"My mother's name is Ana\".\n"
             + context)
