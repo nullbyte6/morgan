@@ -5,16 +5,21 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.4-beta (2026-10-04)
 
 - Add a soft glow around both rings of the orb
+- Add compact always-on-top overlay that replaces the floating mascot while the main window is closed, a narrow composer with a send button and live waveform that opens at the bottom right of the screen, can be dragged without leaving the screen and restores the main window on double click
 - Add dimmed resting state to the working directory button in the indicator row, which returns to full color while the mouse is over the composer
 - Add per-voice reference transcripts, a text file beside each voice's recorded clip, so every reference text matches what is said in its clip
 - Add response timer that slides in from the left of the indicator row only while a response is running and disappears when it ends, instead of always showing 0s
+- Fix the input box changing height while recording in the main window and the compact overlay, by sizing the waveform to the same height as the text input
 - Fix the subtitles under the main Orb moving it up and down, by giving them a fixed three-line area where lines slide up on their own and wrap narrower to show more lines
 - Update .gitignore to allow the voice transcript text files
+- Update audio visualizer to minimalist live waveform bars
 - Update composer to be narrower, at 45 percent of the window width
 - Update input bar to hold the send button inside it as a 36 pixel circle, 10% smaller than before, with an even gap on every side, and the plus button centered vertically so both stay aligned when the input grows
+- Update input placeholder to "Ask" followed by the assistant name, in every interface language, replacing "Write a message..." and the correction prompt shown while a response is running
 - Update main window to a cleaner layout, with the panel header no longer repeating the Morgan name and version while only one session is open, the blue panel frame shown only when more than one workspace is open, and the timer, working directory, permission and model controls without outlines
 - Update model, permission and private indicators to icon-only buttons, a chevron that opens the model list anchored to its right edge with all four corners rounded, a shield for the permission mode and a green lock that shows only while private mode is on, with a soft highlight on hover that the working directory button shares
 - Update search icon in the panel header to be dimmed until hovered
+- Update startup to open the main window maximized, with the floating mascot only available through Ctrl+Shift+M
 - Update the CosyVoice instruction for non-default languages to leave out the language, accent and dialect, so the accent follows the spoken text instead of the hardcoded European Spanish, Simplified Chinese and Brazilian Portuguese names
 - Update the MORGAN Home theme from blues and whites to a dark theme with a black background, white text and outlines and the blue accent, with the orb keeping its tones and defaulting to white to contrast with the background
 - Update the Now playing summary to open in its own Summary panel below the song panel, to no longer greet or introduce Morgan, and the playback area to sit higher
