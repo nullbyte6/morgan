@@ -126,6 +126,7 @@ register("kill_self refresh empty_recycle_bin kill_process shutdown_computer can
 register("run_quick_command", ToolSpec(True, "system", followup_policy=quick_command_followup,
                                       actions_policy=quick_command_actions))
 register("execute_command", ToolSpec(True, "system", verification_capable=True))
+register("delegate_coding", ToolSpec(True, "coding", verification_capable=True))
 register("get_email_draft read_emails", ToolSpec(False, "email"))
 register("draft_email edit_email_draft send_email_draft send_email delete_email", ToolSpec(True, "email"))
 register("send_message", ToolSpec(True, "messages"))

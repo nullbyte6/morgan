@@ -58,6 +58,7 @@ DEFAULTS = {
     "attachments": dict(DEFAULT_LIMITS),
     "lang": "spanish",
     "model": "",
+    "coding_model": "",
     "keep_alive": "24h",
     "context_length": 32768,
     "temperature": 0.2,
@@ -255,7 +256,7 @@ def validate_config(config):
         result["theme"] = DEFAULTS["theme"]
     if result["lang"] not in LANGUAGES:
         raise ValueError(tr('config.lang_must_be_english_or_spanish'))
-    for key in ("model", "message_service", "whatsapp_phone_number_id",
+    for key in ("model", "coding_model", "message_service", "whatsapp_phone_number_id",
                 "whatsapp_api_version", "twilio_account_sid",
                 "twilio_auth_token", "twilio_from_number", "email_provider",
                 "email_address", "email_password", "email_smtp_host",

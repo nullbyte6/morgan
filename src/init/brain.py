@@ -173,6 +173,12 @@ def get_selected_model(models: list[str] | None = None) -> str:
     return models[0] if models else default
 
 
+def get_coding_model() -> str:
+    """Resolve the model used for delegated coding: user setting, then the developer default, then the main model."""
+    configured = load_config()["coding_model"] or load_dev_file()["coding_model"]
+    return _tagged_model(configured) if configured else get_selected_model()
+
+
 def keep_model_loaded() -> None:
     """Extend Ollama's model lifetime without delaying the next prompt."""
     model = get_assistant().MODEL_NAME
