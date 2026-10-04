@@ -158,10 +158,11 @@ def seed_user_themes() -> Path:
     manifest = directory / SEED_MANIFEST
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        if manifest.is_file():
+        existing = {path.name for path in directory.glob("*.json")}
+        if manifest.is_file() and existing:
             seeded = set(manifest.read_text(encoding="utf-8").split())
         else:
-            seeded = {path.name for path in directory.glob("*.json")}
+            seeded = existing
         pending = [source for source in sorted(THEMES_DIR.glob("*.json")) if source.name not in seeded]
         for source in pending:
             target = directory / source.name
