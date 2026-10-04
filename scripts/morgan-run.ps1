@@ -18,8 +18,6 @@ $env:PYTHONPATH = @(
     (Join-Path $root "src\third_party\Matcha-TTS")
 ) -join [IO.Path]::PathSeparator
 
-$env:ASSISTANT_EXTERNAL_CONSOLE = "1"
-
 Set-Location -LiteralPath $root
 
 & $services -NoConsole

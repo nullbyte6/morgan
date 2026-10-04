@@ -53,7 +53,6 @@ PY
     --add-data "$root/dev/core.json:dev" \
     --add-data "$root/src/init:src/init" \
     --add-data "$root/src/voices:src/voices" \
-    --collect-data pyfiglet \
     --collect-data faster_whisper \
     --recursive-copy-metadata pydantic-ai-slim \
     --exclude-module PyQt5 --exclude-module PyQt6 --exclude-module PySide2 \

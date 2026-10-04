@@ -185,7 +185,6 @@ pydantic-evals==2.44.0
 pydantic-graph==2.44.0
 pydantic-settings==2.15.0
 pydub==0.25.1
-pyfiglet==1.0.4
 Pygments==2.21.0
 pyinstaller
 PyJWT==2.14.0

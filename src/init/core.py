@@ -32,7 +32,6 @@ from pydantic_ai import Agent, Tool
 
 from src.init import latency
 from src.init.config import load_config
-from src.init.console import DebugConsole
 from src.init.identity import get_assistant_gender_instruction, get_assistant_name
 from src.init.voice_client import VoiceClient
 from src.platforms import current_platform
@@ -133,7 +132,6 @@ class Assistant:
     voice_service_required: bool = True
     _instance = None
     _instance_lock = threading.Lock()
-    debug_console = None
 
     def __new__(cls):
         with cls._instance_lock:
@@ -147,7 +145,6 @@ class Assistant:
                 instance._active_cancellation_token = None
                 instance._active_task_controller = None
                 instance.voice = None
-                instance.debug_console = None
                 instance._reload_lock = threading.Lock()
                 instance._speech_lock = threading.Lock()
                 instance._speech_owner = None
@@ -205,11 +202,6 @@ class Assistant:
         lines = (line.strip().strip("\"'“”«»*").strip() for line in str(text).splitlines())
         return next((line for line in lines if line), "")[:300]
 
-
-    @property
-    def banner(self):
-        from pyfiglet import figlet_format
-        return figlet_format(self.name, font="4max", width=128)
 
     def _ensure_services(self):
         platform = current_platform()
@@ -1299,13 +1291,3 @@ class Assistant:
         if token is not None:
             token.cancel()
 
-    def start_debug_console(self):
-        from src.init.lang import tr
-        try:
-            self.debug_console = DebugConsole()
-            self.debug_console.start()
-            self.debug_console.configure_logging()
-            logging.getLogger("assistant").info(tr('agent.assistant_is_awake'))
-
-        except (EOFError, KeyboardInterrupt):
-            pass

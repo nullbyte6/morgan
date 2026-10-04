@@ -576,7 +576,6 @@
   "activity.permission": "権限を待っています",
   "activity.waiting_user": "入力を待っています",
   "activity.waiting": "依存関係を待っています",
-  "agent.assistant_is_awake": "{assistant_name}が起動しました。",
   "task_control.stalled_warning": "新たに検証された証拠も基準の進捗もないまま、リクエストが繰り返されたため、タスクを一時停止しました。タスクと証拠は保存されています。方法を変えてから再開してください。",
   "task_control.output_recovery_exhausted": "モデルの出力の復旧で、安全な再試行を3回使い切りました。",
   "task_control.output_recovery_resume": "保存されたタスクを再開して、その出力を修復し、送信してください。",
