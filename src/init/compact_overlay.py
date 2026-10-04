@@ -18,7 +18,9 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Always-on-top compact composer shown while the main window is closed."""
 
-from PySide6.QtCore import QEasingCurve, QRect, Qt, QVariantAnimation
+import time
+
+from PySide6.QtCore import QEasingCurve, QRect, Qt, QVariantAnimation, Signal
 from PySide6.QtGui import QGuiApplication, QRegion
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QPushButton, QSizePolicy,
                                QVBoxLayout, QWidget)
@@ -28,7 +30,7 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.chat import ChatInput
 from src.init.orb import Orb
 
-WIDTH = 360
+WIDTH = 324
 MARGIN = 0
 ORB_SIZE = 40
 BOTTOM_GAP = 48
@@ -36,6 +38,8 @@ DURATION = 260
 
 
 class CompactOverlay(QWidget):
+    restore_requested = Signal()
+
     def __init__(self):
         super().__init__(None, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setObjectName("compactOverlay")
@@ -43,6 +47,7 @@ class CompactOverlay(QWidget):
         self._reveal = 1.0
         self._closing = False
         self._placed = False
+        self._last_press = 0
 
         self.input = ChatInput()
         self.input.file_tags_enabled = False
@@ -160,8 +165,23 @@ class CompactOverlay(QWidget):
         if self._reveal < 1.0:
             self._set_reveal(self._reveal)
 
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._last_press = 0
+            self.restore_requested.emit()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.windowHandle() is not None:
+            now = time.monotonic() * 1000
+            if now - self._last_press <= QGuiApplication.styleHints().mouseDoubleClickInterval():
+                self._last_press = 0
+                self.restore_requested.emit()
+                event.accept()
+                return
+            self._last_press = now
             self.windowHandle().startSystemMove()
             event.accept()
             return

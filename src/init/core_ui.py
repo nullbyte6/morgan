@@ -210,6 +210,7 @@ class AssistantWindow(DesktopWindow):
         self.overlay.input.textChanged.connect(self.on_overlay_text_changed)
         self.overlay.input.submitted.connect(lambda: self.send_message())
         self.overlay.send.clicked.connect(lambda: self.on_send_clicked())
+        self.overlay.restore_requested.connect(self.restore_window)
         self.subtitles_enabled = subtitles_enabled
 
         self.recording = False
