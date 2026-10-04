@@ -65,6 +65,10 @@ Notifications, Me and Search straight away, unfolding the sidebar when needed; p
 same one again shuts the sections. In the editor, `Ctrl + S` saves the current file instead
 of opening Search. Nova opens on Home.
 
+When the main panel is too narrow to hold the sections and the orb side by side, as when a
+second workspace takes half of the window, the sections float over the orb and the input
+instead of squeezing them. Fold the sidebar with the star or `Ctrl + B` to see them again.
+
 Home, Notifications and Me each open a grid of square tiles, one per section, with the
 section's icon and its name below. The grid has up to three columns and reflows as the
 panel is resized, to two and then one column with scrolling when it gets narrow. Click a
