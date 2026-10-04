@@ -23,7 +23,6 @@ import re
 import subprocess
 import sys
 import threading
-import time
 import weakref
 from contextlib import nullcontext
 from datetime import datetime
@@ -140,7 +139,6 @@ class Assistant:
         with cls._instance_lock:
             if cls._instance is None:
                 instance = super().__new__(cls)
-                instance.terminal_ui = None
                 instance.agent = None
                 instance.provider = None
                 instance.audio_model = None
@@ -157,8 +155,6 @@ class Assistant:
                 instance._loop_models_lock = threading.Lock()
                 instance._audio_model_lock = threading.Lock()
                 instance.username = getuser().capitalize()
-                instance.typewriter_delay_seconds = float(
-                    os.environ.get("TYPEWRITER_DELAY", "0"))
                 cls._instance = instance
             return cls._instance
 
@@ -330,10 +326,7 @@ class Assistant:
         from src.init.tools import TOOLS
 
         if self.voice is None:
-            self.voice = VoiceClient(audio_callback=(
-                    self.terminal_ui.update_audio_levels
-                    if self.terminal_ui is not None
-                    else None))
+            self.voice = VoiceClient()
 
         self.selected_model = get_selected_model()
         self.MODEL_NAME = self.selected_model
@@ -500,45 +493,7 @@ class Assistant:
             return summary
 
     def suspend_terminal(self):
-        if self.terminal_ui is None:
-            return nullcontext()
-        return self.terminal_ui.suspend()
-
-    def stream(self, chunks, session=None) -> str:
-        """Consume assistant output without rendering it in TerminalUI."""
-        from src.init.output import chunks_group
-        from src.init.colors import ASSISTANT_COLOR, RESET_COLOR
-
-        source = [chunks] if isinstance(chunks, str) else chunks
-        displayed = []
-
-        if self.terminal_ui is not None:
-            for chunk in source:
-                displayed.append(chunk)
-        else:
-            sys.stdout.write(ASSISTANT_COLOR)
-
-            for chunk in chunks_group(source, color=True):
-                displayed.append(chunk)
-
-                if self.typewriter_delay_seconds:
-                    for character in chunk:
-                        sys.stdout.write(character)
-                        sys.stdout.flush()
-                        time.sleep(self.typewriter_delay_seconds)
-                else:
-                    sys.stdout.write(chunk)
-                    sys.stdout.flush()
-
-            sys.stdout.write(f"{RESET_COLOR}\n")
-            sys.stdout.flush()
-
-        reply = "".join(displayed)
-
-        if session is not None:
-            session.write(self.name, reply)
-
-        return reply
+        return nullcontext()
 
     def speak(self, chunks) -> str:
         """Stream LLM output invisibly and feed complete phrases to TTS."""
@@ -549,21 +504,12 @@ class Assistant:
         for chunk in chunks:
             if not chunk:
                 continue
-            if not reply and self.terminal_ui is not None:
-                self.terminal_ui.set_thinking(False)
             reply.append(chunk)
             for phrase in buffer.feed(chunk):
                 self.voice.enqueue(phrase)
         for phrase in buffer.finish():
             self.voice.enqueue(phrase)
         return "".join(reply)
-
-    def printlns(self, content: str) -> None:
-        if self.terminal_ui is not None:
-            with self.terminal_ui.suspend():
-                self.debug_console.print_to_ui(content)
-        else:
-            print(content)
 
     def build_user_prompt(self) -> str:
         """Show the current location and live Git branch,
@@ -605,11 +551,6 @@ class Assistant:
 
         if prompt is None:
             prompt = self.build_user_prompt()
-
-        if self.terminal_ui is not None:
-            return self.terminal_ui.read_input(
-                prompt=prompt,
-                placeholder=placeholder)
 
         sys.stdout.write(f"{RESET_COLOR}{prompt}{USER_COLOR}")
         sys.stdout.flush()
