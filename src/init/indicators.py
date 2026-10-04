@@ -131,12 +131,27 @@ class ModelSelector(QComboBox):
         arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         arrow.setFixedWidth(24)
+        arrow.hide()
+        self.arrow = arrow
         arrow_layout = QHBoxLayout(self)
         arrow_layout.setContentsMargins(0, 0, 4, 0)
         arrow_layout.addStretch()
         arrow_layout.addWidget(arrow)
         self.currentIndexChanged.connect(self.updateGeometry)
         self.activated.connect(lambda index: self.model_selected.emit(self.itemData(index) or ""))
+
+    def enterEvent(self, event):
+        self.arrow.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if not self.view().isVisible():
+            self.arrow.hide()
+        super().leaveEvent(event)
+
+    def hidePopup(self):
+        super().hidePopup()
+        self.arrow.setVisible(self.underMouse())
 
     def sizeHint(self):
         option = QStyleOptionComboBox()
@@ -265,6 +280,16 @@ class PermissionSelector(QToolButton):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.mode = PermissionMode.ASK
+        self.arrow = QLabel("", self)
+        self.arrow.setObjectName("languageDropdownArrow")
+        self.arrow.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.arrow.setFixedWidth(24)
+        self.arrow.hide()
+        arrow_layout = QHBoxLayout(self)
+        arrow_layout.setContentsMargins(0, 0, 4, 0)
+        arrow_layout.addStretch()
+        arrow_layout.addWidget(self.arrow)
         self.options = QFrame(self, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
                               | Qt.WindowType.NoDropShadowWindowHint)
         self.options.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -297,10 +322,19 @@ class PermissionSelector(QToolButton):
         self.refresh_language()
 
     def refresh_language(self):
-        self.setText(f" {tr('ui.permissions')} · {self.mode.name}  ")
+        self.setText(f" {tr('ui.permissions')} · {self.mode.name} ")
         self.setToolTip(tr("ui.permissions_hint"))
         self.setAccessibleName(tr("ui.permissions"))
         self.updateGeometry()
+
+    def enterEvent(self, event):
+        self.arrow.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if not self.options.isVisible():
+            self.arrow.hide()
+        super().leaveEvent(event)
 
     def show_options(self):
         self.options.adjustSize()
@@ -311,7 +345,31 @@ class PermissionSelector(QToolButton):
 
     def _select(self, button):
         self.options.hide()
+        self.arrow.setVisible(self.underMouse())
         mode = PermissionMode(button.property("mode"))
         if mode is not self.mode:
             self.set_mode(mode)
             self.mode_changed.emit(mode.value)
+
+
+class IndicatorFade(QObject):
+    def __init__(self, row, composer):
+        super().__init__(row)
+        self._row = row
+        composer.installEventFilter(self)
+        self._composer = composer
+        self._set_resting(True)
+
+    def eventFilter(self, watched, event):
+        if watched is self._composer:
+            if event.type() == QEvent.Type.Enter:
+                self._set_resting(False)
+            elif event.type() == QEvent.Type.Leave:
+                self._set_resting(True)
+        return False
+
+    def _set_resting(self, resting):
+        self._row.setProperty("resting", resting)
+        for widget in (self._row, *self._row.findChildren(QWidget)):
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)

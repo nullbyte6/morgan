@@ -53,8 +53,8 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.core import Assistant
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
-from src.init.indicators import (GitBranchIndicator, ModelSelector, PermissionSelector,
-                                 PrivacyIndicator, WorkingDirectory)
+from src.init.indicators import (GitBranchIndicator, IndicatorFade, ModelSelector,
+                                 PermissionSelector, PrivacyIndicator, WorkingDirectory)
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
 from src.init.nova import formatting as nova_formatting
@@ -473,7 +473,7 @@ class AssistantWindow(DesktopWindow):
         ui.input.submitted.connect(lambda: self.send_message(session))
         input_layout.addWidget(ui.input, 1, Qt.AlignVCenter)
         input_layout.addWidget(ui.input_meter)
-        input_layout.addWidget(ui.attach, 0, Qt.AlignBottom)
+        input_layout.addWidget(ui.attach, 0, Qt.AlignVCenter)
         input_layout.addWidget(ui.send, 0, Qt.AlignVCenter)
 
         input_column = QVBoxLayout()
@@ -493,6 +493,8 @@ class AssistantWindow(DesktopWindow):
         ui.response_timer_display.setObjectName("responseTimer")
         ui.response_timer_display.setAlignment(Qt.AlignCenter)
         ui.response_timer_display.setText(session.response_timer_text)
+        ui.response_timer_display.setProperty("active", session.response_timer_running)
+        ui.response_timer_display.setVisible(session.response_timer_running)
         ui.response_timer_display.setSizePolicy(
             QSizePolicy.Fixed, QSizePolicy.Fixed)
         indicator_row.addWidget(ui.response_timer_display)
@@ -503,10 +505,12 @@ class AssistantWindow(DesktopWindow):
         indicator_row.addWidget(ui.permission_selector)
         indicator_row.addWidget(ui.model_selector)
         ui.indicator_row = QWidget()
+        ui.indicator_row.setObjectName("indicatorRow")
         ui.indicator_row.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         ui.indicator_row.setLayout(indicator_row)
         ui.indicator_row.setMaximumHeight(0)
+        ui.indicator_fade = IndicatorFade(ui.indicator_row, ui.composer_widget)
         input_column.addWidget(ui.indicator_row)
         input_row = QHBoxLayout()
         input_row.setContentsMargins(0, 0, 0, 0)
@@ -631,8 +635,35 @@ class AssistantWindow(DesktopWindow):
             if session.response_timer_running:
                 session.response_timer_text = self._response_timer_text(session)
             session.ui.response_timer_display.setText(session.response_timer_text)
+            self._sync_response_timer_visibility(session)
         if not any(item.response_timer_running for item in self.sessions):
             self.response_timer_tick.stop()
+
+    @staticmethod
+    def _sync_response_timer_visibility(session):
+        ui = session.ui
+        label = ui.response_timer_display
+        active = session.response_timer_running
+        if label.property("active") == active:
+            return
+        label.setProperty("active", active)
+        animation = getattr(ui, "response_timer_animation", None)
+        if animation is not None:
+            animation.stop()
+        if not active:
+            label.setMaximumWidth(16777215)
+            label.hide()
+            return
+        label.setMaximumWidth(0)
+        label.show()
+        animation = QPropertyAnimation(label, b"maximumWidth", label)
+        animation.setDuration(220)
+        animation.setEasingCurve(QEasingCurve.OutCubic)
+        animation.setStartValue(0)
+        animation.setEndValue(label.sizeHint().width())
+        animation.finished.connect(lambda: label.setMaximumWidth(16777215))
+        ui.response_timer_animation = animation
+        animation.start()
 
     def _views(self):
         return [session for session in self.sessions if session.ui is not None]
