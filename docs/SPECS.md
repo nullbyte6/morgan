@@ -1,29 +1,35 @@
 ## AI Model Requirements
 
-Morgan uses Gemma 4 E4B as its single local multimodal model through Ollama. It
-is both the main model and the audio model, so only one model is loaded.
+Morgan uses two local models through Ollama: a light assistant model that stays
+loaded for conversation, web search and PC actions, and a larger coding model
+that the assistant hands real coding jobs to with the `delegate_coding` tool.
+Voice input is transcribed locally with Whisper, so neither model needs audio
+input.
 
-### Model
+### Models
 
-- Model: Gemma 4 E4B (`gemma4:e4b`)
-- Architecture: Gemma 4
-- Parameters: ~7.5B
-- Quantization (Ollama default): Q4_K_M
-- Model size: ~6.6 GB
-- Native context: 131,072 tokens
-- Modalities: Text, image and audio
-- Capabilities: Vision, audio input, tool calling, reasoning and agentic workflows
+| Role | Model | Size | Native context | Modalities |
+| --- | --- | --- | --- | --- |
+| Assistant | `qwen3.5:4b` | ~3.4 GB | 262,144 tokens | Text and image |
+| Coding | `qwen3.5:9b` | ~6.6 GB | 262,144 tokens | Text and image |
+
+Both models support tool calling. The assistant is kept loaded with the
+`keep_alive` setting. The coding model uses Ollama's default lifetime, so it is
+unloaded a few minutes after the last coding job. The `base_model_name` and
+`coding_model` entries of `dev/core.json` set the defaults, and the `model` and
+`coding_model` settings of the user configuration override them; an empty
+`coding_model` falls back to the assistant model.
 
 ### Storage
 
-- Minimum free disk space: ~10 GB for Gemma 4 E4B and its model data
-- Recommended free disk space: 15+ GB to leave room for Ollama runtime data, updates and additional model data
+- Minimum free disk space: ~15 GB for both models and their model data
+- Recommended free disk space: 20+ GB to leave room for Ollama runtime data, updates and additional model data
 
 ### Memory
 
-Gemma does not define fixed minimum CPU, RAM or VRAM requirements for running
-Gemma 4 E4B through Ollama. Actual memory requirements depend on quantization,
-context length, KV cache configuration, multimodal inputs and hardware acceleration.
+The models do not define fixed minimum CPU, RAM or VRAM requirements for running
+through Ollama. Actual memory requirements depend on quantization, context
+length, KV cache configuration, multimodal inputs and hardware acceleration.
 
 #### Practical requirements for Morgan
 
@@ -49,15 +55,13 @@ Ideal:
 - GPU: High-performance GPU supported by Ollama
 - Storage: NVMe SSD
 
-The Q4_K_M model occupies approximately 6.6 GB, leaving substantial VRAM
-headroom on a 16 GB GPU for the context cache, multimodal processing and
-other runtime allocations. A 16 GB GPU can therefore run Gemma 4 E4B fully
-GPU-accelerated with Morgan's recommended 32,768-token context on supported
-hardware.
+The assistant and coding models occupy approximately 10 GB together, so a 16 GB
+GPU can keep both loaded with Morgan's recommended 32,768-token context while
+the coding model is in use. On a GPU with 8 to 12 GB of VRAM, Ollama swaps the
+two models, which adds a few seconds to the first reply after a coding job.
 
-Gemma 4 E4B provides native text, image and audio processing, so Morgan does not
-require a separate vision-language or audio model when multimodal input is
-routed directly to the primary model. Morgan does not create derived Ollama
+Both models accept images, so Morgan does not require a separate
+vision-language model. Morgan does not create derived Ollama
 models; when it starts Ollama it sets `OLLAMA_CONTEXT_LENGTH` to the
 `context_length` of the user configuration, which Settings edits (32,768 by
 default). An Ollama service that was already running

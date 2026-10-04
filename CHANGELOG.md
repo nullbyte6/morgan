@@ -5,6 +5,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.4-beta (2026-10-04)
 
 - Add a soft glow around both rings of the orb
+- Add coding model and delegate_coding tool, a separate model (qwen3.5:9b by default, set with coding_model in the settings or dev/core.json) that the assistant hands real coding jobs to, with file, command and Git diff tools, so it is loaded by Ollama only while they run and falls back to the assistant model when none is set
 - Add compact always-on-top overlay that replaces the floating mascot while the main window is closed, a narrow composer with a send button and live waveform that opens at the bottom right of the screen, can be dragged without leaving the screen and restores the main window on double click
 - Add dimmed resting state to the working directory button in the indicator row, which returns to full color while the mouse is over the composer
 - Add Terminal shell setting on Windows that switches new built-in terminals and the default of the execute_command tool between PowerShell and Git Bash, found from the Git for Windows install rather than the WSL bash.exe, and instructions that tell the model to ask for bash for text, file, git and pipeline work and PowerShell for Windows administration, with its text in every interface language
@@ -26,6 +27,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Update .gitignore to allow the voice transcript text files
 - Update audio visualizer to minimalist live waveform bars
 - Update composer to be narrower, at 45 percent of the window width
+- Update default assistant model and installer to qwen3.5:4b plus the qwen3.5:9b coding model instead of a single gemma4:e4b, with the README and specs describing both
 - Update input bar to hold the send button inside it as a 36 pixel circle, 10% smaller than before, with an even gap on every side, and the plus button centered vertically so both stay aligned when the input grows
 - Update input placeholder to "Ask" followed by the assistant name, in every interface language, replacing "Write a message..." and the correction prompt shown while a response is running
 - Update Diary icon in Nova to a scroll, so it is not confused with the Journal, which takes the Diary's previous notebook icon
