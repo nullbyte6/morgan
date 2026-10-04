@@ -60,8 +60,6 @@ class AssistantWorker(SessionRunner, QObject):
     screenshot_requested = Signal(object)
     clipboard_requested = Signal(object)
     exit_requested = Signal()
-    model_changed = Signal(str)
-    model_failed = Signal(str)
 
     def __init__(self, greet=False, *, muted=False, session_key=None, primary=True):
         QObject.__init__(self)
@@ -71,10 +69,6 @@ class AssistantWorker(SessionRunner, QObject):
     @Slot()
     def initialize(self):
         super().initialize()
-
-    @Slot(str)
-    def select_model(self, model):
-        super().select_model(model)
 
     @Slot(int, object)
     def ask(self, turn_id, message):

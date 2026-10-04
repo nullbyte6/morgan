@@ -159,17 +159,13 @@ def main_models() -> list[str] | None:
 
 
 def get_selected_model(models: list[str] | None = None) -> str:
-    """Resolve the main model: user selection, then the configured default, then any installed main model."""
+    """Resolve the main model: the MODEL override, then the configured default, then any installed main model."""
     if MODEL_OVERRIDE:
         return MODEL_OVERRIDE
     default = _tagged_model(load_dev_file()["base_model_name"])
-    selected = _tagged_model(load_config()["model"] or default)
     models = main_models() if models is None else models
-    if models is None:
-        return selected
-    for candidate in (selected, default):
-        if candidate in models:
-            return candidate
+    if models is None or default in models:
+        return default
     return models[0] if models else default
 
 

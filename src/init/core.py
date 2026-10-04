@@ -432,27 +432,6 @@ class Assistant:
             if self._speech_owner is owner:
                 self._speech_owner = None
 
-    def select_model(self, model: str) -> str:
-        """Persist and apply a main model between turns, keeping the agent and task state."""
-        with self._reload_lock:
-            from src.init.brain import MODEL_OVERRIDE, main_models
-            from src.init.config import load_config, save_config
-            from src.init.lang import tr
-
-            if MODEL_OVERRIDE:
-                raise ValueError(tr("ui.model_locked"))
-            if model not in (main_models() or ()):
-                raise ValueError(tr("ui.model_unavailable", model=model))
-            config = load_config()
-            config["model"] = model
-            save_config(config)
-            self.selected_model = model
-            self.MODEL_NAME = model
-            if self.agent is not None:
-                self.model = self._main_model()
-                self.agent.model = self.model
-            return model
-
     def reload_source(self) -> str:
         """Reload source modules and rebuild the model and tools for next turn."""
         with self._reload_lock:

@@ -294,28 +294,9 @@ QToolButton#directory:pressed {
     color: @text;
 }
 
-QComboBox#modelSelector {
-    combobox-popup: 0;
-    background-color: transparent;
-    border: none;
-    border-radius: 16px;
-    color: transparent;
-    padding: 0;
-}
-
-QComboBox#modelSelector:hover,
-QComboBox#modelSelector:on {
-    background-color: @surface_raised;
-}
-
 QLabel#languageDropdownArrow {
     background: transparent;
     color: @text_muted;
-}
-
-QComboBox#modelSelector:hover QLabel#languageDropdownArrow,
-QComboBox#modelSelector:on QLabel#languageDropdownArrow {
-    color: @text;
 }
 
 QToolButton#permissionSelector {
@@ -454,8 +435,7 @@ QPushButton#removeMemoriesButton:focus {
 
 QComboBox#languageDropdown::drop-down,
 QComboBox#modelDropdown::drop-down,
-QComboBox#themeDropdown::drop-down,
-QComboBox#modelSelector::drop-down {
+QComboBox#themeDropdown::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
     width: 0;
@@ -465,8 +445,7 @@ QComboBox#modelSelector::drop-down {
 
 QComboBox#languageDropdown QAbstractItemView,
 QComboBox#modelDropdown QAbstractItemView,
-QComboBox#themeDropdown QAbstractItemView,
-QComboBox#modelSelector QAbstractItemView {
+QComboBox#themeDropdown QAbstractItemView {
     background-color: @surface;
     color: @text;
     border: 2px solid @border;
@@ -478,8 +457,7 @@ QComboBox#modelSelector QAbstractItemView {
 
 QComboBox#languageDropdown QAbstractItemView::item,
 QComboBox#modelDropdown QAbstractItemView::item,
-QComboBox#themeDropdown QAbstractItemView::item,
-QComboBox#modelSelector QAbstractItemView::item {
+QComboBox#themeDropdown QAbstractItemView::item {
     padding: 8px 12px;
     min-height: 24px;
 }
@@ -488,11 +466,6 @@ QComboBox#languageDropdown QAbstractItemView,
 QComboBox#modelDropdown QAbstractItemView,
 QComboBox#themeDropdown QAbstractItemView {
     font-size: 16px;
-}
-
-QComboBox#modelSelector QAbstractItemView {
-    font-size: 16px;
-    border-radius: 12px;
 }
 
 QComboBoxPrivateContainer {
@@ -523,11 +496,9 @@ QComboBox#themeDropdown QAbstractItemView {
 QComboBox#languageDropdown QAbstractItemView::item:hover,
 QComboBox#modelDropdown QAbstractItemView::item:hover,
 QComboBox#themeDropdown QAbstractItemView::item:hover,
-QComboBox#modelSelector QAbstractItemView::item:hover,
 QComboBox#languageDropdown QAbstractItemView::item:selected,
 QComboBox#modelDropdown QAbstractItemView::item:selected,
-QComboBox#themeDropdown QAbstractItemView::item:selected,
-QComboBox#modelSelector QAbstractItemView::item:selected {
+QComboBox#themeDropdown QAbstractItemView::item:selected {
     background-color: @surface_selected;
     color: @text;
 }

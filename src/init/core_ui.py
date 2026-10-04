@@ -54,7 +54,7 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.core import Assistant
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
-from src.init.indicators import (GitBranchIndicator, IndicatorFade, ModelSelector,
+from src.init.indicators import (GitBranchIndicator, IndicatorFade,
                                  PermissionSelector, PrivacyIndicator, WorkingDirectory)
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
@@ -95,7 +95,7 @@ WORKSPACE_VIEW_CONFIG = {
 from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
 from src.init.choice_dialog import ChoiceDialog, NEUTRAL_BUTTON
-from src.init.brain import MODEL_OVERRIDE, get_version, is_cloud_model, kill_self
+from src.init.brain import get_version, kill_self
 from src.init.config import DEFAULTS, load_dev_file, load_config, save_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
@@ -171,7 +171,6 @@ def waveform_icon(size: int = 28) -> QIcon:
 class AssistantWindow(DesktopWindow):
     """Assistant window class, not its brain, which is somewhere else"""
     MAX_SESSIONS = 2
-    model_request = Signal(str)
     reminder_answered = Signal(object, str)
     health_checked = Signal(object)
     updates_checked = Signal(object, object)
@@ -223,7 +222,6 @@ class AssistantWindow(DesktopWindow):
         self.voice_session = None
         self.closing_after_voice = False
         self.quitting = False
-        self.model_switching = False
         self.active_language = None
 
         self.assistant = Assistant()
@@ -422,8 +420,6 @@ class AssistantWindow(DesktopWindow):
         ui.directory_indicator = WorkingDirectory(self)
         ui.branch_indicator = GitBranchIndicator(self)
         ui.privacy_indicator = PrivacyIndicator(self)
-        ui.model_selector = ModelSelector(self)
-        ui.model_selector.model_selected.connect(self.request_model)
         ui.permission_selector = PermissionSelector(self)
         ui.permission_selector.set_mode(load_config()["permission_mode"])
         ui.permission_selector.mode_changed.connect(self.set_permission_mode)
@@ -507,9 +503,8 @@ class AssistantWindow(DesktopWindow):
         indicator_row.addWidget(ui.directory_indicator)
         indicator_row.addWidget(ui.branch_indicator)
         indicator_row.addWidget(ui.privacy_indicator)
-        indicator_row.addStretch()
         indicator_row.addWidget(ui.permission_selector)
-        indicator_row.addWidget(ui.model_selector)
+        indicator_row.addStretch()
         ui.indicator_row = QWidget()
         ui.indicator_row.setObjectName("indicatorRow")
         ui.indicator_row.setSizePolicy(
@@ -861,11 +856,8 @@ class AssistantWindow(DesktopWindow):
         worker = session.worker
         session.bind()
         if session.index == 0:
-            self.model_request.connect(worker.select_model)
             worker.screenshot_requested.connect(self.on_screenshot_requested)
             worker.clipboard_requested.connect(self.on_clipboard_requested)
-        worker.model_changed.connect(self.on_model_changed)
-        worker.model_failed.connect(self.on_model_failed)
         worker.exit_requested.connect(self.request_quit)
         session.worker_thread.start()
 
@@ -1514,11 +1506,6 @@ class AssistantWindow(DesktopWindow):
                     session.submitting is None and ui.attachment_tray.can_send)))
         editable = session.ready and session.submitting is None and not voice_active
         ui.attach.setEnabled(editable)
-        ui.model_selector.setEnabled(
-            editable and not any(item.busy for item in self.sessions)
-            and not self.model_switching and not MODEL_OVERRIDE)
-        ui.model_selector.setToolTip(tr("ui.model_locked" if MODEL_OVERRIDE else "ui.model_hint"))
-        ui.model_selector.setAccessibleName(tr("ui.model"))
         ui.attachment_tray.setEnabled(editable)
         ui.input.setEnabled(editable)
         ui.attach.setToolTip(tr("ui.attach_files"))
@@ -1623,51 +1610,10 @@ class AssistantWindow(DesktopWindow):
         self.set_status("", session)
         self.set_orbs_visual_state(Orb.State.IDLE, session)
         self.set_enabled(True)
-        session.ui.model_selector.refresh(self.assistant.selected_model)
         self._reveal_startup_controls(session)
 
         if self.isVisible() and session is self.session:
             session.ui.input.setFocus()
-
-    @Slot(str)
-    def request_model(self, model):
-        if (not model or model == self.assistant.selected_model
-                or any(session.busy for session in self.sessions) or self.model_switching):
-            self._set_model_selectors(self.assistant.selected_model)
-            return
-        if is_cloud_model(model):
-            def restore():
-                self._set_model_selectors(self.assistant.selected_model)
-
-            ChoiceDialog.of(self).ask(
-                tr("ui.model"), tr("ui.cloud_model_confirm", model=model),
-                [(tr("ui.cancel"), NEUTRAL_BUTTON, restore),
-                 (tr("command.yes"), NEUTRAL_BUTTON, lambda: self.switch_model(model))],
-                on_cancel=restore)
-            return
-        self.switch_model(model)
-
-    def switch_model(self, model):
-        self.model_switching = True
-        self.update_send_button()
-        self.model_request.emit(model)
-
-    def _set_model_selectors(self, model):
-        for session in self._views():
-            session.ui.model_selector.set_current(model)
-
-    @Slot(str)
-    def on_model_changed(self, model):
-        self.model_switching = False
-        self._set_model_selectors(model)
-        self.update_send_button()
-
-    @Slot(str)
-    def on_model_failed(self, error):
-        self.model_switching = False
-        self._set_model_selectors(self.assistant.selected_model)
-        self.update_send_button()
-        ChoiceDialog.of(self).notify(tr("ui.model"), error)
 
     def _reveal_startup_controls(self, session):
         """Slide the composer and subtitles into view after startup."""

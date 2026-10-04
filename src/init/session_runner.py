@@ -46,7 +46,7 @@ from src.init.utils import spectrum_levels
 class SessionRunner:
     """Owns the assistant session and reports progress through Event signals.
 
-    Interfaces call initialize, ask, select_model and shutdown from one worker
+    Interfaces call initialize, ask and shutdown from one worker
     thread, and interrupt or resolve_confirmation from any thread.
     """
     CONFIRMATION_TIMEOUT = 30
@@ -71,8 +71,6 @@ class SessionRunner:
     screenshot_requested = Event()
     clipboard_requested = Event()
     exit_requested = Event()
-    model_changed = Event()
-    model_failed = Event()
     _confirmation_ids = itertools.count(1)
 
     def __init__(self, greet=False, *, muted=False, session_key=None, primary=True):
@@ -136,13 +134,6 @@ class SessionRunner:
             self.muted = bool(muted)
             if self.assistant.voice is not None:
                 self.assistant.voice.set_muted(self.muted)
-
-    def select_model(self, model):
-        try:
-            self.model_changed.emit(self.assistant.select_model(model))
-        except Exception as error:
-            logging.getLogger("assistant.model").exception("Model selection failed")
-            self.model_failed.emit(str(error))
 
     def ask(self, turn_id, message):
         from src.init import brain
