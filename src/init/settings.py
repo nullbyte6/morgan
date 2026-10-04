@@ -34,6 +34,7 @@ from .indicators import PopupCorners
 from .lang import get_language, tr
 from .ollama_service import ollama_executable, restart_ollama
 from .theme import current_theme, discover_themes, on_theme_changed, seed_user_themes, select_theme
+from src.platforms import current_platform
 from .voice_profiles import available_voices, selected_voice, select_voice, VOICE_NAMES
 
 
@@ -312,6 +313,42 @@ class SettingsView(QWidget):
         language_row.addWidget(self.language_dropdown)
         layout.addLayout(language_row)
 
+        self.shell_label = QLabel()
+        self.shell_label.setObjectName("muted")
+        self.shell_dropdown = QComboBox()
+        PopupCorners(self.shell_dropdown)
+        self.shell_dropdown.setObjectName("languageDropdown")
+        self.shell_dropdown.view().setAutoFillBackground(True)
+        self.shell_dropdown.view().viewport().setAutoFillBackground(True)
+        shell_arrow = QLabel("", self.shell_dropdown)
+        shell_arrow.setObjectName("languageDropdownArrow")
+        shell_arrow.setAttribute(Qt.WA_TransparentForMouseEvents)
+        shell_arrow.setAlignment(Qt.AlignCenter)
+        shell_arrow.setFixedWidth(28)
+        shell_arrow_layout = QHBoxLayout(self.shell_dropdown)
+        shell_arrow_layout.setContentsMargins(0, 0, 1, 0)
+        shell_arrow_layout.addStretch()
+        shell_arrow_layout.addWidget(shell_arrow)
+        shell_options = QListView(self.shell_dropdown)
+        shell_options.setMouseTracking(True)
+        self.shell_dropdown.setView(shell_options)
+        self.shell_dropdown.addItem("PowerShell", "pwsh")
+        self.shell_dropdown.addItem("Bash", "bash")
+        self.shell_dropdown.setMinimumWidth(90)
+        self.shell_label.setBuddy(self.shell_dropdown)
+        self.shell_row = QWidget()
+        shell_row = QHBoxLayout(self.shell_row)
+        shell_row.setContentsMargins(0, 0, 0, 0)
+        shell_row.addWidget(self.shell_label)
+        shell_row.addStretch()
+        shell_row.addWidget(self.shell_dropdown)
+        layout.addWidget(self.shell_row)
+        self.shell_row.setVisible(
+            current_platform().supports_shell_choice and current_platform().bash_executable() is not None)
+        self.shell_dropdown.setCurrentIndex(
+            self.shell_dropdown.findData(load_config()["terminal_shell"]))
+        self.shell_dropdown.activated.connect(self.change_terminal_shell)
+
         self.refresh_language()
         self.subtitles_switch.toggled.connect(self.subtitles_changed.emit)
         self.orb_pulse_switch.toggled.connect(self.orb_pulse_changed.emit)
@@ -430,7 +467,7 @@ class SettingsView(QWidget):
         self.remove_markdowns_button.clicked.connect(self.remove_markdowns)
         self.dialog = ChoiceDialog(self)
 
-        for dropdown in (self.language_dropdown, self.model_dropdown, self.theme_dropdown):
+        for dropdown in (self.language_dropdown, self.shell_dropdown, self.model_dropdown, self.theme_dropdown):
             dropdown.installEventFilter(self)
 
         self.theme_dropdown.popup_requested.connect(self.refresh_themes)
@@ -513,6 +550,16 @@ class SettingsView(QWidget):
                 tr("ui.context_length"),
                 tr("ui.context_length_hint", minimum=minimum, maximum=maximum, name=get_assistant_name()))
         self.context_input.setText(str(value))
+
+    def change_terminal_shell(self, index):
+        shell = self.shell_dropdown.itemData(index)
+        config = load_config()
+        if shell and shell != config["terminal_shell"]:
+            try:
+                save_config({**config, "terminal_shell": shell})
+            except (OSError, ValueError) as error:
+                self.shell_dropdown.setCurrentIndex(self.shell_dropdown.findData(config["terminal_shell"]))
+                self.dialog.notify(tr("ui.terminal_shell"), tr("ui.error", error=error))
 
     def open_themes_folder(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(seed_user_themes())))
@@ -659,6 +706,9 @@ class SettingsView(QWidget):
         self.language_label.setText(tr("ui.language"))
         self.language_dropdown.setAccessibleName(tr("ui.language"))
         self.language_dropdown.setToolTip(tr("ui.language_hint"))
+        self.shell_label.setText(tr("ui.terminal_shell"))
+        self.shell_dropdown.setAccessibleName(tr("ui.terminal_shell"))
+        self.shell_dropdown.setToolTip(tr("ui.terminal_shell_hint"))
         if hasattr(self, "model_label"):
             self.model_label.setText(tr("ui.voice"))
             self.model_dropdown.setAccessibleName(tr("ui.voice"))

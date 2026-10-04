@@ -36,6 +36,8 @@
   "voice.selection_restart": "音声サービスが動的な選択に対応していないか、応答していません。ウィンドウだけでなく、{assistant_name}の音声サービスを再起動してください。",
   "ui.voice_hint": "これから話すフレーズに適用されます。音声を追加するには、WAVファイルをsrc/voicesに入れてください。",
   "ui.language_hint": "表示言語を選択します",
+  "ui.terminal_shell": "ターミナルのシェル",
+  "ui.terminal_shell_hint": "新しいターミナルと、シェルを指定しないコマンドで使うシェル",
   "ui.theme": "テーマ",
   "ui.theme_hint": "画面の配色テーマを選択します",
   "ui.context_length": "コンテキスト長",

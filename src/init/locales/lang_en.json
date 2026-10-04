@@ -36,6 +36,8 @@
   "voice.selection_restart": "The voice service does not support dynamic selection or is not responding. Restart {assistant_name}'s voice service, not just the window.",
   "ui.voice_hint": "Applies to upcoming phrases. Add WAV files to src/voices to include more voices.",
   "ui.language_hint": "Select the interface language",
+  "ui.terminal_shell": "Terminal shell",
+  "ui.terminal_shell_hint": "Shell for new terminals and for commands that do not name one",
   "ui.theme": "Theme",
   "ui.theme_hint": "Select the interface color theme",
   "ui.context_length": "Context length",

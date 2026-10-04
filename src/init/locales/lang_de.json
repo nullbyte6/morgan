@@ -36,6 +36,8 @@
   "voice.selection_restart": "Der Sprachdienst unterstützt keine dynamische Auswahl oder antwortet nicht. Starten Sie den Sprachdienst von {assistant_name} neu, nicht nur das Fenster.",
   "ui.voice_hint": "Gilt für kommende Sätze. Fügen Sie WAV-Dateien zu src/voices hinzu, um weitere Stimmen aufzunehmen.",
   "ui.language_hint": "Oberflächensprache auswählen",
+  "ui.terminal_shell": "Terminal-Shell",
+  "ui.terminal_shell_hint": "Shell für neue Terminals und für Befehle ohne Angabe einer Shell",
   "ui.theme": "Design",
   "ui.theme_hint": "Farbdesign der Oberfläche auswählen",
   "ui.context_length": "Kontextlänge",

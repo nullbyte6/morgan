@@ -36,6 +36,8 @@
   "voice.selection_restart": "语音服务不支持动态选择或没有响应。请重启 {assistant_name} 的语音服务，而不仅仅是窗口。",
   "ui.voice_hint": "应用于之后的语句。将 WAV 文件添加到 src/voices 即可加入更多语音。",
   "ui.language_hint": "选择界面语言",
+  "ui.terminal_shell": "终端 Shell",
+  "ui.terminal_shell_hint": "新终端以及未指定 Shell 的命令所使用的 Shell",
   "ui.theme": "主题",
   "ui.theme_hint": "选择界面配色主题",
   "ui.context_length": "上下文长度",

@@ -36,6 +36,8 @@
   "voice.selection_restart": "El servicio de voz no admite la selección dinámica o no responde. Reinicia el servicio de voz de {assistant_name}, no solo la ventana.",
   "ui.voice_hint": "Se aplica a las siguientes frases. Añade archivos WAV a src/voices para incorporar voces.",
   "ui.language_hint": "Seleccionar el idioma de la interfaz",
+  "ui.terminal_shell": "Shell del terminal",
+  "ui.terminal_shell_hint": "Shell de los terminales nuevos y de los comandos que no indican ninguno",
   "ui.theme": "Tema",
   "ui.theme_hint": "Selecciona el tema de colores de la interfaz",
   "ui.context_length": "Longitud de contexto",

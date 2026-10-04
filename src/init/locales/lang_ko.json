@@ -36,6 +36,8 @@
   "voice.selection_restart": "음성 서비스가 동적 선택을 지원하지 않거나 응답하지 않습니다. 창만이 아니라 {assistant_name}의 음성 서비스를 다시 시작하세요.",
   "ui.voice_hint": "앞으로 말할 문장부터 적용됩니다. 음성을 추가하려면 WAV 파일을 src/voices에 넣으세요.",
   "ui.language_hint": "인터페이스 언어를 선택합니다",
+  "ui.terminal_shell": "터미널 셸",
+  "ui.terminal_shell_hint": "새 터미널과 셸을 지정하지 않은 명령에 사용할 셸",
   "ui.theme": "테마",
   "ui.theme_hint": "인터페이스 색상 테마를 선택합니다",
   "ui.context_length": "컨텍스트 길이",
