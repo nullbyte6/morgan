@@ -186,7 +186,6 @@ class VoiceService:
         self.sample_rate = self.voice.sample_rate
         self._reference_key = None
         self._instruction_key = None
-        self._language_keys = {}
         self._select_reference(self.voice_reference)
         self._warm_up()
         if torch.cuda.is_available():
@@ -308,37 +307,10 @@ class VoiceService:
                     self._set_subtitle(batch, "")
                 batch.done.set()
 
-    def _language_speaker(self, language):
-        code = language.iso_code_639_1.name.lower()
-        reference = self.voice_reference.parent / code / self.voice_reference.name
-        if not reference.is_file():
-            return None
-        transcript = reference.with_suffix(".txt")
-        key = (str(reference), reference.stat().st_mtime_ns,
-               transcript.stat().st_mtime_ns if transcript.is_file() else None)
-        speaker_id = f"{get_assistant_identifier()}-{code}"
-        if self._language_keys.get(code) == key:
-            return speaker_id
-        text = transcript.read_text(encoding="utf-8-sig").strip() if transcript.is_file() else ""
-        if "<|endofprompt|>" not in text:
-            text = (f"You are a helpful assistant. Please speak in "
-                    f"{language.name.replace('_', ' ').lower()}.<|endofprompt|>{text}")
-        try:
-            self.voice.add_zero_shot_spk(text, str(reference), speaker_id)
-        finally:
-            self.voice.frontend.release_reference_sessions()
-            gc.collect()
-        self._language_keys[code] = key
-        logger.info("Language voice reference applied: %s/%s", code, reference.name)
-        return speaker_id
-
     def _synthesize(self, text, language=None):
         speaker_id = get_assistant_identifier()
         instruction = ""
-        native = self._language_speaker(language) if language is not None else None
-        if native is not None:
-            speaker_id = native
-        elif language is not None:
+        if language is not None:
             prefix, transcript = self._reference_prompt.split("<|endofprompt|>", 1)
             prefix = prefix.rstrip().removesuffix(f"Please speak in {VOICE_REFERENCE_LANGUAGE}.").rstrip()
             instruction = (f"{prefix} Please speak in "
