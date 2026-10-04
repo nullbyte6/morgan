@@ -6,6 +6,8 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 - Add per-voice reference transcripts, a text file beside each voice's recorded clip, so every reference text matches what is said in its clip
 - Update .gitignore to allow the voice transcript text files
+- Update the CosyVoice instruction for non-default languages to leave out the language, accent and dialect, so the accent follows the spoken text instead of the hardcoded European Spanish, Simplified Chinese and Brazilian Portuguese names
+- Update the waveform icon on the send button to have 5 bars instead of 6
 
 ## 26.10.3-beta (2026-10-03)
 
