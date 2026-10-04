@@ -174,7 +174,7 @@ The implementation lives in `src/init/memory`:
 explicit replacement independently of a semantic key. The service is usable
 without importing the desktop, agent tools, Ollama or TTS.
 
-Both desktop and terminal already write through `SessionLog.write`; that remains
+The desktop already writes through `SessionLog.write`; that remains
 the single persistence entry point. SQLite stores normalized Markdown before
 fenced code is replaced with archival links in the daily log. Accepted user
 messages and finished assistant responses are recorded, and interrupted desktop

@@ -32,7 +32,6 @@ Ollama to run tools and automate tasks on Windows.
   Korean and Italian.
 - Settings buttons to back up and restore memories, Nova and the daily logs,
   and to check for updates from the GitHub releases.
-- A lightweight terminal version that shares the desktop's runtime.
 
 ![morgan-img1](assets/img1.png)
 
@@ -42,8 +41,7 @@ Run `MorganSetup.exe` (Windows 10 or later, 64-bit). No administrator rights are
 required. The installer:
 
 - installs `Morgan.exe` to `C:\Morgan` by default, with a Start menu entry and an
-  optional desktop shortcut, and the terminal version `MorganTUI.exe` with its
-  own Start menu entry;
+  optional desktop shortcut;
 - asks for the assistant name (default `Morgan`) and sets the `MORGAN` environment
   variable (or `<NAME>` for a custom name) to the installation folder;
 - installs Git for Windows through WinGet if Git Bash is not found;
@@ -95,11 +93,7 @@ To build the executable, run `scripts/build-exe.sh` from Git Bash (PyInstaller,
 output in the folder named by the `MORGAN` environment variable, which the
 installer sets to the installation folder, or `C:\Morgan` when it is not set, so
 a build replaces the installed copy), then compile `MorganSetup.iss` with Inno Setup.
-`scripts\rebuild.bat` builds the desktop and the terminal version
-(`scripts/build-tui.sh`, output in `C:\Morgan\tui`, without Qt) and compiles the
-installer, which requires both. `scripts\rebuild-tui.bat` rebuilds only the terminal
-version before compiling; build the desktop first, because its build replaces the
-whole `C:\Morgan` folder. The installer is written to
+`scripts\rebuild.bat` builds the desktop and compiles the installer. The installer is written to
 `build\installer\MorganSetup.exe`. `dev\export_orb_icon.py` regenerates
 `assets\morgan.ico` and `assets\morgan.png` from the orb widget.
 
@@ -131,13 +125,10 @@ platform layer in `src/platforms`:
   `scripts/build-dmg.sh`, run on an Apple Silicon Mac with the dependencies
   from `requirements.txt` in `.venv`, builds `Morgan.app` with PyInstaller
   (in `build/packaging-macos/dist`) and packs it into
-  `build/installer/Morgan-<version>.dmg`. `scripts/build-tui-dmg.sh` builds the
-  terminal version the same way (in `build/packaging-tui-macos/dist`) into
-  `build/installer/MorganTUI-<version>.dmg`, with an `MorganTUI` folder and an
-  `Morgan Terminal.command` launcher to copy together. `scripts/rebuild.sh` runs
-  both builds, stops at the first failure and opens `build/installer`. The
-  builds are only ad-hoc signed, so macOS asks for confirmation the first time
-  they open until they are signed and notarized with an Apple Developer ID.
+  `build/installer/Morgan-<version>.dmg`. `scripts/rebuild.sh` runs that build,
+  stops at a failure and opens `build/installer`. The build is only ad-hoc
+  signed, so macOS asks for confirmation the first time it opens until it is
+  signed and notarized with an Apple Developer ID.
 - `current_platform()` in `src/platforms/__init__.py` selects the package from
   `sys.platform` and falls back to the portable defaults elsewhere.
 
@@ -148,25 +139,6 @@ cross-platform dependencies and includes both package files, so
 To support another system, add a package next to these that subclasses
 `Platform`, override what that system provides, and select it in
 `current_platform()`.
-
-## Terminal version
-
-`scripts\morgan-tui.bat` (or `.venv\Scripts\python.exe -m entry.tui`) starts a
-lightweight dark terminal interface that shares the desktop's runtime, tools and
-configuration, so it is always as up to date as the desktop. It has no orb,
-workspaces or concurrent sessions: the assistant's name is drawn with pyfiglet,
-followed by its version, and replies appear as subtitles synchronized with the
-voice. The composer supports `@file` references, file attachments (button,
-`Ctrl+O`, or pasting/dropping file paths), live voice input (button or `Ctrl+R`)
-and direct shell commands when the text starts with `>`. `Ctrl+K` opens the action
-palette, `F2` shows the last response, `Ctrl+J` inserts a new line, `Esc` or
-`Ctrl+C` stops a response, and `Ctrl+D` exits. Nova opens from the palette,
-with `Ctrl+Alt+N`, or on its diary with `Ctrl+L`, and offers the same agenda,
-reminders, events, calendar, diary, week review, memories and search as the
-desktop, with due reminders announced as Windows notifications. Pass `--no-voice` (or
-`morgan-tui.bat -NoVoice`) to skip the TTS service entirely and show text only.
-
-![morgan-img4](assets/img4.png)
 
 ## Usage
 
