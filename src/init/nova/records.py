@@ -26,9 +26,9 @@ from pathlib import Path
 from src.init.config import HOME_PATH
 from src.init.memory.database import timestamp
 
-from .database import EventDatabase, ReminderDatabase
-from .entries import (Entry, Event, FLAGS, NOTES_LIMIT, Reminder, TITLE_LIMIT, day_start,
-                      next_occurrence, normalize_recurrence, parse_recurrence, to_local)
+from .database import EventDatabase, JournalDatabase, ReminderDatabase
+from .entries import (Entry, Event, FLAGS, JOURNAL_AUTHORS, JOURNAL_LIMIT, JournalEntry, NOTES_LIMIT, Reminder,
+                      TITLE_LIMIT, day_start, next_occurrence, normalize_recurrence, parse_recurrence, to_local)
 
 
 def _text(title: str, notes: str) -> tuple[str, str]:
@@ -39,6 +39,19 @@ def _text(title: str, notes: str) -> tuple[str, str]:
     if len(notes) > NOTES_LIMIT:
         raise ValueError(f"The notes must not exceed {NOTES_LIMIT} characters")
     return title, notes
+
+
+def _journal_text(text: str) -> str:
+    text = str(text).strip()
+    if not 1 <= len(text) <= JOURNAL_LIMIT:
+        raise ValueError(f"The journal entry must contain 1-{JOURNAL_LIMIT} characters")
+    return text
+
+
+def _author(value: str) -> str:
+    if value not in JOURNAL_AUTHORS:
+        raise ValueError("The author must be user or assistant")
+    return value
 
 
 def _recurrence(value: str, all_day: bool = False) -> str:
@@ -66,7 +79,7 @@ def _span(starts_at: datetime, ends_at: datetime, all_day: bool) -> tuple[str, s
 
 
 class NovaRecords:
-    """Reminders and events in two separate SQLite databases, telling listeners when they change."""
+    """Reminders, events and journal entries in separate SQLite databases, telling listeners when they change."""
 
     def __init__(self, directory: Path | str | None = None):
         self.open(directory)
@@ -75,6 +88,7 @@ class NovaRecords:
         directory = Path(directory) if directory is not None else HOME_PATH / "nova"
         self.reminder_db = ReminderDatabase(directory / "reminders.sqlite3")
         self.event_db = EventDatabase(directory / "events.sqlite3")
+        self.journal_db = JournalDatabase(directory / "journal.sqlite3")
         self._listeners = []
 
     def subscribe(self, listener) -> None:
@@ -285,3 +299,61 @@ class NovaRecords:
                 if first <= day <= last:
                     counts[day] = counts.get(day, 0) + 1
         return counts
+
+    def add_journal_entry(self, text: str, day: date | None = None, author: str = "user") -> JournalEntry:
+        text, author = _journal_text(text), _author(author)
+        entry_id = uuid.uuid4().hex
+        stamp = timestamp()
+        with self.journal_db.connect(write=True) as db:
+            db.execute("INSERT INTO journal(id,day,body,author,created_at,modified_at) VALUES(?,?,?,?,?,?)",
+                       (entry_id, (day or date.today()).isoformat(), text, author, stamp, stamp))
+        self._changed()
+        return self.journal_entry(entry_id)
+
+    def update_journal_entry(self, entry_id: str, text: str) -> JournalEntry:
+        text = _journal_text(text)
+        with self.journal_db.connect(write=True) as db:
+            updated = db.execute("UPDATE journal SET body=?,modified_at=? WHERE id=?",
+                                 (text, timestamp(), entry_id)).rowcount
+        if not updated:
+            raise ValueError("The journal entry no longer exists")
+        self._changed()
+        return self.journal_entry(entry_id)
+
+    def delete_journal_entry(self, entry_id: str) -> bool:
+        with self.journal_db.connect(write=True) as db:
+            deleted = db.execute("DELETE FROM journal WHERE id=?", (entry_id,)).rowcount == 1
+        if deleted:
+            self._changed()
+        return deleted
+
+    def journal_entry(self, entry_id: str) -> JournalEntry | None:
+        with self.journal_db.connect() as db:
+            row = db.execute("SELECT * FROM journal WHERE id=?", (entry_id,)).fetchone()
+        return JournalEntry.from_row(row) if row else None
+
+    def journal_entries(self, first: date, last: date) -> list[JournalEntry]:
+        """Journal entries written for any day from first to last, both inclusive, oldest first."""
+        with self.journal_db.connect() as db:
+            rows = db.execute("SELECT * FROM journal WHERE day BETWEEN ? AND ? ORDER BY day,created_at,id",
+                              (first.isoformat(), last.isoformat()))
+            return [JournalEntry.from_row(row) for row in rows]
+
+    def search_journal(self, query: str, limit: int = 100) -> list[JournalEntry]:
+        """Journal entries containing every word of query, ignoring case, newest first."""
+        words = str(query).casefold().split()
+        if not words:
+            return []
+        with self.journal_db.connect() as db:
+            rows = db.execute("SELECT * FROM journal ORDER BY day DESC,created_at DESC,id DESC")
+            found = [entry for entry in map(JournalEntry.from_row, rows)
+                     if all(word in entry.text.casefold() for word in words)]
+        return found[:limit]
+
+    def adjacent_journal_day(self, day: date, earlier: bool = True) -> date | None:
+        """The closest day before or after day that has a journal entry."""
+        query = ("SELECT MAX(day) FROM journal WHERE day < ?" if earlier
+                 else "SELECT MIN(day) FROM journal WHERE day > ?")
+        with self.journal_db.connect() as db:
+            found = db.execute(query, (day.isoformat(),)).fetchone()[0]
+        return date.fromisoformat(found) if found else None

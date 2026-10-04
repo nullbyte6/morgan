@@ -16,7 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""The two SQLite databases behind Nova: one for reminders and one for events."""
+"""The three SQLite databases behind Nova: one for reminders, one for events and one for the journal."""
 from src.init.memory.database import Database
 
 LOCAL_TIME = "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]'"
@@ -85,6 +85,18 @@ EVENT_MIGRATIONS = (
     ),
 )
 
+JOURNAL_MIGRATIONS = (
+    (
+        """CREATE TABLE journal (
+            id TEXT PRIMARY KEY,
+            day TEXT NOT NULL CHECK(day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 20000),
+            author TEXT NOT NULL DEFAULT 'user' CHECK(author IN ('user','assistant')),
+            created_at TEXT NOT NULL, modified_at TEXT NOT NULL)""",
+        "CREATE INDEX journal_day ON journal(day, created_at)",
+    ),
+)
+
 
 class ReminderDatabase(Database):
     migrations = REMINDER_MIGRATIONS
@@ -92,3 +104,7 @@ class ReminderDatabase(Database):
 
 class EventDatabase(Database):
     migrations = EVENT_MIGRATIONS
+
+
+class JournalDatabase(Database):
+    migrations = JOURNAL_MIGRATIONS

@@ -104,11 +104,12 @@ BACKUP_MANIFEST = "backup.json"
 
 def _databases():
     from ..config import HOME_PATH, load_config
-    from ..nova.database import EventDatabase, ReminderDatabase
+    from ..nova.database import EventDatabase, JournalDatabase, ReminderDatabase
     memory = _settings_service(load_config()["memory"]).db
     return {"memory.sqlite3": (type(memory), memory.path),
             "nova/reminders.sqlite3": (ReminderDatabase, HOME_PATH / "nova" / "reminders.sqlite3"),
-            "nova/events.sqlite3": (EventDatabase, HOME_PATH / "nova" / "events.sqlite3")}
+            "nova/events.sqlite3": (EventDatabase, HOME_PATH / "nova" / "events.sqlite3"),
+            "nova/journal.sqlite3": (JournalDatabase, HOME_PATH / "nova" / "journal.sqlite3")}
 
 
 def _daily_logs():
@@ -121,7 +122,7 @@ def _daily_logs():
 
 
 def backup_data(destination):
-    """Save the memory database, Nova's reminders and events and the daily logs into one zip file."""
+    """Save the memory database, Nova's reminders, events and journal and the daily logs into one zip file."""
     from ..brain import get_version
     from .database import timestamp
     destination = Path(destination)
@@ -147,7 +148,7 @@ def backup_data(destination):
 
 
 def restore_data(source):
-    """Replace the memory database, Nova's reminders and events and the matching daily logs with a backup's."""
+    """Replace the memory database, Nova's reminders, events and journal and the matching daily logs with a backup's."""
     from ..config import HOME_PATH
     counts = {"databases": 0, "logs": 0}
     with zipfile.ZipFile(source) as archive, tempfile.TemporaryDirectory() as folder:

@@ -119,6 +119,12 @@ def _entry(entry) -> dict:
     return _event(entry) if hasattr(entry, "starts_at") else _reminder(entry)
 
 
+def _journal(entry) -> dict:
+    return {"id": entry.id, "day": entry.day.isoformat(), "text": entry.text,
+            "written_by": "user" if entry.author == "user" else "assistant",
+            "written_at": entry.created_at, "edited": entry.is_edited}
+
+
 def add_reminder(title: str, remind_at: str, notes: str | None = "", repeat: str | None = "none",
                  flag: str | None = "none") -> dict:
     """Save a reminder in Nova, the user's agenda, announced as a Windows notification when due.
@@ -290,6 +296,68 @@ def delete_agenda_entry(entry_id: str) -> dict:
     try:
         store = _shared()
         deleted = store.delete_reminder(entry_id) or store.delete_event(entry_id)
+        return {"ok": deleted, "deleted": deleted}
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+
+
+def write_journal_entry(text: str, day: str | None = None) -> dict:
+    """Write down an entry in the user's journal in Nova, a personal record the user writes or dictates
+    to you, different from the diary, which is your own record of conversations and memories.
+    Use it when the user asks to write, add or save a journal entry, or dictates what happened in their day.
+    text is the entry in the user's own voice and first person, as a journal is written ("Today I went
+    for a walk with Rudiger"), in the language the user used. Clean up dictation lightly: fix punctuation
+    and paragraphs and drop filler words and false starts, but keep the user's meaning and words and never add
+    facts, opinions or advice. day is an ISO date such as 2026-10-02 and defaults to today. Each call
+    adds a new entry to that day. Do not use remember for this, and do not store a journal entry as a memory.
+    """
+    try:
+        entry = _shared().add_journal_entry(text, _day(day, "day") if day else date.today(), "assistant")
+        return {"ok": True, "entry": _journal(entry)}
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+
+
+def read_journal(first_day: str | None = None, last_day: str | None = None, query: str | None = None,
+                 limit: int = 20) -> dict:
+    """Read the user's Nova journal entries, oldest first, from first_day to last_day, both inclusive
+    ISO dates; they default to the last 7 days up to today. With query, instead find the entries of
+    any day containing every word of query, newest first. Use the IDs it returns with
+    update_journal_entry and delete_journal_entry. Use recall for conversations and memories.
+    """
+    try:
+        limit = min(max(1, int(limit)), 100)
+        store = _shared()
+        if query and str(query).split():
+            found = store.search_journal(query, limit=limit)
+            return {"ok": True, "query": query, "entries": [_journal(entry) for entry in found]}
+        last = _day(last_day, "last_day") if last_day else date.today()
+        first = _day(first_day, "first_day") if first_day else last - timedelta(days=6)
+        if last < first:
+            raise ValueError("last_day cannot be before first_day")
+        if (last - first).days > 366:
+            raise ValueError("The range cannot exceed 366 days")
+        return {"ok": True, "first_day": first.isoformat(), "last_day": last.isoformat(),
+                "entries": [_journal(entry) for entry in store.journal_entries(first, last)[:limit]]}
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+
+
+def update_journal_entry(entry_id: str, text: str) -> dict:
+    """Replace the text of one journal entry by exact ID from read_journal, on the user's request, for
+    example to add something they forgot or to fix a mistake. Pass the whole new text in the user's
+    voice, keeping what was already written unless they asked to change it.
+    """
+    try:
+        return {"ok": True, "entry": _journal(_shared().update_journal_entry(entry_id, text))}
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+
+
+def delete_journal_entry(entry_id: str) -> dict:
+    """Delete one journal entry by exact ID from read_journal, on explicit user request."""
+    try:
+        deleted = _shared().delete_journal_entry(entry_id)
         return {"ok": deleted, "deleted": deleted}
     except Exception as error:
         return {"ok": False, "error": str(error)}

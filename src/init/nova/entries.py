@@ -28,6 +28,8 @@ from functools import lru_cache
 LOCAL_FORMAT = "%Y-%m-%dT%H:%M"
 TITLE_LIMIT = 200
 NOTES_LIMIT = 4000
+JOURNAL_LIMIT = 20000
+JOURNAL_AUTHORS = ("user", "assistant")
 MAX_SPAN_DAYS = 366
 MAX_OCCURRENCES = 2000
 MAX_REPEAT_COUNT = 999
@@ -248,3 +250,22 @@ class Event:
 
 
 Entry = Reminder | Event
+
+
+@dataclass(frozen=True, slots=True)
+class JournalEntry:
+    id: str
+    day: date
+    text: str
+    author: str
+    created_at: str
+    modified_at: str
+
+    @property
+    def is_edited(self) -> bool:
+        return self.modified_at != self.created_at
+
+    @classmethod
+    def from_row(cls, row) -> JournalEntry:
+        return cls(row["id"], date.fromisoformat(row["day"]), row["body"], row["author"],
+                   row["created_at"], row["modified_at"])
