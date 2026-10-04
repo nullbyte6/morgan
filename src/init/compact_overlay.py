@@ -54,7 +54,7 @@ class CompactOverlay(QWidget):
         self.input.file_tags_enabled = False
         self.meter = AudioVisualizer()
         self.meter.setMinimumWidth(0)
-        self.meter.setFixedHeight(32)
+        self.meter.setFixedHeight(36)
         self.meter.hide()
         self.send = QPushButton("")
         self.send.setObjectName("send")

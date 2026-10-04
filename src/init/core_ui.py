@@ -405,7 +405,7 @@ class AssistantWindow(DesktopWindow):
         ui.composer_widget = QWidget()
         ui.input_meter = AudioVisualizer()
         ui.input_meter.setMinimumWidth(0)
-        ui.input_meter.setFixedHeight(48)
+        ui.input_meter.setFixedHeight(40)
         ui.input_meter.hide()
         ui.attachment_tray = AttachmentTray(load_config()["attachments"])
         ui.attach = QPushButton("")
