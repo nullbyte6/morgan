@@ -152,7 +152,7 @@ def waveform_icon(size: int = 28) -> QIcon:
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
         painter.setBrush(theme.color(role))
-        heights = (0.38, 0.80, 0.52, 0.92, 0.28)
+        heights = (0.38, 0.80, 0.56, 0.28)
         bar = size * 0.09
         gap = size * 0.08
         left = (size - (len(heights) * bar + (len(heights) - 1) * gap)) / 2
