@@ -211,9 +211,6 @@ class AssistantWindow(DesktopWindow):
 
         self.mascot.record_requested.connect(self.on_mascot_record)
         self.mascot.restore_requested.connect(self.restore_from_mascot)
-        self.mascot_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
-        self.mascot_shortcut.setContext(Qt.ApplicationShortcut)
-        self.mascot_shortcut.activated.connect(self.toggle_mascot)
 
         self.recording = False
         self.voice_thread = None
@@ -762,6 +759,14 @@ class AssistantWindow(DesktopWindow):
         if event.type() == QEvent.WindowDeactivate and watched is self:
             self._workspace_chord_timer.stop()
             self._workspace_chord_pending = False
+        if (event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress) and
+                event.key() == Qt.Key_M and
+                event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier)):
+            if (event.type() == QEvent.KeyPress and not event.isAutoRepeat()
+                    and not self.quitting):
+                self.toggle_mascot()
+            event.accept()
+            return True
         if (event.type() == QEvent.ShortcutOverride and
                 QApplication.activeWindow() == self and
                 ((event.key() in (Qt.Key_N, Qt.Key_K) and event.modifiers() == Qt.ControlModifier)
@@ -1881,14 +1886,14 @@ class AssistantWindow(DesktopWindow):
     def show_mascot(self):
         """Switch to compact desktop mode when the orb is enabled."""
         if self.orb_enabled:
-            self.enter_background()
+            self.enter_background(show_orb=True)
 
-    def enter_background(self):
-        """Hide the window, leaving the orb on screen when it is enabled."""
+    def enter_background(self, show_orb=False):
+        """Hide the window, leaving the orb on screen only when requested."""
         if self.quitting or self._workspace_hiding:
             return
         self.command_palette.dismiss(restore_focus=False)
-        if self.orb_enabled:
+        if show_orb and self.orb_enabled:
             if not self.mascot.isVisible():
                 self.mascot.move_mascot()
             self.mascot.pop_in()
@@ -2538,7 +2543,7 @@ def main():
         app.setFont(font)
         app.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
         window = AssistantWindow()
-        window.show()
+        window.showMaximized()
 
         def activate_existing_window():
             while instance_server.hasPendingConnections():
@@ -2554,7 +2559,6 @@ def main():
 
         tray_icon = install_tray_icon(app, window, app_icon)
         window.tray_icon = tray_icon
-        QTimer.singleShot(0, window.show_mascot)
         sys.exit(app.exec())
     finally:
         instance_server.close()
