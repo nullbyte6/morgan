@@ -20,7 +20,7 @@
 
 import time
 
-from PySide6.QtCore import QEasingCurve, QRect, Qt, QVariantAnimation, Signal
+from PySide6.QtCore import QEasingCurve, QPoint, QRect, Qt, QVariantAnimation, Signal
 from PySide6.QtGui import QGuiApplication, QRegion
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QPushButton, QSizePolicy,
                                QVBoxLayout, QWidget)
@@ -48,6 +48,7 @@ class CompactOverlay(QWidget):
         self._closing = False
         self._placed = False
         self._last_press = 0
+        self._drag_offset = None
 
         self.input = ChatInput()
         self.input.file_tags_enabled = False
@@ -157,19 +158,19 @@ class CompactOverlay(QWidget):
                   screen.bottom() + 1 - hint.height() - EDGE_GAP)
         self._placed = True
 
+    def _clamped(self, x, y):
+        center = QPoint(x + self.width() // 2, y + self.height() // 2)
+        screen = QGuiApplication.screenAt(center) or QGuiApplication.primaryScreen()
+        area = screen.availableGeometry()
+        return (max(area.left(), min(x, area.right() + 1 - self.width())),
+                max(area.top(), min(y, area.bottom() + 1 - self.height())))
+
     def _clamp_to_screen(self):
         if not self.isVisible():
             return
-        screen = QGuiApplication.screenAt(self.frameGeometry().center()) or QGuiApplication.primaryScreen()
-        area = screen.availableGeometry()
-        x = max(area.left(), min(self.x(), area.right() + 1 - self.width()))
-        y = max(area.top(), min(self.y(), area.bottom() + 1 - self.height()))
+        x, y = self._clamped(self.x(), self.y())
         if (x, y) != (self.x(), self.y()):
             self.move(x, y)
-
-    def moveEvent(self, event):
-        super().moveEvent(event)
-        self._clamp_to_screen()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -183,21 +184,38 @@ class CompactOverlay(QWidget):
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
             self._last_press = 0
+            self._drag_offset = None
             self.restore_requested.emit()
             event.accept()
             return
         super().mouseDoubleClickEvent(event)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and self.windowHandle() is not None:
+        if event.button() == Qt.LeftButton:
             now = time.monotonic() * 1000
             if now - self._last_press <= QGuiApplication.styleHints().mouseDoubleClickInterval():
                 self._last_press = 0
+                self._drag_offset = None
                 self.restore_requested.emit()
                 event.accept()
                 return
             self._last_press = now
-            self.windowHandle().startSystemMove()
+            self._drag_offset = event.globalPosition().toPoint() - self.pos()
             event.accept()
             return
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_offset is not None and event.buttons() & Qt.LeftButton:
+            target = event.globalPosition().toPoint() - self._drag_offset
+            self.move(*self._clamped(target.x(), target.y()))
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self._drag_offset is not None:
+            self._drag_offset = None
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
