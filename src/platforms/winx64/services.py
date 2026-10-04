@@ -51,11 +51,11 @@ def unbundled_libraries(bundle):
         ctypes.windll.kernel32.SetDllDirectoryW(str(bundle))
 
 
-def installed_executable(terminal=False):
+def installed_executable():
     import winreg
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Morgan\Installer") as key:
-            return Path(winreg.QueryValueEx(key, "InstallPath")[0]) / ("MorganTUI.exe" if terminal else "Morgan.exe")
+            return Path(winreg.QueryValueEx(key, "InstallPath")[0]) / "Morgan.exe"
     except OSError:
         return None
 

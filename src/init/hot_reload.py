@@ -49,7 +49,7 @@ _PRESERVED = {
     "src.init.visuals.gateway",
     "src.init.visuals.schema",
 }
-_PRESERVED_PREFIXES = ("src.init.memory.", "src.init.tui.")
+_PRESERVED_PREFIXES = ("src.init.memory.",)
 _RELOAD_LAST = ("src.init.brain", "src.init.rules", "src.init.tools")
 
 

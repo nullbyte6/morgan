@@ -167,7 +167,6 @@ platformdirs==4.11.9
 pooch==1.9.0
 preshed==3.0.13
 primp==2.0.1
-prompt_toolkit==3.0.53
 propcache==0.5.4
 protobuf==5.29.6
 psutil==7.2.2

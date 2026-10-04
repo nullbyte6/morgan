@@ -277,8 +277,8 @@ class Platform:
         """Context in which child processes do not load libraries from a frozen bundle."""
         return nullcontext()
 
-    def installed_executable(self, terminal: bool = False) -> Path | None:
-        """Return the installed desktop or terminal executable."""
+    def installed_executable(self) -> Path | None:
+        """Return the installed desktop executable."""
         return None
 
     def run_installer_after_exit(self, setup: Path, command: list[str], directory: Path,

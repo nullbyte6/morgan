@@ -119,11 +119,11 @@ def download(release: Release, progress: Callable[[int, int], None],
     return target
 
 
-def relaunch_command(terminal: bool = False) -> tuple[list[str], Path]:
+def relaunch_command() -> tuple[list[str], Path]:
     """The command and folder that start Morgan again once the installer has finished."""
     if getattr(sys, "frozen", False):
         return [sys.executable], Path(sys.executable).parent
-    installed = current_platform().installed_executable(terminal)
+    installed = current_platform().installed_executable()
     if installed is not None and installed.is_file():
         return [str(installed)], installed.parent
     return [sys.executable, str(Path(sys.argv[0]).resolve()), *sys.argv[1:]], Path.cwd()
