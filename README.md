@@ -4,12 +4,37 @@
 
 <h1 align="center">MORGAN</h1>
 
-My Organizer for Reminders, Goals, Activities and Notes is a local desktop assistant that uses
-Ollama to run tools and automate tasks on Windows.
+<p align="center">
+  <b>M</b>y <b>O</b>rganizer for <b>R</b>eminders, <b>G</b>oals, <b>A</b>ctivities and <b>N</b>otes
+</p>
 
-![Morgan with the orb and the now playing panel](assets/img1.png)
+<p align="center">
+  A local desktop assistant that uses Ollama to run tools and automate tasks on Windows.
+</p>
 
-## Features
+<p align="center">
+  <img src="https://img.shields.io/badge/license-GPLv3-c39bf0?style=for-the-badge&labelColor=0d1117" alt="GPLv3">
+  <img src="https://img.shields.io/badge/platform-Windows-4da3ff?style=for-the-badge&labelColor=0d1117" alt="Windows">
+  <img src="https://img.shields.io/badge/runs%20on-Ollama-c39bf0?style=for-the-badge&labelColor=0d1117" alt="Ollama">
+  <img src="https://img.shields.io/badge/voice-CosyVoice-4da3ff?style=for-the-badge&labelColor=0d1117" alt="CosyVoice">
+</p>
+
+<p align="center">
+  <a href="#-features">Features</a> ·
+  <a href="#-installation">Installation</a> ·
+  <a href="#-running-from-source">Source</a> ·
+  <a href="#-platform-packages">Platforms</a> ·
+  <a href="#-usage">Usage</a> ·
+  <a href="#-license">License</a>
+</p>
+
+<p align="center">
+  <img src="assets/img1.png" alt="Morgan with the orb and the now playing panel">
+</p>
+
+---
+
+## ✦ Features
 
 - Local assistant model (`qwen3.5:4b` through Ollama) for text, images and
   voice, with tool calling to run commands, read and edit files and automate
@@ -38,11 +63,21 @@ Ollama to run tools and automate tasks on Windows.
 - Settings buttons to back up and restore memories, Nova and the daily logs,
   and to check for updates from the GitHub releases.
 
-![Morgan answering in a workspace pane next to the chat](assets/img3.png)
+<p align="center">
+  <img src="assets/img3.png" alt="Morgan answering in a workspace pane next to the chat">
+  <br>
+  <sub>Answers open in a workspace pane beside the chat.</sub>
+</p>
 
-![The Me section with the diary, journal and memories](assets/img4.png)
+<p align="center">
+  <img src="assets/img4.png" alt="The Me section with the diary, journal and memories">
+  <br>
+  <sub>Me: your diary, your journal and what Morgan remembers.</sub>
+</p>
 
-## Installation
+---
+
+## ✦ Installation
 
 Run `MorganSetup.exe` (Windows 10 or later, 64-bit). No administrator rights are
 required. The installer:
@@ -84,7 +119,9 @@ from the name, the default), `male`, `female` or `neutral`.
 To start Morgan, open it from the Start menu or run `Morgan.exe`. See the
 [specs here](docs/SPECS.md) for model and hardware requirements.
 
-## Running from source
+---
+
+## ✦ Running from source
 
 Running from a clone requires Windows, PowerShell, Python 3.12 and Git, with
 the dependencies from `requirements.txt` installed in a `.venv` virtual
@@ -103,7 +140,9 @@ a build replaces the installed copy), then compile `MorganSetup.iss` with Inno S
 `build\installer\MorganSetup.exe`. `dev\export_orb_icon.py` regenerates
 `assets\morgan.ico` and `assets\morgan.png` from the orb widget.
 
-## Platform packages
+---
+
+## ✦ Platform packages
 
 The core of Morgan (`src/init`, `src/diagnostics` and `entry`) does not call
 operating system APIs directly. Everything system-specific goes through the
@@ -146,9 +185,15 @@ To support another system, add a package next to these that subclasses
 `Platform`, override what that system provides, and select it in
 `current_platform()`.
 
-## Usage
+---
 
-![Morgan working on a request](assets/img2.png)
+## ✦ Usage
+
+<p align="center">
+  <img src="assets/img2.png" alt="Morgan working on a request">
+  <br>
+  <sub>The orb animates while Morgan works on a request.</sub>
+</p>
 
 Closing the desktop window keeps Morgan and its local services running in the
 background. On desktops with a system tray, use the Morgan icon to reopen it or
@@ -178,9 +223,15 @@ preserved so reloading does not require restarting the application.
 For native voice input, tool execution, and action regression checks, see
 [desktop action execution](docs/ACTION-EXECUTION.md).
 
-![Settings with themes and interface language next to the now playing panel](assets/img5.png)
+<p align="center">
+  <img src="assets/img5.png" alt="Settings with themes and interface language next to the now playing panel">
+  <br>
+  <sub>Settings: themes, interface language, voice and backups.</sub>
+</p>
 
-## License
+---
+
+## ✦ License
 
 Morgan is free software released under the [GNU General Public License v3.0](LICENSE).
 You can use, study, modify and share it, and anyone who distributes a modified
