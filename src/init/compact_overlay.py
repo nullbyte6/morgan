@@ -39,6 +39,7 @@ DURATION = 260
 
 class CompactOverlay(QWidget):
     restore_requested = Signal()
+    position_changed = Signal(int, int)
 
     def __init__(self):
         super().__init__(None, Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -118,6 +119,7 @@ class CompactOverlay(QWidget):
                 self._place_default()
             self._set_reveal(0.0)
             self.show()
+            self._clamp_to_screen()
         self.raise_()
         self._run(1.0)
 
@@ -149,6 +151,10 @@ class CompactOverlay(QWidget):
             self.hide()
             self.setWindowOpacity(1.0)
             self.clearMask()
+
+    def restore_position(self, x, y):
+        self.move(x, y)
+        self._placed = True
 
     def _place_default(self):
         screen = QGuiApplication.primaryScreen().availableGeometry()
@@ -216,6 +222,7 @@ class CompactOverlay(QWidget):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self._drag_offset is not None:
             self._drag_offset = None
+            self.position_changed.emit(self.x(), self.y())
             event.accept()
             return
         super().mouseReleaseEvent(event)

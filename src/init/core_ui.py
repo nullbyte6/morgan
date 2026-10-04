@@ -211,6 +211,11 @@ class AssistantWindow(DesktopWindow):
         self.overlay.input.submitted.connect(lambda: self.send_message())
         self.overlay.send.clicked.connect(lambda: self.on_send_clicked())
         self.overlay.restore_requested.connect(self.restore_window)
+        self.overlay.position_changed.connect(self.save_overlay_position)
+        saved_x = self.settings.value("overlay_x", None, type=int)
+        saved_y = self.settings.value("overlay_y", None, type=int)
+        if saved_x is not None and saved_y is not None:
+            self.overlay.restore_position(saved_x, saved_y)
         self.subtitles_enabled = subtitles_enabled
 
         self.recording = False
@@ -996,6 +1001,10 @@ class AssistantWindow(DesktopWindow):
             overlay.send.style().polish(overlay.send)
         overlay.input.setEnabled(ui.input.isEnabled())
         overlay.input.setPlaceholderText(ui.input.placeholderText())
+
+    def save_overlay_position(self, x, y):
+        self.settings.setValue("overlay_x", x)
+        self.settings.setValue("overlay_y", y)
 
     def sync_overlay_subtitle(self):
         self.overlay_subtitles.set_subtitle(
