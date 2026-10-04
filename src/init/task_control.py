@@ -106,6 +106,15 @@ class TaskModelRetry(Exception):
     pass
 
 
+class TaskEscalate(Exception):
+    pass
+
+
+ESCALATION_STEPS = 4
+ESCALATION_FAILURES = 2
+ESCALATION_TOOLS = {"escalate", "delegate_coding"}
+
+
 class TaskControl(AbstractCapability):
     def __init__(self, objective, context, cancel_event, pending_task=None):
         super().__init__()
@@ -1337,6 +1346,12 @@ class ExecutionControl(AbstractCapability):
         self.last_budget = {}
         self.recovery_attempts = 0
         self.force_compaction = False
+        self.escalation_enabled = False
+        self.escalation_pending = False
+        self.escalated = False
+        self.escalation_reason = ""
+        self.steps = 0
+        self.failures = 0
         self.notice = ""
         self.final_output = None
         self._output_surface = "auto"
@@ -1547,9 +1562,38 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
     async def measure_request(self, request_context, messages):
         return await self.context_budget.measure_request(request_context, messages, token_scale=self.token_scale)
 
+    def request_escalation(self, reason):
+        if not self.escalation_enabled:
+            return "No stronger model is configured. Continue the task yourself."
+        if self.escalated:
+            return "The stronger model is already handling this task. Continue it yourself."
+        self.escalation_pending = True
+        self.escalation_reason = reason
+        return "The task is being handed over to the stronger model, which continues from here."
+
+    def note_step(self, call_id, name):
+        receipt = self.receipts.get(call_id, {})
+        spec = TOOL_SPECS.get(name)
+        if not receipt.get("executed") or spec is None or spec.incidental or name in ESCALATION_TOOLS:
+            return
+        self.steps += 1
+        if receipt.get("outcome") not in {None, "success", "negative"}:
+            self.failures += 1
+        if self.steps >= ESCALATION_STEPS or self.failures >= ESCALATION_FAILURES:
+            self.request_escalation(f"{self.steps} steps and {self.failures} failures so far")
+
     async def before_model_request(self, ctx, request_context):
         self.check_cancelled()
         self.messages = ctx.messages
+        if self.escalation_pending:
+            self.escalation_pending = False
+            self.escalated = True
+            self.trace("model_escalation", reason=self.escalation_reason, steps=self.steps, failures=self.failures)
+            raise TaskEscalate(self.escalation_reason)
+        if self.escalated:
+            request_context.model_request_parameters = replace(request_context.model_request_parameters,
+                function_tools=[tool for tool in request_context.model_request_parameters.function_tools
+                                if tool.name not in ESCALATION_TOOLS])
         if self.controller is not None:
             request_context.model_request_parameters = replace(request_context.model_request_parameters,
                 function_tools=[tool for tool in request_context.model_request_parameters.function_tools
@@ -1776,7 +1820,9 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
 
     async def wrap_tool_execute(self, ctx, *, call, tool_def, args, handler):
         self.messages = ctx.messages
-        return await self.execute(call.tool_name, args, call.tool_call_id, handler)
+        output = await self.execute(call.tool_name, args, call.tool_call_id, handler)
+        self.note_step(call.tool_call_id, call.tool_name)
+        return output
 
     async def on_tool_execute_error(self, ctx, *, call, tool_def, args, error):
         if self.controller is not None:

@@ -371,11 +371,11 @@ class Assistant:
             headers={"User-Agent": get_user_agent()}, event_hooks={"request": [trace_provider_request]})
         return OllamaProvider(base_url="http://127.0.0.1:11434/v1", http_client=http_client)
 
-    def _main_model(self, provider=None):
+    def _main_model(self, provider=None, name=None):
         from pydantic_ai.models.ollama import OllamaModel
 
         return OllamaModel(
-            self.MODEL_NAME, provider=provider or self.provider,
+            name or self.MODEL_NAME, provider=provider or self.provider,
             profile={"openai_chat_supports_multiple_system_messages": False,
                      "openai_chat_supports_max_completion_tokens": False,
                      "openai_supports_tool_choice_required": False},
@@ -692,8 +692,9 @@ class Assistant:
         model_prompt = attachments.prompt() if attachments else prompt
         session_model = self._session_main_model(event_loop)
         attachment_tools = [attachments.toolset()] if attachments else []
-        from src.init.task_control import ExecutionControl, TaskModelRetry, TaskOutputReady, TaskStopped
-        previous = (getattr(task_context, "task_controller", None) if session is not None
+        from src.init.task_control import (ExecutionControl, TaskEscalate, TaskModelRetry,
+                                           TaskOutputReady, TaskStopped)
+        previous =(getattr(task_context, "task_controller", None) if session is not None
                     else getattr(task_context, "task_controller", None) or self._active_task_controller)
         while previous is not None and previous.state.status in {"complete", "cancelled"}:
             previous = previous.pending_task
@@ -725,6 +726,14 @@ class Assistant:
             "source": "minimum_of_dev_configuration_and_ollama_show_or_ps; provider_fallback_4096"}
         controller.task_title = task_title
         controller.on_action = on_phase
+        escalation_name = brain.get_coding_model()
+        controller.escalation_enabled = escalation_name != active_model
+
+        def escalation_model():
+            if event_loop is None:
+                return self._main_model(name=escalation_name)
+            return self._loop_model(event_loop, ("escalation", escalation_name),
+                                    lambda provider: self._main_model(provider, escalation_name))
 
         def promoted(supervised):
             task_context.task_controller = supervised
@@ -743,7 +752,9 @@ class Assistant:
         controller.on_task_title = on_task_title
 
         async def generate():
-            nonlocal completed_history, stream_messages, execution_started
+            nonlocal completed_history, stream_messages, execution_started, session_model
+            from src.init.coding import escalation_requests
+            escalation_requests.set(controller.request_escalation)
             if resume_task_id:
                 resumed = controller.call_control("task_resume", {"task_id": resume_task_id})
                 if not resumed.get("accepted"):
@@ -947,6 +958,15 @@ class Assistant:
                     conversation_messages = controller.active_history(controller.messages)
                     conversation_messages.append(ModelRequest(parts=[UserPromptPart(str(retry))]))
                     stream_messages = conversation_messages
+                    current_prompt = None
+                    continue
+                except TaskEscalate:
+                    finish_direct()
+                    conversation_messages = controller.active_history(controller.messages)
+                    stream_messages = conversation_messages
+                    session_model = escalation_model()
+                    logging.getLogger("assistant.model").info(
+                        "Escalating the task to %s (%s)", escalation_name, controller.escalation_reason)
                     current_prompt = None
                     continue
                 except TaskOutputReady as ready:

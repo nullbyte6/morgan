@@ -96,10 +96,11 @@ from src.init.nova.tools import (add_reminder, add_event, list_agenda, search_ag
 from src.init.desktop.clipboard import read_clipboard
 from src.init.visuals.gateway import render_flowchart
 from src.init.reader import analyze_image, analyze_screen
-from src.init.coding import delegate_coding
+from src.init.coding import delegate_coding, escalate
 
 TOOLS = [
     delegate_coding,
+    escalate,
     remember,
     recall,
     forget,

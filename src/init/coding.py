@@ -20,6 +20,7 @@ from __future__ import annotations
 from src.init.identity import get_assistant_name
 
 import asyncio
+from contextvars import ContextVar
 
 from pydantic_ai import Agent, Tool, UsageLimits
 from pydantic_ai.models.ollama import OllamaModel
@@ -29,6 +30,7 @@ CODING_TOOLS = (
     "get_working_directory", "list_files", "read_file", "create_file", "edit_file",
     "append_file", "replace_in_file", "execute_command", "git_status", "git_diff")
 CODING_REQUEST_LIMIT = 40
+escalation_requests = ContextVar("morgan_escalation_request", default=None)
 
 
 def coding_instructions() -> str:
@@ -85,3 +87,21 @@ def delegate_coding(task: str) -> str:
         The coding model's report of what it changed and how it verified the result.
     """
     return asyncio.run(delegate_coding_async(task))
+
+
+def escalate(reason: str) -> str:
+    """Hand the whole current request to the stronger model when it is too hard for you.
+
+    Use this when the task needs careful multi-step reasoning, planning or several
+    dependent actions that you are not confident about, or when you keep failing.
+    The stronger model continues the same conversation and tool calls from where you stop.
+    Do not use it for simple requests, conversation or single actions.
+    Args:
+        reason: One short sentence saying why the task needs the stronger model.
+    Returns:
+        Whether the hand-over was accepted.
+    """
+    request = escalation_requests.get()
+    if request is None:
+        return "No stronger model is available. Continue the task yourself."
+    return request(reason)

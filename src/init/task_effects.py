@@ -101,7 +101,7 @@ def quick_command_followup(result: ActionResult) -> bool:
     return False
 
 
-register("get_current_time calculate", ToolSpec(False, incidental=True))
+register("get_current_time calculate escalate", ToolSpec(False, incidental=True))
 register("get_version get_city_distance get_weather "
          "search_youtube_songs search_spotify_songs search_spotify_playlists search_spotify_albums "
          "list_spotify_playlists get_spotify_playlist_tracks read_clipboard analyze_image analyze_screen "
