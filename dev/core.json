@@ -1,6 +1,5 @@
 {
   "version": "26.10.4-beta",
   "base_model_name": "qwen3.5:4b",
-  "coding_model": "qwen3.5:9b",
-  "audio_model": "gemma4:e4b"
+  "coding_model": "qwen3.5:9b"
 }
