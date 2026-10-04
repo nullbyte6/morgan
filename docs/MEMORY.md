@@ -48,6 +48,12 @@ Examples:
 - “Update that preference to English.”
 - “Forget that preference.”
 
+Memories are written in the third person about the user, naming them, so "Remember that
+my dog is called Rudiger" is stored as "Diego has a dog called Rudiger". Older memories
+written in the first person are still read as the user's own words. This is the opposite
+of the Nova journal, whose entries are kept in the user's own first-person voice and are
+never saved as memories.
+
 The agent receives `remember`, `recall`, `forget`, `list_memories`, `search_words`,
 `word_instances`, `read_conversation`, and `read_memory_message`.
 Mutations are made only when the user asks for them, in any wording or language:

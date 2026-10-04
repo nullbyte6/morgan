@@ -42,14 +42,14 @@ default browser.
 
 Nova is Morgan's reminders, events and agenda workspace. Open it from the command
 palette (`Ctrl + K`, then "Nova") or with `Ctrl + Alt + N`. `Ctrl + L`, or "Open diary" in the palette, opens it straight on the
-Diary, reusing a Nova panel that is already open. It lives inside a
+Diary, and `Ctrl + J`, or "Open journal", straight on the Journal, reusing a Nova panel that is already open. It lives inside a
 workspace panel and uses Morgan's theme, fonts and animations.
 
 A new workspace shows a single Nova star in place of the row of buttons. Press it to
 slide out the workspace buttons (Morgan, Editor, Settings and Terminal) and
 press it again to fold them. `Ctrl + click` on the star opens Nova in that panel instead.
 
-Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar, Diary and Journal,
+Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar, Diary, Journal, Week, Memories and Search,
 and folds to an icon strip with a slide when you click the Nova star. In narrow
 panels it folds by itself.
 
@@ -62,7 +62,15 @@ panels it folds by itself.
 - **Journal** is the user's own record, one day at a time and separate from the Diary:
   write an entry in the box (`Ctrl + Enter` adds it), or tell the assistant about the
   day and it writes the entry down in the first person with light cleanup. Entries show who
-  wrote them, and can be edited or deleted. "Open journal" in the command palette opens it.
+  wrote them, and can be edited or deleted. `Ctrl + J`, or "Open journal" in the command
+  palette, opens it.
+- **Week** reviews one week at a time: reminders done, pending and missed, events, journal
+  entries, conversations and new memories, a row for each day that has activity, and a short
+  summary written by the model from those facts, including the journal entries. Click a day
+  to open it in the Diary.
+- **Search** looks for a word in reminders, events, the conversations of each diary day and
+  journal entries. Clicking a diary day opens it in the Diary, and clicking a journal entry
+  opens the Journal on that day.
 - **Calendar** shows a week, month or year. Click a day in the month or year to drill
   into its week, click a month name in the year to open that month, and double-click a
   slot in the week to create an event there.
