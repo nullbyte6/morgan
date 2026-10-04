@@ -57,6 +57,7 @@ class WorkspacePanel(QFrame):
         self._drag_target = None
         self._minimum = QSize(0, 0)
         self._animating = False
+        self.title_hidden = False
 
         self.setObjectName("workspacePanel")
         self.setProperty("workspacePanel", True)
@@ -217,9 +218,20 @@ class WorkspacePanel(QFrame):
 
         title = title.strip() or self.title
         self.title = title
-        self.title_label.setText(self.title_label.fontMetrics().elidedText(
-            title, Qt.ElideMiddle, max(1, self.title_label.width())))
+        self._render_title()
         self.title_edit.setText(title)
+
+    def set_title_hidden(self, hidden: bool) -> None:
+        self.title_hidden = hidden
+        self._render_title()
+
+    def _render_title(self) -> None:
+        if self.title_hidden:
+            self.title_label.setText("")
+            return
+
+        self.title_label.setText(self.title_label.fontMetrics().elidedText(
+            self.title, Qt.ElideMiddle, max(1, self.title_label.width())))
 
     def set_renamable(self, enabled: bool) -> None:
         """Enable or disable inline title editing."""
@@ -247,8 +259,7 @@ class WorkspacePanel(QFrame):
 
     def eventFilter(self, watched, event):
         if watched is getattr(self, "title_label", None) and event.type() == QEvent.Resize:
-            self.title_label.setText(self.title_label.fontMetrics().elidedText(
-                self.title, Qt.ElideMiddle, max(1, self.title_label.width())))
+            self._render_title()
         if watched is self.header:
             if event.type() == event.Type.MouseButtonPress:
                 if event.button() == Qt.LeftButton:
@@ -921,6 +932,7 @@ class Workspace(QWidget):
             if self._panels:
                 self.focus_panel(next(reversed(self._panels)))
 
+        self._refresh_active_frames()
         self.panel_closed.emit(panel_id)
         self.layout_changed.emit()
 
@@ -938,24 +950,23 @@ class Workspace(QWidget):
         if self._active_panel_id == panel_id:
             return True
 
-        previous = self._panels.get(self._active_panel_id)
-
-        if previous is not None:
-            previous.setProperty("active", False)
-            previous.style().unpolish(previous)
-            previous.style().polish(previous)
-
         self._active_panel_id = panel_id
 
-        panel = self._panels[panel_id]
-        panel.setProperty("active", True)
-
-        panel.style().unpolish(panel)
-        panel.style().polish(panel)
+        self._refresh_active_frames()
 
         self.panel_focused.emit(panel_id)
 
         return True
+
+    def _refresh_active_frames(self) -> None:
+        shared = len(self._panels) > 1
+        for panel_id, panel in self._panels.items():
+            active = shared and panel_id == self._active_panel_id
+            if panel.property("active") == active:
+                continue
+            panel.setProperty("active", active)
+            panel.style().unpolish(panel)
+            panel.style().polish(panel)
 
     def replace_content(
         self,

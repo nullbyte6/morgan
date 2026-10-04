@@ -467,13 +467,14 @@ class AssistantWindow(DesktopWindow):
         )
         input_frame.setMinimumHeight(48)
         input_layout = QHBoxLayout(input_frame)
-        input_layout.setContentsMargins(16, 0, 0, 0)
+        input_layout.setContentsMargins(16, 2, 2, 2)
         input_layout.setSpacing(0)
 
         ui.input.submitted.connect(lambda: self.send_message(session))
         input_layout.addWidget(ui.input, 1, Qt.AlignVCenter)
         input_layout.addWidget(ui.input_meter)
         input_layout.addWidget(ui.attach, 0, Qt.AlignBottom)
+        input_layout.addWidget(ui.send, 0, Qt.AlignBottom)
 
         input_column = QVBoxLayout()
         input_column.setContentsMargins(0, 0, 0, 0)
@@ -511,7 +512,6 @@ class AssistantWindow(DesktopWindow):
         input_row.setContentsMargins(0, 0, 0, 0)
         input_row.setSpacing(12)
         input_row.addWidget(input_frame, 1)
-        input_row.addWidget(ui.send, 0, Qt.AlignVCenter)
         input_column.addLayout(input_row)
 
         input_group = QWidget()
@@ -520,15 +520,14 @@ class AssistantWindow(DesktopWindow):
         ui.attachment_tray.changed.connect(lambda *_: self.update_send_button(session))
 
         ui.attach.setObjectName("attach")
-        ui.attach.setFixedSize(48, 48)
+        ui.attach.setFixedSize(40, 40)
         ui.attach.clicked.connect(ui.attachment_tray.choose_files)
 
         ui.send.setObjectName("send")
-        ui.send.setFixedSize(48, 48)
+        ui.send.setFixedSize(40, 40)
         ui.send.clicked.connect(lambda: self.on_send_clicked(session))
         ui.send.hide()
-        indicator_row.setContentsMargins(
-            0, 0, ui.send.width() + input_row.spacing(), 0)
+        indicator_row.setContentsMargins(16, 0, 16, 0)
 
         input_group.setLayout(input_column)
         ui.input_group = input_group
@@ -921,6 +920,7 @@ class AssistantWindow(DesktopWindow):
             panel = self.workspace.get_panel(session.panel_id) if session.panel_id else None
             if panel is not None:
                 panel.set_title(self._session_title(session))
+                panel.set_title_hidden(len(self.sessions) <= 1)
 
     def _session_title(self, session):
         title = f"{get_assistant_name()} {load_dev_file()['version']}"

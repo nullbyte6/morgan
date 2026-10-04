@@ -132,8 +132,8 @@ QFrame#inputFrame {
 
 QLabel#responseTimer {
     background-color: transparent;
-    color: @text;
-    border: 2px solid @border;
+    color: @text_muted;
+    border: 2px solid transparent;
     border-radius: 17px;
     padding: 6px 12px;
 }
@@ -148,15 +148,15 @@ QTextEdit {
 
 QPushButton#attach,
 QPushButton#send {
-    border-radius: 24px;
+    border-radius: 20px;
     font-family: "JetBrainsMonoNL NFM";
-    font-size: 18pt;
+    font-size: 16pt;
 }
 
 QPushButton#send {
     background-color: @accent;
     color: @on_accent;
-    border: 2px solid @border;
+    border: none;
 }
 
 QPushButton#send[mic="true"] {
@@ -265,42 +265,45 @@ QPushButton#logRemoveNav[armed="true"] {
 
 QToolButton#directory {
     background-color: transparent;
-    border: 2px solid @border;
+    border: 2px solid transparent;
     border-radius: 16px;
-    color: @text;
+    color: @text_muted;
     padding: 4px;
 }
 
 QToolButton#directory:hover,
 QToolButton#directory:pressed {
     border: 2px solid @accent;
+    color: @text;
 }
 
 QComboBox#modelSelector {
     combobox-popup: 0;
     background-color: transparent;
-    border: 2px solid @border;
+    border: 2px solid transparent;
     border-radius: 16px;
-    color: @text;
+    color: @text_muted;
     padding: 6px 28px 6px 12px;
 }
 
 QComboBox#modelSelector:hover,
 QComboBox#modelSelector:on {
     border: 2px solid @accent;
+    color: @text;
 }
 
 QToolButton#permissionSelector {
     background-color: transparent;
-    border: 2px solid @border;
+    border: 2px solid transparent;
     border-radius: 16px;
-    color: @text;
+    color: @text_muted;
     padding: 4px 10px;
 }
 
 QToolButton#permissionSelector:hover,
 QToolButton#permissionSelector:pressed {
     border: 2px solid @accent;
+    color: @text;
 }
 
 QFrame#permissionOptions {
