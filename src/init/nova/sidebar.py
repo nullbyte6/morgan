@@ -98,7 +98,7 @@ class NovaSidebar(QWidget):
         self._group.setExclusive(True)
         self._items: dict[Hub, NavItem] = {}
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 12, 4, 12)
+        layout.setContentsMargins(4, 4, 4, 12)
         layout.setSpacing(14)
         layout.addWidget(self.star)
         navigation = QVBoxLayout()
