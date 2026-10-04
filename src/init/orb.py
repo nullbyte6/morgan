@@ -396,6 +396,12 @@ class Orb(QWidget):
         solid_color = QColor(inner_color)
         solid_color.setAlphaF(inner_color.alphaF() * (1.0 - self.thinking_mix))
         if solid_color.alpha() > 0:
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            for glow_width, glow_strength in ((18.0, 0.12), (9.0, 0.2)):
+                glow_color = QColor(solid_color)
+                glow_color.setAlphaF(solid_color.alphaF() * glow_strength)
+                painter.setPen(QPen(glow_color, glow_width))
+                painter.drawEllipse(inner_rect)
             pen = QPen(solid_color)
             pen.setWidthF(self.line_width / scale)
             painter.setPen(pen)
@@ -459,6 +465,15 @@ class Orb(QWidget):
             else:
                 spectrum_path.lineTo(point)
         spectrum_path.closeSubpath()
+
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for glow_width, glow_strength in ((16.0, 0.12), (8.0, 0.2)):
+            glow_color = QColor(colors[1])
+            glow_color.setAlphaF(colors[1].alphaF() * glow_strength)
+            glow_pen = QPen(glow_color, glow_width)
+            glow_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(glow_pen)
+            painter.drawPath(spectrum_path)
 
         pen = QPen(colors[1])
         pen.setWidthF(self.line_width * 0.85 / scale)
