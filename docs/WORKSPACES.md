@@ -6,10 +6,11 @@ Workspaces are managed entirely through keyboard shortcuts, keeping the interfac
 
 | Shortcut         | Action                                |
 |------------------|---------------------------------------|
-| `Ctrl + N`       | Open a new workspace panel.           |
-| `Ctrl + N`, then `←` / `→` / `↑` / `↓` | Open a panel in that direction from the active panel. |
+| `Ctrl + E`       | Open the editor.                      |
+| `Ctrl + T`       | Open a terminal.                      |
+| `Ctrl + Alt + S` | Open Settings.                        |
+| `Ctrl + E`, `Ctrl + T` or `Ctrl + Alt + S`, then `←` / `→` / `↑` / `↓` | Open that workspace on that side of the active panel. |
 | `Ctrl + W`       | Close the active panel.               |
-| `Ctrl + N`, then `4` | Open an embedded terminal.        |
 | `Ctrl + Alt + ←` | Focus the nearest panel to the left.  |
 | `Ctrl + Alt + →` | Focus the nearest panel to the right. |
 | `Ctrl + Alt + ↑` | Focus the nearest panel above.        |
@@ -26,9 +27,16 @@ Workspaces are managed entirely through keyboard shortcuts, keeping the interfac
 
 The active panel is highlighted, and closing it automatically selects another available panel.
 
-After `Ctrl + N`, press an arrow or a workspace number within 700 ms. You can
-keep Ctrl held while pressing the second key. The chord opens only one panel;
-without a second key, a new workspace opens automatically when that interval ends.
+After `Ctrl + E`, `Ctrl + T` or `Ctrl + Alt + S`, press an arrow within 500 ms. You can
+keep Ctrl, or Ctrl and Alt, held while pressing the arrow. The chord opens only one panel;
+without an arrow, the workspace opens in its usual place when that interval ends.
+
+Without an arrow, the editor opens to the right of the main panel, taking half of its width,
+the terminal opens below the editor, or to the right of the main panel when there is no
+editor, and Settings opens to the right of the main panel as a narrower panel, or comes to
+the front when it is already open. Workspaces can also be opened from the command palette,
+where they open in the same places. Dropping a file on a panel opens it in a read-only view
+beside that panel.
 
 Interface zoom changes in 10% steps, from 50% to 200%, and is remembered between
 sessions. `Ctrl + =` also enlarges the interface on keyboards where `+` requires
@@ -51,10 +59,6 @@ workspace, inside the same frame as the orb, and uses Morgan's theme, fonts and 
 Open it from the command palette (`Ctrl + K`, then "Nova"). `Ctrl + L`, or "Open diary" in
 the palette, opens it straight on the Diary, and `Ctrl + J`, or "Open journal", straight on
 the Journal.
-
-A new workspace shows a single Nova star in place of the row of buttons. Press it to
-slide out the workspace buttons (Morgan, Editor, Settings and Terminal) and
-press it again to fold them. `Ctrl + click` on the star opens Nova's Home in the sidebar.
 
 The sidebar has four buttons: Home, Notifications, Me and Search. It has three states.
 It starts folded to an icon strip. Click the Nova star at its top, press `Ctrl + B`, or
@@ -171,8 +175,7 @@ Panels can be focused, resized, moved, and closed individually. Their content re
 
 ### Terminal
 
-The Terminal button sits immediately to the right of Settings in a new workspace.
-It opens an independent, persistent shell inside the panel: PowerShell 7 (`pwsh.exe`) on Windows,
+`Ctrl + T`, or "Terminal" in the command palette, opens an independent, persistent shell inside a panel: PowerShell 7 (`pwsh.exe`) on Windows,
 starting in `%USERPROFILE%`, or the user's shell in their home directory on Unix.
 On Windows, the Terminal shell setting in Settings switches new terminals to Git Bash
 (`bash --login -i`) when Git for Windows is installed. The same setting is the shell
