@@ -2489,7 +2489,8 @@ class RoundedTooltipFilter(QObject):
         if (event.type() == QEvent.Type.Polish
                 and isinstance(watched, QLabel)
                 and watched.metaObject().className() == "QTipLabel"):
-            watched.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
+            watched.setWindowFlags(
+                watched.windowFlags() | Qt.WindowType.NoDropShadowWindowHint)
             watched.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         return False
 
