@@ -75,52 +75,32 @@ class AudioVisualizer(QWidget):
         height = self.height()
         center = height / 2
 
-        theme = current_theme()
-        colors = (
-            theme.color("audio_wave_layer_1", 240),
-            theme.color("audio_wave_layer_2", 150),
-            theme.color("audio_wave_layer_3", 95),
-            theme.color("audio_wave_layer_4", 55))
+        bar = 3.0
+        gap = 5.0
+        count = max(1, int((width + gap) // (bar + gap)))
+        left = (width - (count * bar + (count - 1) * gap)) / 2
+        max_half = height * 0.42
+        min_half = bar / 2
 
-        for layer, color in enumerate(colors):
-            path = QPainterPath()
-            points = max(120, width // 3)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(current_theme().color("accent"))
 
-            for i in range(points + 1):
-                t = i / points
-                x = t * width
+        for i in range(count):
+            t = i / max(1, count - 1)
+            envelope = 0.35 + 0.65 * math.sin(math.pi * t)
 
-                envelope = max(0.0, 1.0 - ((t - 0.5) * 2.0) ** 2) ** 1.8
+            band_position = t * 14
+            band_index = min(13, int(band_position))
+            fraction = band_position - band_index
+            level = (self.smoothed[band_index] * (1.0 - fraction) +
+                     self.smoothed[band_index + 1] * fraction)
 
-                band_position = t * 14
-                band_index = min(13, int(band_position))
-                fraction = band_position - band_index
+            shimmer = 0.75 + 0.25 * math.sin(i * 0.9 - self.phase * 6.0)
+            energy = min(1.0, (self.amplitude * 0.35 + level * 0.65) * 1.6)
+            half = min_half + (max_half - min_half) * energy * envelope * shimmer
 
-                level = (self.smoothed[band_index] * (1.0 - fraction) +
-                         self.smoothed[band_index + 1] * fraction)
-
-                energy = self.amplitude * 0.45 + level * 0.55
-                amplitude = (12.0 + layer * 7.0) * envelope * energy * 2.2
-
-                wave = math.sin(
-                    t * 26.0 - self.phase * (0.8 + layer * 0.08) + layer * 0.55
-                )
-
-                detail = math.sin(t * 43.0 + self.phase * 0.45) * 0.22
-
-                y = center + (wave + detail) * amplitude
-
-                if i == 0:
-                    path.moveTo(x, y)
-                else:
-                    path.lineTo(x, y)
-
-            pen = QPen(color)
-            pen.setWidthF(2.0 if layer == 0 else 1.5)
-            pen.setCapStyle(Qt.RoundCap)
-            pen.setJoinStyle(Qt.RoundJoin)
-
-            painter.setPen(pen)
-            painter.drawPath(path)
+            x = left + i * (bar + gap)
+            painter.drawRoundedRect(
+                QRectF(x, center - half, bar, half * 2), bar / 2, bar / 2)
 
         painter.end()
