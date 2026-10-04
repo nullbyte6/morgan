@@ -114,11 +114,6 @@ identification system.
 
 ## Verification
 
-Run `.venv\Scripts\python.exe -B -m unittest discover -s tests -v`.
-The regression tests cover wake matching, the recording-request round trip, and
-exclusive desktop lifetime locking. They do not measure physical microphone,
-Whisper, speaker echo, or Qt rendering behavior.
-
 For a live acceptance check, restart the updated listener and close the desktop.
 Say a wake phrase and confirm that Morgan opens and recording starts once it is
 ready. Repeat with the full app already open and in mascot mode; in mascot mode,

@@ -36,14 +36,6 @@ When the budget is exhausted, the tool explicitly reports the limit, and the age
 This limits the amount of context added by attachments: Ollama does not provide advance token counting through the adapter currently in use, and the existing conversation history management is not replaced.
 All processing and model requests remain on localhost.
 
-## Verification
-```powershell
-.venv/Scripts/python.exe -m unittest discover -s tests -v
-```
-Interface tests use Qt's offscreen mode and mock the native file dialog and service startup.
-PydanticAI tests exercise real file-reading tools with a controlled model, including desktop streaming.
-The tests do not require Ollama, TTS, or Steam to be running, and they do not write to the user's logs.
-
 ## Voice
 Fixed a normalization bug that passed empty text to `split_paragraph`, causing an `IndexError`. Chunks containing no letters or digits are now ignored by the service.
 The client preserves asynchronous synthesis errors and detects 120 seconds without progress, reporting an unresponsive service instead of waiting indefinitely.

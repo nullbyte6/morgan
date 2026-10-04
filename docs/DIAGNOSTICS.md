@@ -104,8 +104,6 @@ log file is created. Normal failures are returned as data instead of printed.
 
 ## Validation
 
-Run `.venv/Scripts/python.exe -m unittest discover -s tests -v`.
-Tests mock system sources and use temporary storage for tool-registry checks.
 No installed linter/type-checker configuration exists in this repository.
 
 API references: [psutil sampling](https://psutil.readthedocs.io/stable/),

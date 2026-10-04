@@ -304,7 +304,6 @@ not a guarantee of forensic erasure from FTS segments, WAL files, SSDs or backup
 ```powershell
 .venv\Scripts\python.exe -B -m src.init.memory check
 .venv\Scripts\python.exe -B -m src.init.memory backup "D:\Backups\morgan-memory.sqlite3"
-.venv\Scripts\python.exe -B -m unittest discover -s tests -v
 ```
 
 Backup uses SQLite's online backup API, includes committed WAL content and refuses
@@ -332,8 +331,3 @@ example with `memory.enabled=false`, `memory.store_history=false` or days before
 persistence existed, the diary shows that day's Markdown log from `~/.morgan/.log`
 instead. The diary only reads: private conversations are never in it, nothing is sent
 anywhere, and removing a memory still goes through a request to Morgan.
-
-Tests use temporary databases and logs, including migration rollback, FTS,
-concurrent writes, CRUD, supersession, deletion, imports, privacy, Pydantic AI tool
-execution and the existing streamed agent lifecycle with a local test model.
-They do not exercise a live Ollama model or physical microphone/TTS devices.
