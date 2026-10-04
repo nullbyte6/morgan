@@ -49,7 +49,7 @@ A new workspace shows a single Nova star in place of the row of buttons. Press i
 slide out the workspace buttons (Morgan, Editor, Settings and Terminal) and
 press it again to fold them. `Ctrl + click` on the star opens Nova in that panel instead.
 
-Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar and Diary,
+Its sidebar is part of the panel: it holds Agenda, Reminders, Events, Calendar, Diary and Journal,
 and folds to an icon strip with a slide when you click the Nova star. In narrow
 panels it folds by itself.
 
@@ -58,7 +58,11 @@ panels it folds by itself.
 - **Reminders** keeps pending and completed reminders. Tick the circle to complete one.
 - **Events** lists upcoming and past events, with a time or all day.
 - **Diary** is Morgan's memory one day at a time, with that day's agenda, what Morgan
-  remembers and the conversations held (see [MEMORY.md](MEMORY.md)).
+  remembers and the conversations held (see [MEMORY.md](MEMORY.md)). Its icon is a scroll.
+- **Journal** is the user's own record, one day at a time and separate from the Diary:
+  write an entry in the box (`Ctrl + Enter` adds it), or tell the assistant about the
+  day and it writes the entry down in the first person with light cleanup. Entries show who
+  wrote them, and can be edited or deleted. "Open journal" in the command palette opens it.
 - **Calendar** shows a week, month or year. Click a day in the month or year to drill
   into its week, click a month name in the year to open that month, and double-click a
   slot in the week to create an event there.
@@ -67,9 +71,9 @@ The **+** button, or clicking any entry, opens an overlay to create, edit or del
 reminder or an event. Reminders take a date and an `HH:mm` time; events take a start
 and an end, or last all day. Dates are picked from a month picker.
 
-Reminders live in `~/.morgan/nova/reminders.sqlite3` and events in
-`~/.morgan/nova/events.sqlite3`, two independent SQLite databases that use only Python's
-standard library. Times are stored as local wall-clock times. While Morgan runs, a due
+Reminders live in `~/.morgan/nova/reminders.sqlite3`, events in
+`~/.morgan/nova/events.sqlite3` and journal entries in `~/.morgan/nova/journal.sqlite3`,
+three independent SQLite databases that use only Python's standard library. Times are stored as local wall-clock times. While Morgan runs, a due
 reminder is announced as a Windows notification within about 30 seconds; reminders
 that were already more than a day overdue when Morgan started are not announced, but stay
 marked as overdue.

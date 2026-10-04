@@ -18,7 +18,7 @@ Ollama to run tools and automate tasks on Windows.
   context. See [memory](docs/MEMORY.md).
 - Nova, a personal organizer with reminders and events (flags and daily,
   weekly, monthly or custom repeats), a calendar, a diary of every day's
-  conversations, a weekly review, memories and search. Morgan manages it from
+  conversations, a personal journal you can dictate to Morgan, a weekly review, memories and search. Morgan manages it from
   chat, and due reminders arrive as Windows notifications with snooze buttons.
 - Tiling workspaces for editors, files, diffs, PDFs, terminals and Nova. See
   [workspaces](docs/WORKSPACES.md).
