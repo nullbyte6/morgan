@@ -223,6 +223,7 @@ class SongView(QWidget):
         column.addStretch(1)
         column.addLayout(progress)
         column.addLayout(controls)
+        column.addSpacing(44)
         body = QWidget()
         body.setObjectName("novaEntryBody")
         body.setLayout(column)
