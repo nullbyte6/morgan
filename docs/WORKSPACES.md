@@ -17,6 +17,12 @@ Workspaces are managed entirely through keyboard shortcuts, keeping the interfac
 | `Ctrl + +`      | Enlarge the complete interface.       |
 | `Ctrl + -`      | Reduce the complete interface.        |
 | `Ctrl + 0`      | Restore 100% interface zoom.          |
+| `Ctrl + B`      | Fold or unfold the Nova sidebar.      |
+| `Ctrl + H`      | Open Nova's Home.                     |
+| `Ctrl + Alt + N` | Open Nova's Notifications.           |
+| `Ctrl + M`      | Open Nova's Me.                       |
+| `Ctrl + S`      | Open Nova's Search, or save the file in the editor. |
+| `Ctrl + O`      | Open a file in the editor.            |
 
 The active panel is highlighted, and closing it automatically selects another available panel.
 
@@ -40,18 +46,24 @@ default browser.
 
 ## Nova
 
-Nova is Morgan's reminders, events and agenda workspace. Open it from the command
-palette (`Ctrl + K`, then "Nova") or with `Ctrl + Alt + N`. `Ctrl + L`, or "Open diary" in the palette, opens it straight on the
-Diary, and `Ctrl + J`, or "Open journal", straight on the Journal, reusing a Nova panel that is already open. It lives inside a
-workspace panel and uses Morgan's theme, fonts and animations.
+Nova is Morgan's reminders, events and agenda sidebar. It sits at the left of the main
+workspace, inside the same frame as the orb, and uses Morgan's theme, fonts and animations.
+Open it from the command palette (`Ctrl + K`, then "Nova"). `Ctrl + L`, or "Open diary" in
+the palette, opens it straight on the Diary, and `Ctrl + J`, or "Open journal", straight on
+the Journal.
 
 A new workspace shows a single Nova star in place of the row of buttons. Press it to
 slide out the workspace buttons (Morgan, Editor, Settings and Terminal) and
-press it again to fold them. `Ctrl + click` on the star opens Nova in that panel instead.
+press it again to fold them. `Ctrl + click` on the star opens Nova's Home in the sidebar.
 
-Its sidebar is part of the panel and has four buttons: Home, Notifications, Me and Search.
-It folds to an icon strip with a slide when you click the Nova star, and in narrow
-panels it folds by itself. Nova opens on Home.
+The sidebar has four buttons: Home, Notifications, Me and Search. It has three states.
+It starts folded to an icon strip. Click the Nova star at its top, press `Ctrl + B`, or
+click an icon to unfold it to the labels. Click a label to slide out that hub's sections to
+the right of the labels, and click it again to shut them. The star or `Ctrl + B` folds it
+all back to icons. `Ctrl + H`, `Ctrl + Alt + N`, `Ctrl + M` and `Ctrl + S` open Home,
+Notifications, Me and Search straight away, unfolding the sidebar when needed; pressing the
+same one again shuts the sections. In the editor, `Ctrl + S` saves the current file instead
+of opening Search. Nova opens on Home.
 
 Home, Notifications and Me each open a grid of square tiles, one per section, with the
 section's icon and its name below. The grid has up to three columns and reflows as the
