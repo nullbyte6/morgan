@@ -449,8 +449,12 @@ def _migrate_storage() -> Path:
         current = found.resolve()
         config_file = current / "json" / "config.json"
         name = located
+        adopted = False
         if config_file.exists():
             name = validate_config(json.loads(config_file.read_text(encoding="utf-8-sig")))["assistant"]["name"]
+            if found is not target and _storage_identifier(located) != _storage_identifier(name):
+                name = located
+                adopted = True
         desired = home / ("." + _storage_identifier(name))
         if os.path.normcase(str(current)) != os.path.normcase(str(desired)):
             if not current_platform().persistent_environment:
@@ -479,6 +483,11 @@ def _migrate_storage() -> Path:
                 desired.rename(current)
                 raise
             current = desired
+            if adopted:
+                adopted_file = current / "json" / "config.json"
+                stored = json.loads(adopted_file.read_text(encoding="utf-8-sig"))
+                stored["assistant"] = {**(stored.get("assistant") or {}), "name": name}
+                adopted_file.write_text(json.dumps(stored, indent=2, ensure_ascii=False), encoding="utf-8")
         elif _storage_identifier(located) != _storage_identifier(name):
             _persist_locator(name)
         if _is_link(legacy) and os.path.normcase(str(legacy)) != os.path.normcase(str(current)):
