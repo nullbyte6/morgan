@@ -11,8 +11,9 @@ Ollama to run tools and automate tasks on Windows.
 
 - Local assistant model (`qwen3.5:4b` through Ollama) for text, images and
   voice, with tool calling to run commands, read and edit files and automate
-  tasks on the PC, and a separate coding model (`qwen3.5:9b`) that it hands
-  real coding jobs to and that Ollama loads only while they run.
+  tasks on the PC, and a separate coding model (`qwen3.5:9b`) that takes over
+  real coding jobs and requests that turn out to be long or hard, and that
+  Ollama loads only while it is used.
 - Spoken replies with CosyVoice, hands-free wake phrase activation and live
   voice input. See [wake voice](docs/WAKE-VOICE.md).
 - Persistent local memory in SQLite, with pinned memories that are always in
@@ -48,7 +49,7 @@ required. The installer:
   variable (or `<NAME>` for a custom name) to the installation folder;
 - installs Git for Windows through WinGet if Git Bash is not found;
 - installs Ollama through WinGet if it is missing, starts it, and downloads the
-  `qwen3.5:4b` assistant model (about 3.4 GB) and the `qwen3.5:9b` coding model
+  `qwen3.5:4b` assistant model (about 3.3 GB) and the `qwen3.5:9b` coding model
   (about 6.6 GB);
 - creates the data directory `C:\Users\<username>\.<name>` (`.morgan` for the
   default name), saves the chosen name in its `config.json`, and downloads the

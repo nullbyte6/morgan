@@ -10,15 +10,23 @@ input.
 
 | Role | Model | Size | Native context | Modalities |
 | --- | --- | --- | --- | --- |
-| Assistant | `qwen3.5:4b` | ~3.4 GB | 262,144 tokens | Text and image |
+| Assistant | `qwen3.5:4b` | ~3.3 GB | 262,144 tokens | Text and image |
 | Coding | `qwen3.5:9b` | ~6.6 GB | 262,144 tokens | Text and image |
 
 Both models support tool calling. The assistant is kept loaded with the
 `keep_alive` setting. The coding model uses Ollama's default lifetime, so it is
-unloaded a few minutes after the last coding job. The `base_model_name` and
-`coding_model` entries of `dev/core.json` set the defaults, and the `model` and
-`coding_model` settings of the user configuration override them; an empty
-`coding_model` falls back to the assistant model.
+unloaded a few minutes after the last use.
+
+There is no model selector: Morgan switches models by itself. A real coding job
+is handed to the coding model with the `delegate_coding` tool. When a request
+reaches four tool steps or two failed ones, or when the assistant calls the
+`escalate` tool, the rest of the request continues on the coding model with the
+same conversation, and the next request starts on the assistant again.
+
+The `base_model_name` and `coding_model` entries of `dev/core.json` set the
+models, and the `coding_model` setting of the user configuration overrides the
+coding model; an empty `coding_model` falls back to the assistant model, which
+also turns escalation off.
 
 ### Storage
 
