@@ -313,9 +313,7 @@ class VoiceService:
         if language is not None:
             prefix, transcript = self._reference_prompt.split("<|endofprompt|>", 1)
             prefix = prefix.rstrip().removesuffix(f"Please speak in {VOICE_REFERENCE_LANGUAGE}.").rstrip()
-            instruction = (f"{prefix} Please speak in "
-                           f"{language.name.replace('_', ' ').lower()}."
-                           f"<|endofprompt|>{transcript}")
+            instruction = f"{prefix}<|endofprompt|>{transcript}"
             instruction_key = (self._reference_key, language)
             instructed_id = speaker_id + "-instruct"
             if instruction_key != self._instruction_key:
