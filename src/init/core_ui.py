@@ -274,6 +274,9 @@ class AssistantWindow(DesktopWindow):
         self.diary_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
         self.diary_shortcut.setContext(Qt.ApplicationShortcut)
         self.diary_shortcut.activated.connect(self.open_nova_diary)
+        self.journal_shortcut = QShortcut(QKeySequence("Ctrl+J"), self)
+        self.journal_shortcut.setContext(Qt.ApplicationShortcut)
+        self.journal_shortcut.activated.connect(self.open_nova_journal)
 
         self._workspace_chord_pending = False
         self._workspace_chord_timer = QTimer(self)
