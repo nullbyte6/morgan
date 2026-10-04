@@ -10,6 +10,7 @@ __pycache__/
 .cache
 *.txt
 !src/platforms/*/requirements.txt
+!src/voices/*.txt
 
 /tests/*
 /dev/*.py
