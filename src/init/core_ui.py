@@ -1200,8 +1200,16 @@ class AssistantWindow(DesktopWindow):
         """Watch for songs in the background and open the song panel when one starts playing."""
         self.song_monitor = SongMonitor(self)
         self.song_panel_key = None
+        self.song_panel_id = None
         self.song_monitor.updated.connect(self.on_song_update, Qt.ConnectionType.QueuedConnection)
         self.song_monitor.start()
+
+    def song_panel_open(self) -> bool:
+        """Whether a song panel is already in the workspace, including one that is still closing."""
+        if self.workspace.get_panel(self.song_panel_id) is not None:
+            return True
+        return any(self.workspace.get_panel(panel_id).property("workspaceViewKey") == "song"
+                   for panel_id in self.workspace.panel_ids) or bool(self.workspace.findChildren(SongView))
 
     @Slot(object)
     def on_song_update(self, song) -> None:
@@ -1211,15 +1219,15 @@ class AssistantWindow(DesktopWindow):
             return
         if (not song.playing or song.key == self.song_panel_key or self.quitting or not self.isVisible()
                 or not self.settings.value("song_panel", True, type=bool)
-                or self.workspace.findChildren(SongView)):
+                or self.song_panel_open()):
             return
         self.song_panel_key = song.key
         view = SongView(self.song_monitor)
         view.setProperty("workspaceViewKey", "song")
         view.summary_requested.connect(self.open_song_summary)
         try:
-            self.workspace.open_panel(title=tr("song.title"), content=view, direction=Qt.Key_Right,
-                                      size=SONG_PANEL_WIDTH)
+            self.song_panel_id = self.workspace.open_panel(title=tr("song.title"), content=view,
+                                                           direction=Qt.Key_Right, size=SONG_PANEL_WIDTH)
         except Exception:
             view.deleteLater()
             logging.getLogger("assistant.workspace").exception("Failed to open the song view")
