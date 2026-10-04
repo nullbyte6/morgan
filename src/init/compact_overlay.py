@@ -33,7 +33,7 @@ from src.init.orb import Orb
 WIDTH = 292
 MARGIN = 0
 ORB_SIZE = 40
-BOTTOM_GAP = 48
+EDGE_GAP = 16
 DURATION = 260
 
 
@@ -153,15 +153,30 @@ class CompactOverlay(QWidget):
         screen = QGuiApplication.primaryScreen().availableGeometry()
         self.layout().activate()
         hint = self.layout().sizeHint()
-        self.move(screen.center().x() - hint.width() // 2,
-                  screen.bottom() - hint.height() - BOTTOM_GAP)
+        self.move(screen.right() + 1 - hint.width() - EDGE_GAP,
+                  screen.bottom() + 1 - hint.height() - EDGE_GAP)
         self._placed = True
+
+    def _clamp_to_screen(self):
+        if not self.isVisible():
+            return
+        screen = QGuiApplication.screenAt(self.frameGeometry().center()) or QGuiApplication.primaryScreen()
+        area = screen.availableGeometry()
+        x = max(area.left(), min(self.x(), area.right() + 1 - self.width()))
+        y = max(area.top(), min(self.y(), area.bottom() + 1 - self.height()))
+        if (x, y) != (self.x(), self.y()):
+            self.move(x, y)
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        self._clamp_to_screen()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         old = event.oldSize()
         if self.isVisible() and old.height() > 0 and old.height() != self.height():
             self.move(self.x(), self.y() - (self.height() - old.height()))
+        self._clamp_to_screen()
         if self._reveal < 1.0:
             self._set_reveal(self._reveal)
 
