@@ -166,6 +166,8 @@ reminders, events, calendar, diary, week review, memories and search as the
 desktop, with due reminders announced as Windows notifications. Pass `--no-voice` (or
 `morgan-tui.bat -NoVoice`) to skip the TTS service entirely and show text only.
 
+![morgan-img4](assets/img4.png)
+
 ## Usage
 
 Closing the desktop window keeps Morgan and its local services running in the
@@ -189,6 +191,8 @@ preserved so reloading does not require restarting the application.
 
 For native voice input, tool execution, and action regression checks, see
 [desktop action execution](docs/ACTION-EXECUTION.md).
+
+![morgan-img3](assets/img3.png)
 
 ## License
 
