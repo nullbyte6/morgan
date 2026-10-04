@@ -98,7 +98,7 @@ class MemoryCard(QFrame):
         column.addWidget(_label(memory["content"], "novaRowTitle"))
         category = tr(f"nova.diary.category.{memory['category']}")
         when = formatting.time_text(local_moment(memory["modified_at"]))
-        column.addWidget(_label(f"{category} · {when}", "novaRowCaption", wrap=False))
+        column.addWidget(_label(f"{category} · {when}", "novaRowCaption"))
 
 
 class ConversationCard(QFrame):
@@ -123,7 +123,7 @@ class ConversationCard(QFrame):
         head = QVBoxLayout()
         head.setSpacing(3)
         head.addWidget(_label(topic, "novaRowTitle"))
-        head.addWidget(_label(f"{span} · {message_count(session['messages'])}", "novaRowCaption", wrap=False))
+        head.addWidget(_label(f"{span} · {message_count(session['messages'])}", "novaRowCaption"))
         self._head = QWidget()
         top = QHBoxLayout(self._head)
         top.setContentsMargins(0, 0, 0, 0)
@@ -202,6 +202,7 @@ class DiaryView(QWidget):
         self.day_label = QLabel()
         self.day_label.setObjectName("novaDiaryDay")
         self.day_label.setMinimumWidth(0)
+        self.day_label.setWordWrap(True)
         self.earlier_button = QPushButton()
         self.earlier_button.setObjectName("novaTodayButton")
         self.earlier_button.setCursor(Qt.CursorShape.PointingHandCursor)

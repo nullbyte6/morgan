@@ -60,7 +60,7 @@ class DayRow(QFrame):
         column.addWidget(_label(formatting.day_heading(day), "novaRowTitle"))
         if topic:
             column.addWidget(_label(clipped(topic), "novaRowNotes"))
-        column.addWidget(_label(caption, "novaRowCaption", wrap=False))
+        column.addWidget(_label(caption, "novaRowCaption"))
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
@@ -89,6 +89,7 @@ class ReviewView(QWidget):
         self.week_label = QLabel()
         self.week_label.setObjectName("novaDiaryDay")
         self.week_label.setMinimumWidth(0)
+        self.week_label.setWordWrap(True)
         self.summarize_button = QPushButton()
         self.summarize_button.setObjectName("novaTodayButton")
         self.summarize_button.setCursor(Qt.CursorShape.PointingHandCursor)

@@ -119,6 +119,7 @@ class EntryRow(QFrame):
             details.addWidget(notes)
         when = QLabel(caption(entry))
         when.setObjectName("novaRowCaption")
+        when.setWordWrap(True)
         details.addWidget(when)
 
         if isinstance(entry, Reminder):

@@ -59,7 +59,7 @@ class DayResult(QFrame):
         column.setSpacing(3)
         column.addWidget(_label(formatting.day_heading(day), "novaRowTitle"))
         column.addWidget(_label(clipped(excerpts[0]), "novaRowNotes"))
-        column.addWidget(_label(message_count(len(excerpts)), "novaRowCaption", wrap=False))
+        column.addWidget(_label(message_count(len(excerpts)), "novaRowCaption"))
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
@@ -96,7 +96,7 @@ class JournalResult(QFrame):
         column.addWidget(_label(formatting.day_heading(entry.day), "novaRowTitle"))
         column.addWidget(_label(excerpt(entry.text, query), "novaRowNotes"))
         column.addWidget(_label(f"{author} · {formatting.time_text(local_moment(entry.created_at))}",
-                                "novaRowCaption", wrap=False))
+                                "novaRowCaption"))
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):

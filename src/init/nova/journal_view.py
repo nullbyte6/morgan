@@ -62,7 +62,7 @@ class JournalCard(QFrame):
         details = [author, formatting.time_text(local_moment(entry.created_at))]
         if entry.is_edited:
             details.append(tr("nova.journal.edited"))
-        self.caption = _label(" · ".join(details), "novaRowCaption", wrap=False)
+        self.caption = _label(" · ".join(details), "novaRowCaption")
 
         self.editor = QPlainTextEdit(entry.text)
         self.editor.setObjectName("novaInput")
@@ -152,6 +152,7 @@ class JournalView(QWidget):
         self.day_label = QLabel()
         self.day_label.setObjectName("novaDiaryDay")
         self.day_label.setMinimumWidth(0)
+        self.day_label.setWordWrap(True)
         self.earlier_button = QPushButton()
         self.earlier_button.setObjectName("novaTodayButton")
         self.earlier_button.setCursor(Qt.CursorShape.PointingHandCursor)

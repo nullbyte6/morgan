@@ -77,7 +77,7 @@ class MemoryRow(QFrame):
         category = tr(f"nova.diary.category.{memory['category']}")
         when = formatting.date_time_text(local_moment(memory["modified_at"]))
         details = [category, when] + ([tr("nova.memories.pinned_mark")] if pinned else [])
-        self.caption = _label(" · ".join(details), "novaRowCaption", wrap=False)
+        self.caption = _label(" · ".join(details), "novaRowCaption")
 
         self.editor = QPlainTextEdit(memory["content"])
         self.editor.setObjectName("novaInput")
