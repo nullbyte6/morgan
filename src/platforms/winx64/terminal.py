@@ -25,11 +25,19 @@ import shutil
 import subprocess
 import sys
 
+from src.platforms.winx64.environment import git_bash, selected_shell
+
+
+def environment_shell():
+    return "bash" if selected_shell() == "bash" else "pwsh"
+
 
 class WinTerminal:
     def __init__(self, argv, directory, environment, columns, rows):
         from winpty import PTY
         self.process = PTY(columns, rows, timeout=3000)
+        if argv is None and environment_shell() == "bash":
+            argv = [git_bash(), "--login", "-i"]
         if argv is None:
             shell = shutil.which("pwsh.exe") or str(
                 Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
@@ -80,6 +88,8 @@ class WinTerminal:
 
 def terminal_command_line(command):
     encoded = base64.b64encode(command.encode("utf-8")).decode("ascii")
+    if environment_shell() == "bash":
+        return "eval \"$(echo '" + encoded + "' | base64 -d)\""
     return ". ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encoded + "'))))"
 
 

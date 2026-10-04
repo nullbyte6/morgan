@@ -74,7 +74,7 @@ def _encoded(script: str) -> str:
 
 
 def _shell_command(command: str, shell: str) -> list[str]:
-    executable = shutil.which(shell)
+    executable = current_platform().bash_executable() if shell == "bash" else shutil.which(shell)
     if executable is None:
         raise ValueError(tr("command.shell_unavailable", shell=shell))
     if shell in {"powershell", "pwsh"}:
@@ -95,8 +95,8 @@ def execute_command(command: str, working_directory: str = ".",
     In desktop mode the command runs in the visible terminal, with live output.
     Without the desktop, capture output directly in the current CLI session.
     Supports pipelines, scripts, shell builtins and installed executables.
-    shell: auto, powershell, pwsh, cmd, sh or bash (case-insensitive). On Windows auto is
-    PowerShell. elevated asks separately for sudo (Windows and POSIX).
+    shell: auto, powershell, pwsh, cmd, sh or bash (case-insensitive). On Windows bash is
+    Git Bash and auto is the shell chosen in Settings, PowerShell by default. elevated asks separately for sudo (Windows and POSIX).
     Never retry failed commands automatically: they may have partially run.
     Windows sudo must be enabled and uses the user's configured mode.
     Desktop commands accept input in their terminal panel. CLI commands have

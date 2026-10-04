@@ -63,6 +63,7 @@ DEFAULTS = {
     "temperature": 0.2,
     "voice_reference": "voice-01.wav",
     "permission_mode": "ask",
+    "terminal_shell": "pwsh",
     "theme": "catppuccin-macchiato",
     "weather_location": "",
     "message_service": "whatsapp",
@@ -102,7 +103,7 @@ DEFAULTS = {
         "media": "For currently playing media, call get_current_media first; use identify_playing_song only when its metadata is absent or insufficient, and never guess. Use list_media_sessions only for an explicit session list or diagnosis. Use control_media for playback controls. For YouTube, search with search_youtube_songs and play the returned video_id. When the user requests Spotify and both Spotify credentials are configured, search with search_spotify_songs and play the returned URI with play_spotify_song. For a Spotify playlist, use list_spotify_playlists for the user's own/followed playlists or search_spotify_playlists for a public/external playlist; ask the user to choose when ambiguous and use the exact URI with play_spotify_playlist. Do not call get_spotify_playlist_tracks for an external playlist unless Spotify permits it, because Spotify may return 403 for tracks the user does not own or collaborate on. For albums use search_spotify_albums and play_spotify_album with the selected URI. Resolve ambiguous results with a numbered list. Never say Spotify is playing merely because the API accepted a request: only call it playing when playback_confirmed is true and, for a requested song, confirmed_uri matches the requested URI (or confirmed_context_uri matches a requested playlist or album). Spotify controls use the current Windows session first and Spotify Connect as a configured fallback.",
         "temporal_awareness": "Always use the dynamically provided current local date and time as the authoritative temporal reference. Never assume the current year from your training data. Your knowledge cutoff is not the current date. Distinguish between the current date and the date of your latest verified information. When asked about recent or changing information, use search_web and read_web_page to verify it. Do not present outdated knowledge as current or invent developments after your training cutoff.",
         "numbers": "When responding in Spanish, use standard European Spanish (es-ES) conventions for all numbers, quantities, dates, currencies, and units. Use a comma as the decimal separator and a period as the thousands separator: 1.234,56; 1.000.000; 3,5 %. Never use English number expressions such as 'billion' or 'trillion'. In Spanish, 1.000.000.000 is mil millones, 1.000.000.000.000 is un billón, and 1.000.000.000.000.000.000 is un trillón. Write years naturally in Spanish: 2026 is dos mil veintiséis. Never translate English numerical scales literally. Preserve the original formatting of code, file contents, API values, commands, and other literal technical data.",
-        "commands": "Prefer dedicated tools for supported actions. For a named routine or command group, inspect list_quick_commands and run the exact match once with run_quick_command; do not re-run its individual actions. Use execute_command for general local commands and let it collect consent. For administrator commands set elevated=True; never put sudo or runas in a normal command, ask for passwords, bypass denied consent, or invent command output. Inspect possible partial changes after failures. Use change_directory for a persistent working directory.",
+        "commands": "Prefer dedicated tools for supported actions. For a named routine or command group, inspect list_quick_commands and run the exact match once with run_quick_command; do not re-run its individual actions. Use execute_command for general local commands and let it collect consent. On Windows, when Git Bash is available, pass shell='bash' for text and file processing, grep, sed, find, git and pipelines, and shell='pwsh' for Windows administration such as services, processes, the registry, winget and CIM; omit shell to use the default the user chose in Settings. For administrator commands set elevated=True; never put sudo or runas in a normal command, ask for passwords, bypass denied consent, or invent command output. Inspect possible partial changes after failures. Use change_directory for a persistent working directory.",
         "applications": "For opening or launching an app, always use open_application, including when the user gives an executable path or filename; resolve the persistent apps.json cache before any discovery and never use search_apps for an opening request. For installing or downloading apps, search_apps first and use its exact package ID. Resolve ambiguous results, poll running operations, and never report success early or repeat an unknown operation. Before residue cleanup, show candidates and clean only exact folders the user selected or explicitly authorized after uninstall completes. Do not broaden cleanup beyond the requested app. Use close_application to close apps, list_open_applications for a fresh list of open windows, and kill_process only for an explicitly requested, identified process.",
         "communications": "For messages, use send_message with the user's recipient and text. Ask if either is missing; never invent a recipient or number. A submitted message is API acceptance, not delivery, and unknown results are not retried automatically. Use send_email to send, read_emails to inspect, and delete_email only when the user explicitly identifies an email to delete.",
         "files": "Inspect files when needed. Use create_file for new text files, edit_file only to replace an entire existing file, append_file only to add content, and replace_in_file for precise changes. Use binary file tools for non-text formats. Delete a file or directory only when the latest user message explicitly requests that exact target; recursive directory deletion also requires explicit authorization. Use list_files to inspect directories.",
@@ -122,6 +123,7 @@ LEGACY_INSTRUCTIONS = {
     ),
     "commands": (
         "6b1f2f850148d253",
+        "d7fe245f9855b0b1",
     ),
     "conversation": (
         "0338c4a619be8c28",
@@ -247,6 +249,8 @@ def validate_config(config):
         raise ValueError("voice_reference must be a WAV filename")
     if result["permission_mode"] not in ("ask", "auto"):
         result["permission_mode"] = "ask"
+    if result["terminal_shell"] not in ("pwsh", "bash"):
+        result["terminal_shell"] = DEFAULTS["terminal_shell"]
     if not isinstance(result["theme"], str) or not result["theme"].strip():
         result["theme"] = DEFAULTS["theme"]
     if result["lang"] not in LANGUAGES:
@@ -404,7 +408,7 @@ def update_config(updates: dict) -> str:
         for key, value in updates.items():
             if key not in DEFAULTS:
                 return tr('config.error_updating_configuration_unknown_setting', key=key)
-            if key in ("permission_mode", "theme", "context_length"):
+            if key in ("permission_mode", "theme", "context_length", "terminal_shell"):
                 return tr('config.error_updating_configuration_user_only_setting', key=key)
             if isinstance(current.get(key), dict) and isinstance(value, dict):
                 current[key] = {**current[key], **value}

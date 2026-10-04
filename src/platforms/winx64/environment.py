@@ -21,6 +21,7 @@
 import ctypes
 import os
 import shutil
+from pathlib import Path
 
 
 def user_environment(name):
@@ -59,8 +60,28 @@ def is_elevated():
         return False
 
 
-def default_shell():
+def git_bash():
+    candidates = []
+    git = shutil.which("git")
+    if git:
+        candidates.append(Path(git).resolve().parent.parent / "bin" / "bash.exe")
+    for variable in ("ProgramFiles", "ProgramFiles(x86)"):
+        if os.environ.get(variable):
+            candidates.append(Path(os.environ[variable]) / "Git" / "bin" / "bash.exe")
+    if os.environ.get("LOCALAPPDATA"):
+        candidates.append(Path(os.environ["LOCALAPPDATA"]) / "Programs" / "Git" / "bin" / "bash.exe")
+    return next((str(path) for path in candidates if path.is_file()), None)
+
+
+def selected_shell():
+    from src.init.config import load_config
+    if load_config().get("terminal_shell") == "bash" and git_bash():
+        return "bash"
     return "pwsh" if shutil.which("pwsh") else "powershell"
+
+
+def default_shell():
+    return selected_shell()
 
 
 def elevation_prefix(cwd):

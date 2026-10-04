@@ -131,6 +131,10 @@ Panels can be focused, resized, moved, and closed individually. Their content re
 The Terminal button sits immediately to the right of Settings in a new workspace.
 It opens an independent, persistent shell inside the panel: PowerShell 7 (`pwsh.exe`) on Windows,
 starting in `%USERPROFILE%`, or the user's shell in their home directory on Unix.
+On Windows, the Terminal shell setting in Settings switches new terminals to Git Bash
+(`bash --login -i`) when Git for Windows is installed. The same setting is the shell
+`execute_command` uses when none is named; the model can still ask for `bash` or `pwsh`
+per command.
 Directory changes and environment variables persist within that terminal only.
 Commands run with the same permissions as Morgan.
 

@@ -65,7 +65,9 @@ class WinX64Platform(Platform):
     unlock_file = staticmethod(environment.unlock_file)
     remove_link = staticmethod(environment.remove_link)
     is_elevated = staticmethod(environment.is_elevated)
+    supports_shell_choice = True
     default_shell = staticmethod(environment.default_shell)
+    bash_executable = staticmethod(environment.git_bash)
     elevation_prefix = staticmethod(environment.elevation_prefix)
     service_launchers = staticmethod(services.service_launchers)
     service_command = staticmethod(services.service_command)

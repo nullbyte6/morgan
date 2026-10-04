@@ -254,8 +254,14 @@ class Platform:
     def is_elevated(self) -> bool:
         return hasattr(os, "geteuid") and os.geteuid() == 0
 
+    supports_shell_choice = False
+
     def default_shell(self) -> str:
         return "sh"
+
+    def bash_executable(self) -> str | None:
+        """Return the path of a bash that behaves like a POSIX shell, or None."""
+        return shutil.which("bash")
 
     def elevation_prefix(self, cwd: str) -> list[str]:
         """Return the command prefix that runs a command with administrator rights in cwd."""
