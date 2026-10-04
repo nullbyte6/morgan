@@ -7,8 +7,10 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add a soft glow around both rings of the orb
 - Add compact always-on-top overlay that replaces the floating mascot while the main window is closed, a narrow composer with a send button and live waveform that opens at the bottom right of the screen, can be dragged without leaving the screen and restores the main window on double click
 - Add dimmed resting state to the working directory button in the indicator row, which returns to full color while the mouse is over the composer
+- Add one-click fixes to the health view, a Start Ollama button when Ollama is down, a Load model button when the main model is not loaded and a Restart voice button when the voice service is disconnected, that show their progress and the reason when a fix fails, with their text in every interface language
 - Add per-voice reference transcripts, a text file beside each voice's recorded clip, so every reference text matches what is said in its clip
 - Add response timer that slides in from the left of the indicator row only while a response is running and disappears when it ends, instead of always showing 0s
+- Fix barge-in not triggering on speakers, where the reply kept playing because the fixed volume of 900 needed to count as the user speaking over Morgan was louder than quiet speech, by lowering the volume gate toward the normal 400 while the echo left after cancellation is quiet and keeping 900 when it is loud
 - Fix the input box changing height while recording in the main window and the compact overlay, by sizing the waveform to the same height as the text input
 - Fix the subtitles under the main Orb moving it up and down, by giving them a fixed three-line area where lines slide up on their own and wrap narrower to show more lines
 - Update .gitignore to allow the voice transcript text files
