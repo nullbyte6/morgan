@@ -224,22 +224,13 @@ class EditorView(QWidget):
         self.editor = CodeEditor(self)
         self.editor.document().modificationChanged.connect(self.update_title)
 
-        self.open_button = QPushButton("Open")
-        self.save_button = QPushButton("Save")
-
-        self.open_button.clicked.connect(self.choose_file)
-        self.save_button.clicked.connect(self.save_current)
-
-        toolbar = QHBoxLayout()
-        toolbar.addWidget(self.open_button)
-        toolbar.addWidget(self.save_button)
-        toolbar.addStretch()
+        self.open_shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
+        self.open_shortcut.activated.connect(self.choose_file)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 12, 20, 20)
         layout.setSpacing(12)
 
-        layout.addLayout(toolbar)
         layout.addWidget(self.editor, 1)
         self.update_title()
 
