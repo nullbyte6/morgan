@@ -30,7 +30,7 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.chat import ChatInput
 from src.init.orb import Orb
 
-WIDTH = 324
+WIDTH = 292
 MARGIN = 0
 ORB_SIZE = 40
 BOTTOM_GAP = 48
@@ -79,12 +79,12 @@ class CompactOverlay(QWidget):
         self.orb = Orb(self, fill_ratio=0.54)
         self.orb.set_size(ORB_SIZE)
         self.orb.setFixedSize(ORB_SIZE, ORB_SIZE)
+        self.orb.hide()
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(8)
+        outer.setSpacing(0)
         outer.setSizeConstraint(QLayout.SetFixedSize)
-        outer.addWidget(self.orb, 0, Qt.AlignVCenter)
         outer.addWidget(card)
         card.setFixedWidth(WIDTH)
 
