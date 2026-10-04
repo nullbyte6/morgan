@@ -37,6 +37,7 @@ Ollama to run tools and automate tasks on Windows.
   and to check for updates from the GitHub releases.
 
 ![morgan-img1](assets/img1.png)
+![morgan-img2](assets/img2.png)
 
 ## Installation
 
@@ -80,7 +81,7 @@ from the name, the default), `male`, `female` or `neutral`.
 To start Morgan, open it from the Start menu or run `Morgan.exe`. See the
 [specs here](docs/SPECS.md) for model and hardware requirements.
 
-![morgan-img2](assets/img2.png)
+![morgan-img3](assets/img3.png)
 
 ## Running from source
 
@@ -144,6 +145,8 @@ To support another system, add a package next to these that subclasses
 `Platform`, override what that system provides, and select it in
 `current_platform()`.
 
+![morgan-img4](assets/img4.png)
+
 ## Usage
 
 Closing the desktop window keeps Morgan and its local services running in the
@@ -168,7 +171,7 @@ preserved so reloading does not require restarting the application.
 For native voice input, tool execution, and action regression checks, see
 [desktop action execution](docs/ACTION-EXECUTION.md).
 
-![morgan-img3](assets/img3.png)
+![morgan-img5](assets/img5.png)
 
 ## License
 
