@@ -28,8 +28,8 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.chat import ChatInput
 from src.init.orb import Orb
 
-WIDTH = 400
-MARGIN = 6
+WIDTH = 360
+MARGIN = 0
 ORB_SIZE = 40
 BOTTOM_GAP = 48
 DURATION = 260
@@ -48,16 +48,16 @@ class CompactOverlay(QWidget):
         self.input.file_tags_enabled = False
         self.meter = AudioVisualizer()
         self.meter.setMinimumWidth(0)
-        self.meter.setFixedHeight(40)
+        self.meter.setFixedHeight(32)
         self.meter.hide()
         self.send = QPushButton("")
         self.send.setObjectName("send")
-        self.send.setFixedSize(36, 36)
+        self.send.setFixedSize(32, 32)
 
         frame = QFrame()
         frame.setObjectName("inputFrame")
         frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        frame.setMinimumHeight(44)
+        frame.setMinimumHeight(40)
         row = QHBoxLayout(frame)
         row.setContentsMargins(16, 2, 4, 2)
         row.setSpacing(0)
