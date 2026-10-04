@@ -474,7 +474,7 @@ class AssistantWindow(DesktopWindow):
         input_layout.addWidget(ui.input, 1, Qt.AlignVCenter)
         input_layout.addWidget(ui.input_meter)
         input_layout.addWidget(ui.attach, 0, Qt.AlignBottom)
-        input_layout.addWidget(ui.send, 0, Qt.AlignBottom)
+        input_layout.addWidget(ui.send, 0, Qt.AlignVCenter)
 
         input_column = QVBoxLayout()
         input_column.setContentsMargins(0, 0, 0, 0)
@@ -524,7 +524,7 @@ class AssistantWindow(DesktopWindow):
         ui.attach.clicked.connect(ui.attachment_tray.choose_files)
 
         ui.send.setObjectName("send")
-        ui.send.setFixedSize(40, 40)
+        ui.send.setFixedSize(36, 36)
         ui.send.clicked.connect(lambda: self.on_send_clicked(session))
         ui.send.hide()
         indicator_row.setContentsMargins(16, 0, 16, 0)
@@ -1418,7 +1418,7 @@ class AssistantWindow(DesktopWindow):
             ui.send.style().polish(ui.send)
         if mic:
             ui.send.setIcon(waveform_icon())
-            ui.send.setIconSize(QSize(28, 28))
+            ui.send.setIconSize(QSize(25, 25))
         else:
             ui.send.setIcon(QIcon())
 

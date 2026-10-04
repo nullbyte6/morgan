@@ -154,6 +154,7 @@ QPushButton#send {
 }
 
 QPushButton#send {
+    border-radius: 18px;
     background-color: @accent;
     color: @on_accent;
     border: none;
