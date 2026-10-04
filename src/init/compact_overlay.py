@@ -23,11 +23,14 @@ from PySide6.QtGui import QGuiApplication, QRegion
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QPushButton, QSizePolicy,
                                QVBoxLayout, QWidget)
 
+
 from src.init.audio_visualizer import AudioVisualizer
 from src.init.chat import ChatInput
+from src.init.orb import Orb
 
-WIDTH = 560
-MARGIN = 8
+WIDTH = 400
+MARGIN = 6
+ORB_SIZE = 40
 BOTTOM_GAP = 48
 DURATION = 260
 
@@ -45,7 +48,7 @@ class CompactOverlay(QWidget):
         self.input.file_tags_enabled = False
         self.meter = AudioVisualizer()
         self.meter.setMinimumWidth(0)
-        self.meter.setFixedHeight(48)
+        self.meter.setFixedHeight(40)
         self.meter.hide()
         self.send = QPushButton("")
         self.send.setObjectName("send")
@@ -54,7 +57,7 @@ class CompactOverlay(QWidget):
         frame = QFrame()
         frame.setObjectName("inputFrame")
         frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        frame.setMinimumHeight(48)
+        frame.setMinimumHeight(44)
         row = QHBoxLayout(frame)
         row.setContentsMargins(16, 2, 4, 2)
         row.setSpacing(0)
@@ -68,9 +71,15 @@ class CompactOverlay(QWidget):
         card_layout.setContentsMargins(MARGIN, MARGIN, MARGIN, MARGIN)
         card_layout.addWidget(frame)
 
-        outer = QVBoxLayout(self)
+        self.orb = Orb(self, fill_ratio=0.54)
+        self.orb.set_size(ORB_SIZE)
+        self.orb.setFixedSize(ORB_SIZE, ORB_SIZE)
+
+        outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(8)
         outer.setSizeConstraint(QLayout.SetFixedSize)
+        outer.addWidget(self.orb, 0, Qt.AlignVCenter)
         outer.addWidget(card)
         card.setFixedWidth(WIDTH)
 
@@ -137,7 +146,8 @@ class CompactOverlay(QWidget):
 
     def _place_default(self):
         screen = QGuiApplication.primaryScreen().availableGeometry()
-        hint = self.sizeHint()
+        self.layout().activate()
+        hint = self.layout().sizeHint()
         self.move(screen.center().x() - hint.width() // 2,
                   screen.bottom() - hint.height() - BOTTOM_GAP)
         self._placed = True

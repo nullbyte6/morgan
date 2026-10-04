@@ -87,9 +87,10 @@ class MascotSubtitleBubble(QWidget):
     RADIUS = 24
     ANIMATION_MS = 120
 
-    def __init__(self, mascot):
+    def __init__(self, mascot, above=False):
         super().__init__(None)
         self.mascot = mascot
+        self.above = above
         self._active = False
 
         self._source_text = ""
@@ -286,6 +287,13 @@ class MascotSubtitleBubble(QWidget):
         area = screen.availableGeometry()
         mascot = self.mascot.frameGeometry()
         bubble = self.frameGeometry()
+
+        if self.above:
+            x = mascot.center().x() - bubble.width() // 2
+            x = max(area.left(), min(x, area.right() - bubble.width() + 1))
+            y = mascot.top() - bubble.height() - self.GAP
+            self.move(x, max(area.top(), y))
+            return
 
         left_x = mascot.left() - bubble.width() - self.GAP
         right_x = mascot.right() + self.GAP + 1

@@ -48,7 +48,7 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import *
 
 from src.init.orb import Orb
-from src.init.orb_subtitles import SlidingSubtitleLabel
+from src.init.orb_subtitles import MascotSubtitleBubble, SlidingSubtitleLabel
 from src.init.compact_overlay import CompactOverlay
 from src.init.audio_visualizer import AudioVisualizer
 from src.init.core import Assistant
@@ -205,6 +205,8 @@ class AssistantWindow(DesktopWindow):
         self.setWindowIcon(QIcon(str(icon_path)))
 
         self.overlay = CompactOverlay()
+        self.overlay.orb.set_speech_pulse_enabled(orb_speech_pulse)
+        self.overlay_subtitles = MascotSubtitleBubble(self.overlay, above=True)
         self.overlay.input.textChanged.connect(self.on_overlay_text_changed)
         self.overlay.input.submitted.connect(lambda: self.send_message())
         self.overlay.send.clicked.connect(lambda: self.on_send_clicked())
@@ -821,7 +823,10 @@ class AssistantWindow(DesktopWindow):
 
     def _orbs(self, session=None):
         session = session or self.session
-        return [session.ui.orb] if session.ui is not None else []
+        orbs = [session.ui.orb] if session.ui is not None else []
+        if session is self.session:
+            orbs.append(self.overlay.orb)
+        return orbs
 
     def clear_orbs(self, session=None):
         for orb in self._orbs(session):
@@ -968,6 +973,13 @@ class AssistantWindow(DesktopWindow):
         if ui is None:
             return
         overlay = self.overlay
+        view = self.session.presentation.view
+        overlay.orb.set_thinking(view.active and view.orb_state == Orb.State.PROCESSING)
+        if self.session.ready:
+            overlay.orb.set_visual_state(view.orb_state)
+        overlay.orb.set_speaking(self.session.speaking)
+        overlay.orb.set_listening(self.recording and self.voice_session is self.session)
+        self.sync_overlay_subtitle()
         overlay.sync_text(ui.input.toPlainText())
         overlay.set_recording(not ui.input_meter.isHidden())
         overlay.send.setText(ui.send.text())
@@ -983,6 +995,11 @@ class AssistantWindow(DesktopWindow):
             overlay.send.style().polish(overlay.send)
         overlay.input.setEnabled(ui.input.isEnabled())
         overlay.input.setPlaceholderText(ui.input.placeholderText())
+
+    def sync_overlay_subtitle(self):
+        self.overlay_subtitles.set_subtitle(
+            self.session.subtitle_text,
+            self.subtitles_enabled and self.session.speaking)
 
     def on_overlay_text_changed(self):
         ui = self.session.ui
@@ -1516,7 +1533,7 @@ class AssistantWindow(DesktopWindow):
             actions = tray.contextMenu().actions()
             actions[0].setText(tr("tray.open"))
             actions[1].setText(tr("tray.quit"))
-        for orb in (session.ui.orb for session in self._views()):
+        for orb in (self.overlay.orb, *(session.ui.orb for session in self._views())):
             orb.setToolTip(name)
         if hasattr(self, "command_palette"):
             self.command_palette.refresh_language()
@@ -1665,6 +1682,7 @@ class AssistantWindow(DesktopWindow):
         self.subtitles_enabled = enabled
         for session in self._views():
             session.ui.subtitles.setVisible(enabled and session.ready)
+        self.sync_overlay_subtitle()
         self.settings.setValue("subtitles", enabled)
         self.refresh_settings_workspaces()
 
@@ -1682,10 +1700,11 @@ class AssistantWindow(DesktopWindow):
                 self.on_speaking(session, session.turn_id, False)
             for session in self._views():
                 session.ui.orb.clear()
+            self.overlay.orb.clear()
         self.refresh_settings_workspaces()
 
     def toggle_orb_speech_pulse(self, enabled: bool):
-        for orb in (session.ui.orb for session in self._views()):
+        for orb in (self.overlay.orb, *(session.ui.orb for session in self._views())):
             orb.set_speech_pulse_enabled(enabled)
         self.settings.setValue("orb_speech_pulse", enabled)
         self.refresh_settings_workspaces()
@@ -1728,6 +1747,7 @@ class AssistantWindow(DesktopWindow):
     def set_orbs_speaking(self, speaking: bool, session=None):
         for orb in self._orbs(session):
             orb.set_speaking(speaking)
+        self.sync_overlay_subtitle()
 
     def set_orbs_listening(self, listening: bool, session=None):
         for orb in self._orbs(session):
@@ -1774,6 +1794,8 @@ class AssistantWindow(DesktopWindow):
             subtitles.reset_lines()
         subtitles.set_lines(
             self.render_subtitle("\n".join(lines[-3:])), len(lines))
+        if session is self.session:
+            self.sync_overlay_subtitle()
 
     @staticmethod
     def render_subtitle(text: str) -> str:

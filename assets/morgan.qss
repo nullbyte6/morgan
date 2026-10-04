@@ -133,7 +133,11 @@ QFrame#inputFrame {
 QFrame#overlayCard {
     background-color: @surface_sunken;
     border: none;
-    border-radius: 32px;
+    border-radius: 28px;
+}
+
+QFrame#overlayCard QFrame#inputFrame {
+    border-radius: 22px;
 }
 
 QLabel#responseTimer {
