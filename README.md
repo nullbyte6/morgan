@@ -7,6 +7,8 @@
 My Organizer for Reminders, Goals, Activities and Notes is a local desktop assistant that uses
 Ollama to run tools and automate tasks on Windows.
 
+![Morgan with the orb and the now playing panel](assets/img1.png)
+
 ## Features
 
 - Local assistant model (`qwen3.5:4b` through Ollama) for text, images and
@@ -36,8 +38,9 @@ Ollama to run tools and automate tasks on Windows.
 - Settings buttons to back up and restore memories, Nova and the daily logs,
   and to check for updates from the GitHub releases.
 
-![morgan-img1](assets/img1.png)
-![morgan-img2](assets/img2.png)
+![Morgan answering in a workspace pane next to the chat](assets/img3.png)
+
+![The Me section with the diary, journal and memories](assets/img4.png)
 
 ## Installation
 
@@ -80,8 +83,6 @@ from the name, the default), `male`, `female` or `neutral`.
 
 To start Morgan, open it from the Start menu or run `Morgan.exe`. See the
 [specs here](docs/SPECS.md) for model and hardware requirements.
-
-![morgan-img3](assets/img3.png)
 
 ## Running from source
 
@@ -144,8 +145,6 @@ cross-platform dependencies and includes both package files, so
 To support another system, add a package next to these that subclasses
 `Platform`, override what that system provides, and select it in
 `current_platform()`.
-
-![morgan-img4](assets/img4.png)
 
 ## Usage
 
