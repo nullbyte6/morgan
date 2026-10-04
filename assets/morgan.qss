@@ -1526,7 +1526,7 @@ QLabel#songTime {
 
 QLabel#songSummary {
     color: @text_muted;
-    font-size: 12px;
+    font-size: 16px;
     background: transparent;
 }
 
