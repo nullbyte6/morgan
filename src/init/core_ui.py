@@ -2493,7 +2493,11 @@ def main():
         tooltip_filter = RoundedTooltipFilter(app)
         app.installEventFilter(tooltip_filter)
         window = AssistantWindow()
+        window.setWindowOpacity(0.0)
         window.showMaximized()
+        app.processEvents()
+        window.repaint()
+        window.setWindowOpacity(1.0)
 
         def activate_existing_window():
             while instance_server.hasPendingConnections():
