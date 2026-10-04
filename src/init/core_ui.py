@@ -2484,6 +2484,16 @@ def install_tray_icon(app: QApplication, window: AssistantWindow, icon: QIcon):
     tray.show()
     return tray
 
+class RoundedTooltipFilter(QObject):
+    def eventFilter(self, watched, event):
+        if (event.type() == QEvent.Type.Polish
+                and isinstance(watched, QLabel)
+                and watched.metaObject().className() == "QTipLabel"):
+            watched.setWindowFlag(Qt.WindowType.NoDropShadowWindowHint, True)
+            watched.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        return False
+
+
 def main():
     set_app_id()
     os.chdir(Path.home())
@@ -2539,6 +2549,8 @@ def main():
         font.setLetterSpacing(QFont.SpacingType.PercentageSpacing, 100)
         app.setFont(font)
         app.setEffectEnabled(Qt.UIEffect.UI_AnimateCombo, False)
+        tooltip_filter = RoundedTooltipFilter(app)
+        app.installEventFilter(tooltip_filter)
         window = AssistantWindow()
         window.showMaximized()
 
