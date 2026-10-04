@@ -531,8 +531,6 @@ class Workspace(QWidget):
         self._layout.setContentsMargins(6, 6, 6, 8)
         self._layout.setSpacing(6)
 
-        self.manual_content_factory = None
-        self._shortcut_counter = 0
         self._animations: dict[QSplitter, SplitterAnimation] = {}
         self._install_shortcuts()
 
@@ -610,10 +608,8 @@ class Workspace(QWidget):
 
     def can_open_file(self, panel: WorkspacePanel) -> bool:
         return (self._panels.get(panel.panel_id) is panel
-                and panel.panel_id != getattr(self, "_primary_panel_id", None)
                 and panel.panel_id not in self._closing_panels
-                and panel.panel_id not in self._pending_closes
-                and panel.is_empty)
+                and panel.panel_id not in self._pending_closes)
 
     def open_panel(self,
         title: str = "Workspace",
@@ -991,12 +987,13 @@ class Workspace(QWidget):
 
     def open_registered_panel(self, key: str, title: str,
                               content_factory, *,
-                              orientation: Qt.Orientation | None = None) -> str:
+                              orientation: Qt.Orientation | None = None,
+                              **placement) -> str:
         """Open a fresh configured panel instance in this workspace."""
         content = content_factory()
         content.setProperty("workspaceViewKey", key)
         return self.open_panel(title=title, content=content,
-                               orientation=orientation)
+                               orientation=orientation, **placement)
 
     def close_all(self) -> None:
         """Remove all panels and cancel pending layout animations."""
@@ -1035,21 +1032,6 @@ class Workspace(QWidget):
             shortcut.setContext(Qt.ApplicationShortcut)
             shortcut.activated.connect(callback)
             self._shortcuts.append(shortcut)
-
-    def _open_shortcut_panel(self, direction: Qt.Key | None = None) -> None:
-        """Open a manually created workspace."""
-        counter = getattr(self, "_shortcut_counter", 0) + 1
-        self._shortcut_counter = counter
-
-        content = (
-            self.manual_content_factory()
-            if self.manual_content_factory is not None
-            else None)
-
-        self.open_panel(
-            title=f"Workspace {counter}",
-            content=content,
-            direction=direction)
 
     def close_active_panel(self) -> None:
         """Close the currently selected panel."""

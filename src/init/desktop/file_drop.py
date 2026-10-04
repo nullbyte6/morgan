@@ -16,8 +16,7 @@
 #
 #  You should have received a copy of the GNU General Public License
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
-"""One desktop file-drop policy for composer attachments and empty
-workspaces."""
+"""One desktop file-drop policy for composer attachments and read-only file views."""
 from pathlib import Path
 import weakref
 
@@ -101,7 +100,7 @@ class FileDropRouter(QObject):
                 return "", "Attachments are unavailable while a message is being sent"
             return "attachment", "Drop to attach files"
         if not self.workspace.can_open_file(target):
-            return "", "Open files in an empty workspace"
+            return "", "This workspace is closing"
         if len(paths) != 1:
             return "", "Drop one file to open a read-only view"
         if not self.registry.supports(paths[0]):
@@ -191,10 +190,10 @@ class FileDropRouter(QObject):
                     self.show_indicator(target, "Attachment count limit reached", False)
             else:
                 content = self.registry.create(paths[0])
-                target.set_content(content)
-                target.set_title(Path(paths[0]).name)
-                target.title_label.setToolTip(paths[0])
-                self.workspace.focus_panel(target.panel_id)
+                panel_id = self.workspace.open_panel(
+                    title=Path(paths[0]).name, content=content,
+                    target_id=target.panel_id, direction=Qt.Key_Right)
+                self.workspace.get_panel(panel_id).title_label.setToolTip(paths[0])
         except (OSError, ValueError, RuntimeError) as error:
             self.show_indicator(target, str(error) or "Unable to open file", False)
             event.ignore()

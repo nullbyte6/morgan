@@ -59,7 +59,6 @@ from src.init.indicators import (GitBranchIndicator, IndicatorFade,
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
 from src.init.nova import formatting as nova_formatting
-from src.init.nova.navigation import WorkspaceNavigation
 from src.init.nova.sections import Hub, Section
 from src.init.nova.store import NovaStore
 from src.init.nova.tools import use_store as use_nova_store
@@ -135,6 +134,8 @@ from src.init.terminal import TerminalBridge
 HEALTH_CHECK_DELAY_MS = 45_000
 SONG_PANEL_WIDTH = 440
 SONG_SUMMARY_PANEL_HEIGHT = 320
+SETTINGS_PANEL_WIDTH = 440
+WORKSPACE_CHORD_MS = 500
 
 # noinspection PyBroadException
 def waveform_icon(size: int = 28) -> QIcon:
@@ -252,16 +253,12 @@ class AssistantWindow(DesktopWindow):
         self.start_song_monitor()
         self.check_health_after_update()
 
-        self._workspace_shortcut_map = {
-            options["shortcut"].rsplit("+", 1)[-1]: view_key
-            for view_key, options in WORKSPACE_VIEW_CONFIG.items()
-        }
         self._workspace_shortcuts = []
         for view_key, options in WORKSPACE_VIEW_CONFIG.items():
             shortcut = QShortcut(QKeySequence(options["shortcut"]), self)
             shortcut.setContext(Qt.ApplicationShortcut)
             shortcut.activated.connect(
-                lambda view_key=view_key: self.open_workspace_view(view_key))
+                lambda view_key=view_key: self.begin_workspace_chord(view_key))
             self._workspace_shortcuts.append(shortcut)
 
         self.diary_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
@@ -281,10 +278,10 @@ class AssistantWindow(DesktopWindow):
             shortcut.activated.connect(action)
             self.nova_shortcuts.append(shortcut)
 
-        self._workspace_chord_pending = False
+        self._workspace_chord_view = None
         self._workspace_chord_timer = QTimer(self)
         self._workspace_chord_timer.setSingleShot(True)
-        self._workspace_chord_timer.setInterval(700)
+        self._workspace_chord_timer.setInterval(WORKSPACE_CHORD_MS)
         self._workspace_chord_timer.timeout.connect(
             self._open_pending_workspace)
         QApplication.instance().installEventFilter(self)
@@ -367,9 +364,6 @@ class AssistantWindow(DesktopWindow):
         container_layout.setSpacing(0)
 
         self.workspace = Workspace()
-        self.workspace.manual_content_factory = (
-            self.workspace_content
-        )
 
         session = self.session
         session.panel_id = "main"
@@ -593,46 +587,6 @@ class AssistantWindow(DesktopWindow):
         ui.orb.setToolTip(get_assistant_name())
         return main_content
 
-    def workspace_content(self) -> QWidget:
-        """Create navigation controls for a manually opened workspace."""
-        content = QWidget()
-        content.setObjectName("manualWorkspaceContent")
-        content.setProperty("workspaceEmpty", True)
-
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(12)
-
-        navigation = QHBoxLayout()
-        navigation.setContentsMargins(0, 0, 0, 0)
-        navigation.setSpacing(8)
-        tray_buttons = []
-
-        buttons = [(options["icon"], f"{view_key}Nav", options["title"], view_key) for view_key, options in WORKSPACE_VIEW_CONFIG.items()]
-
-        for icon, object_name, tooltip, view_key in buttons:
-            button = QPushButton(icon, content)
-            button.setObjectName(object_name)
-            button.setFixedSize(48, 48)
-            button.setToolTip(tooltip)
-            button.setCursor(Qt.PointingHandCursor)
-            button.clicked.connect(
-                lambda checked=False, key=view_key, source=button:
-                self.open_workspace_view(key, source))
-            tray_buttons.append(button)
-
-        workspace_navigation = WorkspaceNavigation(tray_buttons, content)
-        workspace_navigation.nova_requested.connect(
-            lambda _source: self.open_nova_hub(Hub.HOME))
-        navigation.addWidget(workspace_navigation)
-        navigation.addStretch()
-        layout.addLayout(navigation)
-        placeholder = QLabel("Select a workspace type", content)
-        placeholder.setObjectName("workspacePlaceholderLabel")
-        placeholder.setAlignment(Qt.AlignCenter)
-        layout.addWidget(placeholder, 1)
-        return content
-
     def showEvent(self, event):
         super().showEvent(event)
         if hasattr(self, "workspace"):
@@ -726,8 +680,6 @@ class AssistantWindow(DesktopWindow):
 
     def build_command_palette(self):
         commands = [
-            Command("workspace.new", "palette.new_workspace", self.open_workspace,
-                    ("new workspace", "nuevo espacio")),
             Command("session.new", "palette.new_session", self.new_session,
                     ("new session", "nueva sesion", "nueva sesión"),
                     lambda: len(self.sessions) < self.MAX_SESSIONS),
@@ -782,7 +734,7 @@ class AssistantWindow(DesktopWindow):
         panel = self.workspace.get_panel(self.workspace.active_panel_id)
         if panel is not None:
             self._workspace_chord_timer.stop()
-            self._workspace_chord_pending = False
+            self._workspace_chord_view = None
             self.command_palette.open(panel.content_host)
 
     def open_command_palette_from_panel(self, panel_id):
@@ -792,60 +744,50 @@ class AssistantWindow(DesktopWindow):
     def eventFilter(self, watched, event):
         if event.type() == QEvent.WindowDeactivate and watched is self:
             self._workspace_chord_timer.stop()
-            self._workspace_chord_pending = False
+            self._workspace_chord_view = None
+        chord_arrow = (self._workspace_chord_view is not None
+                       and event.type() in (QEvent.ShortcutOverride, QEvent.KeyPress)
+                       and not event.modifiers() & ~(Qt.ControlModifier | Qt.AltModifier)
+                       and event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down))
         if (event.type() == QEvent.ShortcutOverride and
                 QApplication.activeWindow() == self and
-                ((event.key() in (Qt.Key_N, Qt.Key_K) and event.modifiers() == Qt.ControlModifier)
-                 or (self._workspace_chord_pending and
-                     event.modifiers() in (Qt.NoModifier, Qt.ControlModifier) and
-                     event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down,
-                                     *range(Qt.Key_0, Qt.Key_9 + 1))))):
+                ((event.key() == Qt.Key_K and event.modifiers() == Qt.ControlModifier) or chord_arrow)):
             event.accept()
             return True
         if (event.type() == QEvent.KeyPress and
                 QApplication.activeWindow() == self):
-            modifiers = event.modifiers()
-            if event.key() == Qt.Key_K and modifiers == Qt.ControlModifier:
+            if event.key() == Qt.Key_K and event.modifiers() == Qt.ControlModifier:
                 if not event.isAutoRepeat():
                     self.open_command_palette()
                 event.accept()
                 return True
-            if event.key() == Qt.Key_N and modifiers == Qt.ControlModifier:
-                if event.isAutoRepeat():
-                    return True
-                self._workspace_chord_pending = True
-                self._workspace_chord_timer.start()
+            if chord_arrow:
+                view_key = self._workspace_chord_view
+                self._workspace_chord_timer.stop()
+                self._workspace_chord_view = None
+                self.open_workspace_view(view_key, direction=event.key())
                 event.accept()
                 return True
-            if (self._workspace_chord_pending and
-                    modifiers in (Qt.NoModifier, Qt.ControlModifier)):
-                if event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
-                    self._workspace_chord_timer.stop()
-                    self._workspace_chord_pending = False
-                    self.open_workspace(direction=event.key())
-                    event.accept()
-                    return True
-                key_code = int(event.key())
-                key = str(key_code - int(Qt.Key_0))
-                view_key = self._workspace_shortcut_map.get(key)
-                if key == "0":
-                    view_key = None
-                if view_key is not None or key == "0":
-                    self._workspace_chord_timer.stop()
-                    self._workspace_chord_pending = False
-                    if view_key is None:
-                        self.open_workspace()
-                    else:
-                        self.open_workspace_view(view_key)
-                    event.accept()
-                    return True
         return super().eventFilter(watched, event)
 
+    def begin_workspace_chord(self, view_key: str) -> None:
+        """Open a workspace after a short wait, on the side of an arrow pressed in the meantime."""
+        self.flush_workspace_chord()
+        self._workspace_chord_view = view_key
+        self._workspace_chord_timer.start()
+
+    def flush_workspace_chord(self) -> None:
+        view_key = self._workspace_chord_view
+        self._workspace_chord_timer.stop()
+        self._workspace_chord_view = None
+        if view_key is not None:
+            self.open_workspace_view(view_key)
+
     def _open_pending_workspace(self):
-        pending = self._workspace_chord_pending
-        self._workspace_chord_pending = False
-        if pending and QApplication.activeWindow() == self:
-            self.open_workspace()
+        if QApplication.activeWindow() == self:
+            self.flush_workspace_chord()
+        else:
+            self._workspace_chord_view = None
 
     def load_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet())
@@ -1045,15 +987,6 @@ class AssistantWindow(DesktopWindow):
             ui.input.setPlainText(text)
 
     @Slot()
-    def open_workspace(self, direction: Qt.Key | None = None) -> None:
-        """Open a manually created workspace from the main window."""
-        try:
-            self.workspace._open_shortcut_panel(direction=direction)
-        except Exception:
-            logging.getLogger("assistant.workspace").exception(
-                "Failed to open a workspace")
-            raise
-
     def _workspace_view_factory(self, view_key: str) -> QWidget:
         """Create a fresh view instance for one workspace panel."""
         if view_key == "editor":
@@ -1080,29 +1013,35 @@ class AssistantWindow(DesktopWindow):
             return view
         raise ValueError(f"Unknown workspace view: {view_key}")
 
-    def open_workspace_view(self, view_key: str, source=None) -> None:
-        """Open or replace a configured view in the embedded workspace."""
+    def workspace_panel_for(self, view_key: str) -> str | None:
+        """The id of the first open panel that shows a view of this kind."""
+        return next((panel_id for panel_id in self.workspace.panel_ids
+                     if self.workspace.get_panel(panel_id).property("workspaceViewKey") == view_key), None)
+
+    def workspace_placement(self, view_key: str, direction: Qt.Key | None) -> dict:
+        """Where a new view opens: beside the active panel when a side was chosen, else a fixed layout."""
+        if direction is not None:
+            return {"direction": direction}
+        if view_key == "terminal":
+            editor = self.workspace_panel_for("editor")
+            if editor is not None:
+                height = self.workspace.get_panel(editor).height()
+                return {"target_id": editor, "direction": Qt.Key_Down, "size": round(height * 0.38)}
+        placement = {"target_id": self.main_workspace_panel_id, "direction": Qt.Key_Right}
+        if view_key == "settings":
+            placement["size"] = SETTINGS_PANEL_WIDTH
+        return placement
+
+    def open_workspace_view(self, view_key: str, direction: Qt.Key | None = None) -> None:
+        """Open a configured view in the embedded workspace, focusing the settings if already open."""
         options = WORKSPACE_VIEW_CONFIG.get(view_key)
         if options is None:
             raise ValueError(f"Unknown workspace view: {view_key}")
-        sender = source
-        panel = None
-        while sender is not None:
-            if isinstance(sender, WorkspacePanel):
-                panel = sender
-                break
-            sender = sender.parentWidget()
-        if panel is not None:
-            try:
-                content = self._workspace_view_factory(view_key)
-                content.setProperty("workspaceViewKey", view_key)
-                panel.set_title(options["title"])
-                panel.set_content(content)
-                self.workspace.focus_panel(panel.panel_id)
-            except Exception:
-                logging.getLogger("assistant.workspace").exception(
-                    "Failed to replace workspace view %s", view_key)
-            return
+        if view_key == "settings":
+            existing = self.workspace_panel_for("settings")
+            if existing is not None:
+                self.workspace.focus_panel(existing)
+                return
         count = getattr(self, "_workspace_view_counts", {}).get(view_key, 0) + 1
         if not hasattr(self, "_workspace_view_counts"):
             self._workspace_view_counts = {}
@@ -1112,7 +1051,8 @@ class AssistantWindow(DesktopWindow):
             self.workspace.open_registered_panel(
                 view_key,
                 title,
-                lambda: self._workspace_view_factory(view_key))
+                lambda: self._workspace_view_factory(view_key),
+                **self.workspace_placement(view_key, direction))
         except Exception:
             logging.getLogger("assistant.workspace").exception(
                 "Failed to open workspace view %s", view_key)
@@ -1602,8 +1542,6 @@ class AssistantWindow(DesktopWindow):
             view.refresh_language()
         for view in self.workspace.findChildren(SongView):
             view.refresh_language()
-        for navigation in self.workspace.findChildren(WorkspaceNavigation):
-            navigation.refresh_language()
         self.update_send_button()
 
     def refresh_settings_workspaces(self):
