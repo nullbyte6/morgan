@@ -2,6 +2,11 @@
 
 All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.4-beta (2026-10-04)
+
+- Add per-voice reference transcripts, a text file beside each voice's recorded clip, so every reference text matches what is said in its clip
+- Update .gitignore to allow the voice transcript text files
+
 ## 26.10.3-beta (2026-10-03)
 
 - Add calculator to the command palette, opened by typing >> instead of >, that shows the result live as one types and copies it with Enter, covering arithmetic with exact fractions and decimals, implicit multiplication, factorials and mathematical functions and constants, equations such as x^2 = 4, unit conversions such as 5 km to mi and 20 degC to degF, and symbolic derivatives, integrals, limits, factoring, expansion and prime factorization computed on Enter, built on sympy and the new Pint dependency (with flexcache and flexparser) in requirements.txt, with its text in every interface language
