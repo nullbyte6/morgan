@@ -68,6 +68,7 @@ class JournalCard(QFrame):
         self.editor.setObjectName("novaInput")
         self.editor.setFixedHeight(140)
         self.editor.setTabChangesFocus(True)
+        self.editor.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.error = _label("", "novaError")
         self.error.hide()
         self.save_button = _text_button("novaPrimaryButton")
@@ -106,7 +107,7 @@ class JournalCard(QFrame):
         row.setSpacing(14)
         row.addLayout(details_column, 1)
         row.addLayout(buttons)
-
+        
         self.edit_button.clicked.connect(lambda: self.set_editing(True))
         self.cancel_button.clicked.connect(lambda: self.set_editing(False))
         self.save_button.clicked.connect(self._save)
