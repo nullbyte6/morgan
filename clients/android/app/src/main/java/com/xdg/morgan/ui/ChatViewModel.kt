@@ -27,9 +27,9 @@ import com.xdg.morgan.api.MorganApi
 import com.xdg.morgan.api.StreamEvent
 import com.xdg.morgan.data.Server
 import com.xdg.morgan.data.VoiceRecorder
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,22 +37,25 @@ import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-
-data class ChatMessage(val role: String, val text: String)
+import kotlinx.coroutines.withContext
 
 data class ChatUi(
-    val messages: List<ChatMessage> = emptyList(),
+    val reply: String = "",
+    val error: String = "",
     val busy: Boolean = false,
     val connected: Boolean = false,
     val status: String = "",
     val confirmation: StreamEvent.Confirmation? = null,
+    val orb: OrbState = OrbState.Idle,
     val listening: Boolean = false,
-    val level: Float = 0f,
-    val transcribing: Boolean = false
+    val transcribing: Boolean = false,
+    val levels: List<Float> = emptyList()
 )
 
 private const val FIRST_RETRY_MILLIS = 1_000L
 private const val LAST_RETRY_MILLIS = 15_000L
+private const val SUCCESS_MILLIS = 1_400L
+private const val ERROR_MILLIS = 2_500L
 private const val NOT_FOUND = 404
 
 class ChatViewModel(private val server: Server) : ViewModel() {
@@ -60,11 +63,53 @@ class ChatViewModel(private val server: Server) : ViewModel() {
     private val mutableState = MutableStateFlow(ChatUi())
     private var sessionId: String? = null
     private var recorder: VoiceRecorder? = null
+    private var settleJob: Job? = null
+    private var lifecycle = "idle"
+    private var executing = false
+    private var writing = false
+    private var denied = false
+    private var waiting = false
+    private var settled = true
 
     val state: StateFlow<ChatUi> = mutableState
 
     init {
         viewModelScope.launch { connectForever() }
+    }
+
+    private fun orbFor(ui: ChatUi): OrbState = when {
+        ui.transcribing -> OrbState.Processing
+        settled -> OrbState.Idle
+        waiting -> OrbState.AwaitingPermission
+        denied || lifecycle == "blocked" || lifecycle == "failed" -> OrbState.DeniedError
+        lifecycle in IDLE_LIFECYCLES -> OrbState.Idle
+        lifecycle == "complete" -> OrbState.Success
+        executing -> OrbState.Executing
+        writing -> OrbState.Writing
+        else -> OrbState.Processing
+    }
+
+    private fun change(block: (ChatUi) -> ChatUi) {
+        mutableState.update { block(it).let { next -> next.copy(orb = orbFor(next)) } }
+    }
+
+    private fun settleAfter(millis: Long) {
+        settleJob?.cancel()
+        settleJob = viewModelScope.launch {
+            delay(millis)
+            settled = true
+            change { it }
+        }
+    }
+
+    private fun begin() {
+        settleJob?.cancel()
+        settled = false
+        lifecycle = "active"
+        executing = false
+        writing = false
+        denied = false
+        waiting = false
     }
 
     private suspend fun connectForever() {
@@ -80,11 +125,9 @@ class ChatViewModel(private val server: Server) : ViewModel() {
                 throw cancelled
             } catch (error: Exception) {
                 if (error is ApiException && error.status == NOT_FOUND) sessionId = null
-                mutableState.update {
-                    it.copy(connected = false, status = error.message ?: error.javaClass.simpleName)
-                }
+                change { it.copy(connected = false, status = error.message ?: error.javaClass.simpleName) }
             }
-            mutableState.update { it.copy(connected = false) }
+            change { it.copy(connected = false) }
             delay(retry)
             retry = (retry * 2).coerceAtMost(LAST_RETRY_MILLIS)
         }
@@ -106,65 +149,82 @@ class ChatViewModel(private val server: Server) : ViewModel() {
 
     private fun handle(event: StreamEvent) {
         when (event) {
-            is StreamEvent.Snapshot -> mutableState.update {
-                val history = event.transcript.map { entry -> ChatMessage(entry.role, entry.text) }
-                val partial = if (event.partial.isEmpty()) {
-                    emptyList()
-                } else {
-                    listOf(ChatMessage("assistant", event.partial))
+            is StreamEvent.Snapshot -> {
+                if (event.busy) begin() else {
+                    settleJob?.cancel()
+                    settled = true
+                    lifecycle = "idle"
                 }
-                it.copy(
-                    messages = history + partial,
-                    busy = event.busy,
-                    connected = true,
-                    status = "",
-                    confirmation = event.confirmation
-                )
+                writing = event.partial.isNotEmpty()
+                waiting = event.confirmation != null
+                change {
+                    it.copy(
+                        reply = event.partial,
+                        error = "",
+                        busy = event.busy,
+                        connected = true,
+                        status = "",
+                        confirmation = event.confirmation
+                    )
+                }
             }
-            is StreamEvent.Chunk -> mutableState.update { it.copy(messages = appendChunk(it.messages, event.text)) }
-            is StreamEvent.Step -> mutableState.update {
+            is StreamEvent.Chunk -> {
+                settled = false
+                executing = false
+                writing = true
+                change { it.copy(reply = it.reply + event.text) }
+            }
+            is StreamEvent.Step -> change {
                 it.copy(status = listOf(event.tool, event.subject).filter(String::isNotEmpty).joinToString(" · "))
             }
-            is StreamEvent.Finished -> mutableState.update {
-                it.copy(messages = finishReply(it.messages, event.reply), busy = false, status = "")
+            is StreamEvent.Activity -> {
+                if (event.lifecycle.isNotEmpty()) lifecycle = event.lifecycle
+                executing = event.event == "started"
+                writing = false
+                change { it }
             }
-            is StreamEvent.Failed -> mutableState.update {
-                it.copy(
-                    messages = dropEmptyReply(it.messages) + ChatMessage("system", event.error),
-                    busy = false,
-                    status = ""
-                )
+            is StreamEvent.Finished -> {
+                executing = false
+                writing = false
+                waiting = false
+                if (event.reply.isEmpty() && mutableState.value.reply.isEmpty()) {
+                    lifecycle = "idle"
+                    settled = true
+                } else {
+                    lifecycle = if (denied) "failed" else "complete"
+                    settled = false
+                    settleAfter(if (denied) ERROR_MILLIS else SUCCESS_MILLIS)
+                }
+                change { it.copy(reply = event.reply.ifEmpty { it.reply }, busy = false, status = "") }
             }
-            is StreamEvent.Confirmation -> mutableState.update { it.copy(confirmation = event) }
-            is StreamEvent.ConfirmationClosed -> mutableState.update {
-                if (it.confirmation?.id == event.id) it.copy(confirmation = null) else it
+            is StreamEvent.Failed -> {
+                executing = false
+                writing = false
+                waiting = false
+                lifecycle = "failed"
+                settled = false
+                settleAfter(ERROR_MILLIS)
+                change { it.copy(error = event.error, busy = false, status = "") }
             }
-            is StreamEvent.ConfirmationBlocked -> mutableState.update {
-                it.copy(messages = it.messages + ChatMessage("system", event.message))
+            is StreamEvent.PermissionDenied -> {
+                denied = true
+                change { it }
+            }
+            is StreamEvent.Confirmation -> {
+                waiting = true
+                change { it.copy(confirmation = event) }
+            }
+            is StreamEvent.ConfirmationClosed -> {
+                waiting = false
+                change { if (it.confirmation?.id == event.id) it.copy(confirmation = null) else it }
+            }
+            is StreamEvent.ConfirmationBlocked -> {
+                denied = true
+                change { it.copy(error = "Needs approval on the PC: ${event.message}") }
             }
             is StreamEvent.Closed -> sessionId = null
             is StreamEvent.Ready, is StreamEvent.Resync, is StreamEvent.Ignored -> Unit
         }
-    }
-
-    private fun appendChunk(messages: List<ChatMessage>, text: String): List<ChatMessage> {
-        val last = messages.lastOrNull()
-        return if (last != null && last.role == "assistant") {
-            messages.dropLast(1) + last.copy(text = last.text + text)
-        } else {
-            messages + ChatMessage("assistant", text)
-        }
-    }
-
-    private fun finishReply(messages: List<ChatMessage>, reply: String): List<ChatMessage> {
-        val last = messages.lastOrNull()
-        val base = if (last != null && last.role == "assistant") messages.dropLast(1) else messages
-        return if (reply.isEmpty()) base else base + ChatMessage("assistant", reply)
-    }
-
-    private fun dropEmptyReply(messages: List<ChatMessage>): List<ChatMessage> {
-        val last = messages.lastOrNull()
-        return if (last != null && last.role == "assistant" && last.text.isEmpty()) messages.dropLast(1) else messages
     }
 
     fun send(text: String) {
@@ -172,24 +232,20 @@ class ChatViewModel(private val server: Server) : ViewModel() {
         val message = text.trim()
         if (message.isEmpty() || mutableState.value.busy) return
         if (id == null || !mutableState.value.connected) {
-            mutableState.update { it.copy(status = "Not connected") }
+            change { it.copy(status = "Not connected") }
             return
         }
-        mutableState.update {
-            it.copy(messages = it.messages + ChatMessage("user", message), busy = true, status = "")
-        }
+        begin()
+        change { it.copy(reply = "", error = "", busy = true, status = "") }
         viewModelScope.launch {
             try {
                 api.sendMessage(id, message)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                mutableState.update {
-                    it.copy(
-                        messages = it.messages + ChatMessage("system", error.message ?: error.javaClass.simpleName),
-                        busy = false
-                    )
-                }
+                lifecycle = "failed"
+                settleAfter(ERROR_MILLIS)
+                change { it.copy(error = error.message ?: error.javaClass.simpleName, busy = false) }
             }
         }
     }
@@ -197,40 +253,39 @@ class ChatViewModel(private val server: Server) : ViewModel() {
     fun startListening() {
         val current = mutableState.value
         if (recorder != null || current.busy || current.transcribing || !current.connected) return
-        val next = VoiceRecorder { level -> mutableState.update { it.copy(level = level) } }
+        val next = VoiceRecorder { levels -> change { it.copy(levels = levels) } }
         try {
             next.start()
         } catch (error: Exception) {
-            mutableState.update { it.copy(status = error.message ?: "The microphone is not available") }
+            change { it.copy(status = error.message ?: "The microphone is not available") }
             return
         }
         recorder = next
-        mutableState.update { it.copy(listening = true, level = 0f, status = "") }
+        change { it.copy(listening = true, levels = emptyList(), status = "", error = "") }
     }
 
     fun stopListening() {
         val active = recorder ?: return
         recorder = null
-        mutableState.update { it.copy(listening = false, level = 0f, transcribing = true, status = "Transcribing…") }
+        change { it.copy(listening = false, levels = emptyList(), transcribing = true, status = "Transcribing…") }
         viewModelScope.launch {
             try {
                 val clip = withContext(Dispatchers.Default) { active.stop() }
                 if (clip.isEmpty()) {
-                    mutableState.update { it.copy(transcribing = false, status = "Too short") }
+                    change { it.copy(transcribing = false, status = "Too short") }
                     return@launch
                 }
                 val text = api.transcribe(clip)
-                mutableState.update { it.copy(transcribing = false, status = if (text.isBlank()) "Didn't catch that" else "") }
+                change { it.copy(transcribing = false, status = if (text.isBlank()) "Didn't catch that" else "") }
                 if (text.isNotBlank()) send(text)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                mutableState.update {
-                    it.copy(
-                        transcribing = false,
-                        status = "",
-                        messages = it.messages + ChatMessage("system", error.message ?: error.javaClass.simpleName)
-                    )
+                lifecycle = "failed"
+                settled = false
+                settleAfter(ERROR_MILLIS)
+                change {
+                    it.copy(transcribing = false, status = "", error = error.message ?: error.javaClass.simpleName)
                 }
             }
         }
@@ -239,7 +294,7 @@ class ChatViewModel(private val server: Server) : ViewModel() {
     fun cancelListening() {
         recorder?.cancel()
         recorder = null
-        mutableState.update { it.copy(listening = false, level = 0f) }
+        change { it.copy(listening = false, levels = emptyList()) }
     }
 
     override fun onCleared() {
@@ -249,13 +304,20 @@ class ChatViewModel(private val server: Server) : ViewModel() {
 
     fun interrupt() {
         val id = sessionId ?: return
+        lifecycle = "cancelled"
+        change { it }
         viewModelScope.launch { runCatching { api.interrupt(id) } }
     }
 
     fun confirm(accepted: Boolean) {
         val id = sessionId ?: return
         val pending = mutableState.value.confirmation ?: return
-        mutableState.update { it.copy(confirmation = null) }
+        waiting = false
+        change { it.copy(confirmation = null) }
         viewModelScope.launch { runCatching { api.confirm(id, pending.id, accepted) } }
+    }
+
+    private companion object {
+        val IDLE_LIFECYCLES = setOf("interrupted", "cancelled", "limit_reached", "idle")
     }
 }

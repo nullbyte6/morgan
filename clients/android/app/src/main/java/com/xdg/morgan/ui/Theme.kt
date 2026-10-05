@@ -29,15 +29,15 @@ object MorganColors {
     val Background = Color(0xFF0D1117)
     val Panel = Color(0xFF10151C)
     val Raised = Color(0xFF171D26)
-    val Border = Color(0xFF2D333B)
+    val Border = Color(0xFF30363D)
     val Text = Color(0xFFE6EDF3)
     val Body = Color(0xFFC9D1D9)
-    val Muted = Color(0xFF8B949E)
-    val Purple = Color(0xFFC39BF0)
-    val Blue = Color(0xFF4DA3FF)
-    val Danger = Color(0xFFF47067)
-    val Online = Color(0xFF56D364)
-    val Away = Color(0xFFE3B341)
+    val Muted = Color(0xFF94999F)
+    val Purple = Color(0xFFD2A8FF)
+    val Blue = Color(0xFF58A6FF)
+    val Danger = Color(0xFFFF7B72)
+    val Online = Color(0xFF3FB950)
+    val Away = Color(0xFFD29922)
 }
 
 private val Scheme = darkColorScheme(

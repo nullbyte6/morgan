@@ -27,11 +27,16 @@ import android.media.MediaRecorder
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.sin
 import kotlin.math.sqrt
 
-class VoiceRecorder(private val onLevel: (Float) -> Unit) {
+class VoiceRecorder(private val onLevels: (List<Float>) -> Unit) {
     private val buffer = ByteArrayOutputStream()
     private var record: AudioRecord? = null
     private var worker: Thread? = null
@@ -63,7 +68,7 @@ class VoiceRecorder(private val onLevel: (Float) -> Unit) {
                 val read = source.read(chunk, 0, chunk.size)
                 if (read > 0) {
                     synchronized(buffer) { buffer.write(chunk, 0, read) }
-                    onLevel(level(chunk, read))
+                    onLevels(spectrum(chunk, read))
                 }
             }
         }.also {
@@ -93,15 +98,76 @@ class VoiceRecorder(private val onLevel: (Float) -> Unit) {
         record = null
     }
 
-    private fun level(chunk: ByteArray, length: Int): Float {
-        val samples = ByteBuffer.wrap(chunk, 0, length).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-        var sum = 0.0
-        val count = samples.remaining()
+    private fun spectrum(chunk: ByteArray, length: Int): List<Float> {
+        val shorts = ByteBuffer.wrap(chunk, 0, length).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        val count = min(shorts.remaining(), FFT_SIZE)
+        val real = DoubleArray(FFT_SIZE)
+        val imaginary = DoubleArray(FFT_SIZE)
+        var windowSum = 0.0
         for (index in 0 until count) {
-            val value = samples.get(index) / 32768.0
-            sum += value * value
+            val window = 0.5 - 0.5 * cos(2.0 * PI * index / (count - 1).coerceAtLeast(1))
+            real[index] = shorts.get(index) / 32768.0 * window
+            windowSum += window
         }
-        return if (count == 0) 0f else min(1f, (sqrt(sum / count) * LEVEL_GAIN).toFloat())
+        fft(real, imaginary)
+        val resolution = SAMPLE_RATE.toDouble() / FFT_SIZE
+        val top = SAMPLE_RATE / 2.0
+        val edges = DoubleArray(BANDS + 1) { MIN_FREQUENCY * (top / MIN_FREQUENCY).pow(it.toDouble() / BANDS) }
+        return List(BANDS) { band ->
+            var power = 0.0
+            for (bin in 0..FFT_SIZE / 2) {
+                val frequency = bin * resolution
+                if (frequency >= edges[band] && frequency < edges[band + 1]) {
+                    val magnitude = sqrt(real[bin] * real[bin] + imaginary[bin] * imaginary[bin]) / max(windowSum, 1.0)
+                    power += magnitude * magnitude
+                }
+            }
+            val rms = sqrt(power)
+            ((20.0 * log10(max(rms, 1e-8)) + 60.0) / 60.0).coerceIn(0.0, 1.0).toFloat()
+        }
+    }
+
+    private fun fft(real: DoubleArray, imaginary: DoubleArray) {
+        val size = real.size
+        var target = 0
+        for (index in 1 until size) {
+            var bit = size shr 1
+            while (target and bit != 0) {
+                target = target xor bit
+                bit = bit shr 1
+            }
+            target = target xor bit
+            if (index < target) {
+                real[index] = real[target].also { real[target] = real[index] }
+                imaginary[index] = imaginary[target].also { imaginary[target] = imaginary[index] }
+            }
+        }
+        var length = 2
+        while (length <= size) {
+            val angle = -2.0 * PI / length
+            val stepReal = cos(angle)
+            val stepImaginary = sin(angle)
+            var start = 0
+            while (start < size) {
+                var weightReal = 1.0
+                var weightImaginary = 0.0
+                for (offset in 0 until length / 2) {
+                    val even = start + offset
+                    val odd = even + length / 2
+                    val oddReal = real[odd] * weightReal - imaginary[odd] * weightImaginary
+                    val oddImaginary = real[odd] * weightImaginary + imaginary[odd] * weightReal
+                    real[odd] = real[even] - oddReal
+                    imaginary[odd] = imaginary[even] - oddImaginary
+                    real[even] += oddReal
+                    imaginary[even] += oddImaginary
+                    val nextReal = weightReal * stepReal - weightImaginary * stepImaginary
+                    weightImaginary = weightReal * stepImaginary + weightImaginary * stepReal
+                    weightReal = nextReal
+                }
+                start += length
+            }
+            length = length shl 1
+        }
     }
 
     private fun wav(pcm: ByteArray): ByteArray {
@@ -120,6 +186,8 @@ class VoiceRecorder(private val onLevel: (Float) -> Unit) {
         const val MIN_BYTES = SAMPLE_RATE / 2
         const val MAX_BYTES = SAMPLE_RATE * 2 * 120
         const val WORKER_JOIN_MILLIS = 500L
-        const val LEVEL_GAIN = 5.0
+        const val FFT_SIZE = 1024
+        const val BANDS = 15
+        const val MIN_FREQUENCY = 60.0
     }
 }

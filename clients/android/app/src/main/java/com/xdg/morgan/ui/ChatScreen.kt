@@ -24,7 +24,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,27 +33,25 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,16 +64,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+
+private val SubtitleSize = 16.sp
+private val SubtitleLine = 24.sp
+private const val SUBTITLE_LINES = 3
 
 @Composable
 fun ChatScreen(
@@ -88,6 +91,7 @@ fun ChatScreen(
     onStopListening: () -> Unit
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
+    var showReply by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) onStartListening()
@@ -97,50 +101,37 @@ fun ChatScreen(
             PackageManager.PERMISSION_GRANTED
         if (granted) onStartListening() else permission.launch(Manifest.permission.RECORD_AUDIO)
     }
-    val working = ui.busy || ui.listening || ui.transcribing
-    val listState = rememberLazyListState()
-    val lastLength = ui.messages.lastOrNull()?.text?.length ?: 0
     val subtitle = when {
+        ui.error.isNotEmpty() -> ui.error
+        ui.reply.isNotEmpty() -> ui.reply
         ui.listening -> "Listening…"
         !ui.connected -> ui.status.ifEmpty { "Connecting…" }
-        ui.busy -> ui.status.ifEmpty { "Thinking…" }
         else -> ui.status
     }
-
-    LaunchedEffect(ui.messages.size, lastLength) {
-        if (ui.messages.isNotEmpty()) listState.animateScrollToItem(ui.messages.lastIndex)
+    val subtitleColor = when {
+        ui.error.isNotEmpty() -> MorganColors.Danger
+        ui.reply.isNotEmpty() -> MorganColors.Body
+        else -> MorganColors.Muted
     }
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (ui.messages.isEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Orb(working, Modifier.fillMaxWidth().widthIn(max = 320.dp), ui.level)
-                    Subtitle(subtitle)
-                }
-            } else {
-                Column(Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Orb(working, Modifier.size(84.dp), ui.level)
-                        Subtitle(subtitle)
-                    }
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        items(ui.messages) { message -> MessageRow(message) }
-                    }
-                }
-            }
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 28.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Orb(
+                state = ui.orb,
+                modifier = Modifier.fillMaxWidth(0.62f).widthIn(max = 220.dp),
+                levels = ui.levels,
+                listening = ui.listening
+            )
+            Subtitles(
+                text = subtitle,
+                color = subtitleColor,
+                expandable = ui.reply.isNotEmpty() && ui.error.isEmpty(),
+                onOpen = { showReply = true }
+            )
         }
         Composer(
             draft = draft,
@@ -148,7 +139,7 @@ fun ChatScreen(
             connected = ui.connected,
             listening = ui.listening,
             transcribing = ui.transcribing,
-            level = ui.level,
+            levels = ui.levels,
             onDraft = { draft = it },
             onSend = {
                 onSend(draft)
@@ -156,6 +147,25 @@ fun ChatScreen(
             },
             onInterrupt = onInterrupt,
             onMic = { if (ui.listening) onStopListening() else startMic() }
+        )
+    }
+
+    if (showReply && ui.reply.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showReply = false },
+            containerColor = MorganColors.Raised,
+            textContentColor = MorganColors.Body,
+            text = {
+                SelectionContainer {
+                    Text(
+                        ui.reply,
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { showReply = false }) { Text("Close") } }
         )
     }
 
@@ -174,52 +184,30 @@ fun ChatScreen(
 }
 
 @Composable
-private fun Subtitle(text: String) {
-    Text(
-        text = text,
-        color = MorganColors.Muted,
-        fontSize = 13.sp,
-        textAlign = TextAlign.Center,
-        maxLines = 2,
-        modifier = Modifier.padding(top = 6.dp, bottom = 4.dp).heightIn(min = 18.dp)
-    )
-}
+private fun Subtitles(text: String, color: Color, expandable: Boolean, onOpen: () -> Unit) {
+    val scroll = rememberScrollState()
+    val height = with(LocalDensity.current) { (SubtitleLine * SUBTITLE_LINES).toDp() }
 
-@Composable
-private fun MessageRow(message: ChatMessage) {
-    when (message.role) {
-        "user" -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-            Surface(
-                color = MorganColors.Raised,
-                contentColor = MorganColors.Text,
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, MorganColors.Border),
-                modifier = Modifier.widthIn(max = 300.dp)
-            ) {
-                SelectionContainer {
-                    Text(
-                        message.text,
-                        fontSize = 15.sp,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                    )
-                }
-            }
-        }
-        "system" -> Text(
-            message.text,
-            color = MorganColors.Danger,
-            fontSize = 13.sp,
+    LaunchedEffect(text) { scroll.animateScrollTo(scroll.maxValue) }
+
+    Box(
+        modifier = Modifier
+            .padding(top = 20.dp)
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = expandable, onClick = onOpen)
+            .verticalScroll(scroll, enabled = false),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Text(
+            text = text,
+            color = color,
+            fontSize = SubtitleSize,
+            lineHeight = SubtitleLine,
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
-        else -> SelectionContainer {
-            Text(
-                message.text,
-                color = MorganColors.Body,
-                fontSize = 16.sp,
-                lineHeight = 23.sp,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
     }
 }
 
@@ -230,7 +218,7 @@ private fun Composer(
     connected: Boolean,
     listening: Boolean,
     transcribing: Boolean,
-    level: Float,
+    levels: List<Float>,
     onDraft: (String) -> Unit,
     onSend: () -> Unit,
     onInterrupt: () -> Unit,
@@ -307,7 +295,7 @@ private fun Composer(
                     )
                 }
             } else if (!typing) {
-                WaveformIcon(level, Modifier.size(22.dp))
+                WaveformIcon(levels.maxOrNull() ?: 0f, Modifier.size(22.dp))
             } else {
                 Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = MorganColors.Background, modifier = Modifier.size(20.dp))
             }

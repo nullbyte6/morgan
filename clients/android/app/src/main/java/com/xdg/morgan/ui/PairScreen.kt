@@ -66,7 +66,10 @@ fun PairScreen(ui: PairingUi, onPair: (url: String, code: String, deviceName: St
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Orb(ui.busy, Modifier.widthIn(max = 220.dp).fillMaxWidth(0.6f))
+        Orb(
+            state = if (ui.busy) OrbState.Processing else OrbState.Idle,
+            modifier = Modifier.widthIn(max = 200.dp).fillMaxWidth(0.55f)
+        )
         Text("Morgan", color = MorganColors.Text, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
         Text(
             "Run python -m src.init.api pair on your PC",

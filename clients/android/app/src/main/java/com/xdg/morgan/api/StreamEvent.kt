@@ -45,6 +45,8 @@ sealed interface StreamEvent {
     data class Step(val tool: String, val subject: String) : StreamEvent
     data class Finished(val reply: String) : StreamEvent
     data class Failed(val error: String) : StreamEvent
+    data class Activity(val event: String, val lifecycle: String) : StreamEvent
+    data object PermissionDenied : StreamEvent
     data object Ready : StreamEvent
     data object Closed : StreamEvent
     data object Resync : StreamEvent
@@ -86,6 +88,11 @@ fun parseEvent(frame: String): StreamEvent {
         "step" -> StreamEvent.Step(event.text("tool"), event.text("subject"))
         "finished" -> StreamEvent.Finished(event.text("reply"))
         "failed", "rejected" -> StreamEvent.Failed(event.text("error"))
+        "activity" -> {
+            val activity = event["activity"] as? JsonObject
+            StreamEvent.Activity(activity?.text("event").orEmpty(), activity?.text("lifecycle").orEmpty())
+        }
+        "permission_denied" -> StreamEvent.PermissionDenied
         "ready" -> StreamEvent.Ready
         "closed" -> StreamEvent.Closed
         "resync" -> StreamEvent.Resync
