@@ -20,3 +20,13 @@ __pycache__/
 
 AGENTS.md
 FEATURES.md
+
+.gradle/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+.kotlin/
+/clients/android/captures/
+.cxx/
