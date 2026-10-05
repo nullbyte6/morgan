@@ -14,8 +14,13 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add collapsible sidebar to the Android client, a narrow icon rail that expands over the screen to Chat, Home, Notifications, Me and Search, with a connection indicator, a scrim and Back to collapse it
 - Add Home, Notifications, Me and Search screens to the Android client, with the Nova agenda grouped by day, overdue and due reminders that can be completed, the journal and device details with unpairing, and a search across reminders, events and journal entries
 - Add /v1/nova/search route to the phone API that searches agenda entries and journal entries
+- Add reminder creation to the Android client, a floating button on Home and Notifications that opens a dialog with title, date and time pickers, a Never, Daily, Weekly or Monthly repeat and notes, and shows the reason when Morgan rejects it
+- Add voice input to the Android client, a waveform button that records at 16 kHz after asking for the microphone permission, makes the orb swell with the voice, and sends the transcript as a message once Morgan has transcribed it
+- Add /v1/transcribe route to the phone API that transcribes 16-bit mono WAV audio of up to 8 MB with the local Whisper model
+- Add release signing to the Android client, reading the keystore from local.properties or environment variables so assembleRelease produces a signed APK, and version 0.2.0
 - Fix subtitles displacing the main orb when turned on, off or revealed, by always reserving their area in the main window layout
 - Fix installer writing config.json with the wide padding of Windows PowerShell 5.1, by reformatting it with standard two-space indentation
+- Fix waveform icon of the Android client to show four bars
 - Update Android client look to match the desktop app, with the animated orb that pulses while Morgan answers, the dark palette, a pill composer with a round send and stop button, plain assistant text with outlined user bubbles, and light system bar icons
 - Update Android client build to AGP 9.2.1 and Gradle 9.4.1
 - Update desktop startup to run the phone API server when it is enabled and stop it on exit, and the executable and macOS builds to bundle the uvicorn and websockets modules
