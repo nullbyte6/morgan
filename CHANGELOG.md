@@ -4,6 +4,9 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.5-beta (2026-10-05)
 
+- Add scripts/setup-runtime.sh, the Linux counterpart of setup-runtime.ps1, that installs Ollama and the models, creates the Python 3.12 voice runtime with uv and PyTorch for the detected GPU, and downloads the CosyVoice model and timezone data
+- Add voice service sources, dev/core.json and the runtime setup to MorganSetup.run, which runs the setup after installing unless --no-runtime is given and keeps the existing runtime when reinstalling
+- Update morgan-services.sh to read core.json from the bundled _internal folder
 - Fix Linux installer putting morgan-services.sh outside the folder Morgan searches, which showed The local services launcher was not found
 - Add linuxx64 platform package in src/platforms with X11 window control, MPRIS media sessions through playerctl, notify-send notifications with buttons, XDG folders and mounted volumes, .desktop application discovery, systemd shutdown, gio trash, multi-distro package commands and PulseAudio system audio capture
 - Add Linux selection in current_platform and the linuxx64 requirements file referenced from requirements.txt

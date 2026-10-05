@@ -186,8 +186,14 @@ platform layer in `src/platforms`:
   NVIDIA libraries and packs it into the self-extracting
   `build/installer/MorganSetup.run` (about 165 MB, xz-compressed).
   `./MorganSetup.run` installs it under `~/.local/opt/Morgan` with a menu
-  entry and a `morgan` command; `--prefix FOLDER` changes the folder and
-  `--uninstall` removes it. `scripts/rebuild.sh` runs the build for the current system.
+  entry and a `morgan` command, then runs `scripts/setup-runtime.sh`, the
+  counterpart of `setup-runtime.ps1`: it installs Ollama (official script,
+  with confirmation), pulls the models, creates `Morgan/.venv` with Python 3.12
+  through `uv`, installs PyTorch for the detected GPU (ROCm, CUDA or CPU) and
+  the voice dependencies, and downloads the CosyVoice model and timezone data.
+  `--no-runtime` skips that step, `--prefix FOLDER` changes the folder and
+  `--uninstall` removes everything. The voice dependencies need a C++ compiler
+  and PortAudio, and FFmpeg is recommended. `scripts/rebuild.sh` runs the build for the current system.
 - `current_platform()` in `src/platforms/__init__.py` selects the package from
   `sys.platform` and falls back to the portable defaults elsewhere.
 
