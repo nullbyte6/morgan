@@ -49,7 +49,7 @@ voice_packages=(
     protobuf==5.29.6 psutil==7.2.2 pyarrow==21.0.0 pydub==0.25.1 Pygments==2.21.0 pyparsing==3.3.2
     PySocks==1.7.1 python-dateutil==2.9.0.post0 pyworld==0.3.5 PyYAML==6.0.3 regex==2026.9.10
     requests==2.34.2 rich==14.3.4 ruamel.yaml==0.18.17 safetensors==0.8.0 scikit-learn==1.9.1
-    scipy==1.15.3 six==1.17.0 sounddevice==0.5.6 soundfile==0.14.0 soupsieve==2.9.2 sympy==1.14.0
+    scipy==1.15.3 setuptools==80.9.0 six==1.17.0 sounddevice==0.5.6 soundfile==0.14.0 soupsieve==2.9.2 sympy==1.14.0
     threadpoolctl==3.7.0 tiktoken==0.14.0 tokenizers==0.21.4 torch-einops-utils==0.1.27
     torchmetrics==1.9.0 tqdm==4.70.1 transformers==4.51.3 typeguard==4.6.0 typing_extensions==4.16.0
     urllib3==2.8.0 wetext==0.1.8 wget==3.2 x-transformers==2.28.8
@@ -159,8 +159,10 @@ torch_index() {
     esac
 }
 
+voice_probe="import torch, torchaudio, onnxruntime, transformers, hyperpyyaml, whisper, modelscope, sounddevice, librosa, wetext, pyworld, x_transformers, lingua"
+
 test_voice_runtime() {
-    [[ -x "$venv_python" ]] && "$venv_python" -c "import torch, torchaudio, onnxruntime, transformers, hyperpyyaml, whisper, modelscope, sounddevice, librosa, wetext, pyworld, x_transformers, lingua" >/dev/null 2>&1
+    [[ -x "$venv_python" ]] && "$venv_python" -c "$voice_probe" >/dev/null 2>&1
 }
 
 test_torch_backend() {
@@ -213,7 +215,7 @@ ensure_voice_runtime() {
     printf 'Installing voice dependencies...\n'
     uv pip install --python "$venv_python" --index-strategy unsafe-best-match "${voice_packages[@]}" \
         || die "Failed to install the voice dependencies."
-    test_voice_runtime || die "The voice runtime was installed but could not be verified. PortAudio may be missing: $(package_hint portaudio libportaudio2)"
+    test_voice_runtime || die "The voice runtime was installed but could not be verified: $("$venv_python" -c "$voice_probe" 2>&1 | tail -1)"
     printf 'Voice runtime installed successfully.\n'
 }
 
