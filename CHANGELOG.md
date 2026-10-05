@@ -9,6 +9,8 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add a medium orb above the subtitles in the compact overlay that reacts like the main orb, with the subtitles shown between the orb and the composer
 - Add phone API server in src/init/api, off by default and set with the api section of config.json, that serves paired devices over HTTP and a WebSocket on loopback, LAN and Tailscale addresses only, with chat sessions that stream the reply, steps and confirmations, interrupt, and Nova agenda, reminder and journal routes
 - Add device pairing for the phone API, a single-use code valid for five minutes created with python -m src.init.api pair, tokens stored only as hashes, and devices and revoke commands
+- Add Android client in clients/android, a Kotlin and Jetpack Compose app that pairs with the phone API using a code, keeps the token encrypted with the Android Keystore, and chats with streamed replies, tool steps, interrupt and optional remote confirmations, reconnecting on its own
+- Add Gradle project for the Android client with a version catalog and the Gradle 9.3.1 wrapper
 - Fix subtitles displacing the main orb when turned on, off or revealed, by always reserving their area in the main window layout
 - Fix installer writing config.json with the wide padding of Windows PowerShell 5.1, by reformatting it with standard two-space indentation
 - Update desktop startup to run the phone API server when it is enabled and stop it on exit, and the executable and macOS builds to bundle the uvicorn and websockets modules
