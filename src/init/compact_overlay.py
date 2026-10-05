@@ -32,9 +32,10 @@ from src.init.orb import Orb
 
 WIDTH = 248
 MARGIN = 0
-ORB_SIZE = 96
-ORB_LOWER = 14
-ORB_PADDING = 22
+ORB_SIZE = 128
+ORB_FILL = 0.54
+ORB_LOWER = 6
+ORB_PADDING = round(ORB_SIZE * (1 - ORB_FILL) / 2)
 EDGE_GAP = 16
 DURATION = 260
 
@@ -82,7 +83,7 @@ class CompactOverlay(QWidget):
 
         self.card = card
 
-        self.orb = Orb(self, fill_ratio=0.54)
+        self.orb = Orb(self, fill_ratio=ORB_FILL)
         self.orb.set_size(ORB_SIZE)
         self.orb.setFixedSize(ORB_SIZE, ORB_SIZE)
 

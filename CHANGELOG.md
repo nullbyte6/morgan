@@ -24,7 +24,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix pauses between spoken sentences by waiting for less buffered audio before resuming playback
 - Fix installer writing config.json with the wide padding of Windows PowerShell 5.1, by reformatting it with standard two-space indentation
 - Fix waveform icon of the Android client to show four bars
-- Update compact overlay to keep the orb in place and lower, resting against the composer, with the subtitles shown above it
+- Update compact overlay to keep the orb in place, larger and with a small gap above the composer, with the subtitles shown above it
 - Update Android client look to match the desktop app, with the animated orb that pulses while Morgan answers, the dark palette, a pill composer with a round send and stop button, plain assistant text with outlined user bubbles, and light system bar icons
 - Update Android client orb to the desktop orb, with its eight states and colors from the theme (idle, processing with the rotating arc, reading, writing, executing, awaiting permission, error and success), the audio-reactive spectrum ring, breathing, and the smaller size, driven by the same task activity the desktop uses
 - Update Android client chat to have no chat history, so what is typed or spoken goes to the orb and the reply shows as three-line subtitles under it that open in full when tapped, and the microphone feeds the orb the same 15-band spectrum as the desktop
