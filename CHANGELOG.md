@@ -4,6 +4,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.5-beta (2026-10-05)
 
+- Fix Linux installer putting morgan-services.sh outside the folder Morgan searches, which showed The local services launcher was not found
 - Add linuxx64 platform package in src/platforms with X11 window control, MPRIS media sessions through playerctl, notify-send notifications with buttons, XDG folders and mounted volumes, .desktop application discovery, systemd shutdown, gio trash, multi-distro package commands and PulseAudio system audio capture
 - Add Linux selection in current_platform and the linuxx64 requirements file referenced from requirements.txt
 - Add scripts/build-linux.sh that builds Morgan with PyInstaller, drops the unused NVIDIA, GTK and QML libraries and packs it into the self-extracting MorganSetup.run, lighter than MorganSetup.exe, with --prefix and --uninstall options
