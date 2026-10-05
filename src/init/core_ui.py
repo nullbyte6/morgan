@@ -87,6 +87,7 @@ from src.init.attachment_widgets import AttachmentTray
 from src.init.attachments import DesktopMessage, DesktopVoiceMessage
 from src.init.choice_dialog import ChoiceDialog, NEUTRAL_BUTTON
 from src.init.brain import get_version, kill_self
+from src.init.api import start_api_server, stop_api_server
 from src.init.config import DEFAULTS, load_dev_file, load_config, save_config
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
@@ -2518,8 +2519,13 @@ def main():
 
         tray_icon = install_tray_icon(app, window, app_icon)
         window.tray_icon = tray_icon
+        try:
+            start_api_server()
+        except Exception:
+            logging.getLogger("assistant.api").exception("Unable to start the API server")
         sys.exit(app.exec())
     finally:
+        stop_api_server()
         instance_server.close()
         QLocalServer.removeServer(ASSISTANT_INSTANCE_SERVER)
         instance_lock.unlock()

@@ -84,6 +84,8 @@ command=("$python" -B -m PyInstaller.utils.cliutils.makespec
     --add-data "$root/src/init:src/init"
     --add-data "$root/src/voices:src/voices"
     --collect-submodules winrt
+    --collect-submodules uvicorn
+    --collect-submodules websockets
     --collect-data faster_whisper
     --collect-data winpty
     --recursive-copy-metadata pydantic-ai-slim
