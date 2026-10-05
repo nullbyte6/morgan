@@ -33,6 +33,8 @@ from src.init.orb import Orb
 WIDTH = 248
 MARGIN = 0
 ORB_SIZE = 96
+ORB_LOWER = 14
+ORB_PADDING = 22
 EDGE_GAP = 16
 DURATION = 260
 
@@ -91,8 +93,9 @@ class CompactOverlay(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.setSizeConstraint(QLayout.SetFixedSize)
-        outer.addWidget(self.orb, 0, Qt.AlignHCenter)
         outer.addWidget(self._subtitle_slot)
+        outer.addWidget(self.orb, 0, Qt.AlignHCenter)
+        outer.addSpacing(-ORB_LOWER)
         outer.addWidget(card)
         card.setFixedWidth(WIDTH)
 
@@ -103,9 +106,11 @@ class CompactOverlay(QWidget):
         self._animation.finished.connect(self._finish_animation)
 
     def subtitle_anchor(self):
-        return QRect(self.card.mapToGlobal(QPoint(0, 0)), self.card.size())
+        return QRect(self.orb.mapToGlobal(QPoint(0, ORB_PADDING)),
+                     self.orb.size())
 
     def set_subtitle_space(self, height: int):
+        height = max(0, height - ORB_PADDING) if height else 0
         if self._subtitle_slot.height() != height:
             self._subtitle_slot.setFixedHeight(height)
 
