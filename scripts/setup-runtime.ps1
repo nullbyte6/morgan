@@ -909,6 +909,22 @@ function Move-LegacyDataDirectory {
     }
 }
 
+function Format-Json {
+    param([string]$Json)
+
+    $Depth = 0
+    $Lines = foreach ($Line in ($Json -split "\r?\n")) {
+        $Line = $Line.Trim()
+        if (-not $Line) { continue }
+        if ($Line -match '^[\}\]]') { $Depth-- }
+        $Line = $Line -replace '^("(?:[^"\\]|\\.)*"):\s+', '$1: '
+        ("  " * [Math]::Max($Depth, 0)) + $Line
+        if ($Line -match '[\{\[]$') { $Depth++ }
+    }
+
+    (($Lines -join "`n") -replace '([\{\[])\n\s*([\}\]])', '$1$2') + "`n"
+}
+
 function Set-AssistantConfig {
     New-Item `
         -ItemType Directory `
@@ -938,7 +954,7 @@ function Set-AssistantConfig {
 
     [IO.File]::WriteAllText(
         $ConfigFile,
-        ($Config | ConvertTo-Json -Depth 20),
+        (Format-Json ($Config | ConvertTo-Json -Depth 20)),
         (New-Object Text.UTF8Encoding $false))
 }
 
