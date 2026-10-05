@@ -4,6 +4,11 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.5-beta (2026-10-05)
 
+- Add linuxx64 platform package in src/platforms with X11 window control, MPRIS media sessions through playerctl, notify-send notifications with buttons, XDG folders and mounted volumes, .desktop application discovery, systemd shutdown, gio trash, multi-distro package commands and PulseAudio system audio capture
+- Add Linux selection in current_platform and the linuxx64 requirements file referenced from requirements.txt
+- Add scripts/build-linux.sh that builds Morgan with PyInstaller and packs it with an install.sh into a tar.gz archive
+- Add package manager and window tools messages in all ten interface languages
+- Update morgan-services.sh and rebuild.sh to run on Linux, with a terminal emulator for the debug console
 - Fix task checkpoint rejection hint that suggested an unrelated core.py resource, now listing the observed resources and telling to cite evidence call IDs only in completed, so tasks stop pausing after repeated rejected checkpoints
 - Fix voice references by restoring the four .txt audio transcripts with the new reference text
 - Update voice reference text to ¡Hola! Soy tu asistente personal y estoy aquí para lo que necesites. with the reference language set to Spanish

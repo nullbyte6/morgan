@@ -174,6 +174,18 @@ platform layer in `src/platforms`:
   stops at a failure and opens `build/installer`. The build is only ad-hoc
   signed, so macOS asks for confirmation the first time it opens until it is
   signed and notarized with an Apple Developer ID.
+- `linuxx64` implements it for Linux with `wmctrl` and `xdotool` (X11 windows),
+  `playerctl` (MPRIS media), `notify-send`, `gio`, `systemctl`, `.desktop`
+  entries and `pacman`, `apt`, `dnf` or `zypper`. System audio capture uses
+  SoundCard through PulseAudio or PipeWire. It has not been tested on every
+  distribution, and window control does not work on pure Wayland sessions.
+  `scripts/morgan-services.sh` also runs on Linux, opening the debug console in
+  the first terminal emulator it finds. `scripts/build-linux.sh`, run on Linux
+  with the dependencies from `requirements.txt` in `.venv`, builds Morgan with
+  PyInstaller (in `build/packaging-linux/dist`) and packs it with an
+  `install.sh` into `build/installer/Morgan-<version>-linux-<arch>.tar.gz`;
+  `install.sh` installs it under `~/.local/opt/Morgan` with a menu entry and a
+  `morgan` command. `scripts/rebuild.sh` runs the build for the current system.
 - `current_platform()` in `src/platforms/__init__.py` selects the package from
   `sys.platform` and falls back to the portable defaults elsewhere.
 
