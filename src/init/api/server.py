@@ -18,15 +18,18 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """HTTP and WebSocket server that lets paired phones talk to this assistant."""
 import asyncio
+import io
 import ipaddress
 import logging
 import threading
 import time
+import wave
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 from starlette.websockets import WebSocketDisconnect
 
 from .auth import DeviceStore, PairingCodes
@@ -37,6 +40,7 @@ API_VERSION = 1
 PING_INTERVAL = 25
 PAIR_FAILURE_LIMIT = 10
 PAIR_FAILURE_WINDOW = 300
+MAX_AUDIO_BYTES = 8 * 1024 * 1024
 CARRIER_GRADE_NAT = ipaddress.ip_network("100.64.0.0/10")
 
 log = logging.getLogger("assistant.api")
@@ -99,6 +103,20 @@ class CompletionBody(BaseModel):
 def _bearer(headers) -> str:
     scheme, _, token = headers.get("authorization", "").partition(" ")
     return token.strip() if scheme.lower() == "bearer" else ""
+
+
+def _transcribe(audio: bytes) -> dict:
+    try:
+        with wave.open(io.BytesIO(audio), "rb") as clip:
+            if clip.getnchannels() != 1 or clip.getsampwidth() != 2:
+                raise HTTPException(400, "Audio must be 16-bit mono WAV")
+            rate = clip.getframerate()
+            frames = clip.readframes(clip.getnframes())
+    except (wave.Error, EOFError) as error:
+        raise HTTPException(400, "Audio must be a WAV file") from error
+    from src.init.voice import transcribe_voice
+    text, language = transcribe_voice(frames, rate, beam_size=1, vad_filter=False)
+    return {"text": text.strip(), "language": language}
 
 
 def _checked(result: dict) -> dict:
@@ -250,6 +268,16 @@ def create_app(manager: SessionManager, devices: DeviceStore, pairing: PairingCo
                 await websocket.close()
             except (RuntimeError, WebSocketDisconnect):
                 pass
+
+    @app.post("/v1/transcribe")
+    async def transcribe(request: Request, device: dict = Depends(authenticate)):
+        declared = request.headers.get("content-length", "0")
+        if declared.isdigit() and int(declared) > MAX_AUDIO_BYTES:
+            raise HTTPException(413, "Audio is too long")
+        audio = await request.body()
+        if not audio or len(audio) > MAX_AUDIO_BYTES:
+            raise HTTPException(413 if audio else 400, "Audio is empty or too long")
+        return await run_in_threadpool(_transcribe, audio)
 
     @app.get("/v1/nova/agenda")
     def agenda(first_day: str | None = None, last_day: str | None = None,

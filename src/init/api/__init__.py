@@ -41,6 +41,7 @@ Every route except /v1/health and /v1/pair needs "Authorization: Bearer <token>"
     POST   /v1/sessions/{id}/interrupt                 stop the current answer
     POST   /v1/sessions/{id}/confirmations/{n} {accepted}
     WS     /v1/sessions/{id}/stream                    server events as JSON text frames
+    POST   /v1/transcribe          audio/wav body     -> {text, language}; 16-bit mono, at most 8 MB
     GET    /v1/nova/agenda?first_day&last_day          reminders and events
     POST   /v1/nova/reminders      {title, remind_at, notes, repeat}
     POST   /v1/nova/reminders/{id}/completion {completed}
