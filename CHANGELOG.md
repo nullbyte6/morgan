@@ -4,6 +4,8 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.5-beta (2026-10-05)
 
+- Add Ctrl+Alt+M launch hotkey script that binds the hotkey to the Start Menu shortcut of Morgan.exe, or asks the user to run MorganSetup.exe first when it is not installed
+- Add hotkey task to the installer that ships the hotkey script and binds Ctrl+Alt+M after installation
 - Add a medium orb above the subtitles in the compact overlay that reacts like the main orb, with the subtitles shown between the orb and the composer
 - Fix subtitles displacing the main orb when turned on, off or revealed, by always reserving their area in the main window layout
 
