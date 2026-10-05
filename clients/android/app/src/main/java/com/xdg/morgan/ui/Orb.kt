@@ -43,7 +43,7 @@ private const val ACTIVE_MILLIS = 1700
 private val RingAlphas = floatArrayOf(0.95f, 0.72f, 0.48f)
 
 @Composable
-fun Orb(active: Boolean, modifier: Modifier = Modifier) {
+fun Orb(active: Boolean, modifier: Modifier = Modifier, level: Float = 0f) {
     val transition = rememberInfiniteTransition(label = "orb")
     val slow by transition.animateFloat(
         initialValue = 0f,
@@ -58,6 +58,7 @@ fun Orb(active: Boolean, modifier: Modifier = Modifier) {
         label = "fast"
     )
     val energy by animateFloatAsState(if (active) 1f else 0f, tween(600), label = "energy")
+    val voice by animateFloatAsState(level, tween(90), label = "voice")
 
     Canvas(modifier.aspectRatio(1f)) {
         val unit = size.minDimension / 2f
@@ -83,7 +84,7 @@ fun Orb(active: Boolean, modifier: Modifier = Modifier) {
         RingAlphas.forEachIndexed { index, alpha ->
             drawCircle(
                 color = MorganColors.Purple.copy(alpha = alpha),
-                radius = unit * (0.915f + index * 0.027f + wave * (0.004f + 0.012f * energy) * (index + 1)),
+                radius = unit * (0.915f + index * 0.027f + wave * (0.004f + 0.012f * energy) * (index + 1) + voice * 0.03f * (index + 1)),
                 style = Stroke(width = unit * 0.013f)
             )
         }
@@ -93,7 +94,7 @@ fun Orb(active: Boolean, modifier: Modifier = Modifier) {
                 startY = center.y - unit * 0.48f,
                 endY = center.y + unit * 0.48f
             ),
-            radius = unit * 0.47f * (1f + 0.018f * wave + 0.035f * energy * wave)
+            radius = unit * 0.47f * (1f + 0.018f * wave + 0.035f * energy * wave + 0.16f * voice)
         )
     }
 }

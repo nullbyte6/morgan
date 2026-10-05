@@ -24,6 +24,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -55,21 +56,23 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun SectionPage(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .padding(horizontal = 20.dp)
-    ) {
-        Text(
-            title,
-            color = MorganColors.Text,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)
-        )
-        content()
+fun SectionPage(
+    title: String,
+    action: (@Composable BoxScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+        Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+            Text(
+                title,
+                color = MorganColors.Text,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 20.dp, bottom = 16.dp)
+            )
+            content()
+        }
+        action?.invoke(this)
     }
 }
 

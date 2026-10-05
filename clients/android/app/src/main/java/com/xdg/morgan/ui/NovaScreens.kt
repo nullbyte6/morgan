@@ -53,9 +53,15 @@ import com.xdg.morgan.api.AgendaEntry
 import java.time.LocalDate
 
 @Composable
-fun HomeScreen(ui: NovaUi, onRefresh: () -> Unit, onToggle: (AgendaEntry) -> Unit) {
+fun HomeScreen(
+    ui: NovaUi,
+    onRefresh: () -> Unit,
+    onToggle: (AgendaEntry) -> Unit,
+    onAdd: (String, String, String, String) -> Unit,
+    onDismissAdd: () -> Unit
+) {
     LaunchedEffect(Unit) { onRefresh() }
-    SectionPage("Home") {
+    SectionPage("Home", action = { AddReminderAction(ui, onAdd, onDismissAdd) }) {
         ErrorLine(ui.error)
         val grouped = ui.agenda.entries
             .sortedBy { entryMoment(it) }
@@ -79,14 +85,20 @@ fun HomeScreen(ui: NovaUi, onRefresh: () -> Unit, onToggle: (AgendaEntry) -> Uni
 }
 
 @Composable
-fun NotificationsScreen(ui: NovaUi, onRefresh: () -> Unit, onToggle: (AgendaEntry) -> Unit) {
+fun NotificationsScreen(
+    ui: NovaUi,
+    onRefresh: () -> Unit,
+    onToggle: (AgendaEntry) -> Unit,
+    onAdd: (String, String, String, String) -> Unit,
+    onDismissAdd: () -> Unit
+) {
     LaunchedEffect(Unit) { onRefresh() }
     val today = LocalDate.now()
     val dueToday = ui.agenda.entries.filter {
         it.kind == "reminder" && !it.completed && entryDay(it)?.let { day -> !day.isAfter(today) } == true
     }
     val overdue = ui.agenda.overdue.filter { !it.completed }
-    SectionPage("Notifications") {
+    SectionPage("Notifications", action = { AddReminderAction(ui, onAdd, onDismissAdd) }) {
         ErrorLine(ui.error)
         if (!ui.agendaLoaded) {
             EmptyState("Loading…")

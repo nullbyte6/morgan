@@ -119,3 +119,14 @@ data class SearchResponse(
 
 @Serializable
 data class CompletionRequest(val completed: Boolean)
+
+@Serializable
+data class TranscriptionResponse(val text: String = "", val language: String = "")
+
+@Serializable
+data class ReminderRequest(
+    val title: String,
+    @SerialName("remind_at") val remindAt: String,
+    val notes: String = "",
+    val repeat: String = "none"
+)

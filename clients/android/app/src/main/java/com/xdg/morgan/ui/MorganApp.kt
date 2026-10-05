@@ -88,10 +88,24 @@ private fun PairedApp(server: Server, onUnpair: () -> Unit) {
                     ui = chat,
                     onSend = chatModel::send,
                     onInterrupt = chatModel::interrupt,
-                    onConfirm = chatModel::confirm
+                    onConfirm = chatModel::confirm,
+                    onStartListening = chatModel::startListening,
+                    onStopListening = chatModel::stopListening
                 )
-                Section.Home -> HomeScreen(nova, novaModel::refreshAgenda, novaModel::toggle)
-                Section.Notifications -> NotificationsScreen(nova, novaModel::refreshAgenda, novaModel::toggle)
+                Section.Home -> HomeScreen(
+                    nova,
+                    novaModel::refreshAgenda,
+                    novaModel::toggle,
+                    novaModel::addReminder,
+                    novaModel::clearSaveError
+                )
+                Section.Notifications -> NotificationsScreen(
+                    nova,
+                    novaModel::refreshAgenda,
+                    novaModel::toggle,
+                    novaModel::addReminder,
+                    novaModel::clearSaveError
+                )
                 Section.Me -> MeScreen(
                     ui = nova,
                     onRefresh = {

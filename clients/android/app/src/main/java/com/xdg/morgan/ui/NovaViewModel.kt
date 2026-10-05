@@ -44,7 +44,10 @@ data class NovaUi(
     val me: MeResponse? = null,
     val search: SearchResponse? = null,
     val searching: Boolean = false,
-    val error: String = ""
+    val error: String = "",
+    val saving: Boolean = false,
+    val saveError: String = "",
+    val savedCount: Int = 0
 )
 
 class NovaViewModel(val server: Server) : ViewModel() {
@@ -80,6 +83,26 @@ class NovaViewModel(val server: Server) : ViewModel() {
         val me = api.me()
         mutableState.update { it.copy(me = me, error = "") }
     }
+
+    fun addReminder(title: String, remindAt: String, notes: String, repeat: String) {
+        if (mutableState.value.saving) return
+        mutableState.update { it.copy(saving = true, saveError = "") }
+        viewModelScope.launch {
+            try {
+                api.addReminder(title.trim(), remindAt, notes.trim(), repeat)
+                mutableState.update { it.copy(saving = false, savedCount = it.savedCount + 1) }
+                refreshAgenda()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                mutableState.update {
+                    it.copy(saving = false, saveError = error.message ?: error.javaClass.simpleName)
+                }
+            }
+        }
+    }
+
+    fun clearSaveError() = mutableState.update { it.copy(saveError = "") }
 
     fun toggle(entry: AgendaEntry) = load {
         api.completeReminder(entry.id, !entry.completed)

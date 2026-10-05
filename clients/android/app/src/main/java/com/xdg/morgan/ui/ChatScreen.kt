@@ -20,6 +20,10 @@
  */
 package com.xdg.morgan.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -63,6 +67,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -77,12 +83,25 @@ fun ChatScreen(
     ui: ChatUi,
     onSend: (String) -> Unit,
     onInterrupt: () -> Unit,
-    onConfirm: (Boolean) -> Unit
+    onConfirm: (Boolean) -> Unit,
+    onStartListening: () -> Unit,
+    onStopListening: () -> Unit
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) onStartListening()
+    }
+    val startMic = {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) onStartListening() else permission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    val working = ui.busy || ui.listening || ui.transcribing
     val listState = rememberLazyListState()
     val lastLength = ui.messages.lastOrNull()?.text?.length ?: 0
     val subtitle = when {
+        ui.listening -> "Listening…"
         !ui.connected -> ui.status.ifEmpty { "Connecting…" }
         ui.busy -> ui.status.ifEmpty { "Thinking…" }
         else -> ui.status
@@ -100,7 +119,7 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Orb(ui.busy, Modifier.fillMaxWidth().widthIn(max = 320.dp))
+                    Orb(working, Modifier.fillMaxWidth().widthIn(max = 320.dp), ui.level)
                     Subtitle(subtitle)
                 }
             } else {
@@ -109,7 +128,7 @@ fun ChatScreen(
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Orb(ui.busy, Modifier.size(84.dp))
+                        Orb(working, Modifier.size(84.dp), ui.level)
                         Subtitle(subtitle)
                     }
                     LazyColumn(
@@ -127,12 +146,16 @@ fun ChatScreen(
             draft = draft,
             busy = ui.busy,
             connected = ui.connected,
+            listening = ui.listening,
+            transcribing = ui.transcribing,
+            level = ui.level,
             onDraft = { draft = it },
             onSend = {
                 onSend(draft)
                 draft = ""
             },
-            onInterrupt = onInterrupt
+            onInterrupt = onInterrupt,
+            onMic = { if (ui.listening) onStopListening() else startMic() }
         )
     }
 
@@ -205,13 +228,22 @@ private fun Composer(
     draft: String,
     busy: Boolean,
     connected: Boolean,
+    listening: Boolean,
+    transcribing: Boolean,
+    level: Float,
     onDraft: (String) -> Unit,
     onSend: () -> Unit,
-    onInterrupt: () -> Unit
+    onInterrupt: () -> Unit,
+    onMic: () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val enabled = busy || (draft.isNotBlank() && connected)
+    val typing = draft.isNotBlank()
+    val enabled = when {
+        listening || busy -> true
+        transcribing -> false
+        else -> connected
+    }
     val shape = RoundedCornerShape(30.dp)
 
     Row(
@@ -237,7 +269,15 @@ private fun Composer(
             decorationBox = { field ->
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (draft.isEmpty()) {
-                        Text("Ask Morgan…", color = MorganColors.Muted, fontSize = 16.sp)
+                        Text(
+                            when {
+                                listening -> "Listening…"
+                                transcribing -> "Transcribing…"
+                                else -> "Ask Morgan…"
+                            },
+                            color = MorganColors.Muted,
+                            fontSize = 16.sp
+                        )
                     }
                     field()
                 }
@@ -248,10 +288,16 @@ private fun Composer(
                 .size(42.dp)
                 .clip(CircleShape)
                 .background(MorganColors.Blue.copy(alpha = if (enabled) 1f else 0.35f))
-                .clickable(enabled = enabled) { if (busy) onInterrupt() else onSend() },
+                .clickable(enabled = enabled) {
+                    when {
+                        busy -> onInterrupt()
+                        listening || !typing -> onMic()
+                        else -> onSend()
+                    }
+                },
             contentAlignment = Alignment.Center
         ) {
-            if (busy) {
+            if (busy || listening) {
                 Canvas(Modifier.size(14.dp)) {
                     drawRoundRect(
                         MorganColors.Background,
@@ -260,9 +306,28 @@ private fun Composer(
                         CornerRadius(3.dp.toPx())
                     )
                 }
+            } else if (!typing) {
+                WaveformIcon(level, Modifier.size(22.dp))
             } else {
                 Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = MorganColors.Background, modifier = Modifier.size(20.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun WaveformIcon(level: Float, modifier: Modifier = Modifier) {
+    val heights = floatArrayOf(0.35f, 0.7f, 1f, 0.55f, 0.8f)
+    Canvas(modifier) {
+        val bar = size.width / 9f
+        heights.forEachIndexed { index, height ->
+            val scaled = (height + level * 0.3f).coerceAtMost(1f) * size.height
+            drawRoundRect(
+                MorganColors.Background,
+                Offset(bar * (1 + index * 2), (size.height - scaled) / 2f),
+                Size(bar, scaled),
+                CornerRadius(bar / 2f)
+            )
         }
     }
 }

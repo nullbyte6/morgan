@@ -61,6 +61,10 @@ class MorganApi(baseUrl: String, private val token: String? = null) {
         .readTimeout(30, TimeUnit.SECONDS)
         .callTimeout(30, TimeUnit.SECONDS)
         .build()
+    private val slowClient = socketClient.newBuilder()
+        .readTimeout(180, TimeUnit.SECONDS)
+        .callTimeout(180, TimeUnit.SECONDS)
+        .build()
 
     suspend fun pair(code: String, deviceName: String): PairResponse =
         execute(post("/v1/pair", PairRequest(code, deviceName)))
@@ -89,12 +93,23 @@ class MorganApi(baseUrl: String, private val token: String? = null) {
         send(post("/v1/sessions/$id/confirmations/$requestId", ConfirmationRequest(accepted)))
     }
 
+    suspend fun transcribe(wav: ByteArray): String {
+        val request = request("/v1/transcribe")
+            .post(wav.toRequestBody("audio/wav".toMediaType()))
+            .build()
+        return json.decodeFromString<TranscriptionResponse>(send(request, slowClient)).text
+    }
+
     suspend fun agenda(): AgendaResponse = execute(get("/v1/nova/agenda"))
 
     suspend fun journal(): JournalResponse = execute(get("/v1/nova/journal"))
 
     suspend fun search(query: String): SearchResponse =
         execute(get("/v1/nova/search", "query" to query))
+
+    suspend fun addReminder(title: String, remindAt: String, notes: String, repeat: String) {
+        send(post("/v1/nova/reminders", ReminderRequest(title, remindAt, notes, repeat)))
+    }
 
     suspend fun completeReminder(id: String, completed: Boolean) {
         send(post("/v1/nova/reminders/$id/completion", CompletionRequest(completed)))
@@ -155,9 +170,9 @@ class MorganApi(baseUrl: String, private val token: String? = null) {
     private suspend inline fun <reified T> execute(request: Request): T =
         json.decodeFromString(send(request))
 
-    private suspend fun send(request: Request): String =
+    private suspend fun send(request: Request, http: OkHttpClient = client): String =
         suspendCancellableCoroutine { continuation ->
-            val call = client.newCall(request)
+            val call = http.newCall(request)
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {

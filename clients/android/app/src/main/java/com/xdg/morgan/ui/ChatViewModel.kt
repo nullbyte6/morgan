@@ -26,6 +26,9 @@ import com.xdg.morgan.api.ApiException
 import com.xdg.morgan.api.MorganApi
 import com.xdg.morgan.api.StreamEvent
 import com.xdg.morgan.data.Server
+import com.xdg.morgan.data.VoiceRecorder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +45,10 @@ data class ChatUi(
     val busy: Boolean = false,
     val connected: Boolean = false,
     val status: String = "",
-    val confirmation: StreamEvent.Confirmation? = null
+    val confirmation: StreamEvent.Confirmation? = null,
+    val listening: Boolean = false,
+    val level: Float = 0f,
+    val transcribing: Boolean = false
 )
 
 private const val FIRST_RETRY_MILLIS = 1_000L
@@ -53,6 +59,7 @@ class ChatViewModel(private val server: Server) : ViewModel() {
     private val api = MorganApi(server.url, server.token)
     private val mutableState = MutableStateFlow(ChatUi())
     private var sessionId: String? = null
+    private var recorder: VoiceRecorder? = null
 
     val state: StateFlow<ChatUi> = mutableState
 
@@ -185,6 +192,59 @@ class ChatViewModel(private val server: Server) : ViewModel() {
                 }
             }
         }
+    }
+
+    fun startListening() {
+        val current = mutableState.value
+        if (recorder != null || current.busy || current.transcribing || !current.connected) return
+        val next = VoiceRecorder { level -> mutableState.update { it.copy(level = level) } }
+        try {
+            next.start()
+        } catch (error: Exception) {
+            mutableState.update { it.copy(status = error.message ?: "The microphone is not available") }
+            return
+        }
+        recorder = next
+        mutableState.update { it.copy(listening = true, level = 0f, status = "") }
+    }
+
+    fun stopListening() {
+        val active = recorder ?: return
+        recorder = null
+        mutableState.update { it.copy(listening = false, level = 0f, transcribing = true, status = "Transcribing…") }
+        viewModelScope.launch {
+            try {
+                val clip = withContext(Dispatchers.Default) { active.stop() }
+                if (clip.isEmpty()) {
+                    mutableState.update { it.copy(transcribing = false, status = "Too short") }
+                    return@launch
+                }
+                val text = api.transcribe(clip)
+                mutableState.update { it.copy(transcribing = false, status = if (text.isBlank()) "Didn't catch that" else "") }
+                if (text.isNotBlank()) send(text)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                mutableState.update {
+                    it.copy(
+                        transcribing = false,
+                        status = "",
+                        messages = it.messages + ChatMessage("system", error.message ?: error.javaClass.simpleName)
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelListening() {
+        recorder?.cancel()
+        recorder = null
+        mutableState.update { it.copy(listening = false, level = 0f) }
+    }
+
+    override fun onCleared() {
+        recorder?.cancel()
+        recorder = null
     }
 
     fun interrupt() {
