@@ -449,6 +449,7 @@ class AssistantWindow(DesktopWindow):
 
         ui.subtitles.setObjectName("subtitles")
         ui.subtitles.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        ui.subtitles.setProperty("staticSlot", True)
         ui.subtitles.setWordWrap(True)
         ui.subtitles.setTextFormat(Qt.RichText)
         ui.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

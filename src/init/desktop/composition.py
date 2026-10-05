@@ -47,13 +47,23 @@ class CompositionLayout(QLayout):
     def expandingDirections(self):
         return Qt.Horizontal | Qt.Vertical
 
+    @staticmethod
+    def _static(item):
+        widget = item.widget()
+        return widget is not None and bool(widget.property("staticSlot"))
+
+    def _occupied(self, item):
+        return not item.isEmpty() or self._static(item)
+
     def _height(self, item, width):
+        if self._static(item):
+            return item.widget().sizeHint().height()
         hint = item.heightForWidth(width) if item.hasHeightForWidth() else item.sizeHint().height()
         return max(item.minimumSize().height(), min(item.maximumSize().height(), max(0, hint)))
 
     def _size(self, preferred):
         left, top, right, bottom = self.getContentsMargins()
-        visible = [item for item in self.items if not item.isEmpty()]
+        visible = [item for item in self.items if self._occupied(item)]
         width = max((item.sizeHint().width() if preferred else item.minimumSize().width()
                      for item in visible[1:]), default=0)
         orb = self.items[0].sizeHint().width() if preferred and self.items else self.MINIMUM_ORB
@@ -73,7 +83,7 @@ class CompositionLayout(QLayout):
         if not self.items:
             return
         area = self.contentsRect()
-        tail = [item for item in self.items[1:] if not item.isEmpty()]
+        tail = [item for item in self.items[1:] if self._occupied(item)]
         heights = [self._height(item, area.width()) for item in tail]
         spacing = self.spacing()
         reserved = sum(heights) + spacing * len(tail)
