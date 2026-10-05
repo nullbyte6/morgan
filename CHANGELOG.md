@@ -10,8 +10,8 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add phone API server in src/init/api, off by default and set with the api section of config.json, that serves paired devices over HTTP and a WebSocket on loopback, LAN and Tailscale addresses only, with chat sessions that stream the reply, steps and confirmations, interrupt, and Nova agenda, reminder and journal routes
 - Add device pairing for the phone API, a single-use code valid for five minutes created with python -m src.init.api pair, tokens stored only as hashes, and devices and revoke commands
 - Fix subtitles displacing the main orb when turned on, off or revealed, by always reserving their area in the main window layout
-- Update desktop startup to run the phone API server when it is enabled and stop it on exit, and the executable and macOS builds to bundle the uvicorn and websockets modules
 - Fix installer writing config.json with the wide padding of Windows PowerShell 5.1, by reformatting it with standard two-space indentation
+- Update desktop startup to run the phone API server when it is enabled and stop it on exit, and the executable and macOS builds to bundle the uvicorn and websockets modules
 - Update gitignore to exclude Android build output, Gradle caches, local.properties, APK and AAB packages and signing keystores, and to keep text files inside clients/
 
 ## 26.10.4-beta (2026-10-04)
