@@ -20,6 +20,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add release signing to the Android client, reading the keystore from local.properties or environment variables so assembleRelease produces a signed APK, and version 0.2.0
 - Fix subtitles displacing the main orb when turned on, off or revealed, by always reserving their area in the main window layout
 - Fix English accent when speaking other languages, by naming the detected language in the voice instruction, dropping the English reference speech tokens from the model prompt for non-English replies, and passing the language name instead of a detector object
+- Fix startup greeting not following the last spoken language in builds without lingua, with a small built-in detector for the ten supported languages
 - Fix pauses between spoken sentences by waiting for less buffered audio before resuming playback
 - Fix installer writing config.json with the wide padding of Windows PowerShell 5.1, by reformatting it with standard two-space indentation
 - Fix waveform icon of the Android client to show four bars
