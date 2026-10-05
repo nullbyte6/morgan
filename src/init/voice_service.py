@@ -53,8 +53,8 @@ from src.platforms import current_platform
 
 logger = logging.getLogger(f"{get_assistant_identifier()}.tts")
 
-RESUME_LEAD_SECONDS = 1.5
-RESUME_MAX_WAIT_SECONDS = 2.5
+RESUME_LEAD_SECONDS = 0.8
+RESUME_MAX_WAIT_SECONDS = 1.5
 WARMUP_TEXT = "Hello, I am ready to help you with whatever you need today."
 
 
@@ -309,16 +309,17 @@ class VoiceService:
 
     def _synthesize(self, text, language=None):
         speaker_id = get_assistant_identifier()
-        instruction = ""
-        if language is not None:
-            prefix, transcript = self._reference_prompt.split("<|endofprompt|>", 1)
+        if language is not None and language.casefold() != VOICE_REFERENCE_LANGUAGE:
+            prefix, _ = self._reference_prompt.split("<|endofprompt|>", 1)
             prefix = prefix.rstrip().removesuffix(f"Please speak in {VOICE_REFERENCE_LANGUAGE}.").rstrip()
-            instruction = f"{prefix}<|endofprompt|>{transcript}"
+            instruction = f"{prefix} Please speak in {language}.<|endofprompt|>"
             instruction_key = (self._reference_key, language)
             instructed_id = speaker_id + "-instruct"
             if instruction_key != self._instruction_key:
                 frontend = self.voice.frontend
                 speaker = dict(frontend.spk2info[speaker_id])
+                speaker.pop("llm_prompt_speech_token", None)
+                speaker.pop("llm_prompt_speech_token_len", None)
                 speaker["prompt_text"], speaker["prompt_text_len"] = (
                     frontend._extract_text_token(instruction))
                 frontend.spk2info[instructed_id] = speaker
@@ -368,7 +369,7 @@ class VoiceService:
                     self._queue_audio(batch, np.zeros(int(self.sample_rate * pause),
                                                       dtype=np.float32),
                                       batch.last_timeline, batch.last_total)
-                generator = self._synthesize(text, batch.numbers.language)
+                generator = self._synthesize(text, batch.numbers.name)
                 for chunk in generator:
                     if batch.cancelled.is_set():
                         break

@@ -51,6 +51,10 @@ class SpeechNumbers:
     def code(self):
         return self.language.iso_code_639_1.name.lower() if self.language else None
 
+    @property
+    def name(self):
+        return self.language.name.replace("_", " ").title() if self.language else None
+
     def normalize(self, text):
         if self.language is None:
             return text
