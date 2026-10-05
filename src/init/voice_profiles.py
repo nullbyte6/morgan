@@ -37,7 +37,7 @@ def _voice_model() -> Path:
 
 VOICE_MODEL = _voice_model()
 VOICE_REFERENCE = VOICE_DIR / "voice-01.wav"
-VOICE_REFERENCE_TEXT = "Hola soy Morgan, estoy aquí para lo que necesites."
+VOICE_REFERENCE_TEXT = "¡Hola! Soy tu asistente personal y estoy aquí para lo que necesites."
 VOICE_REFERENCE_LANGUAGE = "spanish"
 VOICE_REFERENCE_INSTRUCTION = (f"You are a helpful assistant. "
                                f"Please speak in {VOICE_REFERENCE_LANGUAGE}.<|endofprompt|>")
