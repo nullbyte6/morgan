@@ -36,6 +36,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
+Name: "hotkey"; Description: "Launch with the Ctrl+Alt+M hotkey"
 
 [Files]
 Source: "{#MorganSourceDir}\Morgan.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -43,6 +44,7 @@ Source: "{#MorganSourceDir}\_internal\*"; DestDir: "{app}\_internal"; Flags: ign
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "licenses\*"; DestDir: "{app}\licenses"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "scripts\morgan-services.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+Source: "scripts\morgan-hotkey.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
 Source: "src\__init__.py"; DestDir: "{app}\src"; Flags: ignoreversion
 Source: "src\init\__init__.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
 Source: "src\init\attachments.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
@@ -326,8 +328,21 @@ begin
   end;
 end;
 
+procedure BindHotkey;
+var
+  Parameters: String;
+  ResultCode: Integer;
+begin
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\scripts\morgan-hotkey.ps1') +
+    '" -InstallDir "' + ExpandConstant('{app}') + '" -AssistantName "' + GetAssistantName('') + '"';
+  if (not Exec('powershell.exe', Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    Log('The hotkey could not be bound (exit code ' + IntToStr(ResultCode) + ').');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  if (CurStep = ssPostInstall) and WizardIsTaskSelected('hotkey') then
+    BindHotkey;
   if CurStep = ssPostInstall then begin
     if HasMorganRepository then
       Log('Morgan repository found: ' + GetRepositoryScripts(''))
