@@ -5,7 +5,6 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     printf 'build-linux.sh builds the Linux application and archive and must run on Linux.\n' >&2
     exit 1
 fi
-architecture="$(uname -m)"
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 python="${MORGAN_BUILD_PYTHON:-$root/.venv/bin/python}"
@@ -23,7 +22,6 @@ export PYTHONUTF8=1
 export PYTHONDONTWRITEBYTECODE=1
 mkdir -p -- "$build" "$installer"
 
-version="$("$python" -c "import json; print(json.load(open('dev/core.json', encoding='utf-8'))['version'])")"
 
 hidden=()
 while IFS= read -r module; do
@@ -62,6 +60,7 @@ PY
     --exclude-module src.init.speech_text \
     --exclude-module src.platforms.winx64 \
     --exclude-module src.platforms.macx64 \
+    --exclude-module grpc_tools --exclude-module hf_xet \
     --exclude-module lingua --exclude-module babel --exclude-module num2words \
     "${hidden[@]}" "$root/entry/desktop.py"
 
@@ -81,49 +80,107 @@ text = text.replace('pyz = PYZ(a.pure)',
     "    a.datas += Tree(directory, prefix=package, excludes=['__pycache__', '*.pyc'])\n"
     "a.datas = [entry for entry in a.datas if not entry[0].startswith('timezonefinder_data/data/')]\n"
     "pyz = PYZ(a.pure)")
+unused_binaries = r'''import re
+unused = re.compile(r'^(onnxruntime/capi/libonnxruntime_providers_(cuda|tensorrt)\.so|PySide6/(qml/|plugins/qmltooling/|Qt6?(3D|Charts|DataVisualization|Graphs|Location|MultimediaQuick|Quick3D|QuickShapes|QuickTest|QuickVectorImage|RemoteObjects|Scxml|Sensors|SpatialAudio|Test)[^/]*$|resources/.*\\.debug\\.|translations/))')
+a.binaries = [entry for entry in a.binaries if not unused.match(entry[0])]
+a.datas = [entry for entry in a.datas if not unused.match(entry[0])]
+'''
+text = text.replace('pyz = PYZ(a.pure)', unused_binaries + 'pyz = PYZ(a.pure)')
 path.write_text(text, encoding='utf-8')
 PY
 
 "$python" -B -m PyInstaller --noconfirm --distpath "$dist" --workpath "$build/work" "$build/Morgan.spec" "$@"
 
-staging="$build/archive/Morgan-$version-linux-$architecture"
-rm -rf -- "$build/archive"
-mkdir -p -- "$staging"
-cp -R -- "$dist/Morgan" "$staging/Morgan"
-cp -- "$root/assets/morgan.png" "$staging/morgan.png"
+internal="$dist/Morgan/_internal"
+qt="$internal/PySide6/Qt"
+rm -rf -- "$qt/translations" "$qt/plugins/egldeviceintegrations"
+rm -f -- "$qt/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so" \
+    "$qt/plugins/platformthemes/libqgtk3.so" \
+    "$qt"/plugins/platforms/libq{eglfs,linuxfb,minimalegl,vnc,vkkhrdisplay}.so \
+    "$qt"/lib/libQt6{Quick,Qml,VirtualKeyboard,EglFS,EglFsKms}*
+for library in libgtk-3 libgdk-3 libgdk_pixbuf libglycin libcairo libpango libatk libatspi libepoxy \
+    libcloudproviders libtinysparql libjson-glib libharfbuzz libgraphite2 libfribidi libthai libdatrie \
+    libpixman libseccomp libicudata.so.78 libicuuc.so.78 libicui18n.so.78 libxml2 libXi libXrandr \
+    libXcursor libXrender libXext liblcms2; do
+    rm -f -- "$internal/$library"*
+done
+find "$internal" -name RECORD -delete
+find "$internal" -type f \( -name '*.so' -o -name '*.so.*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true
 
-cat > "$staging/morgan.desktop" <<'DESKTOP'
+payload="$build/payload"
+rm -rf -- "$payload"
+mkdir -p -- "$payload/scripts"
+cp -R -- "$dist/Morgan" "$payload/Morgan"
+cp -- "$root/assets/morgan.png" "$payload/morgan.png"
+cp -- "$root/LICENSE" "$payload/LICENSE"
+cp -R -- "$root/licenses" "$payload/licenses"
+cp -- "$root/scripts/morgan-services.sh" "$payload/scripts/morgan-services.sh"
+chmod +x "$payload/Morgan/Morgan" "$payload/scripts/morgan-services.sh"
+
+archive="$build/payload.tar.xz"
+tar -C "$payload" -cf - . | xz -T1 --x86 --lzma2=preset=9e,dict=256MiB,lc=4,lp=0,pb=0 > "$archive"
+rm -rf -- "$payload"
+
+stub="$build/stub.sh"
+cat > "$stub" <<'STUB'
+#!/bin/sh
+set -eu
+prefix="${MORGAN_PREFIX:-$HOME/.local/opt/Morgan}"
+applications="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+command_link="$HOME/.local/bin/morgan"
+uninstall=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --prefix) prefix="${2:?--prefix needs a folder}"; shift 2 ;;
+        --uninstall) uninstall=1; shift ;;
+        -h|--help)
+            printf 'Usage: %s [--prefix FOLDER] [--uninstall]\n' "$0"
+            exit 0 ;;
+        *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
+    esac
+done
+
+if [ "$uninstall" = 1 ]; then
+    rm -rf -- "$prefix"
+    rm -f -- "$applications/morgan.desktop"
+    [ -L "$command_link" ] && rm -f -- "$command_link"
+    printf 'Morgan removed from %s\n' "$prefix"
+    exit 0
+fi
+
+for tool in xz tar awk; do
+    command -v "$tool" >/dev/null 2>&1 || { printf '%s is required to install Morgan.\n' "$tool" >&2; exit 1; }
+done
+
+skip="$(awk '/^__ARCHIVE_BELOW__$/ { print NR + 1; exit }' "$0")"
+mkdir -p -- "$prefix" "$applications" "$HOME/.local/bin"
+rm -rf -- "$prefix/Morgan" "$prefix/scripts" "$prefix/licenses"
+printf 'Installing Morgan in %s...\n' "$prefix"
+tail -n +"$skip" "$0" | xz -dc | tar -x -C "$prefix"
+
+cat > "$applications/morgan.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Morgan
 Comment=Personal assistant
-Exec=@PREFIX@/Morgan/Morgan
-Icon=@PREFIX@/morgan.png
+Exec=$prefix/Morgan/Morgan
+Icon=$prefix/morgan.png
 Terminal=false
 Categories=Utility;
 StartupWMClass=morgan
 DESKTOP
-
-cat > "$staging/install.sh" <<'INSTALL'
-#!/usr/bin/env bash
-set -euo pipefail
-source_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-prefix="${MORGAN_PREFIX:-$HOME/.local/opt/Morgan}"
-applications="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-mkdir -p -- "$prefix" "$applications" "$HOME/.local/bin"
-rm -rf -- "$prefix/Morgan"
-cp -R -- "$source_dir/Morgan" "$prefix/Morgan"
-cp -- "$source_dir/morgan.png" "$prefix/morgan.png"
-sed "s|@PREFIX@|$prefix|g" "$source_dir/morgan.desktop" > "$applications/morgan.desktop"
-ln -sf -- "$prefix/Morgan/Morgan" "$HOME/.local/bin/morgan"
+ln -sf -- "$prefix/Morgan/Morgan" "$command_link"
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$applications" || true
-printf 'Morgan installed in %s\n' "$prefix"
-INSTALL
-chmod +x "$staging/install.sh" "$staging/Morgan/Morgan"
+printf 'Morgan installed. Start it from the application menu or with the morgan command.\nTo remove it, run: %s --uninstall\n' "$0"
+exit 0
+__ARCHIVE_BELOW__
+STUB
 
-archive="$installer/Morgan-$version-linux-$architecture.tar.gz"
-rm -f -- "$archive"
-tar -C "$build/archive" -czf "$archive" "$(basename -- "$staging")"
-rm -rf -- "$build/archive"
+setup="$installer/MorganSetup.run"
+rm -f -- "$setup"
+cat "$stub" "$archive" > "$setup"
+chmod +x "$setup"
+rm -f -- "$stub" "$archive"
 
-printf '\nApplication: %s/Morgan/Morgan\nArchive: %s\n' "$dist" "$archive"
+printf '\nApplication: %s/Morgan/Morgan\nInstaller: %s (%s)\n' "$dist" "$setup" "$(du -h "$setup" | cut -f1)"
