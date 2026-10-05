@@ -18,7 +18,11 @@ ollama_url="http://127.0.0.1:11434"
 tts_host="127.0.0.1"
 tts_port=18765
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/Applications/Ollama.app/Contents/Resources:$PATH"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    export PATH="/opt/homebrew/bin:/usr/local/bin:/Applications/Ollama.app/Contents/Resources:$PATH"
+else
+    export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+fi
 export PYTHONPATH="$root:$root/src:$root/src/third_party/Matcha-TTS"
 export TORCH_CPP_LOG_LEVEL="ERROR"
 export TORCH_LOGS="-all"
@@ -90,7 +94,7 @@ printf '[1/3] Checking Ollama...\n'
 export OLLAMA_CONTEXT_LENGTH="$model_context"
 if ! port_open 127.0.0.1 11434; then
     if ! command -v ollama >/dev/null 2>&1; then
-        printf 'Ollama was not found. Install it from https://ollama.com or with brew install ollama.\n' >&2
+        printf 'Ollama was not found. Install it from https://ollama.com or with your package manager.\n' >&2
         exit 1
     fi
     printf 'Starting Ollama...\n'
@@ -213,7 +217,25 @@ if (( ! no_console )); then
         printf 'Debug console already running.\n'
     else
         console_command="printf '\\033]0;%s\\007' $(printf '%q' "$console_title"); tail -n 0 -F $(printf '%q' "$tts_log") $(printf '%q' "$agent_log")"
-        osascript -e 'on run argv' -e 'tell application "Terminal" to do script (item 1 of argv)' -e 'end run' "$console_command" >/dev/null
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            osascript -e 'on run argv' -e 'tell application "Terminal" to do script (item 1 of argv)' -e 'end run' "$console_command" >/dev/null
+        else
+            terminal=""
+            for candidate in x-terminal-emulator gnome-terminal konsole kitty alacritty xterm; do
+                if command -v "$candidate" >/dev/null 2>&1; then
+                    terminal="$candidate"
+                    break
+                fi
+            done
+            if [[ -z "$terminal" ]]; then
+                printf 'No terminal emulator found for the debug console.\n' >&2
+            else
+                case "$terminal" in
+                    gnome-terminal) "$terminal" -- bash -c "$console_command" >/dev/null 2>&1 & ;;
+                    *) "$terminal" -e bash -c "$console_command" >/dev/null 2>&1 & ;;
+                esac
+            fi
+        fi
         printf 'Debug console started.\n'
     fi
 fi
