@@ -35,6 +35,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -47,7 +48,10 @@ class ApiException(val status: Int, message: String) : Exception(message)
 
 class MorganApi(baseUrl: String, private val token: String? = null) {
     private val base = baseUrl.trimEnd('/')
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
     private val socketClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.SECONDS)
@@ -85,6 +89,17 @@ class MorganApi(baseUrl: String, private val token: String? = null) {
         send(post("/v1/sessions/$id/confirmations/$requestId", ConfirmationRequest(accepted)))
     }
 
+    suspend fun agenda(): AgendaResponse = execute(get("/v1/nova/agenda"))
+
+    suspend fun journal(): JournalResponse = execute(get("/v1/nova/journal"))
+
+    suspend fun search(query: String): SearchResponse =
+        execute(get("/v1/nova/search", "query" to query))
+
+    suspend fun completeReminder(id: String, completed: Boolean) {
+        send(post("/v1/nova/reminders/$id/completion", CompletionRequest(completed)))
+    }
+
     fun stream(id: String): Flow<StreamEvent> = callbackFlow {
         val socket = socketClient.newWebSocket(
             request("/v1/sessions/$id/stream").build(),
@@ -120,7 +135,14 @@ class MorganApi(baseUrl: String, private val token: String? = null) {
             token?.let { header("Authorization", "Bearer $it") }
         }
 
-    private fun get(path: String): Request = request(path).get().build()
+    private fun get(path: String, vararg query: Pair<String, String>): Request {
+        val url = (base + path).toHttpUrl().newBuilder().apply {
+            query.forEach { (name, value) -> addQueryParameter(name, value) }
+        }.build()
+        return Request.Builder().url(url).apply {
+            token?.let { header("Authorization", "Bearer $it") }
+        }.get().build()
+    }
 
     private fun postJson(path: String, payload: String): Request =
         request(path).post(payload.toRequestBody("application/json".toMediaType())).build()

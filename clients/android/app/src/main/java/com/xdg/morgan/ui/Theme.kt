@@ -20,35 +20,42 @@
  */
 package com.xdg.morgan.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val Purple = Color(0xFFC39BF0)
-private val Blue = Color(0xFF4DA3FF)
-private val Night = Color(0xFF0D1117)
+object MorganColors {
+    val Background = Color(0xFF0D1117)
+    val Panel = Color(0xFF10151C)
+    val Raised = Color(0xFF171D26)
+    val Border = Color(0xFF2D333B)
+    val Text = Color(0xFFE6EDF3)
+    val Body = Color(0xFFC9D1D9)
+    val Muted = Color(0xFF8B949E)
+    val Purple = Color(0xFFC39BF0)
+    val Blue = Color(0xFF4DA3FF)
+    val Danger = Color(0xFFF47067)
+    val Online = Color(0xFF56D364)
+    val Away = Color(0xFFE3B341)
+}
 
-private val DarkColors = darkColorScheme(
-    primary = Purple,
-    onPrimary = Night,
-    secondary = Blue,
-    onSecondary = Night,
-    background = Night,
-    surface = Night
-)
-
-private val LightColors = lightColorScheme(
-    primary = Color(0xFF7B4FB3),
-    secondary = Color(0xFF1F6FBF)
+private val Scheme = darkColorScheme(
+    primary = MorganColors.Blue,
+    onPrimary = MorganColors.Background,
+    secondary = MorganColors.Purple,
+    onSecondary = MorganColors.Background,
+    background = MorganColors.Background,
+    onBackground = MorganColors.Text,
+    surface = MorganColors.Panel,
+    onSurface = MorganColors.Text,
+    surfaceVariant = MorganColors.Raised,
+    onSurfaceVariant = MorganColors.Body,
+    outline = MorganColors.Border,
+    error = MorganColors.Danger
 )
 
 @Composable
 fun MorganTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
-        content = content
-    )
+    MaterialTheme(colorScheme = Scheme, content = content)
 }

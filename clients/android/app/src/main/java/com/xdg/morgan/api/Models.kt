@@ -78,3 +78,44 @@ data class TurnResponse(val turn: Int)
 
 @Serializable
 data class ConfirmationRequest(val accepted: Boolean)
+
+@Serializable
+data class AgendaEntry(
+    val id: String,
+    val kind: String,
+    val title: String,
+    val notes: String? = null,
+    @SerialName("remind_at") val remindAt: String? = null,
+    val completed: Boolean = false,
+    @SerialName("starts_at") val startsAt: String? = null,
+    @SerialName("ends_at") val endsAt: String? = null,
+    @SerialName("all_day") val allDay: Boolean = false,
+    val repeat: String? = null,
+    val flag: String? = null
+)
+
+@Serializable
+data class AgendaResponse(
+    val overdue: List<AgendaEntry> = emptyList(),
+    val entries: List<AgendaEntry> = emptyList()
+)
+
+@Serializable
+data class JournalEntry(
+    val id: String,
+    val day: String,
+    val text: String,
+    @SerialName("written_by") val writtenBy: String = "user"
+)
+
+@Serializable
+data class JournalResponse(val entries: List<JournalEntry> = emptyList())
+
+@Serializable
+data class SearchResponse(
+    val agenda: List<AgendaEntry> = emptyList(),
+    val journal: List<JournalEntry> = emptyList()
+)
+
+@Serializable
+data class CompletionRequest(val completed: Boolean)
