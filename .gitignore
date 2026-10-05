@@ -11,6 +11,7 @@ __pycache__/
 *.txt
 !src/platforms/*/requirements.txt
 !src/voices/*.txt
+!clients/**/*.txt
 
 /tests/*
 /dev/*.py
