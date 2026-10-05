@@ -7,6 +7,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add Ctrl+Alt+M launch hotkey script that binds the hotkey to the Start Menu shortcut of Morgan.exe, or asks the user to run MorganSetup.exe first when it is not installed
 - Add hotkey task to the installer that ships the hotkey script and binds Ctrl+Alt+M after installation
 - Add a medium orb above the subtitles in the compact overlay that reacts like the main orb, with the subtitles shown between the orb and the composer
+- Add Enable Subtitles in Overlay toggle under the subtitles setting, off by default, in all ten interface languages
 - Add phone API server in src/init/api, off by default and set with the api section of config.json, that serves paired devices over HTTP and a WebSocket on loopback, LAN and Tailscale addresses only, with chat sessions that stream the reply, steps and confirmations, interrupt, and Nova agenda, reminder and journal routes
 - Add device pairing for the phone API, a single-use code valid for five minutes created with python -m src.init.api pair, tokens stored only as hashes, and devices and revoke commands
 - Add Android client in clients/android, a Kotlin and Jetpack Compose app that pairs with the phone API using a code, keeps the token encrypted with the Android Keystore, and chats with streamed replies, tool steps, interrupt and optional remote confirmations, reconnecting on its own
@@ -24,6 +25,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix pauses between spoken sentences by waiting for less buffered audio before resuming playback
 - Fix installer writing config.json with the wide padding of Windows PowerShell 5.1, by reformatting it with standard two-space indentation
 - Fix waveform icon of the Android client to show four bars
+- Update compact overlay to show subtitles only when Enable Subtitles in Overlay is on
 - Update compact overlay to keep the orb in place, larger and with a small gap above the composer, with the subtitles shown above it
 - Update Android client look to match the desktop app, with the animated orb that pulses while Morgan answers, the dark palette, a pill composer with a round send and stop button, plain assistant text with outlined user bubbles, and light system bar icons
 - Update Android client orb to the desktop orb, with its eight states and colors from the theme (idle, processing with the rotating arc, reading, writing, executing, awaiting permission, error and success), the audio-reactive spectrum ring, breathing, and the smaller size, driven by the same task activity the desktop uses
