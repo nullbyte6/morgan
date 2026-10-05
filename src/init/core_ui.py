@@ -211,6 +211,7 @@ class AssistantWindow(DesktopWindow):
         if saved_x is not None and saved_y is not None:
             self.overlay.restore_position(saved_x, saved_y)
         self.subtitles_enabled = subtitles_enabled
+        self.overlay_subtitles_enabled = self.settings.value("overlay_subtitles", False, type=bool)
 
         self.recording = False
         self.voice_thread = None
@@ -974,7 +975,8 @@ class AssistantWindow(DesktopWindow):
         self.settings.setValue("overlay_y", y)
 
     def sync_overlay_subtitle(self):
-        active = bool(self.subtitles_enabled and self.session.speaking
+        active = bool(self.subtitles_enabled and self.overlay_subtitles_enabled
+                      and self.session.speaking
                       and " ".join(str(self.session.subtitle_text or "").split()))
         bubble = self.overlay_subtitles
         self.overlay.set_subtitle_space(
@@ -1004,9 +1006,11 @@ class AssistantWindow(DesktopWindow):
                 muted=self.muted,
                 ephemeral_steps_enabled=self.settings.value("ephemeral_steps", True, type=bool),
                 song_panel_enabled=self.settings.value("song_panel", True, type=bool),
-                orb_enabled=self.orb_enabled)
+                orb_enabled=self.orb_enabled,
+                overlay_subtitles_enabled=self.overlay_subtitles_enabled)
             view.mute_changed.connect(self.toggle_mute)
             view.subtitles_changed.connect(self.toggle_subtitles)
+            view.overlay_subtitles_changed.connect(self.toggle_overlay_subtitles)
             view.orb_pulse_changed.connect(self.toggle_orb_speech_pulse)
             view.ephemeral_steps_changed.connect(self.toggle_ephemeral_steps)
             view.song_panel_changed.connect(self.toggle_song_panel)
@@ -1553,6 +1557,8 @@ class AssistantWindow(DesktopWindow):
                 view.mute_switch.setChecked(self.muted)
             with QSignalBlocker(view.subtitles_switch):
                 view.subtitles_switch.setChecked(self.subtitles_enabled)
+            with QSignalBlocker(view.overlay_subtitles_switch):
+                view.overlay_subtitles_switch.setChecked(self.overlay_subtitles_enabled)
             with QSignalBlocker(view.orb_pulse_switch):
                 view.orb_pulse_switch.setChecked(
                     self.settings.value("orb_speech_pulse", True, type=bool))
@@ -1638,6 +1644,13 @@ class AssistantWindow(DesktopWindow):
             session.ui.subtitles.setVisible(enabled and session.ready)
         self.sync_overlay_subtitle()
         self.settings.setValue("subtitles", enabled)
+        self.refresh_settings_workspaces()
+
+    @Slot(bool)
+    def toggle_overlay_subtitles(self, enabled: bool):
+        self.overlay_subtitles_enabled = enabled
+        self.sync_overlay_subtitle()
+        self.settings.setValue("overlay_subtitles", enabled)
         self.refresh_settings_workspaces()
 
     @Slot(bool)
