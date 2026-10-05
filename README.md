@@ -182,10 +182,12 @@ platform layer in `src/platforms`:
   `scripts/morgan-services.sh` also runs on Linux, opening the debug console in
   the first terminal emulator it finds. `scripts/build-linux.sh`, run on Linux
   with the dependencies from `requirements.txt` in `.venv`, builds Morgan with
-  PyInstaller (in `build/packaging-linux/dist`) and packs it with an
-  `install.sh` into `build/installer/Morgan-<version>-linux-<arch>.tar.gz`;
-  `install.sh` installs it under `~/.local/opt/Morgan` with a menu entry and a
-  `morgan` command. `scripts/rebuild.sh` runs the build for the current system.
+  PyInstaller (in `build/packaging-linux/dist`), drops the unused GTK, QML and
+  NVIDIA libraries and packs it into the self-extracting
+  `build/installer/MorganSetup.run` (about 165 MB, xz-compressed).
+  `./MorganSetup.run` installs it under `~/.local/opt/Morgan` with a menu
+  entry and a `morgan` command; `--prefix FOLDER` changes the folder and
+  `--uninstall` removes it. `scripts/rebuild.sh` runs the build for the current system.
 - `current_platform()` in `src/platforms/__init__.py` selects the package from
   `sys.platform` and falls back to the portable defaults elsewhere.
 

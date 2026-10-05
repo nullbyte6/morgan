@@ -6,7 +6,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 - Add linuxx64 platform package in src/platforms with X11 window control, MPRIS media sessions through playerctl, notify-send notifications with buttons, XDG folders and mounted volumes, .desktop application discovery, systemd shutdown, gio trash, multi-distro package commands and PulseAudio system audio capture
 - Add Linux selection in current_platform and the linuxx64 requirements file referenced from requirements.txt
-- Add scripts/build-linux.sh that builds Morgan with PyInstaller and packs it with an install.sh into a tar.gz archive
+- Add scripts/build-linux.sh that builds Morgan with PyInstaller, drops the unused NVIDIA, GTK and QML libraries and packs it into the self-extracting MorganSetup.run, lighter than MorganSetup.exe, with --prefix and --uninstall options
 - Add package manager and window tools messages in all ten interface languages
 - Update morgan-services.sh and rebuild.sh to run on Linux, with a terminal emulator for the debug console
 - Fix task checkpoint rejection hint that suggested an unrelated core.py resource, now listing the observed resources and telling to cite evidence call IDs only in completed, so tasks stop pausing after repeated rejected checkpoints
