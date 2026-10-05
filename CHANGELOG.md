@@ -2,6 +2,11 @@
 
 All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.5-beta (2026-10-05)
+
+- Add a medium orb above the subtitles in the compact overlay that reacts like the main orb, with the subtitles shown between the orb and the composer
+- Fix subtitles displacing the main orb when turned on, off or revealed, by always reserving their area in the main window layout
+
 ## 26.10.4-beta (2026-10-04)
 
 - Add a soft glow around both rings of the orb
