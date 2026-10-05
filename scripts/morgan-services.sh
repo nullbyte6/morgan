@@ -82,6 +82,9 @@ printf '%s SERVICES\n-------------\n' "$(printf '%s' "$assistant_name" | tr '[:l
 
 core_path="$root/dev/core.json"
 if [[ ! -f "$core_path" ]]; then
+    core_path="$root/_internal/dev/core.json"
+fi
+if [[ ! -f "$core_path" ]]; then
     printf '%s model configuration not found: %s\n' "$assistant_name" "$core_path" >&2
     exit 1
 fi
