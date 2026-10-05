@@ -56,6 +56,8 @@ DEFAULTS = {
         "recall_chars": 8000,
     },
     "attachments": dict(DEFAULT_LIMITS),
+    "api": {"enabled": False, "host": "127.0.0.1", "port": 8765,
+            "allow_remote_confirmation": False, "tls_certificate": "", "tls_key": ""},
     "lang": "spanish",
     "coding_model": "",
     "keep_alive": "24h",
@@ -242,6 +244,24 @@ def validate_config(config):
                               ("recall_chars", 1024, 64000)):
         if isinstance(memory[key], bool) or not isinstance(memory[key], int) or not lower <= memory[key] <= upper:
             raise ValueError(f"memory.{key} must be an integer between {lower} and {upper}")
+    api = config.get("api", {})
+    if not isinstance(api, dict) or api.keys() - DEFAULTS["api"].keys():
+        raise ValueError("Invalid api configuration")
+    result["api"] = {**DEFAULTS["api"], **api}
+    api = result["api"]
+    for key in ("enabled", "allow_remote_confirmation"):
+        if not isinstance(api[key], bool):
+            raise ValueError(f"api.{key} must be boolean")
+    for key in ("host", "tls_certificate", "tls_key"):
+        if not isinstance(api[key], str):
+            raise ValueError(f"api.{key} must be text")
+    if not api["host"].strip():
+        raise ValueError("api.host must not be empty")
+    api["host"] = api["host"].strip()
+    if isinstance(api["port"], bool) or not isinstance(api["port"], int) or not 1 <= api["port"] <= 65535:
+        raise ValueError("api.port must be an integer between 1 and 65535")
+    if bool(api["tls_certificate"]) != bool(api["tls_key"]):
+        raise ValueError("api.tls_certificate and api.tls_key must be set together")
     reference = result["voice_reference"]
     if (not isinstance(reference, str) or not reference
             or Path(reference).name != reference
@@ -409,7 +429,7 @@ def update_config(updates: dict) -> str:
         for key, value in updates.items():
             if key not in DEFAULTS:
                 return tr('config.error_updating_configuration_unknown_setting', key=key)
-            if key in ("permission_mode", "theme", "context_length", "terminal_shell"):
+            if key in ("permission_mode", "theme", "context_length", "terminal_shell", "api"):
                 return tr('config.error_updating_configuration_user_only_setting', key=key)
             if isinstance(current.get(key), dict) and isinstance(value, dict):
                 current[key] = {**current[key], **value}
