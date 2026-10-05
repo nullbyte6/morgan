@@ -4,6 +4,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.5-beta (2026-10-05)
 
+- Fix requirements.txt pinning setuptools 84.0.0, which has no pkg_resources and broke pyworld, by pinning 80.9.0
 - Fix Linux runtime setup failing on pyworld with No module named pkg_resources by pinning setuptools 80.9.0, and make its verification step report the actual import error instead of blaming PortAudio
 - Add scripts/setup-runtime.sh, the Linux counterpart of setup-runtime.ps1, that installs Ollama and the models, creates the Python 3.12 voice runtime with uv and PyTorch for the detected GPU, and downloads the CosyVoice model and timezone data
 - Add voice service sources, dev/core.json and the runtime setup to MorganSetup.run, which runs the setup after installing unless --no-runtime is given and keeps the existing runtime when reinstalling

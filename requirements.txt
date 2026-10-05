@@ -213,7 +213,7 @@ scikit-learn==1.9.1
 scipy==1.15.3
 segments==2.4.0
 Send2Trash==1.8.3
-setuptools==84.0.0
+setuptools==80.9.0
 shazamio==0.8.1
 shazamio_core==1.1.2
 shellingham==1.5.4
