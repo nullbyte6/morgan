@@ -116,7 +116,20 @@ cp -- "$root/assets/morgan.png" "$payload/morgan.png"
 cp -- "$root/LICENSE" "$payload/LICENSE"
 cp -R -- "$root/licenses" "$payload/licenses"
 cp -- "$root/scripts/morgan-services.sh" "$payload/Morgan/scripts/morgan-services.sh"
-chmod +x "$payload/Morgan/Morgan" "$payload/Morgan/scripts/morgan-services.sh"
+cp -- "$root/scripts/setup-runtime.sh" "$payload/Morgan/scripts/setup-runtime.sh"
+chmod +x "$payload/Morgan/Morgan" "$payload/Morgan/scripts/morgan-services.sh" "$payload/Morgan/scripts/setup-runtime.sh"
+mkdir -p -- "$payload/Morgan/dev" "$payload/Morgan/src/init" "$payload/Morgan/src/platforms/linuxx64" \
+    "$payload/Morgan/src/third_party"
+cp -- "$root/dev/core.json" "$payload/Morgan/dev/core.json"
+cp -- "$root/src/__init__.py" "$payload/Morgan/src/__init__.py"
+cp -- "$root/src/init"/*.py "$payload/Morgan/src/init/"
+cp -R -- "$root/src/init/locales" "$payload/Morgan/src/init/locales"
+cp -- "$root/src/platforms/__init__.py" "$root/src/platforms/base.py" "$payload/Morgan/src/platforms/"
+cp -- "$root/src/platforms/linuxx64"/*.py "$payload/Morgan/src/platforms/linuxx64/"
+cp -R -- "$root/src/cosyvoice" "$payload/Morgan/src/cosyvoice"
+cp -R -- "$root/src/third_party/Matcha-TTS" "$payload/Morgan/src/third_party/Matcha-TTS"
+cp -R -- "$root/src/voices" "$payload/Morgan/src/voices"
+find "$payload/Morgan/src" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 archive="$build/payload.tar.xz"
 tar -C "$payload" -cf - . | xz -T1 --x86 --lzma2=preset=9e,dict=256MiB,lc=4,lp=0,pb=0 > "$archive"
@@ -131,13 +144,15 @@ prefix="${MORGAN_PREFIX:-$HOME/.local/opt/Morgan}"
 applications="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 command_link="$HOME/.local/bin/morgan"
 uninstall=0
+runtime=1
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --prefix) prefix="${2:?--prefix needs a folder}"; shift 2 ;;
         --uninstall) uninstall=1; shift ;;
+        --no-runtime) runtime=0; shift ;;
         -h|--help)
-            printf 'Usage: %s [--prefix FOLDER] [--uninstall]\n' "$0"
+            printf 'Usage: %s [--prefix FOLDER] [--no-runtime] [--uninstall]\n' "$0"
             exit 0 ;;
         *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
@@ -157,9 +172,16 @@ done
 
 skip="$(awk '/^__ARCHIVE_BELOW__$/ { print NR + 1; exit }' "$0")"
 mkdir -p -- "$prefix" "$applications" "$HOME/.local/bin"
+if [ -d "$prefix/Morgan/.venv" ]; then
+    rm -rf -- "$prefix/.venv.keep"
+    mv -- "$prefix/Morgan/.venv" "$prefix/.venv.keep"
+fi
 rm -rf -- "$prefix/Morgan" "$prefix/licenses"
 printf 'Installing Morgan in %s...\n' "$prefix"
 tail -n +"$skip" "$0" | xz -dc | tar -x -C "$prefix"
+if [ -d "$prefix/.venv.keep" ]; then
+    mv -- "$prefix/.venv.keep" "$prefix/Morgan/.venv"
+fi
 
 cat > "$applications/morgan.desktop" <<DESKTOP
 [Desktop Entry]
@@ -175,6 +197,12 @@ DESKTOP
 ln -sf -- "$prefix/Morgan/Morgan" "$command_link"
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$applications" || true
 printf 'Morgan installed. Start it from the application menu or with the morgan command.\nTo remove it, run: %s --uninstall\n' "$0"
+if [ "$runtime" = 1 ]; then
+    "$prefix/Morgan/scripts/setup-runtime.sh" || {
+        printf '\nThe Morgan runtime could not be prepared. Run %s/Morgan/scripts/setup-runtime.sh to retry.\n' "$prefix" >&2
+        exit 1
+    }
+fi
 exit 0
 __ARCHIVE_BELOW__
 STUB
