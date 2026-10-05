@@ -22,6 +22,8 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix installer writing config.json with the wide padding of Windows PowerShell 5.1, by reformatting it with standard two-space indentation
 - Fix waveform icon of the Android client to show four bars
 - Update Android client look to match the desktop app, with the animated orb that pulses while Morgan answers, the dark palette, a pill composer with a round send and stop button, plain assistant text with outlined user bubbles, and light system bar icons
+- Update Android client orb to the desktop orb, with its eight states and colors from the theme (idle, processing with the rotating arc, reading, writing, executing, awaiting permission, error and success), the audio-reactive spectrum ring, breathing, and the smaller size, driven by the same task activity the desktop uses
+- Update Android client chat to have no chat history, so what is typed or spoken goes to the orb and the reply shows as three-line subtitles under it that open in full when tapped, and the microphone feeds the orb the same 15-band spectrum as the desktop
 - Update Android client build to AGP 9.2.1 and Gradle 9.4.1
 - Update desktop startup to run the phone API server when it is enabled and stop it on exit, and the executable and macOS builds to bundle the uvicorn and websockets modules
 - Update gitignore to exclude Android build output, Gradle caches, local.properties, APK and AAB packages and signing keystores, and to keep text files inside clients/
