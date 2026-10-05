@@ -4,11 +4,14 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.5-beta (2026-10-05)
 
-- Update gitignore to exclude Android build output, Gradle caches, local.properties, APK and AAB packages and signing keystores for the upcoming Android client
 - Add Ctrl+Alt+M launch hotkey script that binds the hotkey to the Start Menu shortcut of Morgan.exe, or asks the user to run MorganSetup.exe first when it is not installed
 - Add hotkey task to the installer that ships the hotkey script and binds Ctrl+Alt+M after installation
 - Add a medium orb above the subtitles in the compact overlay that reacts like the main orb, with the subtitles shown between the orb and the composer
+- Add phone API server in src/init/api, off by default and set with the api section of config.json, that serves paired devices over HTTP and a WebSocket on loopback, LAN and Tailscale addresses only, with chat sessions that stream the reply, steps and confirmations, interrupt, and Nova agenda, reminder and journal routes
+- Add device pairing for the phone API, a single-use code valid for five minutes created with python -m src.init.api pair, tokens stored only as hashes, and devices and revoke commands
 - Fix subtitles displacing the main orb when turned on, off or revealed, by always reserving their area in the main window layout
+- Update desktop startup to run the phone API server when it is enabled and stop it on exit, and the executable and macOS builds to bundle the uvicorn and websockets modules
+- Update gitignore to exclude Android build output, Gradle caches, local.properties, APK and AAB packages and signing keystores, and to keep text files inside clients/
 
 ## 26.10.4-beta (2026-10-04)
 
