@@ -317,14 +317,14 @@ private fun Composer(
 
 @Composable
 private fun WaveformIcon(level: Float, modifier: Modifier = Modifier) {
-    val heights = floatArrayOf(0.35f, 0.7f, 1f, 0.55f, 0.8f)
+    val heights = floatArrayOf(0.45f, 1f, 0.75f, 0.4f)
     Canvas(modifier) {
-        val bar = size.width / 9f
+        val bar = size.width / 7f
         heights.forEachIndexed { index, height ->
             val scaled = (height + level * 0.3f).coerceAtMost(1f) * size.height
             drawRoundRect(
                 MorganColors.Background,
-                Offset(bar * (1 + index * 2), (size.height - scaled) / 2f),
+                Offset(bar * index * 2, (size.height - scaled) / 2f),
                 Size(bar, scaled),
                 CornerRadius(bar / 2f)
             )
