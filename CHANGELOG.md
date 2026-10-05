@@ -4,6 +4,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.5-beta (2026-10-05)
 
+- Fix voice references by restoring the four .txt audio transcripts with the new reference text
 - Update voice reference text to ¡Hola! Soy tu asistente personal y estoy aquí para lo que necesites. with the reference language set to Spanish
 - Update voices to drop the four .txt reference transcripts so the default reference text is used
 - Add Ctrl+Alt+M launch hotkey script that binds the hotkey to the Start Menu shortcut of Morgan.exe, or asks the user to run MorganSetup.exe first when it is not installed
