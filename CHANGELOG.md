@@ -11,8 +11,13 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add device pairing for the phone API, a single-use code valid for five minutes created with python -m src.init.api pair, tokens stored only as hashes, and devices and revoke commands
 - Add Android client in clients/android, a Kotlin and Jetpack Compose app that pairs with the phone API using a code, keeps the token encrypted with the Android Keystore, and chats with streamed replies, tool steps, interrupt and optional remote confirmations, reconnecting on its own
 - Add Gradle project for the Android client with a version catalog and the Gradle 9.3.1 wrapper
+- Add collapsible sidebar to the Android client, a narrow icon rail that expands over the screen to Chat, Home, Notifications, Me and Search, with a connection indicator, a scrim and Back to collapse it
+- Add Home, Notifications, Me and Search screens to the Android client, with the Nova agenda grouped by day, overdue and due reminders that can be completed, the journal and device details with unpairing, and a search across reminders, events and journal entries
+- Add /v1/nova/search route to the phone API that searches agenda entries and journal entries
 - Fix subtitles displacing the main orb when turned on, off or revealed, by always reserving their area in the main window layout
 - Fix installer writing config.json with the wide padding of Windows PowerShell 5.1, by reformatting it with standard two-space indentation
+- Update Android client look to match the desktop app, with the animated orb that pulses while Morgan answers, the dark palette, a pill composer with a round send and stop button, plain assistant text with outlined user bubbles, and light system bar icons
+- Update Android client build to AGP 9.2.1 and Gradle 9.4.1
 - Update desktop startup to run the phone API server when it is enabled and stop it on exit, and the executable and macOS builds to bundle the uvicorn and websockets modules
 - Update gitignore to exclude Android build output, Gradle caches, local.properties, APK and AAB packages and signing keystores, and to keep text files inside clients/
 
