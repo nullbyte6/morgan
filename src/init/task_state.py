@@ -282,8 +282,12 @@ class TaskState:
                 resource.startswith("domain:") and resource[7:].strip()
                 or resource.startswith(("file:", "entry:")) and Path(resource.split(":", 1)[1]).is_absolute())
                for resource in declared_resources):
-            return reject("Use resource identifiers, not bare paths, globs or display names.", "verification.resources",
-                          ["file:" + str(Path.cwd() / "src" / "init" / "core.py"), "domain:presentation"])
+            observed = [resource for resource in self.revisions if resource.startswith(("file:", "entry:"))]
+            return reject("Use resource identifiers, not bare paths, globs, display names or evidence call IDs. "
+                          "Cite evidence call IDs only in completed, keyed by criterion.",
+                          "verification.resources",
+                          {"observed_resources": observed[:5] or ["file:" + str(Path.cwd())],
+                           "no_resource_needed": []})
         for criterion in criteria:
             contract = verification.get(criterion)
             if criterion not in proposed:
