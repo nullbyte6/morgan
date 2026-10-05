@@ -109,17 +109,19 @@ find "$internal" -type f \( -name '*.so' -o -name '*.so.*' \) -exec strip --stri
 
 payload="$build/payload"
 rm -rf -- "$payload"
-mkdir -p -- "$payload/scripts"
+mkdir -p -- "$payload"
 cp -R -- "$dist/Morgan" "$payload/Morgan"
+mkdir -p -- "$payload/Morgan/scripts"
 cp -- "$root/assets/morgan.png" "$payload/morgan.png"
 cp -- "$root/LICENSE" "$payload/LICENSE"
 cp -R -- "$root/licenses" "$payload/licenses"
-cp -- "$root/scripts/morgan-services.sh" "$payload/scripts/morgan-services.sh"
-chmod +x "$payload/Morgan/Morgan" "$payload/scripts/morgan-services.sh"
+cp -- "$root/scripts/morgan-services.sh" "$payload/Morgan/scripts/morgan-services.sh"
+chmod +x "$payload/Morgan/Morgan" "$payload/Morgan/scripts/morgan-services.sh"
 
 archive="$build/payload.tar.xz"
 tar -C "$payload" -cf - . | xz -T1 --x86 --lzma2=preset=9e,dict=256MiB,lc=4,lp=0,pb=0 > "$archive"
 rm -rf -- "$payload"
+mkdir -p -- "$payload"
 
 stub="$build/stub.sh"
 cat > "$stub" <<'STUB'
@@ -155,7 +157,7 @@ done
 
 skip="$(awk '/^__ARCHIVE_BELOW__$/ { print NR + 1; exit }' "$0")"
 mkdir -p -- "$prefix" "$applications" "$HOME/.local/bin"
-rm -rf -- "$prefix/Morgan" "$prefix/scripts" "$prefix/licenses"
+rm -rf -- "$prefix/Morgan" "$prefix/licenses"
 printf 'Installing Morgan in %s...\n' "$prefix"
 tail -n +"$skip" "$0" | xz -dc | tar -x -C "$prefix"
 
