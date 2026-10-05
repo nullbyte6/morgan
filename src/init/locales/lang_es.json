@@ -336,6 +336,8 @@
   "platforms.no_matching_process": "ningún proceso en ejecución coincide",
   "platforms.process_still_running": "el proceso sigue en ejecución",
   "platforms.quit_request_refused": "La aplicación rechazó la solicitud de salir",
+  "platforms.package_manager_unavailable": "No se encontró un gestor de paquetes compatible (pacman, apt, dnf o zypper)",
+  "platforms.window_tools_unavailable": "El control de ventanas necesita wmctrl y xdotool en una sesión X11",
   "folder_search.folders_json_must_contain_an_object": "folders.json debe contener un objeto",
   "folder_search.name_must_be_a_folder_name_not_a_path": "name debe ser un nombre de carpeta, no una ruta",
   "folder_search.max_results_must_be_between_1_and_1000": "max_results debe estar entre 1 y 1000",

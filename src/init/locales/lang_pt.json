@@ -336,6 +336,8 @@
   "platforms.no_matching_process": "nenhum processo em execução corresponde",
   "platforms.process_still_running": "o processo ainda está em execução",
   "platforms.quit_request_refused": "O aplicativo recusou o pedido de encerramento",
+  "platforms.package_manager_unavailable": "Nenhum gerenciador de pacotes compatível foi encontrado (pacman, apt, dnf ou zypper)",
+  "platforms.window_tools_unavailable": "O controle de janelas precisa de wmctrl e xdotool em uma sessão X11",
   "folder_search.folders_json_must_contain_an_object": "folders.json deve conter um objeto",
   "folder_search.name_must_be_a_folder_name_not_a_path": "name deve ser o nome de uma pasta, não um caminho",
   "folder_search.max_results_must_be_between_1_and_1000": "max_results deve estar entre 1 e 1000",

@@ -336,6 +336,8 @@
   "platforms.no_matching_process": "일치하는 실행 중인 프로세스가 없습니다",
   "platforms.process_still_running": "프로세스가 아직 실행 중입니다",
   "platforms.quit_request_refused": "애플리케이션이 종료 요청을 거부했습니다",
+  "platforms.package_manager_unavailable": "지원되는 패키지 관리자를 찾을 수 없습니다 (pacman, apt, dnf, zypper)",
+  "platforms.window_tools_unavailable": "창 제어에는 X11 세션의 wmctrl과 xdotool이 필요합니다",
   "folder_search.folders_json_must_contain_an_object": "folders.json에는 객체가 있어야 합니다",
   "folder_search.name_must_be_a_folder_name_not_a_path": "name은 경로가 아니라 폴더 이름이어야 합니다",
   "folder_search.max_results_must_be_between_1_and_1000": "max_results는 1~1000 사이여야 합니다",

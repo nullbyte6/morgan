@@ -1,0 +1,2 @@
+onnxruntime==1.24.4; sys_platform == "linux"
+SoundCard==0.4.5; sys_platform == "linux"

@@ -336,6 +336,8 @@
   "platforms.no_matching_process": "es läuft kein passender Prozess",
   "platforms.process_still_running": "der Prozess läuft noch",
   "platforms.quit_request_refused": "Die Anwendung hat die Beenden-Anforderung abgelehnt",
+  "platforms.package_manager_unavailable": "Es wurde kein unterstützter Paketmanager gefunden (pacman, apt, dnf oder zypper)",
+  "platforms.window_tools_unavailable": "Die Fenstersteuerung benötigt wmctrl und xdotool in einer X11-Sitzung",
   "folder_search.folders_json_must_contain_an_object": "folders.json muss ein Objekt enthalten",
   "folder_search.name_must_be_a_folder_name_not_a_path": "name muss ein Ordnername sein, kein Pfad",
   "folder_search.max_results_must_be_between_1_and_1000": "max_results muss zwischen 1 und 1000 liegen",

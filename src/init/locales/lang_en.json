@@ -336,6 +336,8 @@
   "platforms.no_matching_process": "no running process matches",
   "platforms.process_still_running": "the process is still running",
   "platforms.quit_request_refused": "The application refused the quit request",
+  "platforms.package_manager_unavailable": "No supported package manager was found (pacman, apt, dnf or zypper)",
+  "platforms.window_tools_unavailable": "Window control needs wmctrl and xdotool on an X11 session",
   "folder_search.folders_json_must_contain_an_object": "folders.json must contain an object",
   "folder_search.name_must_be_a_folder_name_not_a_path": "name must be a folder name, not a path",
   "folder_search.max_results_must_be_between_1_and_1000": "max_results must be between 1 and 1000",

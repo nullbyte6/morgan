@@ -34,4 +34,7 @@ def current_platform() -> Platform:
     if sys.platform == "darwin":
         from .macx64 import MacX64Platform
         return MacX64Platform()
+    if sys.platform.startswith("linux"):
+        from .linuxx64 import LinuxX64Platform
+        return LinuxX64Platform()
     return Platform()

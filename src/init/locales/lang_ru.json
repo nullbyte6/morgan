@@ -336,6 +336,8 @@
   "platforms.no_matching_process": "нет подходящего запущенного процесса",
   "platforms.process_still_running": "процесс всё ещё выполняется",
   "platforms.quit_request_refused": "Приложение отклонило запрос на выход",
+  "platforms.package_manager_unavailable": "Не найден поддерживаемый менеджер пакетов (pacman, apt, dnf или zypper)",
+  "platforms.window_tools_unavailable": "Для управления окнами нужны wmctrl и xdotool в сеансе X11",
   "folder_search.folders_json_must_contain_an_object": "folders.json должен содержать объект",
   "folder_search.name_must_be_a_folder_name_not_a_path": "name должно быть именем папки, а не путём",
   "folder_search.max_results_must_be_between_1_and_1000": "max_results должно быть от 1 до 1000",

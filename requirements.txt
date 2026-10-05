@@ -281,3 +281,4 @@ yt-dlp==2026.8.19
 zipp==4.1.0
 -r src/platforms/winx64/requirements.txt
 -r src/platforms/macx64/requirements.txt
+-r src/platforms/linuxx64/requirements.txt
