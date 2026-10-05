@@ -45,6 +45,7 @@ Every route except /v1/health and /v1/pair needs "Authorization: Bearer <token>"
     POST   /v1/nova/reminders      {title, remind_at, notes, repeat}
     POST   /v1/nova/reminders/{id}/completion {completed}
     GET    /v1/nova/journal?first_day&last_day&query&limit
+    GET    /v1/nova/search?query&limit                 agenda entries and journal entries
 
 Stream events carry a "type": snapshot (first frame, with the transcript, the partial reply and
 any pending confirmation), ready, accepted, chunk (text delta), step, phase, activity,

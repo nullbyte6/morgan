@@ -24,7 +24,7 @@ import threading
 import time
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
@@ -274,6 +274,14 @@ def create_app(manager: SessionManager, devices: DeviceStore, pairing: PairingCo
                 device: dict = Depends(authenticate)):
         from src.init.nova.tools import read_journal
         return _checked(read_journal(first_day, last_day, query, limit))
+
+    @app.get("/v1/nova/search")
+    def search(query: str = Query(min_length=1, max_length=200), limit: int = 20,
+               device: dict = Depends(authenticate)):
+        from src.init.nova.tools import read_journal, search_agenda
+        agenda = _checked(search_agenda(query, limit))
+        journal = _checked(read_journal(query=query, limit=limit))
+        return {"query": query, "agenda": agenda["entries"], "journal": journal["entries"]}
 
     return PrivateNetworkOnly(app)
 
