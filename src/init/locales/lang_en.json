@@ -23,6 +23,7 @@
   "ui.settings": "Settings",
   "ui.subtitles": "Subtitles",
   "ui.subtitles_hint": "Toggle Subtitles",
+  "ui.overlay_subtitles": "Enable Subtitles in Overlay",
   "ui.orb_speech_pulse": "Pulse",
   "ui.orb_speech_pulse_hint": "Make the Orb grow and shrink with {assistant_name}'s voice",
   "ui.ephemeral_steps": "Ephemeral steps",

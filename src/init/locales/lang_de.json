@@ -23,6 +23,7 @@
   "ui.settings": "Einstellungen",
   "ui.subtitles": "Untertitel",
   "ui.subtitles_hint": "Untertitel ein- oder ausschalten",
+  "ui.overlay_subtitles": "Untertitel im Overlay aktivieren",
   "ui.orb_speech_pulse": "Pulsieren",
   "ui.orb_speech_pulse_hint": "Lässt die Kugel mit der Stimme von {assistant_name} wachsen und schrumpfen",
   "ui.ephemeral_steps": "Flüchtige Schritte",

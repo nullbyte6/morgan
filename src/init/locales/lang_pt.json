@@ -23,6 +23,7 @@
   "ui.settings": "Configurações",
   "ui.subtitles": "Legendas",
   "ui.subtitles_hint": "Ativar ou desativar as legendas",
+  "ui.overlay_subtitles": "Ativar legendas na sobreposição",
   "ui.orb_speech_pulse": "Pulsar",
   "ui.orb_speech_pulse_hint": "Faz o orbe crescer e diminuir com a voz de {assistant_name}",
   "ui.ephemeral_steps": "Etapas efêmeras",

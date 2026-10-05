@@ -23,6 +23,7 @@
   "ui.settings": "设置",
   "ui.subtitles": "字幕",
   "ui.subtitles_hint": "显示或隐藏字幕",
+  "ui.overlay_subtitles": "在悬浮窗中启用字幕",
   "ui.orb_speech_pulse": "脉动",
   "ui.orb_speech_pulse_hint": "让光球随 {assistant_name} 的声音放大和缩小",
   "ui.ephemeral_steps": "临时步骤",

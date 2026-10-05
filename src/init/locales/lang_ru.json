@@ -23,6 +23,7 @@
   "ui.settings": "Настройки",
   "ui.subtitles": "Субтитры",
   "ui.subtitles_hint": "Включить или отключить субтитры",
+  "ui.overlay_subtitles": "Включить субтитры в оверлее",
   "ui.orb_speech_pulse": "Пульсация",
   "ui.orb_speech_pulse_hint": "Сфера увеличивается и уменьшается в такт голосу {assistant_name}",
   "ui.ephemeral_steps": "Временные шаги",

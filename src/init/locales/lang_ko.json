@@ -23,6 +23,7 @@
   "ui.settings": "설정",
   "ui.subtitles": "자막",
   "ui.subtitles_hint": "자막 켜기/끄기",
+  "ui.overlay_subtitles": "오버레이에서 자막 사용",
   "ui.orb_speech_pulse": "펄스",
   "ui.orb_speech_pulse_hint": "{assistant_name}의 목소리에 맞춰 오브가 커졌다 작아집니다",
   "ui.ephemeral_steps": "임시 단계",

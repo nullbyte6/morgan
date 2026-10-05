@@ -175,6 +175,7 @@ class ThemeDropdown(QComboBox):
 class SettingsView(QWidget):
     """Desktop subtitle and interface language preferences."""
     subtitles_changed = Signal(bool)
+    overlay_subtitles_changed = Signal(bool)
     orb_pulse_changed = Signal(bool)
     ephemeral_steps_changed = Signal(bool)
     song_panel_changed = Signal(bool)
@@ -188,7 +189,8 @@ class SettingsView(QWidget):
 
     def __init__(self, subtitles_enabled: bool,
                  orb_pulse_enabled: bool, parent=None, *, muted=False, ephemeral_steps_enabled=True,
-                 song_panel_enabled=True, orb_enabled=True):
+                 song_panel_enabled=True, orb_enabled=True,
+                 overlay_subtitles_enabled=False):
         super().__init__(parent)
         self.setObjectName("settingsPage")
         content = QWidget()
@@ -229,6 +231,18 @@ class SettingsView(QWidget):
         subtitle_row.addStretch()
         subtitle_row.addWidget(self.subtitles_switch)
         layout.addLayout(subtitle_row)
+
+        self.overlay_subtitle_label = QLabel()
+        self.overlay_subtitle_label.setObjectName("muted")
+        self.overlay_subtitles_switch = ToggleSwitch()
+        self.overlay_subtitles_switch.setChecked(overlay_subtitles_enabled)
+        self.overlay_subtitle_label.setBuddy(self.overlay_subtitles_switch)
+        overlay_subtitle_row = QHBoxLayout()
+        overlay_subtitle_row.setContentsMargins(24, 0, 0, 0)
+        overlay_subtitle_row.addWidget(self.overlay_subtitle_label)
+        overlay_subtitle_row.addStretch()
+        overlay_subtitle_row.addWidget(self.overlay_subtitles_switch)
+        layout.addLayout(overlay_subtitle_row)
 
         self.orb_pulse_label = QLabel()
         self.orb_pulse_label.setObjectName("muted")
@@ -351,6 +365,7 @@ class SettingsView(QWidget):
 
         self.refresh_language()
         self.subtitles_switch.toggled.connect(self.subtitles_changed.emit)
+        self.overlay_subtitles_switch.toggled.connect(self.overlay_subtitles_changed.emit)
         self.orb_pulse_switch.toggled.connect(self.orb_pulse_changed.emit)
         self.ephemeral_steps_switch.toggled.connect(self.ephemeral_steps_changed.emit)
         self.song_panel_switch.toggled.connect(self.song_panel_changed.emit)
@@ -691,6 +706,8 @@ class SettingsView(QWidget):
         self.subtitle_label.setText(tr("ui.subtitles"))
         self.subtitles_switch.setAccessibleName(tr("ui.subtitles"))
         self.subtitles_switch.setToolTip(tr("ui.subtitles_hint"))
+        self.overlay_subtitle_label.setText(tr("ui.overlay_subtitles"))
+        self.overlay_subtitles_switch.setAccessibleName(tr("ui.overlay_subtitles"))
         self.orb_pulse_label.setText(tr("ui.orb_speech_pulse"))
         self.orb_pulse_switch.setAccessibleName(tr("ui.orb_speech_pulse"))
         self.orb_pulse_switch.setToolTip(tr("ui.orb_speech_pulse_hint"))

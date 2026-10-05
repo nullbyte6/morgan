@@ -23,6 +23,7 @@
   "ui.settings": "設定",
   "ui.subtitles": "字幕",
   "ui.subtitles_hint": "字幕のオン/オフを切り替えます",
+  "ui.overlay_subtitles": "オーバーレイで字幕を有効にする",
   "ui.orb_speech_pulse": "パルス",
   "ui.orb_speech_pulse_hint": "{assistant_name}の声に合わせてオーブを拡大・縮小します",
   "ui.ephemeral_steps": "一時的なステップ",

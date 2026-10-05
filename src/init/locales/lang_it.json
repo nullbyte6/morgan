@@ -23,6 +23,7 @@
   "ui.settings": "Impostazioni",
   "ui.subtitles": "Sottotitoli",
   "ui.subtitles_hint": "Attiva o disattiva i sottotitoli",
+  "ui.overlay_subtitles": "Attiva i sottotitoli nella sovrapposizione",
   "ui.orb_speech_pulse": "Pulsazione",
   "ui.orb_speech_pulse_hint": "Fa ingrandire e rimpicciolire la sfera con la voce di {assistant_name}",
   "ui.ephemeral_steps": "Passaggi temporanei",

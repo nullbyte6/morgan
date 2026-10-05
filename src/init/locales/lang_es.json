@@ -23,6 +23,7 @@
   "ui.settings": "Ajustes",
   "ui.subtitles": "Subtítulos",
   "ui.subtitles_hint": "Mostrar u ocultar Subtítulos",
+  "ui.overlay_subtitles": "Activar subtítulos en la superposición",
   "ui.orb_speech_pulse": "Pulsar",
   "ui.orb_speech_pulse_hint": "Hace que el Orb crezca y decrezca con la voz de {assistant_name}",
   "ui.ephemeral_steps": "Pasos efímeros",
