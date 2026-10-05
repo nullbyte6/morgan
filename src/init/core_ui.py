@@ -198,7 +198,8 @@ class AssistantWindow(DesktopWindow):
 
         self.overlay = CompactOverlay()
         self.overlay.orb.set_speech_pulse_enabled(orb_speech_pulse)
-        self.overlay_subtitles = MascotSubtitleBubble(self.overlay, above=True)
+        self.overlay_subtitles = MascotSubtitleBubble(
+            self.overlay, above=True, anchor=self.overlay.subtitle_anchor)
         self.overlay.input.textChanged.connect(self.on_overlay_text_changed)
         self.overlay.input.submitted.connect(lambda: self.send_message())
         self.overlay.send.clicked.connect(lambda: self.on_send_clicked())
@@ -448,8 +449,8 @@ class AssistantWindow(DesktopWindow):
         main.addWidget(ui.status)
 
         ui.subtitles.setObjectName("subtitles")
-        ui.subtitles.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         ui.subtitles.setProperty("staticSlot", True)
+        ui.subtitles.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         ui.subtitles.setWordWrap(True)
         ui.subtitles.setTextFormat(Qt.RichText)
         ui.subtitles.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -972,9 +973,12 @@ class AssistantWindow(DesktopWindow):
         self.settings.setValue("overlay_y", y)
 
     def sync_overlay_subtitle(self):
-        self.overlay_subtitles.set_subtitle(
-            self.session.subtitle_text,
-            self.subtitles_enabled and self.session.speaking)
+        active = bool(self.subtitles_enabled and self.session.speaking
+                      and " ".join(str(self.session.subtitle_text or "").split()))
+        bubble = self.overlay_subtitles
+        self.overlay.set_subtitle_space(
+            bubble.height() + bubble.GAP if active else 0)
+        bubble.set_subtitle(self.session.subtitle_text, active)
 
     def on_overlay_text_changed(self):
         ui = self.session.ui

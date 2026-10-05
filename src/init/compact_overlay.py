@@ -32,7 +32,7 @@ from src.init.orb import Orb
 
 WIDTH = 248
 MARGIN = 0
-ORB_SIZE = 40
+ORB_SIZE = 96
 EDGE_GAP = 16
 DURATION = 260
 
@@ -78,15 +78,21 @@ class CompactOverlay(QWidget):
         card_layout.setContentsMargins(MARGIN, MARGIN, MARGIN, MARGIN)
         card_layout.addWidget(frame)
 
+        self.card = card
+
         self.orb = Orb(self, fill_ratio=0.54)
         self.orb.set_size(ORB_SIZE)
         self.orb.setFixedSize(ORB_SIZE, ORB_SIZE)
-        self.orb.hide()
 
-        outer = QHBoxLayout(self)
+        self._subtitle_slot = QWidget()
+        self._subtitle_slot.setFixedHeight(0)
+
+        outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.setSizeConstraint(QLayout.SetFixedSize)
+        outer.addWidget(self.orb, 0, Qt.AlignHCenter)
+        outer.addWidget(self._subtitle_slot)
         outer.addWidget(card)
         card.setFixedWidth(WIDTH)
 
@@ -95,6 +101,13 @@ class CompactOverlay(QWidget):
         self._animation.setEasingCurve(QEasingCurve.OutCubic)
         self._animation.valueChanged.connect(self._set_reveal)
         self._animation.finished.connect(self._finish_animation)
+
+    def subtitle_anchor(self):
+        return QRect(self.card.mapToGlobal(QPoint(0, 0)), self.card.size())
+
+    def set_subtitle_space(self, height: int):
+        if self._subtitle_slot.height() != height:
+            self._subtitle_slot.setFixedHeight(height)
 
     def set_recording(self, recording: bool):
         self.input.setVisible(not recording)
