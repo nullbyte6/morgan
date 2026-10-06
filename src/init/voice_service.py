@@ -451,7 +451,8 @@ class VoiceService:
         try:
             opened = time.monotonic()
             stream = sd.OutputStream(samplerate=self.sample_rate, channels=1,
-                                     dtype="float32", latency="low", blocksize=0)
+                                     dtype="float32", latency=current_platform().output_latency,
+                                     blocksize=0)
             logger.info("Voice output stream opened in %d ms, device latency %d ms",
                         (time.monotonic() - opened) * 1000, stream.latency * 1000)
         except Exception:
@@ -473,7 +474,8 @@ class VoiceService:
                     self._await_lead(batch)
                 if stream is None:
                     stream = sd.OutputStream(samplerate=self.sample_rate, channels=1,
-                                             dtype="float32", latency="low", blocksize=0)
+                                             dtype="float32", latency=current_platform().output_latency,
+                                     blocksize=0)
                 if not stream.active:
                     stream.start()
                 for start in range(0, len(samples), frame_size):

@@ -130,6 +130,7 @@ class Platform:
     installer_name = ""
     has_drive_letters = False
     preferred_audio_host = ""
+    output_latency = "low"
     telemetry_sources: frozenset[str] = frozenset()
 
     def unsupported(self, operation: str) -> UnsupportedOperation:

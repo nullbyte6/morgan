@@ -26,6 +26,7 @@ from . import apps, desktop, folders, media, notifications, services, system, wi
 class LinuxX64Platform(Platform):
     name = "linuxx64"
     preferred_audio_host = ""
+    output_latency = "high"
 
     list_windows = staticmethod(windows.get_open_windows)
     launch_application = staticmethod(windows.launch_application)
