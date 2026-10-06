@@ -39,12 +39,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+      - run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/hostedtoolcache/CodeQL
       - run: |
           sudo apt-get update
           sudo apt-get install -y xz-utils binutils libportaudio2 libxcb-cursor0
           python -m venv .venv
-          .venv/bin/python -m pip install -r requirements.txt pyinstaller
+          .venv/bin/python -m pip install --no-cache-dir -r requirements.txt pyinstaller
           scripts/build-linux.sh
       - uses: actions/upload-artifact@v4
         with:
