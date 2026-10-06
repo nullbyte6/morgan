@@ -232,6 +232,13 @@ class CompactOverlay(QWidget):
 
     def mouseMoveEvent(self, event):
         if self._drag_offset is not None and event.buttons() & Qt.LeftButton:
+            if QGuiApplication.platformName() == "wayland":
+                self._drag_offset = None
+                handle = self.windowHandle()
+                if handle is not None:
+                    handle.startSystemMove()
+                event.accept()
+                return
             target = event.globalPosition().toPoint() - self._drag_offset
             self.move(*self._clamped(target.x(), target.y()))
             event.accept()
