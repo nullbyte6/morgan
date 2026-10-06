@@ -9,6 +9,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix Linux runtime setup failing on sounddevice with PortAudio library not found by checking for the system libportaudio and offering to install it
 - Fix Linux release build failing with permission denied by running scripts/build-linux.sh through bash in the GitHub Actions workflow
 - Fix Linux voice playback breaking while Morgan speaks by opening the output stream with high latency
+- Fix Linux voice transcription failing with GLIBC_2.44 not found by no longer bundling the build machine's libmvec in the Linux build
 - Fix Morgan services failing to start on Linux with Unsupported backend soundfile by copying the environment after the bundled libraries are removed, so CosyVoice no longer loads the app's LD_LIBRARY_PATH
 - Fix Ollama context alignment on Linux so the systemd service context length is read and a server owned by another user is no longer signalled, reporting how to set its context length
 

@@ -100,7 +100,7 @@ rm -f -- "$qt/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so" \
     "$qt"/lib/libQt6{Quick,Qml,VirtualKeyboard,EglFS,EglFsKms}*
 for library in libgtk-3 libgdk-3 libgdk_pixbuf libglycin libcairo libpango libatk libatspi libepoxy \
     libcloudproviders libtinysparql libjson-glib libharfbuzz libgraphite2 libfribidi libthai libdatrie \
-    libpixman libseccomp libicudata.so.78 libicuuc.so.78 libicui18n.so.78 libxml2 libXi libXrandr \
+    libmvec libpixman libseccomp libicudata.so.78 libicuuc.so.78 libicui18n.so.78 libxml2 libXi libXrandr \
     libXcursor libXrender libXext liblcms2; do
     rm -f -- "$internal/$library"*
 done
