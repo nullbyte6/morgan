@@ -191,11 +191,40 @@ ensure_ffmpeg() {
     fi
 }
 
+portaudio_present() {
+    { ldconfig -p || /sbin/ldconfig -p; } 2>/dev/null | grep -q 'libportaudio\.so'
+}
+
+ensure_portaudio() {
+    step "Checking PortAudio..."
+    if portaudio_present; then
+        printf 'PortAudio found.\n'
+        return
+    fi
+    local install
+    if command -v pacman >/dev/null 2>&1; then
+        install=(sudo pacman -S --needed portaudio)
+    elif command -v apt >/dev/null 2>&1; then
+        install=(sudo apt install -y libportaudio2)
+    elif command -v dnf >/dev/null 2>&1; then
+        install=(sudo dnf install -y portaudio)
+    else
+        die "PortAudio is required by sounddevice. Install it with your package manager and run this setup again."
+    fi
+    if confirm "PortAudio is missing and sounddevice needs it. Install it with '${install[*]}'?"; then
+        "${install[@]}" || die "Failed to install PortAudio."
+        portaudio_present || die "PortAudio was installed but could not be found."
+    else
+        die "PortAudio is required by sounddevice. Install it with: $(package_hint portaudio libportaudio2)"
+    fi
+}
+
 ensure_voice_runtime() {
     step "Checking the voice runtime..."
     local backend
     backend="$(torch_backend)"
     ensure_uv
+    ensure_portaudio
     if test_voice_runtime; then
         if test_torch_backend "$backend"; then
             printf 'Voice runtime found: %s\n' "$venv"
