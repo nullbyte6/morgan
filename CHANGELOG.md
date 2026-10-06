@@ -4,6 +4,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.6-beta (2026-10-06)
 
+- Add GitHub Actions workflow that builds MorganSetup.exe, MorganSetup.run and Morgan.apk daily and publishes them in the release of the version in dev/core.json
 - Fix compact overlay that could not be dragged on Linux Wayland by handing the move to the compositor
 - Fix Linux voice playback breaking while Morgan speaks by opening the output stream with high latency
 - Fix Ollama context alignment on Linux so the systemd service context length is read and a server owned by another user is no longer signalled, reporting how to set its context length
