@@ -24,6 +24,13 @@ else
     export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
 fi
 export PYTHONPATH="$root:$root/src:$root/src/third_party/Matcha-TTS"
+if [[ "$(uname -s)" == "Linux" ]]; then
+    if [[ -n "${LD_LIBRARY_PATH_ORIG+x}" ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH_ORIG"
+    elif [[ "${LD_LIBRARY_PATH:-}" == *"$root/_internal"* ]]; then
+        unset LD_LIBRARY_PATH
+    fi
+fi
 export TORCH_CPP_LOG_LEVEL="ERROR"
 export TORCH_LOGS="-all"
 export PYTHONUNBUFFERED="1"
