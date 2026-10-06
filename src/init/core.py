@@ -268,17 +268,16 @@ class Assistant:
         if services is None:
             raise RuntimeError(tr("startup.services_missing"))
         command = platform.service_command(services, self.voice_service_required)
-        environment = os.environ.copy()
-        libraries = nullcontext()
-        if getattr(sys, "frozen", False):
-            bundle = Path(sys._MEIPASS).resolve()
-            environment["PATH"] = os.pathsep.join(
-                entry for entry in environment.get("PATH", "").split(os.pathsep)
-                if not Path(os.path.expandvars(entry)).resolve().is_relative_to(bundle))
-            environment.pop("PYTHONHOME", None)
-            libraries = platform.unbundled_libraries(bundle)
+        bundle = Path(sys._MEIPASS).resolve() if getattr(sys, "frozen", False) else None
+        libraries = platform.unbundled_libraries(bundle) if bundle else nullcontext()
         try:
             with libraries:
+                environment = os.environ.copy()
+                if bundle:
+                    environment["PATH"] = os.pathsep.join(
+                        entry for entry in environment.get("PATH", "").split(os.pathsep)
+                        if not Path(os.path.expandvars(entry)).resolve().is_relative_to(bundle))
+                    environment.pop("PYTHONHOME", None)
                 process = subprocess.Popen(
                     command, cwd=str(services.parent.parent), env=environment,
                     stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
