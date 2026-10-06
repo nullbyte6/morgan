@@ -82,11 +82,12 @@ class VoiceInputRunner:
         with sound.RawInputStream(samplerate=sample_rate,
                                   blocksize=max(1, int(sample_rate * 0.05)),
                                   device=device["index"], channels=1,
-                                  dtype="int16") as stream:
+                                  dtype="int16", latency="high") as stream:
             while not self.stop_event.is_set() and not self.interrupted():
                 data, overflow = stream.read(max(1, int(sample_rate * 0.05)))
                 if overflow:
-                    raise RuntimeError("Microphone overflow; restart voice conversation")
+                    logging.getLogger("assistant.voice").warning(
+                        "Microphone overflow; dropped audio was ignored")
                 pcm = bytes(data)
                 if self.waiting_response.is_set():
                     self.capture.idle = 0.0
