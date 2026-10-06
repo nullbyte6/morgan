@@ -2,6 +2,12 @@
 
 All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.6-beta (2026-10-06)
+
+- Fix compact overlay that could not be dragged on Linux Wayland by handing the move to the compositor
+- Fix Linux voice playback breaking while Morgan speaks by opening the output stream with high latency
+- Fix Ollama context alignment on Linux so the systemd service context length is read and a server owned by another user is no longer signalled, reporting how to set its context length
+
 ## 26.10.5-beta (2026-10-05)
 
 - Fix requirements.txt pinning setuptools 84.0.0, which has no pkg_resources and broke pyworld, by pinning 80.9.0
