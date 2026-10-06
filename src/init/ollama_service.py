@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 """Restarting the local Ollama server so a new context length applies."""
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -78,6 +79,20 @@ def ollama_ready() -> bool:
         return False
 
 
+def _service_context_length() -> int | None:
+    """The OLLAMA_CONTEXT_LENGTH of the systemd service, whose process environment another user owns."""
+    systemctl = shutil.which("systemctl")
+    if systemctl is None:
+        return None
+    try:
+        shown = subprocess.run([systemctl, "show", "ollama", "--property=Environment", "--value"],
+                               capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r"OLLAMA_CONTEXT_LENGTH=(\d+)", shown)
+    return int(match[1]) if match else None
+
+
 def server_context_length() -> int | None:
     """The OLLAMA_CONTEXT_LENGTH of the running server; None when it is unset or unreadable."""
     for process in _processes():
@@ -89,10 +104,18 @@ def server_context_length() -> int | None:
             continue
         if value and value.isdigit():
             return int(value)
-    return None
+    return _service_context_length()
+
+
+def _owned(process: psutil.Process) -> bool:
+    try:
+        return process.username() == psutil.Process().username()
+    except psutil.Error:
+        return False
 
 
 def _stop(processes: list[psutil.Process]) -> None:
+    processes = [process for process in processes if _owned(process)]
     for process in processes:
         try:
             process.terminate()
@@ -116,6 +139,10 @@ def restart_ollama(context_length: int) -> None:
     apps = [process for process in processes if (process.info["name"] or "").casefold() in APP_NAMES]
     _stop(apps)
     _stop([process for process in processes if process not in apps])
+    if ollama_ready():
+        raise PermissionError(
+            f"Ollama is running under another user and keeps its own context length; set OLLAMA_CONTEXT_LENGTH={context_length} "
+            "in its service environment (systemctl edit ollama) and restart it")
     subprocess.Popen(
         [str(executable), "serve"], env={**os.environ, "OLLAMA_CONTEXT_LENGTH": str(context_length)},
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True,
