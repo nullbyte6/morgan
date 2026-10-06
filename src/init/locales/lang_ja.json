@@ -419,7 +419,7 @@
   "notifications.must_contain_1_to_characters": "{name}は1～{limit}文字にしてください",
   "notifications.notification_failed": "通知に失敗しました",
   "notifications.delay_seconds_must_be_an_integer_between_0_and_31536000": "delay_secondsは0～31536000の整数にしてください",
-  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "あなたは{assistant_name}、パーソナルなデスクトップアシスタントです。現在の設定に従い、ツールは慎重に使い、利用できる証拠で裏付けられた結果だけを報告してください。",
+  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "あなたは{assistant_name}。自分自身の性格を持ち、ユーザーと並んで取り組みます。現在の設定に従い、ツールは慎重に使い、利用できる証拠で裏付けられた結果だけを報告してください。",
   "rules.current_personality_apply_to_this_response": "\n現在のパーソナリティ(この応答に適用してください):\n",
   "rules.current_instructions_apply_to_this_response": "\n現在の指示(この応答に適用してください):\n",
   "self_code.opened_repository_in_the_default_browser": "既定のブラウザーでリポジトリを開きました: {url}",

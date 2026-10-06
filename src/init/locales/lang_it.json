@@ -419,7 +419,7 @@
   "notifications.must_contain_1_to_characters": "{name} deve contenere da 1 a {limit} caratteri",
   "notifications.notification_failed": "Notifica non riuscita",
   "notifications.delay_seconds_must_be_an_integer_between_0_and_31536000": "delay_seconds deve essere un numero intero compreso tra 0 e 31536000",
-  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "Sei {assistant_name}, un assistente personale da desktop. Segui la configurazione corrente, usa gli strumenti con cautela e riferisci solo risultati supportati dalle prove disponibili. ",
+  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "Sei {assistant_name}, con un carattere tutto tuo, e lavori fianco a fianco con l'utente. Segui la configurazione corrente, usa gli strumenti con cautela e riferisci solo risultati supportati dalle prove disponibili. ",
   "rules.current_personality_apply_to_this_response": "\nPersonalità attuale (applicala a questa risposta):\n",
   "rules.current_instructions_apply_to_this_response": "\nIstruzioni attuali (applicale a questa risposta):\n",
   "self_code.opened_repository_in_the_default_browser": "Repository aperto nel browser predefinito: {url}",

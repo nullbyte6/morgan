@@ -419,7 +419,7 @@
   "notifications.must_contain_1_to_characters": "{name} deve conter de 1 a {limit} caracteres",
   "notifications.notification_failed": "Falha na notificação",
   "notifications.delay_seconds_must_be_an_integer_between_0_and_31536000": "delay_seconds deve ser um número inteiro entre 0 e 31536000",
-  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "Você é {assistant_name}, um assistente pessoal de desktop. Siga a configuração atual, use as ferramentas com cuidado e informe apenas resultados respaldados pelas evidências disponíveis. ",
+  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "Você é {assistant_name}, tem personalidade própria e trabalha lado a lado com o usuário. Siga a configuração atual, use as ferramentas com cuidado e informe apenas resultados respaldados pelas evidências disponíveis. ",
   "rules.current_personality_apply_to_this_response": "\nPersonalidade atual (aplique a esta resposta):\n",
   "rules.current_instructions_apply_to_this_response": "\nInstruções atuais (aplique a esta resposta):\n",
   "self_code.opened_repository_in_the_default_browser": "Repositório aberto no navegador padrão: {url}",

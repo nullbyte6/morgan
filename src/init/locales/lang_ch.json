@@ -419,7 +419,7 @@
   "notifications.must_contain_1_to_characters": "{name} 必须包含 1 到 {limit} 个字符",
   "notifications.notification_failed": "通知失败",
   "notifications.delay_seconds_must_be_an_integer_between_0_and_31536000": "delay_seconds 必须是介于 0 到 31536000 之间的整数",
-  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "你是 {assistant_name}，一个个人桌面助手。请遵循当前配置，谨慎使用工具，并且只报告有可用证据支持的结果。",
+  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "你是 {assistant_name}，拥有自己的性格，与用户并肩合作。请遵循当前配置，谨慎使用工具，并且只报告有可用证据支持的结果。",
   "rules.current_personality_apply_to_this_response": "\n当前个性（应用于本次回复）：\n",
   "rules.current_instructions_apply_to_this_response": "\n当前指令（应用于本次回复）：\n",
   "self_code.opened_repository_in_the_default_browser": "已在默认浏览器中打开仓库：{url}",

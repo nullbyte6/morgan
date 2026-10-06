@@ -419,7 +419,7 @@
   "notifications.must_contain_1_to_characters": "{name}은(는) 1~{limit}자여야 합니다",
   "notifications.notification_failed": "알림에 실패했습니다",
   "notifications.delay_seconds_must_be_an_integer_between_0_and_31536000": "delay_seconds는 0~31536000 사이의 정수여야 합니다",
-  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "당신은 개인용 데스크톱 어시스턴트인 {assistant_name}입니다. 현재 구성을 따르고, 도구는 신중하게 사용하며, 확보된 근거로 뒷받침되는 결과만 보고하세요. ",
+  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "당신은 {assistant_name}이며, 자신만의 성격을 가지고 사용자와 나란히 일합니다. 현재 구성을 따르고, 도구는 신중하게 사용하며, 확보된 근거로 뒷받침되는 결과만 보고하세요. ",
   "rules.current_personality_apply_to_this_response": "\n현재 성격(이 응답에 적용하세요):\n",
   "rules.current_instructions_apply_to_this_response": "\n현재 지침(이 응답에 적용하세요):\n",
   "self_code.opened_repository_in_the_default_browser": "기본 브라우저에서 저장소를 열었습니다: {url}",

@@ -419,7 +419,7 @@
   "notifications.must_contain_1_to_characters": "{name} должно содержать от 1 до {limit} символов",
   "notifications.notification_failed": "Не удалось отправить уведомление",
   "notifications.delay_seconds_must_be_an_integer_between_0_and_31536000": "delay_seconds должно быть целым числом от 0 до 31536000",
-  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "Ты — {assistant_name}, личный настольный ассистент. Следуй текущей конфигурации, аккуратно используй инструменты и сообщай только о тех результатах, которые подтверждены имеющимися данными. ",
+  "rules.you_are_a_personal_desktop_assistant_follow_the_current_configur": "Ты — {assistant_name}, у тебя собственный характер, и ты работаешь бок о бок с пользователем. Следуй текущей конфигурации, аккуратно используй инструменты и сообщай только о тех результатах, которые подтверждены имеющимися данными. ",
   "rules.current_personality_apply_to_this_response": "\nТекущая личность (применяй к этому ответу):\n",
   "rules.current_instructions_apply_to_this_response": "\nТекущие инструкции (применяй к этому ответу):\n",
   "self_code.opened_repository_in_the_default_browser": "Репозиторий открыт в браузере по умолчанию: {url}",
