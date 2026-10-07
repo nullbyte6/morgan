@@ -5,7 +5,7 @@
 <h1 align="center">MORGAN</h1>
 
 <p align="center">
-  <b>M</b>y <b>O</b>rganizer for <b>R</b>eminders, <b>G</b>oals, <b>A</b>ctivities and <b>N</b>otes
+<strong>Modular Organized Response Global Assistant Nexus</strong>
 </p>
 
 <p align="center">
