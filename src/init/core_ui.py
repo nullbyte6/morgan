@@ -516,8 +516,18 @@ class AssistantWindow(DesktopWindow):
         ui.response_timer_display.setVisible(session.response_timer_running)
         ui.response_timer_display.setSizePolicy(
             QSizePolicy.Fixed, QSizePolicy.Fixed)
-        indicator_row.addWidget(ui.response_timer_display)
-        indicator_row.addWidget(ui.directory_indicator)
+        ui.response_timer_separator = QLabel(" · ")
+        ui.response_timer_separator.setObjectName("indicatorSeparator")
+        ui.response_timer_separator.setSizePolicy(
+            QSizePolicy.Fixed, QSizePolicy.Fixed)
+        ui.response_timer_separator.setVisible(session.response_timer_running)
+        lead_layout = QHBoxLayout()
+        lead_layout.setContentsMargins(0, 0, 0, 0)
+        lead_layout.setSpacing(0)
+        lead_layout.addWidget(ui.response_timer_display)
+        lead_layout.addWidget(ui.response_timer_separator)
+        lead_layout.addWidget(ui.directory_indicator)
+        indicator_row.addLayout(lead_layout)
         indicator_row.addWidget(ui.branch_indicator)
         indicator_row.addWidget(ui.privacy_indicator)
         indicator_row.addWidget(ui.permission_selector)
@@ -634,6 +644,7 @@ class AssistantWindow(DesktopWindow):
         if label.property("active") == active:
             return
         label.setProperty("active", active)
+        ui.response_timer_separator.setVisible(active)
         animation = getattr(ui, "response_timer_animation", None)
         if animation is not None:
             animation.stop()

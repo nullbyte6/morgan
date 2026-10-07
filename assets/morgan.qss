@@ -151,7 +151,13 @@ QLabel#responseTimer {
     color: @text_muted;
     border: 2px solid transparent;
     border-radius: 17px;
-    padding: 6px 12px;
+    padding: 6px 0 6px 12px;
+}
+
+QLabel#indicatorSeparator {
+    background-color: transparent;
+    color: @text_muted;
+    padding: 0;
 }
 
 QTextEdit {
@@ -288,6 +294,7 @@ QToolButton#permissionSelector {
 }
 
 QWidget#indicatorRow[resting="true"] QLabel#responseTimer,
+QWidget#indicatorRow[resting="true"] QLabel#indicatorSeparator,
 QWidget#indicatorRow[resting="true"] QToolButton#directory {
     color: @text_muted/140;
 }

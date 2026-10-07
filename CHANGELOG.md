@@ -4,9 +4,11 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.7-beta (2026-10-07)
 
+- Add microphone mute button to the indicator row that turns red when active and makes live voice capture discard all input without processing it
 - Fix Morgan hearing her own voice as the user's reply and answering herself in a loop by tracking the estimated end of buffered playback so echo cancellation covers the whole output buffer, which is large on Linux
 - Fix Ollama context length not applying when the server is a systemd service of another user by writing the OLLAMA_CONTEXT_LENGTH drop-in and restarting the service after a pkexec authorization
 - Update release workflow to stop building and publishing Morgan.apk, keeping the Android client code
+- Update response timer and working directory in the indicator row to sit together separated by a dot
 
 ## 26.10.6-beta (2026-10-06)
 
