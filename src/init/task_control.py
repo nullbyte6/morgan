@@ -141,6 +141,8 @@ class TaskControl(AbstractCapability):
         self._recovery_stalls = 0
         self._task_progress = None
         self._task_stalls = 0
+        self._rejection_key = None
+        self._rejection_repeats = 0
         self.request_configuration = {}
         self.read_cache = {}
         self.receipts = {}
@@ -708,6 +710,10 @@ and retain its consent checks. cd requests use change_directory and Git requests
             payload.setdefault("expected", "The declared control protocol")
             payload.setdefault("recoverable", True)
             self.state.last_rejection = {"tool": name, "call_id": call_id, **payload}
+            rejection = fingerprint({"tool": name, "arguments": arguments, "code": payload.get("code"),
+                                     "field": payload.get("field"), "progress": self.progress_fingerprint()})
+            self._rejection_repeats = self._rejection_repeats + 1 if rejection == self._rejection_key else 0
+            self._rejection_key = rejection
         self.trace("tool_return", tool=name, call_id=call_id, receipt=self.receipts[call_id],
                    result=payload if control or not evidence_id else {key: value for key, value in payload.items()
                                                                      if key != "data"})
@@ -1130,9 +1136,10 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self._task_stalls = 0
 
         self._task_progress = progress
-        if self._task_stalls >= 12:
+        if self._task_stalls >= 12 or self._rejection_repeats >= 1:
             self.state.suspend(Lifecycle.LIMIT_REACHED, tr("task_control.stalled_warning"))
-            self.trace("task_stalled", consecutive_requests=self._task_stalls)
+            self.trace("task_stalled", consecutive_requests=self._task_stalls,
+                       repeated_rejections=self._rejection_repeats)
             self.publish_activity()
             raise TaskStopped(self.state.notice)
         if self._task_stalls == 6:
@@ -1313,6 +1320,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self._recovery_stalls = 0
         self._task_progress = None
         self._task_stalls = 0
+        self._rejection_key = None
+        self._rejection_repeats = 0
         self.recovery_attempts = 0
         self.force_compaction = True
         self.state.resume()
