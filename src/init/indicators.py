@@ -53,7 +53,22 @@ def _draw_lock(painter):
     painter.drawPath(shackle)
 
 
-def line_icon(draw, normal_role, active_role, size=18) -> QIcon:
+def _draw_microphone(painter):
+    painter.drawRoundedRect(QRectF(9, 3, 6, 11), 3, 3)
+    cradle = QPainterPath()
+    cradle.moveTo(5, 11)
+    cradle.arcTo(QRectF(5, 6, 14, 10), 180, 180)
+    painter.drawPath(cradle)
+    painter.drawLine(QPointF(12, 16), QPointF(12, 21))
+    painter.drawLine(QPointF(9, 21), QPointF(15, 21))
+
+
+def _draw_microphone_muted(painter):
+    _draw_microphone(painter)
+    painter.drawLine(QPointF(4, 4), QPointF(20, 20))
+
+
+def line_icon(draw, normal_role, active_role, size=18, alpha=None) -> QIcon:
     theme = current_theme()
     icon = QIcon()
     ratio = 2
@@ -64,7 +79,7 @@ def line_icon(draw, normal_role, active_role, size=18) -> QIcon:
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.scale(size / 24, size / 24)
-        pen = QPen(theme.color(role), 2.2)
+        pen = QPen(theme.color(role, alpha if mode == QIcon.Mode.Normal else None), 2.2)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
@@ -252,6 +267,37 @@ class PermissionSelector(QToolButton):
             self.mode_changed.emit(mode.value)
 
 
+class MicMuteIndicator(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("micMuteIndicator")
+        self.setCheckable(True)
+        self.setIconSize(QSize(18, 18))
+        self.setFixedSize(32, 32)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._resting = True
+        self.toggled.connect(self.refresh)
+        self.refresh()
+        on_theme_changed(self.refresh)
+
+    def set_resting(self, resting):
+        self._resting = bool(resting)
+        self.refresh()
+
+    def refresh(self, *_):
+        if self.isChecked():
+            self.setIcon(line_icon(_draw_microphone_muted, "error", "error"))
+            text = tr("ui.mic_unmute")
+        else:
+            self.setIcon(line_icon(_draw_microphone, "text_muted", "text",
+                                   alpha=140 if self._resting else None))
+            text = tr("ui.mic_mute")
+        self.setToolTip(text)
+        self.setAccessibleName(text)
+
+
 class IndicatorFade(QObject):
     def __init__(self, row, composer):
         super().__init__(row)
@@ -270,6 +316,8 @@ class IndicatorFade(QObject):
 
     def _set_resting(self, resting):
         self._row.setProperty("resting", resting)
+        for button in self._row.findChildren(MicMuteIndicator):
+            button.set_resting(resting)
         for widget in (self._row, *self._row.findChildren(QWidget)):
             widget.style().unpolish(widget)
             widget.style().polish(widget)

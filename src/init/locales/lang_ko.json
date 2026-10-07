@@ -71,6 +71,8 @@
   "ui.restore_data_done": "백업을 복원했습니다(데이터베이스 {databases}개, 일일 로그 {logs}개).",
   "ui.permissions": "권한",
   "ui.permissions_hint": "ASK: 명령마다 확인합니다. 30초 안에 응답이 없으면 거부됩니다. AUTO: 확인을 자동으로 승인합니다. 다른 모든 안전장치는 계속 적용됩니다.",
+  "ui.mic_mute": "마이크 음소거",
+  "ui.mic_unmute": "마이크 음소거 해제",
   "ui.input": "{assistant_name}에게 물어보기...",
   "ui.steering_input": "{assistant_name}에게 물어보기...",
   "ui.send": "보내기",

@@ -71,6 +71,8 @@
   "ui.restore_data_done": "Sauvegarde restaurée, avec {databases} bases de données et {logs} journaux quotidiens.",
   "ui.permissions": "Autorisations",
   "ui.permissions_hint": "ASK : confirmer chaque commande ; sans réponse sous 30 s, elle est refusée. AUTO : approuver automatiquement les confirmations ; toutes les autres protections restent actives.",
+  "ui.mic_mute": "Couper le microphone",
+  "ui.mic_unmute": "Réactiver le microphone",
   "ui.input": "Demandez à {assistant_name}...",
   "ui.steering_input": "Demandez à {assistant_name}...",
   "ui.send": "Envoyer",

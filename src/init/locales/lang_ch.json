@@ -71,6 +71,8 @@
   "ui.restore_data_done": "备份已恢复，包含 {databases} 个数据库和 {logs} 个每日日志。",
   "ui.permissions": "权限",
   "ui.permissions_hint": "ASK：逐条确认命令；30 秒内未回答则拒绝。AUTO：自动批准确认；其他所有保护措施仍然有效。",
+  "ui.mic_mute": "静音麦克风",
+  "ui.mic_unmute": "取消麦克风静音",
   "ui.input": "向 {assistant_name} 提问...",
   "ui.steering_input": "向 {assistant_name} 提问...",
   "ui.send": "发送",

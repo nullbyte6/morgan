@@ -297,6 +297,21 @@ QToolButton#permissionSelector:pressed {
     background-color: @surface_raised;
 }
 
+QPushButton#micMuteIndicator {
+    background-color: transparent;
+    border: none;
+    border-radius: 16px;
+    padding: 0;
+}
+
+QPushButton#micMuteIndicator:hover {
+    background-color: @surface_raised;
+}
+
+QPushButton#micMuteIndicator:checked {
+    background-color: @error/30;
+}
+
 QFrame#permissionOptions {
     background-color: @surface;
     border: 2px solid @border;

@@ -71,6 +71,8 @@
   "ui.restore_data_done": "Sicherung wiederhergestellt, mit {databases} Datenbanken und {logs} Tagesprotokollen.",
   "ui.permissions": "Berechtigungen",
   "ui.permissions_hint": "ASK: jeden Befehl bestätigen; ohne Antwort innerhalb von 30 s wird er abgelehnt. AUTO: Bestätigungen automatisch genehmigen; alle anderen Schutzmaßnahmen bleiben aktiv.",
+  "ui.mic_mute": "Mikrofon stummschalten",
+  "ui.mic_unmute": "Mikrofon aktivieren",
   "ui.input": "Frag {assistant_name}...",
   "ui.steering_input": "Frag {assistant_name}...",
   "ui.send": "Senden",

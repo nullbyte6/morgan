@@ -71,6 +71,8 @@
   "ui.restore_data_done": "Backup restored, with {databases} databases and {logs} daily logs.",
   "ui.permissions": "Permissions",
   "ui.permissions_hint": "ASK: confirm each command; no answer within 30 s rejects it. AUTO: approve confirmations automatically; all other safeguards still apply.",
+  "ui.mic_mute": "Mute microphone",
+  "ui.mic_unmute": "Unmute microphone",
   "ui.input": "Ask {assistant_name}...",
   "ui.steering_input": "Ask {assistant_name}...",
   "ui.send": "Send",

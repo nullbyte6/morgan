@@ -54,7 +54,7 @@ from src.init.audio_visualizer import AudioVisualizer
 from src.init.core import Assistant
 from src.init.worker import AssistantWorker, VoiceInputWorker
 from src.init.chat import ChatInput
-from src.init.indicators import (GitBranchIndicator, IndicatorFade,
+from src.init.indicators import (GitBranchIndicator, IndicatorFade, MicMuteIndicator,
                                  PermissionSelector, PrivacyIndicator, WorkingDirectory)
 from src.init.visuals.workspace import Workspace, WorkspacePanel
 from src.init.visuals.response import ResponseBridge
@@ -191,6 +191,7 @@ class AssistantWindow(DesktopWindow):
 
         self.settings = QSettings(DEFAULTS["assistant"]["name"].upper(), "desktop")
         self.muted = self.settings.value("muted", False, type=bool)
+        self.mic_muted = False
         subtitles_enabled = self.settings.value("subtitles", True, type=bool)
         orb_speech_pulse = self.settings.value("orb_speech_pulse", True, type=bool)
         self.setWindowTitle(f"{get_assistant_name()} {load_dev_file()["version"]}")
@@ -435,6 +436,9 @@ class AssistantWindow(DesktopWindow):
         ui.permission_selector = PermissionSelector(self)
         ui.permission_selector.set_mode(load_config()["permission_mode"])
         ui.permission_selector.mode_changed.connect(self.set_permission_mode)
+        ui.mic_mute_indicator = MicMuteIndicator(self)
+        ui.mic_mute_indicator.setChecked(self.mic_muted)
+        ui.mic_mute_indicator.toggled.connect(self.set_mic_muted)
         ui.privacy_indicator.clicked.connect(
             lambda: ui.privacy_indicator.private_toggle(session.worker))
 
@@ -517,6 +521,7 @@ class AssistantWindow(DesktopWindow):
         indicator_row.addWidget(ui.branch_indicator)
         indicator_row.addWidget(ui.privacy_indicator)
         indicator_row.addWidget(ui.permission_selector)
+        indicator_row.addWidget(ui.mic_mute_indicator)
         indicator_row.addStretch()
         ui.indicator_row = QWidget()
         ui.indicator_row.setObjectName("indicatorRow")
@@ -1654,6 +1659,16 @@ class AssistantWindow(DesktopWindow):
         self.refresh_settings_workspaces()
 
     @Slot(bool)
+    def set_mic_muted(self, muted: bool):
+        self.mic_muted = bool(muted)
+        for session in self._views():
+            indicator = session.ui.mic_mute_indicator
+            if indicator.isChecked() != self.mic_muted:
+                indicator.setChecked(self.mic_muted)
+        if self.voice_thread is not None:
+            self.voice_thread.set_mic_muted(self.mic_muted)
+
+    @Slot(bool)
     def toggle_mute(self, muted: bool):
         self.muted = bool(muted)
         self.settings.setValue("muted", self.muted)
@@ -1967,6 +1982,7 @@ class AssistantWindow(DesktopWindow):
             ui.status.show()
             return
         self.voice_thread = VoiceInputWorker(self, automatic=True, live=True)
+        self.voice_thread.set_mic_muted(self.mic_muted)
         self.voice_session = session
         session.worker.live_capture = self.voice_thread
         self.voice_thread.levels.connect(self.on_voice_levels)

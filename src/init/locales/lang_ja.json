@@ -71,6 +71,8 @@
   "ui.restore_data_done": "バックアップを復元しました(データベース{databases}件、日次ログ{logs}件)。",
   "ui.permissions": "権限",
   "ui.permissions_hint": "ASK: コマンドごとに確認します。30秒以内に応答がない場合は拒否されます。AUTO: 確認を自動的に承認します。その他の安全対策はすべて有効です。",
+  "ui.mic_mute": "マイクをミュート",
+  "ui.mic_unmute": "マイクのミュートを解除",
   "ui.input": "{assistant_name}に聞く...",
   "ui.steering_input": "{assistant_name}に聞く...",
   "ui.send": "送信",
