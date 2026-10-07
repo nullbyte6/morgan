@@ -18,6 +18,7 @@
 #  along with this program. If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 from src.init.choice_dialog import DANGER_BUTTON, NEUTRAL_BUTTON, ChoiceDialog
+from src.init import hotkeys
 from src.init.identity import get_assistant_name
 from src.init.lang import tr
 
@@ -224,8 +225,7 @@ class EditorView(QWidget):
         self.editor = CodeEditor(self)
         self.editor.document().modificationChanged.connect(self.update_title)
 
-        self.open_shortcut = QShortcut(QKeySequence("Ctrl+O"), self)
-        self.open_shortcut.activated.connect(self.choose_file)
+        self.open_shortcut = hotkeys.bind("open_file", self, self.choose_file, Qt.WindowShortcut)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 12, 20, 20)

@@ -26,6 +26,7 @@ from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 from shiboken6 import isValid
 
+from src.init import hotkeys
 from src.init.lang import tr
 
 
@@ -1018,20 +1019,17 @@ class Workspace(QWidget):
     def _install_shortcuts(self) -> None:
         """Install keyboard shortcuts for the active workspace."""
         shortcuts = {
-            "Ctrl+W": self.close_active_panel,
-            "Ctrl+Alt+Left": lambda: self.focus_neighbor(Qt.LeftArrow),
-            "Ctrl+Alt+Right": lambda: self.focus_neighbor(Qt.RightArrow),
-            "Ctrl+Alt+Up": lambda: self.focus_neighbor(Qt.UpArrow),
-            "Ctrl+Alt+Down": lambda: self.focus_neighbor(Qt.DownArrow),
+            "close_panel": self.close_active_panel,
+            "focus_left": lambda: self.focus_neighbor(Qt.LeftArrow),
+            "focus_right": lambda: self.focus_neighbor(Qt.RightArrow),
+            "focus_up": lambda: self.focus_neighbor(Qt.UpArrow),
+            "focus_down": lambda: self.focus_neighbor(Qt.DownArrow),
         }
 
         self._shortcuts: list[QShortcut] = []
 
-        for sequence, callback in shortcuts.items():
-            shortcut = QShortcut(QKeySequence(sequence), self)
-            shortcut.setContext(Qt.ApplicationShortcut)
-            shortcut.activated.connect(callback)
-            self._shortcuts.append(shortcut)
+        for name, callback in shortcuts.items():
+            self._shortcuts += hotkeys.bind(name, self, callback)
 
     def close_active_panel(self) -> None:
         """Close the currently selected panel."""

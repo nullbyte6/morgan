@@ -20,10 +20,10 @@
 from datetime import date, timedelta
 
 from PySide6.QtCore import QTimer, Qt, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QScrollArea,
                                QVBoxLayout, QWidget)
 
+from src.init import hotkeys
 from src.init.lang import tr
 
 from . import formatting
@@ -221,9 +221,7 @@ class JournalView(QWidget):
         self.earlier_button.clicked.connect(self._jump_earlier)
         self.composer.textChanged.connect(self._composer_changed)
         self.add_button.clicked.connect(self._add_entry)
-        send = QShortcut(QKeySequence("Ctrl+Return"), self.composer)
-        send.setContext(Qt.ShortcutContext.WidgetShortcut)
-        send.activated.connect(self._add_entry)
+        hotkeys.bind("journal_add", self.composer, self._add_entry, Qt.ShortcutContext.WidgetShortcut)
         store.changed.connect(self._store_changed)
         self.refresh_language()
 

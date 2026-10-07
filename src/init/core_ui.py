@@ -71,15 +71,12 @@ from src.init.song.view import SongView
 WORKSPACE_VIEW_CONFIG = {
     "editor": {
         "title": "Editor",
-        "shortcut": "Ctrl+E",
     },
     "settings": {
         "title": "Settings",
-        "shortcut": "Ctrl+Alt+S",
     },
     "terminal": {
         "title": "Terminal",
-        "shortcut": "Ctrl+T",
     },
 }
 
@@ -89,6 +86,7 @@ from src.init.choice_dialog import ChoiceDialog, NEUTRAL_BUTTON
 from src.init.brain import get_version, kill_self
 from src.init.api import start_api_server, stop_api_server
 from src.init.config import DEFAULTS, load_dev_file, load_config, save_config
+from src.init import hotkeys
 from src.init.editor.live import EditorView
 from src.init.lang import get_language, set_language, tr
 from src.init.settings import SettingsView
@@ -255,29 +253,20 @@ class AssistantWindow(DesktopWindow):
         self.check_health_after_update()
 
         self._workspace_shortcuts = []
-        for view_key, options in WORKSPACE_VIEW_CONFIG.items():
-            shortcut = QShortcut(QKeySequence(options["shortcut"]), self)
-            shortcut.setContext(Qt.ApplicationShortcut)
-            shortcut.activated.connect(
+        for view_key in WORKSPACE_VIEW_CONFIG:
+            self._workspace_shortcuts += hotkeys.bind(
+                f"open_{view_key}", self,
                 lambda view_key=view_key: self.begin_workspace_chord(view_key))
-            self._workspace_shortcuts.append(shortcut)
 
-        self.diary_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
-        self.diary_shortcut.setContext(Qt.ApplicationShortcut)
-        self.diary_shortcut.activated.connect(self.open_nova_diary)
-        self.journal_shortcut = QShortcut(QKeySequence("Ctrl+J"), self)
-        self.journal_shortcut.setContext(Qt.ApplicationShortcut)
-        self.journal_shortcut.activated.connect(self.open_nova_journal)
+        self.diary_shortcut = hotkeys.bind("nova_diary", self, self.open_nova_diary)
+        self.journal_shortcut = hotkeys.bind("nova_journal", self, self.open_nova_journal)
         self.nova_shortcuts = []
-        for sequence, action in (("Ctrl+B", self.toggle_nova_dock),
-                                 ("Ctrl+H", lambda: self.open_nova_hub(Hub.HOME)),
-                                 ("Ctrl+Alt+N", lambda: self.open_nova_hub(Hub.NOTIFICATIONS)),
-                                 ("Ctrl+M", lambda: self.open_nova_hub(Hub.ME)),
-                                 ("Ctrl+S", self.save_or_search)):
-            shortcut = QShortcut(QKeySequence(sequence), self)
-            shortcut.setContext(Qt.ApplicationShortcut)
-            shortcut.activated.connect(action)
-            self.nova_shortcuts.append(shortcut)
+        for name, action in (("nova_dock", self.toggle_nova_dock),
+                             ("nova_home", lambda: self.open_nova_hub(Hub.HOME)),
+                             ("nova_notifications", lambda: self.open_nova_hub(Hub.NOTIFICATIONS)),
+                             ("nova_me", lambda: self.open_nova_hub(Hub.ME)),
+                             ("save_or_search", self.save_or_search)):
+            self.nova_shortcuts += hotkeys.bind(name, self, action)
 
         self._workspace_chord_view = None
         self._workspace_chord_timer = QTimer(self)
@@ -286,16 +275,15 @@ class AssistantWindow(DesktopWindow):
         self._workspace_chord_timer.timeout.connect(
             self._open_pending_workspace)
         QApplication.instance().installEventFilter(self)
+        self.hotkey_hints = hotkeys.HotkeyHints(self)
+        self.hotkey_hints.install()
 
         self.session_shortcuts = []
-        for sequence, action in (("Ctrl+Shift+N", self.new_session),
-                                 ("Ctrl+Shift+W", lambda: self.close_session()),
-                                 ("Ctrl+R", self.toggle_recording_shortcut),
-                                 ("Ctrl+Shift+M", self.toggle_mic_mute_shortcut)):
-            shortcut = QShortcut(QKeySequence(sequence), self)
-            shortcut.setContext(Qt.ApplicationShortcut)
-            shortcut.activated.connect(action)
-            self.session_shortcuts.append(shortcut)
+        for name, action in (("new_session", self.new_session),
+                             ("close_session", lambda: self.close_session()),
+                             ("record", self.toggle_recording_shortcut),
+                             ("mic_mute", self.toggle_mic_mute_shortcut)):
+            self.session_shortcuts += hotkeys.bind(name, self, action)
 
         self.build_worker(self.session)
         self.set_status("status.waking")
@@ -770,12 +758,12 @@ class AssistantWindow(DesktopWindow):
                        and event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down))
         if (event.type() == QEvent.ShortcutOverride and
                 QApplication.activeWindow() == self and
-                ((event.key() == Qt.Key_K and event.modifiers() == Qt.ControlModifier) or chord_arrow)):
+                (hotkeys.matches(event, "command_palette") or chord_arrow)):
             event.accept()
             return True
         if (event.type() == QEvent.KeyPress and
                 QApplication.activeWindow() == self):
-            if event.key() == Qt.Key_K and event.modifiers() == Qt.ControlModifier:
+            if hotkeys.matches(event, "command_palette"):
                 if not event.isAutoRepeat():
                     self.open_command_palette()
                 event.accept()

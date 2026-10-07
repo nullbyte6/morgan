@@ -37,7 +37,7 @@
 """Live scaling of the complete widget interface, including custom painting."""
 
 from PySide6.QtCore import QEvent, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QPainter, QShortcut, QTransform
+from PySide6.QtGui import QPainter, QTransform
 from PySide6.QtWidgets import QApplication, QFrame, QGraphicsScene, QGraphicsView
 
 
@@ -71,17 +71,9 @@ class ZoomView(QGraphicsView):
         self._layout_timer.timeout.connect(self._resize_content)
 
         self._zoom_shortcuts = []
-        for sequence, direction in (
-                ("Ctrl++", 1),
-                ("Ctrl+=", 1),
-                ("Ctrl+Shift+=", 1),
-                ("Ctrl+-", -1),
-                ("Ctrl+0", 0)):
-            shortcut = QShortcut(QKeySequence(sequence), self)
-            shortcut.setContext(Qt.ApplicationShortcut)
-            shortcut.activated.connect(
-                lambda direction=direction: self._apply_shortcut_zoom(direction))
-            self._zoom_shortcuts.append(shortcut)
+        for name, direction in (("zoom_in", 1), ("zoom_out", -1), ("zoom_reset", 0)):
+            self._zoom_shortcuts += hotkeys.bind(
+                name, self, lambda direction=direction: self._apply_shortcut_zoom(direction))
 
         scene = QGraphicsScene(self)
         self.setScene(scene)

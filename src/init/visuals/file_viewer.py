@@ -30,11 +30,13 @@ from threading import Event
 from PySide6.QtCore import (
     QFileSystemWatcher, QObject, QRect, QSize, Qt, QRunnable, QThreadPool,
     Signal, Slot)
-from PySide6.QtGui import QFont, QKeySequence, QPainter, QShortcut, QTextCursor
+from PySide6.QtGui import QFont, QPainter, QTextCursor
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
     QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 from shiboken6 import isValid
+
+from src.init import hotkeys
 
 from ..attachments import TEXT_EXTENSIONS, _encoding
 from ..editor.highlighter import PygmentsHighlighter, lexer_for_path
@@ -347,11 +349,8 @@ class TextViewer(FileViewer):
         self.search.returnPressed.connect(self.find_next)
         self.search.hide()
         self.layout_box.insertWidget(1, self.search)
-        self.find_shortcut = QShortcut(QKeySequence.Find, self)
-        self.find_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
-        self.find_shortcut.activated.connect(self.show_search)
-        self.escape_shortcut = QShortcut(QKeySequence("Esc"), self.search)
-        self.escape_shortcut.activated.connect(self.hide_search)
+        self.find_shortcut = hotkeys.bind("find", self, self.show_search, Qt.WidgetWithChildrenShortcut)
+        self.escape_shortcut = hotkeys.bind("find_close", self.search, self.hide_search, Qt.WindowShortcut)
         if Path(path).suffix.lower() in {".md", ".markdown"}:
             self.mode = QPushButton("Preview", self)
             self.mode.clicked.connect(self.toggle_preview)
