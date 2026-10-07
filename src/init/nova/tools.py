@@ -308,7 +308,9 @@ def write_journal_entry(text: str, day: str | None = None) -> dict:
     text is the entry in the user's own voice and first person, as a journal is written ("Today I went
     for a walk with Rudiger"), in the language the user used. Clean up dictation lightly: fix punctuation
     and paragraphs and drop filler words and false starts, but keep the user's meaning and words and never add
-    facts, opinions or advice. day is an ISO date such as 2026-10-02 and defaults to today. Each call
+    facts, opinions or advice. Never write a description of the request itself ("I wrote an entry about X");
+    if the user only named a subject or word to write, write that content, and if there is nothing to
+    write yet, ask. day is an ISO date such as 2026-10-02 and defaults to today. Each call
     adds a new entry to that day. Do not use remember for this, and do not store a journal entry as a memory.
     """
     try:
