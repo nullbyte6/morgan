@@ -24,6 +24,7 @@ import hashlib
 import inspect
 import json
 import logging
+import re
 import uuid
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -79,6 +80,19 @@ def select_schemas(names, available, control):
                         and not other_spec.effectful and other_spec.path_argument
                         and (other_spec.domain, other_spec.source) == (spec.domain, spec.source))
     return set(selected[:12])
+
+
+def relevant_tools(objective, available, control):
+    stems = {word[:5] for word in re.findall(r"\w{4,}", str(objective).casefold())}
+    scored = []
+    for name, tool in available.items():
+        if name in control:
+            continue
+        text = (name + " " + (tool.description or "")).casefold().replace("_", " ")
+        score = sum(1 for stem in stems if stem in text)
+        if score:
+            scored.append((-score, name))
+    return [name for _, name in sorted(scored)[:12]]
 
 
 class VerificationContract(BaseModel):
@@ -1657,7 +1671,9 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
         before = await measure(history)
         if before["estimated_input_tokens"] > input_limit and self.selected_tools is None:
             recent = [part.tool_name for message in history[-6:] for part in message.parts if part.part_kind == "tool-call"]
-            self.selected_tools = select_schemas(reversed(recent), self.available_tools, self.control_tools)
+            self.selected_tools = select_schemas(
+                [*reversed(recent), *relevant_tools(self.objective, self.available_tools, self.control_tools)],
+                self.available_tools, self.control_tools)
             select()
         history = await self.context_budget.compact(history, measure, input_limit, force=self.force_compaction)
         measured = await measure(history)
