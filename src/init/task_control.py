@@ -317,6 +317,16 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self.set_task_title(task_title)
         return result
 
+    def declare_read_only_contract(self, name):
+        spec = TOOL_SPECS.get(name)
+        if (self.state.kind is not None or self.state.criteria or spec is None
+                or spec.effectful and not spec.ancillary):
+            return False
+        criterion = " ".join(str(self.state.objective).split())[:200] or "Answer the user's request"
+        result = self.task_checkpoint("inspect", [criterion], kind="read_only")
+        self.trace("contract_implied", tool=name, accepted=result["accepted"])
+        return result["accepted"]
+
     def task_resume(self, task_id: str) -> dict:
         """Resume the preserved task only when the current request continues its objective."""
         previous = self.pending_task
@@ -809,7 +819,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
                 except (ValidationError, ValueError, TypeError, ModelRetry) as error:
                     result = self._validation_rejection(error)
                 return self._return(name, arguments, call_id, result)
-            if self.state.kind is None or not self.state.criteria:
+            if (self.state.kind is None or not self.state.criteria) and not self.declare_read_only_contract(name):
                 result = control_rejection("Declare the user's task contract before tool work.", "kind/criteria/verification",
                                            "task_checkpoint with read_only or mutation and observable criteria",
                                            requirements=self.state.requirements(), code="contract_required")
