@@ -12,7 +12,7 @@
 AppId={{EFC7E428-7C68-4FF5-A608-C737BD547853}
 AppName=Morgan
 AppVersion={#MorganVersion}
-AppPublisher=XDG
+AppPublisher=Nullbyte
 DefaultDirName=C:\Morgan
 DisableDirPage=no
 DisableProgramGroupPage=yes
