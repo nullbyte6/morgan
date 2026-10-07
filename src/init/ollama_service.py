@@ -35,6 +35,8 @@ SERVER_NAMES = {"ollama.exe", "ollama"}
 APP_NAMES = {"ollama app.exe"}
 PROCESS_NAMES = SERVER_NAMES | APP_NAMES
 RUNNER_NAMES = {"llama-server.exe", "llama-server"}
+SERVICE_DROPIN = "/etc/systemd/system/ollama.service.d/zz-context-length.conf"
+SERVICE_TIMEOUT = 120
 STOP_SECONDS = 10
 START_SECONDS = 30
 
@@ -107,6 +109,32 @@ def server_context_length() -> int | None:
     return _service_context_length()
 
 
+def _restart_service(context_length: int) -> bool:
+    """Persist OLLAMA_CONTEXT_LENGTH in the systemd service of another user and restart it, asking for authorization."""
+    systemctl = shutil.which("systemctl")
+    pkexec = shutil.which("pkexec")
+    if systemctl is None or pkexec is None:
+        return False
+    try:
+        if subprocess.run([systemctl, "is-active", "--quiet", "ollama"], timeout=5).returncode != 0:
+            return False
+        script = (f'mkdir -p "$(dirname {SERVICE_DROPIN})" && '
+                  f"printf '[Service]\\nEnvironment=OLLAMA_CONTEXT_LENGTH={context_length}\\n' > {SERVICE_DROPIN} && "
+                  f"{systemctl} daemon-reload && {systemctl} restart ollama")
+        return subprocess.run([pkexec, "sh", "-c", script], timeout=SERVICE_TIMEOUT).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _wait_ready() -> bool:
+    deadline = time.monotonic() + START_SECONDS
+    while time.monotonic() < deadline:
+        if ollama_ready():
+            return True
+        time.sleep(0.5)
+    return False
+
+
 def _owned(process: psutil.Process) -> bool:
     try:
         return process.username() == psutil.Process().username()
@@ -139,7 +167,7 @@ def restart_ollama(context_length: int) -> None:
     apps = [process for process in processes if (process.info["name"] or "").casefold() in APP_NAMES]
     _stop(apps)
     _stop([process for process in processes if process not in apps])
-    if ollama_ready():
+    if ollama_ready() and not (_restart_service(context_length) and _wait_ready()):
         raise PermissionError(
             f"Ollama is running under another user and keeps its own context length; set OLLAMA_CONTEXT_LENGTH={context_length} "
             "in its service environment (systemctl edit ollama) and restart it")
@@ -147,9 +175,5 @@ def restart_ollama(context_length: int) -> None:
         [str(executable), "serve"], env={**os.environ, "OLLAMA_CONTEXT_LENGTH": str(context_length)},
         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True,
         creationflags=current_platform().detached_flags)
-    deadline = time.monotonic() + START_SECONDS
-    while time.monotonic() < deadline:
-        if ollama_ready():
-            return
-        time.sleep(0.5)
-    raise TimeoutError(tr("ui.restart_ollama_timeout"))
+    if not _wait_ready():
+        raise TimeoutError(tr("ui.restart_ollama_timeout"))

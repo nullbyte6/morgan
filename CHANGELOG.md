@@ -2,6 +2,10 @@
 
 All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.7-beta (2026-10-07)
+
+- Fix Ollama context length not applying when the server is a systemd service of another user by writing the OLLAMA_CONTEXT_LENGTH drop-in and restarting the service after a pkexec authorization
+
 ## 26.10.6-beta (2026-10-06)
 
 - Add GitHub Actions workflow that builds MorganSetup.exe, MorganSetup.run and Morgan.apk daily and publishes them in the release of the version in dev/core.json
