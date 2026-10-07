@@ -26,6 +26,7 @@ from PySide6.QtGui import QBrush, QKeySequence, QPainter, QShortcut, QTextLength
 from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsOpacityEffect, QLabel,
                                QTextBrowser, QVBoxLayout, QWidget)
 
+from src.init.lang import tr
 from src.init.theme import current_theme
 
 HINT_HOLD_MS = 2000
@@ -36,37 +37,36 @@ HINT_FADE_MS = 180
 class Hotkey:
     group: str
     sequences: tuple[str, ...]
-    description: str
 
 
 HOTKEYS = {
-    "command_palette": Hotkey("General", ("Ctrl+K",), "Open the command palette"),
-    "record": Hotkey("General", ("Ctrl+R",), "Start or stop voice recording"),
-    "mic_mute": Hotkey("General", ("Ctrl+Shift+M",), "Mute or unmute the microphone"),
-    "new_session": Hotkey("General", ("Ctrl+Shift+N",), "Open a new session"),
-    "close_session": Hotkey("General", ("Ctrl+Shift+W",), "Close the current session"),
-    "zoom_in": Hotkey("General", ("Ctrl++", "Ctrl+=", "Ctrl+Shift+="), "Zoom in"),
-    "zoom_out": Hotkey("General", ("Ctrl+-",), "Zoom out"),
-    "zoom_reset": Hotkey("General", ("Ctrl+0",), "Reset zoom"),
-    "open_editor": Hotkey("Workspace", ("Ctrl+E",), "Open the editor, then an arrow to pick its side"),
-    "open_terminal": Hotkey("Workspace", ("Ctrl+T",), "Open the terminal, then an arrow to pick its side"),
-    "open_settings": Hotkey("Workspace", ("Ctrl+Alt+S",), "Open the settings, then an arrow to pick its side"),
-    "close_panel": Hotkey("Workspace", ("Ctrl+W",), "Close the active panel"),
-    "focus_left": Hotkey("Workspace", ("Ctrl+Alt+Left",), "Focus the panel on the left"),
-    "focus_right": Hotkey("Workspace", ("Ctrl+Alt+Right",), "Focus the panel on the right"),
-    "focus_up": Hotkey("Workspace", ("Ctrl+Alt+Up",), "Focus the panel above"),
-    "focus_down": Hotkey("Workspace", ("Ctrl+Alt+Down",), "Focus the panel below"),
-    "nova_dock": Hotkey("Nova", ("Ctrl+B",), "Show or hide the Nova dock"),
-    "nova_home": Hotkey("Nova", ("Ctrl+H",), "Open Nova home"),
-    "nova_notifications": Hotkey("Nova", ("Ctrl+Alt+N",), "Open notifications"),
-    "nova_me": Hotkey("Nova", ("Ctrl+M",), "Open the Me page"),
-    "nova_diary": Hotkey("Nova", ("Ctrl+L",), "Open the diary"),
-    "nova_journal": Hotkey("Nova", ("Ctrl+J",), "Open the journal"),
-    "journal_add": Hotkey("Nova", ("Ctrl+Return",), "Add the journal entry being written"),
-    "save_or_search": Hotkey("Files", ("Ctrl+S",), "Save the open file, or open Nova search"),
-    "open_file": Hotkey("Files", ("Ctrl+O",), "Open a file in the editor"),
-    "find": Hotkey("Files", ("Ctrl+F",), "Find in the open file"),
-    "find_close": Hotkey("Files", ("Esc",), "Close the find bar"),
+    "command_palette": Hotkey("general", ("Ctrl+K",)),
+    "record": Hotkey("general", ("Ctrl+R",)),
+    "mic_mute": Hotkey("general", ("Ctrl+Shift+M",)),
+    "new_session": Hotkey("general", ("Ctrl+Shift+N",)),
+    "close_session": Hotkey("general", ("Ctrl+Shift+W",)),
+    "zoom_in": Hotkey("general", ("Ctrl++", "Ctrl+=", "Ctrl+Shift+=")),
+    "zoom_out": Hotkey("general", ("Ctrl+-",)),
+    "zoom_reset": Hotkey("general", ("Ctrl+0",)),
+    "open_editor": Hotkey("workspace", ("Ctrl+E",)),
+    "open_terminal": Hotkey("workspace", ("Ctrl+T",)),
+    "open_settings": Hotkey("workspace", ("Ctrl+Alt+S",)),
+    "close_panel": Hotkey("workspace", ("Ctrl+W",)),
+    "focus_left": Hotkey("workspace", ("Ctrl+Alt+Left",)),
+    "focus_right": Hotkey("workspace", ("Ctrl+Alt+Right",)),
+    "focus_up": Hotkey("workspace", ("Ctrl+Alt+Up",)),
+    "focus_down": Hotkey("workspace", ("Ctrl+Alt+Down",)),
+    "nova_dock": Hotkey("nova", ("Ctrl+B",)),
+    "nova_home": Hotkey("nova", ("Ctrl+H",)),
+    "nova_notifications": Hotkey("nova", ("Ctrl+Alt+N",)),
+    "nova_me": Hotkey("nova", ("Ctrl+M",)),
+    "nova_diary": Hotkey("nova", ("Ctrl+L",)),
+    "nova_journal": Hotkey("nova", ("Ctrl+J",)),
+    "journal_add": Hotkey("nova", ("Ctrl+Return",)),
+    "save_or_search": Hotkey("files", ("Ctrl+S",)),
+    "open_file": Hotkey("files", ("Ctrl+O",)),
+    "find": Hotkey("files", ("Ctrl+F",)),
+    "find_close": Hotkey("files", ("Esc",)),
 }
 
 
@@ -91,13 +91,14 @@ def matches(event, name: str) -> bool:
 
 
 def markdown_table() -> str:
-    lines = ["| Group | Shortcut | Action |", "| --- | --- | --- |"]
+    lines = [f"| {tr('hotkeys.col_group')} | {tr('hotkeys.col_shortcut')} | {tr('hotkeys.col_action')} |",
+             "| --- | --- | --- |"]
     previous = None
-    for hotkey in HOTKEYS.values():
-        group = hotkey.group if hotkey.group != previous else ""
+    for name, hotkey in HOTKEYS.items():
+        group = tr(f"hotkeys.group_{hotkey.group}") if hotkey.group != previous else ""
         previous = hotkey.group
         keys = " / ".join(f"`{text}`" for text in hotkey.sequences)
-        lines.append(f"| {group} | {keys} | {hotkey.description} |")
+        lines.append(f"| {group} | {keys} | {tr(f'hotkeys.action.{name}')} |")
     return "\n".join(lines)
 
 
@@ -110,8 +111,8 @@ class HotkeyOverlay(QFrame):
         self.setFocusPolicy(Qt.NoFocus)
         self.card = QFrame(self)
         self.card.setObjectName("HotkeyCard")
-        self.title = QLabel("Keyboard shortcuts", self.card)
-        self.hint = QLabel("Release Ctrl to close", self.card)
+        self.title = QLabel(self.card)
+        self.hint = QLabel(self.card)
         self.table = QTextBrowser(self.card)
         self.table.setFocusPolicy(Qt.NoFocus)
         self.table.setFrameShape(QFrame.NoFrame)
@@ -132,6 +133,8 @@ class HotkeyOverlay(QFrame):
 
     def refresh(self) -> None:
         theme = current_theme()
+        self.title.setText(tr("hotkeys.title"))
+        self.hint.setText(tr("hotkeys.hint"))
         self.setStyleSheet(theme.render(
             "#HotkeyCard { background: @surface_raised; border: 1px solid @border_strong; "
             "border-radius: 12px; } "
