@@ -20,11 +20,13 @@ from pathlib import Path
 import subprocess
 
 from ..base import Platform
-from . import apps, desktop, folders, media, notifications, services, system, windows
+from . import apps, desktop, folders, media, notifications, services, system, telemetry, windows
 
 
 class LinuxX64Platform(Platform):
     name = "linuxx64"
+    telemetry_sources = frozenset(telemetry.SOURCES)
+    telemetry_query = staticmethod(telemetry.telemetry_query)
     preferred_audio_host = ""
     output_latency = "high"
 
