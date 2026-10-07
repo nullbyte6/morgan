@@ -117,7 +117,7 @@ class ResponseBridge(QObject):
                     None)
                 if panel is not None:
                     workspace.focus_panel(panel.panel_id)
-                    window.restore_from_mascot()
+                    window.restore_window()
                     self._complete(request, result="Response workspace is already open.")
                     return
 
@@ -133,7 +133,7 @@ class ResponseBridge(QObject):
                 view.destroyed.connect(
                     lambda: window._forget_response_view(view))
                 workspace.focus_panel(panel_id)
-                window.restore_from_mascot()
+                window.restore_window()
                 self._complete(request, result="Response workspace opened.")
             except Exception as error:
                 self._complete(request, error=str(error))

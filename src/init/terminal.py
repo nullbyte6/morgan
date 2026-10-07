@@ -110,7 +110,7 @@ class TerminalBridge(QObject):
                                     timeout=request.timeout, autostart=False)
                 view.setProperty("workspaceViewKey", "terminal")
                 request.panel_id = workspace.open_panel(title="Terminal", content=view)
-                self.parent().restore_from_mascot()
+                self.parent().restore_window()
                 view.start_session(on_created=lambda session: self._watch_session(session, request))
                 view.receive_output(request.command.replace("\n", "\r\n") + "\r\n")
                 request.started.set()
