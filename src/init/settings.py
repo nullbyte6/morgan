@@ -21,10 +21,10 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QFileInfo, QSize, Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QIcon, QImage, QIntValidator, QPainter, QPixmap
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QIntValidator, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractButton, QApplication, QComboBox, QFileDialog, QFileIconProvider, QFrame, QGridLayout, QHBoxLayout,
+    QAbstractButton, QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListView, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from .choice_dialog import ChoiceDialog
@@ -32,7 +32,7 @@ from .config import CONTEXT_LENGTH_RANGE, load_config, save_config
 from .identity import get_assistant_name
 from .indicators import PopupCorners
 from .lang import get_language, tr
-from .ollama_service import ollama_executable, restart_ollama
+from .ollama_service import restart_ollama
 from .theme import current_theme, discover_themes, on_theme_changed, seed_user_themes, select_theme
 from src.platforms import current_platform
 from .voice_profiles import available_voices, selected_voice, select_voice, VOICE_NAMES
@@ -146,21 +146,20 @@ class ToggleSwitch(QAbstractButton):
         painter.end()
 
 
-def ollama_icon(color: QColor) -> QIcon:
-    """The Ollama llama from the installed program, redrawn in the given color; empty when Ollama is missing."""
-    executable = ollama_executable()
-    if executable is None:
-        return QIcon()
-    artwork = executable.with_name("app.ico")
-    source = QIcon(str(artwork)) if artwork.is_file() else QFileIconProvider().icon(QFileInfo(str(executable)))
-    image = source.pixmap(128, 128).toImage().convertToFormat(QImage.Format.Format_ARGB32)
-    rgb = color.rgb() & 0xFFFFFF
-    for y in range(image.height()):
-        for x in range(image.width()):
-            pixel = image.pixel(x, y)
-            gray = (((pixel >> 16) & 255) * 299 + ((pixel >> 8) & 255) * 587 + (pixel & 255) * 114) // 1000
-            image.setPixel(x, y, ((pixel >> 24) & 255) * (255 - gray) // 255 << 24 | rgb)
-    return QIcon(QPixmap.fromImage(image))
+def power_icon(color: QColor) -> QIcon:
+    """A simple power button glyph drawn in the given color."""
+    size = 128
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    pen = QPen(color, 10)
+    pen.setCapStyle(Qt.RoundCap)
+    painter.setPen(pen)
+    painter.drawArc(QRectF(22, 24, 84, 84), 120 * 16, -300 * 16)
+    painter.drawLine(QPointF(64, 14), QPointF(64, 62))
+    painter.end()
+    return QIcon(pixmap)
 
 
 class ThemeDropdown(QComboBox):
@@ -543,9 +542,7 @@ class SettingsView(QWidget):
         self.refresh_ollama_icon()
 
     def refresh_ollama_icon(self):
-        icon = ollama_icon(current_theme().color("text"))
-        self.ollama_button.setIcon(icon)
-        self.ollama_button.setText("" if not icon.isNull() else "\u21bb")
+        self.ollama_button.setIcon(power_icon(current_theme().color("text")))
 
     def change_context_length(self):
         minimum, maximum = CONTEXT_LENGTH_RANGE

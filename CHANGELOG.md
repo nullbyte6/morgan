@@ -4,6 +4,8 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.7-beta (2026-10-07)
 
+- Fix Ollama reset button icon by replacing the Ollama logo with a simple power button icon
+- Update settings dropdowns to hide their chevrons
 - Add Linux graphics adapter telemetry read from sysfs, so the GPU health check no longer reports the adapters as unreadable
 - Fix release workflow being rejected by GitHub because the release notes broke out of the YAML block, by moving them into a variable
 - Fix Ollama running on the CPU after a reboot because its systemd service started without access to the GPU devices, by adding the render and video groups to the service drop-in and restarting it, and by offering that restart from the model health warning
