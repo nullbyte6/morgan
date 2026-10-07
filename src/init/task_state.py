@@ -55,6 +55,16 @@ def fingerprint(value):
 GATED_REJECTIONS = {"contract_required", "mutation_contract_required"}
 
 
+def web_resources(resources):
+    unique = []
+    for resource in resources:
+        if isinstance(resource, str) and resource.lower().startswith(("http://", "https://")):
+            resource = "domain:web"
+        if resource not in unique:
+            unique.append(resource)
+    return unique
+
+
 def control_rejection(reason, field, expected, *, requirements=None, code="invalid_checkpoint"):
     return {"accepted": False, "outcome": Outcome.REJECTED, "status": "rejected", "code": code,
             "reason": reason, "field": field, "expected": expected, "recoverable": True,
@@ -269,7 +279,10 @@ class TaskState:
         if any(not value.strip() for value in criteria) or len(set(criteria)) != len(criteria):
             return reject("Acceptance criteria must be distinct and nonempty.")
         proposed = copy.deepcopy(self.criteria)
-        declared_resources = list(resources)
+        declared_resources = web_resources(resources)
+        verification = {key: {**contract, "resources": web_resources(contract["resources"])}
+                        if isinstance(contract, dict) and isinstance(contract.get("resources"), list) else contract
+                        for key, contract in verification.items()}
         for key, contract in verification.items():
             if not isinstance(contract, dict) or not isinstance(contract.get("method"), str) or not isinstance(contract.get("resources"), list):
                 return reject("Verification entries must be keyed by the exact criterion, without a wrapper.",
