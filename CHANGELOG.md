@@ -8,6 +8,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix web search results never counting as evidence, which left read-only tasks stuck on task_finish until the loop guard paused them, by treating search_web and read_web_page text as successful observations
 - Fix Morgan hearing her own voice as the user's reply and answering herself in a loop by tracking the estimated end of buffered playback so echo cancellation covers the whole output buffer, which is large on Linux
 - Fix Ollama context length not applying when the server is a systemd service of another user by writing the OLLAMA_CONTEXT_LENGTH drop-in and restarting the service after a pkexec authorization
+- Add scripts/pymorgan.sh to launch the desktop app detached from the terminal on Linux and macOS, matching scripts/pymorgan.bat
 - Fix task checkpoints that declared web page URLs as verification resources being rejected until the task paused, by mapping http and https URLs to the domain:web resource
 - Fix tasks spending minutes resubmitting the same rejected control call by pausing as soon as an identical call is rejected twice with no new evidence or criterion progress in between
 - Update model escalation to hand a request to the coding model on its first web tool call or when it becomes a supervised multi-step task, keeping only conversation and simple actions on the assistant model
