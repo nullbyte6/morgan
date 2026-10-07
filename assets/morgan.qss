@@ -446,6 +446,14 @@ QComboBox#themeDropdown::drop-down {
     border: none;
 }
 
+QComboBox#languageDropdown::down-arrow,
+QComboBox#modelDropdown::down-arrow,
+QComboBox#themeDropdown::down-arrow {
+    image: none;
+    width: 0;
+    height: 0;
+}
+
 QComboBox#languageDropdown QAbstractItemView,
 QComboBox#modelDropdown QAbstractItemView,
 QComboBox#themeDropdown QAbstractItemView {
