@@ -40,6 +40,8 @@ from PySide6.QtCore import QEvent, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QTransform
 from PySide6.QtWidgets import QApplication, QFrame, QGraphicsScene, QGraphicsView
 
+from src.init import hotkeys
+
 
 class ZoomView(QGraphicsView):
     """Keep the interface in logical coordinates and scale its presentation."""
