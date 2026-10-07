@@ -5,6 +5,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.7-beta (2026-10-07)
 
 - Add Linux graphics adapter telemetry read from sysfs, so the GPU health check no longer reports the adapters as unreadable
+- Fix release workflow being rejected by GitHub because the release notes broke out of the YAML block, by moving them into a variable
 - Fix Ollama running on the CPU after a reboot because its systemd service started without access to the GPU devices, by adding the render and video groups to the service drop-in and restarting it, and by offering that restart from the model health warning
 - Fix Morgan saying the agenda was unavailable or empty without reading it, by seeding the reduced tool schemas with the tools that match the request so list_agenda is available on the first model request
 - Update CosyVoice startup to cache the voice reference conditioning on disk, skipping its extraction on every start
