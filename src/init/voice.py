@@ -40,6 +40,8 @@ VOICE_SILENCE_THRESHOLD = 400
 PLAYBACK_SILENCE_THRESHOLD = 900
 ECHO_TAIL_SECONDS = 1.0
 ECHO_REFERENCE_SECONDS = 4.0
+ECHO_SEARCH_BEHIND_SECONDS = 2.0
+ECHO_SEARCH_AHEAD_SECONDS = 0.5
 ECHO_FLOOR_BLOCKS = 40
 ECHO_FLOOR_FACTOR = 2.5
 PARTIAL_SILENCE_SECONDS = 0.5
@@ -86,16 +88,25 @@ class LiveVoiceCapture:
             now = time.monotonic()
             if now - self.playback_end > ECHO_TAIL_SECONDS:
                 self.reference = self.reference[:0]
-            self.reference = np.concatenate((self.reference, samples))[
-                -int(self.sample_rate * ECHO_REFERENCE_SECONDS):]
             self.playback_end = max(self.playback_end, now) + len(samples) / self.sample_rate
+            keep = self.playback_end - now + ECHO_REFERENCE_SECONDS
+            self.reference = np.concatenate((self.reference, samples))[
+                -int(self.sample_rate * keep):]
 
     def suppress_echo(self, samples):
         import numpy as np
 
         with self.reference_lock:
-            recent = time.monotonic() - self.playback_end < ECHO_TAIL_SECONDS
-            reference = self.reference.copy() if recent else self.reference[:0]
+            now = time.monotonic()
+            recent = now - self.playback_end < ECHO_TAIL_SECONDS
+            reference = self.reference if recent else self.reference[:0]
+            if len(reference):
+                lead = max(self.playback_end - now, 0.0)
+                heard = len(reference) - int(lead * self.sample_rate)
+                reference = reference[
+                    max(0, heard - int(ECHO_SEARCH_BEHIND_SECONDS * self.sample_rate)):
+                    heard + int(ECHO_SEARCH_AHEAD_SECONDS * self.sample_rate)
+                    + len(samples)].copy()
         if len(reference) < len(samples):
             return samples, recent
         probe = samples.astype(np.float64)
