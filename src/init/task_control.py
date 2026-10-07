@@ -1495,6 +1495,7 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
             if execution["operational"]:
                 self.controller.import_execution(execution)
         self.controller.trace("execution_promoted", reason=reason)
+        self.request_escalation(f"supervised task ({reason})")
         return self.controller
 
     def call_control(self, name, values):
@@ -1588,7 +1589,9 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
         self.steps += 1
         if receipt.get("outcome") not in {None, "success", "negative"}:
             self.failures += 1
-        if self.steps >= ESCALATION_STEPS or self.failures >= ESCALATION_FAILURES:
+        if spec.domain == "web":
+            self.request_escalation(f"web tool {name}")
+        elif self.steps >= ESCALATION_STEPS or self.failures >= ESCALATION_FAILURES:
             self.request_escalation(f"{self.steps} steps and {self.failures} failures so far")
 
     async def before_model_request(self, ctx, request_context):

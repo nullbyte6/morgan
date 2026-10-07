@@ -1,8 +1,8 @@
 ## AI Model Requirements
 
 Morgan uses two local models through Ollama: a light assistant model that stays
-loaded for conversation, web search and PC actions, and a larger coding model
-that the assistant hands real coding jobs to with the `delegate_coding` tool.
+loaded for conversation and simple PC actions, and a larger coding model that
+takes over coding jobs, web searches and multi-step tasks.
 Voice input is transcribed locally with Whisper, so neither model needs audio
 input.
 
@@ -19,9 +19,10 @@ unloaded a few minutes after the last use.
 
 There is no model selector: Morgan switches models by itself. A real coding job
 is handed to the coding model with the `delegate_coding` tool. When a request
-reaches four tool steps or two failed ones, or when the assistant calls the
-`escalate` tool, the rest of the request continues on the coding model with the
-same conversation, and the next request starts on the assistant again.
+uses a web tool, becomes a supervised multi-step task, reaches four tool steps or
+two failed ones, or when the assistant calls the `escalate` tool, the rest of the
+request continues on the coding model with the same conversation, and the next
+request starts on the assistant again.
 
 The `base_model_name` and `coding_model` entries of `dev/core.json` set the
 models, and the `coding_model` setting of the user configuration overrides the

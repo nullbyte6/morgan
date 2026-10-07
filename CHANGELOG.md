@@ -10,6 +10,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix Ollama context length not applying when the server is a systemd service of another user by writing the OLLAMA_CONTEXT_LENGTH drop-in and restarting the service after a pkexec authorization
 - Fix task checkpoints that declared web page URLs as verification resources being rejected until the task paused, by mapping http and https URLs to the domain:web resource
 - Fix tasks spending minutes resubmitting the same rejected control call by pausing as soon as an identical call is rejected twice with no new evidence or criterion progress in between
+- Update model escalation to hand a request to the coding model on its first web tool call or when it becomes a supervised multi-step task, keeping only conversation and simple actions on the assistant model
 - Update release workflow to stop building and publishing Morgan.apk, keeping the Android client code
 - Update response timer and working directory in the indicator row to sit together separated by a dot
 
