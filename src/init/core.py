@@ -964,7 +964,7 @@ class Assistant:
                     notice = controller.state.notice if controller.state is not None else controller.notice
                     if on_phase is not None and controller.state is not None:
                         on_phase(controller.state.status)
-                    delivery.speech_enabled = delivery.speech_enabled and claim_speech()
+                    delivery.speech_enabled = False
                     delivery.emit(notice)
                     conversation_messages = [*stream_messages,
                                              ModelResponse(parts=[TextPart(notice)])]

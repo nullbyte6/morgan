@@ -18,6 +18,9 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add scripts/pymorgan.sh to launch the desktop app detached from the terminal on Linux and macOS, matching scripts/pymorgan.bat
 - Fix task checkpoints that declared web page URLs as verification resources being rejected until the task paused, by mapping http and https URLs to the domain:web resource
 - Fix tasks spending minutes resubmitting the same rejected control call by pausing as soon as an identical call is rejected twice with no new evidence or criterion progress in between
+- Fix journal entries and other single-domain mutations being rejected with contract_required until the task paused, by having the supervisor declare the mutation checkpoint itself on the tool's domain
+- Fix Morgan answering her own echo or the tail of her last reply mixed into the user's request by removing words that repeat her most recent spoken reply from voice transcripts and ignoring transcripts that are only echo
+- Fix the English task-paused notice being spoken aloud and picked up by the microphone by showing control notices as text only
 - Update model escalation to hand a request to the coding model on its first web tool call or when it becomes a supervised multi-step task, keeping only conversation and simple actions on the assistant model
 - Update release workflow to stop building and publishing Morgan.apk, keeping the Android client code
 - Update response timer and working directory in the indicator row to sit together separated by a dot
