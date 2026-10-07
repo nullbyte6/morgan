@@ -6,6 +6,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 - Add microphone mute button to the indicator row that turns red when active and makes live voice capture discard all input without processing it
 - Fix tasks looping on contract_required rejections when each retried call differs, by having the supervisor declare a read-only checkpoint itself when a read-only tool runs before any contract
+- Fix tasks looping on mutation_contract_required rejections when every retried command differs, by pausing the task after three consecutive contract rejections
 - Fix web search results never counting as evidence, which left read-only tasks stuck on task_finish until the loop guard paused them, by treating search_web and read_web_page text as successful observations
 - Fix Morgan hearing her own voice as the user's reply and answering herself in a loop by tracking the estimated end of buffered playback so echo cancellation covers the whole output buffer, which is large on Linux
 - Fix commands and response workspaces failing with no attribute restore_from_mascot, which made the first command of every task fail and pushed simple questions into a retrying supervised task, by calling restore_window

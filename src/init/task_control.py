@@ -41,7 +41,7 @@ from .lang import tr
 from .session_log import ContextBudget
 from .task_effects import TOOL_SPECS, content_revision, resources_for
 from .task_outcomes import ActionResult, Outcome, normalize_result
-from .task_state import Lifecycle, TaskState, control_rejection, encoded, fingerprint, normalize_task_title
+from .task_state import GATED_REJECTIONS, Lifecycle, TaskState, control_rejection, encoded, fingerprint, normalize_task_title
 from .task_trace import (TaskJournal, active_model_request, measurement_error, response_metrics,
                          serialized_metrics, settings_metadata)
 from .task_activity import TaskActivity, tool_activity
@@ -143,6 +143,7 @@ class TaskControl(AbstractCapability):
         self._task_stalls = 0
         self._rejection_key = None
         self._rejection_repeats = 0
+        self._gated_rejections = 0
         self.request_configuration = {}
         self.read_cache = {}
         self.receipts = {}
@@ -661,6 +662,8 @@ and retain its consent checks. cd requests use change_directory and Git requests
         payload = dict(getattr(result, "return_value", result))
         outcome = payload.get("outcome", Outcome.REJECTED if payload.get("accepted") is False else Outcome.SUCCESS)
         payload.setdefault("outcome", outcome)
+        if not control and outcome != Outcome.REJECTED:
+            self._gated_rejections = 0
         if evidence_id:
             payload["evidence_id"] = evidence_id
             item = self.state.evidence.get(evidence_id)
@@ -737,6 +740,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         if name in self.control_tools:
             return self._return(name, arguments, call_id, data, validated=validated)
         result = ActionResult(Outcome.REJECTED, data, code)
+        self._gated_rejections = self._gated_rejections + 1 if code in GATED_REJECTIONS else 0
         self.state.observe(name, arguments, result, call_id, {})
         return self._return(name, arguments, call_id, result.payload(), validated=validated, evidence_id=call_id)
 
@@ -1146,10 +1150,10 @@ and retain its consent checks. cd requests use change_directory and Git requests
             self._task_stalls = 0
 
         self._task_progress = progress
-        if self._task_stalls >= 12 or self._rejection_repeats >= 1:
+        if self._task_stalls >= 12 or self._rejection_repeats >= 1 or self._gated_rejections >= 3:
             self.state.suspend(Lifecycle.LIMIT_REACHED, tr("task_control.stalled_warning"))
             self.trace("task_stalled", consecutive_requests=self._task_stalls,
-                       repeated_rejections=self._rejection_repeats)
+                       repeated_rejections=self._rejection_repeats, gated_rejections=self._gated_rejections)
             self.publish_activity()
             raise TaskStopped(self.state.notice)
         if self._task_stalls == 6:
@@ -1332,6 +1336,7 @@ and retain its consent checks. cd requests use change_directory and Git requests
         self._task_stalls = 0
         self._rejection_key = None
         self._rejection_repeats = 0
+        self._gated_rejections = 0
         self.recovery_attempts = 0
         self.force_compaction = True
         self.state.resume()
