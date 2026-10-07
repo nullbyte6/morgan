@@ -4,6 +4,9 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.7-beta (2026-10-07)
 
+- Fix Ollama running on the CPU after a reboot because its systemd service started without access to the GPU devices, by adding the render and video groups to the service drop-in and restarting it, and by offering that restart from the model health warning
+- Fix Morgan saying the agenda was unavailable or empty without reading it, by seeding the reduced tool schemas with the tools that match the request so list_agenda is available on the first model request
+- Update CosyVoice startup to cache the voice reference conditioning on disk, skipping its extraction on every start
 - Add Ctrl+R hotkey to start and stop voice recording and Ctrl+Shift+M hotkey to mute and unmute the microphone
 - Add microphone mute button to the indicator row that turns red when active and makes live voice capture discard all input without processing it
 - Fix tasks looping on contract_required rejections when each retried call differs, by having the supervisor declare a read-only checkpoint itself when a read-only tool runs before any contract

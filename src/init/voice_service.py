@@ -259,8 +259,24 @@ class VoiceService:
                 if transcript.is_file() else self.reference_text)
         if "<|endofprompt|>" not in text:
             text = VOICE_REFERENCE_INSTRUCTION + text
+        speaker_id = get_assistant_identifier()
+        cache = self._speaker_cache(reference, text, key)
         try:
-            self.voice.add_zero_shot_spk(text, str(reference), get_assistant_identifier())
+            cached = None
+            if cache.is_file():
+                try:
+                    cached = torch.load(cache, map_location="cpu", weights_only=True)
+                except Exception:
+                    cached = None
+            if cached is not None:
+                self.voice.frontend.spk2info[speaker_id] = cached
+            else:
+                self.voice.add_zero_shot_spk(text, str(reference), speaker_id)
+                try:
+                    cache.parent.mkdir(parents=True, exist_ok=True)
+                    torch.save(self.voice.frontend.spk2info[speaker_id], cache)
+                except Exception:
+                    logger.exception("Unable to cache the voice reference")
         finally:
             self.voice.frontend.release_reference_sessions()
             gc.collect()
@@ -268,6 +284,12 @@ class VoiceService:
         self.voice_reference = reference
         self._reference_key = key
         logger.info("Voice reference applied: %s", reference.name)
+
+    def _speaker_cache(self, reference, text, key) -> Path:
+        import hashlib
+        from .config import HOME_PATH
+        digest = hashlib.sha256(repr((key, text, str(self.model_path))).encode("utf-8")).hexdigest()[:24]
+        return HOME_PATH / "voice_cache" / f"{digest}.pt"
 
     def current_batch(self):
         with self._state_lock:
