@@ -21,6 +21,7 @@
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -176,6 +177,18 @@ def contains(scope, resource):
     return False
 
 
+def entry_signature(path):
+    try:
+        status = os.lstat(path)
+    except FileNotFoundError:
+        return "missing"
+    except OSError:
+        return None
+    if stat.S_ISLNK(status.st_mode):
+        return "link:" + os.readlink(path)
+    return f"{status.st_size}:{status.st_mtime_ns}"
+
+
 def content_revision(resource):
     if resource.startswith("domain:git:"):
         path = resource[len("domain:git:"):]
@@ -214,7 +227,7 @@ def content_revision(resource):
             for name in sorted(set(tracked.stdout.decode("utf-8", errors="surrogateescape").split("\0")) - {""}):
                 child = path / name
                 digest.update(name.encode("utf-8", errors="surrogateescape"))
-                revision = content_revision(entry_resource(child))
+                revision = entry_signature(child)
                 if revision is None:
                     return None
                 digest.update(revision.encode())
@@ -228,7 +241,7 @@ def content_revision(resource):
             for name in sorted(files):
                 child = Path(root, name)
                 digest.update(name.encode())
-                revision = content_revision(entry_resource(child))
+                revision = entry_signature(child)
                 if revision is None:
                     return None
                 digest.update(revision.encode())

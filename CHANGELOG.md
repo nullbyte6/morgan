@@ -7,6 +7,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add microphone mute button to the indicator row that turns red when active and makes live voice capture discard all input without processing it
 - Fix web search results never counting as evidence, which left read-only tasks stuck on task_finish until the loop guard paused them, by treating search_web and read_web_page text as successful observations
 - Fix Morgan hearing her own voice as the user's reply and answering herself in a loop by tracking the estimated end of buffered playback so echo cancellation covers the whole output buffer, which is large on Linux
+- Fix simple questions taking minutes when a command ran with a large working directory like the home folder by comparing directory revisions by file size and modification time instead of hashing the content of every file
 - Fix Ollama context length not applying when the server is a systemd service of another user by writing the OLLAMA_CONTEXT_LENGTH drop-in and restarting the service after a pkexec authorization
 - Add scripts/pymorgan.sh to launch the desktop app detached from the terminal on Linux and macOS, matching scripts/pymorgan.bat
 - Fix task checkpoints that declared web page URLs as verification resources being rejected until the task paused, by mapping http and https URLs to the domain:web resource
