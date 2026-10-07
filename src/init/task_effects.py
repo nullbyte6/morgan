@@ -106,7 +106,7 @@ register("get_version get_city_distance get_weather "
          "search_youtube_songs search_spotify_songs search_spotify_playlists search_spotify_albums "
          "list_spotify_playlists get_spotify_playlist_tracks read_clipboard analyze_image analyze_screen "
          "find_directories list_quick_commands read_attachment", ToolSpec(False))
-register("search_web read_web_page", ToolSpec(True, "web", ancillary=True, verification_capable=True))
+register("search_web read_web_page", ToolSpec(True, "web", text_observation=True, ancillary=True, verification_capable=True))
 register("recall list_memories search_words word_instances read_conversation read_memory_message",
          ToolSpec(False, "memory"))
 register("remember forget pin_memory", ToolSpec(True, "memory"))
