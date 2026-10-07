@@ -125,6 +125,14 @@ class LiveVoiceCapture:
         return min(PLAYBACK_SILENCE_THRESHOLD,
                    max(VOICE_SILENCE_THRESHOLD, ECHO_FLOOR_FACTOR * floor))
 
+    def discard(self):
+        self.frames.clear()
+        self.pre_roll.clear()
+        self.started = False
+        self.paused = False
+        self.speech_seconds = self.silent_seconds = self.idle = 0.0
+        self.event = None
+
     def snapshot(self):
         return b"".join(self.frames)
 

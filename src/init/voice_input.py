@@ -40,12 +40,19 @@ class VoiceInputRunner:
         self.partial = None
         self.waiting_response = threading.Event()
         self.stop_event = threading.Event()
+        self.mic_muted = threading.Event()
         self.audio_wav = b""
         self.transcript = ""
         self.error = ""
 
     def interrupted(self):
         return False
+
+    def set_mic_muted(self, muted):
+        if muted:
+            self.mic_muted.set()
+        else:
+            self.mic_muted.clear()
 
     def run(self):
         try:
@@ -88,6 +95,11 @@ class VoiceInputRunner:
                 if overflow:
                     logging.getLogger("assistant.voice").warning(
                         "Microphone overflow; dropped audio was ignored")
+                if self.mic_muted.is_set():
+                    self.capture.discard()
+                    self.partial = None
+                    self.report_audio(b"\x00" * len(data), sample_rate)
+                    continue
                 pcm = bytes(data)
                 if self.waiting_response.is_set():
                     self.capture.idle = 0.0
