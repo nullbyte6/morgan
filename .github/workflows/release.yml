@@ -51,33 +51,8 @@ jobs:
           name: linux
           path: build/installer/MorganSetup.run
 
-  android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
-      - working-directory: clients/android
-        env:
-          MORGAN_KEYSTORE_FILE: release.keystore
-          MORGAN_KEYSTORE_PASSWORD: ${{ secrets.MORGAN_KEYSTORE_PASSWORD }}
-          MORGAN_KEY_ALIAS: ${{ secrets.MORGAN_KEY_ALIAS }}
-          MORGAN_KEY_PASSWORD: ${{ secrets.MORGAN_KEY_PASSWORD }}
-        run: |
-          echo "${{ secrets.MORGAN_KEYSTORE_B64 }}" | base64 -d > release.keystore
-          chmod +x gradlew
-          ./gradlew assembleRelease
-      - run: cp "$(find clients/android/app/build/outputs/apk/release -name '*.apk' | head -1)" Morgan.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android
-          path: Morgan.apk
-
   publish:
-    needs: [windows, linux, android]
+    needs: [windows, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
