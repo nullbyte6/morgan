@@ -222,6 +222,11 @@ class SessionRunner:
                     return
                 if not prompt:
                     raise RuntimeError(tr("voice.not_transcribed"))
+                from src.init.voice import last_reply_text, strip_echo
+                prompt = strip_echo(prompt, last_reply_text(self.history))
+                if not prompt:
+                    self.finished.emit("")
+                    return
                 latency.mark("transcript_ready")
                 message = replace(message, transcript=prompt)
             local_command = (not voice_input and not message.attachments

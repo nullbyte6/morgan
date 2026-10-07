@@ -20,6 +20,7 @@ import io
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -287,6 +288,45 @@ def get_voice_model():
                 VOICE_MODEL_NAME, device="cpu", compute_type="int8",
                 cpu_threads=os.cpu_count() or 4)
         return _VOICE_MODEL
+
+
+def strip_echo(transcript: str, spoken: str, minimum: int = 3) -> str:
+    """Remove the run of words in a transcript that repeats the assistant's last spoken reply."""
+    reference = [word.casefold()[:5] for word in re.findall(r"\w+", spoken)]
+    while len(reference) >= minimum:
+        spans = [match.span() for match in re.finditer(r"\w+", transcript)]
+        keys = [transcript[start:end].casefold()[:5] for start, end in spans]
+        runs = [[0] * (len(reference) + 1) for _ in range(len(keys) + 1)]
+        best, end_index = 0, 0
+        for i, key in enumerate(keys, 1):
+            for j, target in enumerate(reference, 1):
+                if key == target:
+                    runs[i][j] = runs[i - 1][j - 1] + 1
+                    if runs[i][j] > best:
+                        best, end_index = runs[i][j], i
+        if best < minimum:
+            break
+        first = spans[end_index - best][0]
+        last = spans[end_index - 1][1]
+        transcript = transcript[:first] + " " + transcript[last:]
+    return re.sub(r"\s+", " ", transcript).strip(" .,;:!?¡¿…-—")
+
+
+def last_reply_text(messages, max_age: float = 120.0) -> str:
+    """Text of the assistant's most recent reply when it is recent enough to still be audible."""
+    from datetime import datetime, timezone
+
+    for message in reversed(messages):
+        if getattr(message, "kind", "") != "response":
+            continue
+        text = "".join(part.content for part in message.parts if part.part_kind == "text").strip()
+        if not text:
+            continue
+        timestamp = getattr(message, "timestamp", None)
+        if timestamp is not None and (datetime.now(timezone.utc) - timestamp).total_seconds() > max_age:
+            return ""
+        return text
+    return ""
 
 
 def transcribe_voice(pcm_data: bytes, sample_rate: int, *, model=None,
