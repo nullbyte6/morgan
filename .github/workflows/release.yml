@@ -64,6 +64,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="$(jq -r .version dev/core.json)"
-          notes=$'**Full Changelog**\nCheck [CHANGELOG](https://github.com/xddigs/morgan/blob/main/CHANGELOG.md) for release notes'
+          notes=$'**Full Changelog**\nCheck [CHANGELOG](https://github.com/nullbyte6/morgan/blob/main/CHANGELOG.md) for release notes'
           gh release view "$version" >/dev/null 2>&1 || gh release create "$version" --title "$version" --latest --notes "$notes"
           gh release upload "$version" dist/* --clobber
