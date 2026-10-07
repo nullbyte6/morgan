@@ -64,5 +64,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="$(jq -r .version dev/core.json)"
-          gh release view "$version" >/dev/null 2>&1 || gh release create "$version" --title "$version" --prerelease --notes "Daily build"
+          gh release view "$version" >/dev/null 2>&1 || gh release create "$version" --title "$version" --prerelease --notes "**Full Changelog**
+Check [CHANGELOG](https://github.com/xddigs/morgan/blob/main/CHANGELOG.md) for release notes"
           gh release upload "$version" dist/* --clobber
