@@ -289,7 +289,9 @@ class AssistantWindow(DesktopWindow):
 
         self.session_shortcuts = []
         for sequence, action in (("Ctrl+Shift+N", self.new_session),
-                                 ("Ctrl+Shift+W", lambda: self.close_session())):
+                                 ("Ctrl+Shift+W", lambda: self.close_session()),
+                                 ("Ctrl+R", self.toggle_recording_shortcut),
+                                 ("Ctrl+Shift+M", self.toggle_mic_mute_shortcut)):
             shortcut = QShortcut(QKeySequence(sequence), self)
             shortcut.setContext(Qt.ApplicationShortcut)
             shortcut.activated.connect(action)
@@ -1975,6 +1977,16 @@ class AssistantWindow(DesktopWindow):
             self.send_message(session)
         else:
             self.start_recording(session=session)
+
+    def toggle_recording_shortcut(self):
+        session = self.session
+        if self.voice_thread is not None or self.recording:
+            self.on_send_clicked(session)
+        elif not session.busy:
+            self.start_recording(session=session)
+
+    def toggle_mic_mute_shortcut(self):
+        self.set_mic_muted(not self.mic_muted)
 
     def start_recording(self, *, automatic=False, session=None):
         session = session or self.session

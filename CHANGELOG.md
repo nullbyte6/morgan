@@ -4,6 +4,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.7-beta (2026-10-07)
 
+- Add Ctrl+R hotkey to start and stop voice recording and Ctrl+Shift+M hotkey to mute and unmute the microphone
 - Add microphone mute button to the indicator row that turns red when active and makes live voice capture discard all input without processing it
 - Fix tasks looping on contract_required rejections when each retried call differs, by having the supervisor declare a read-only checkpoint itself when a read-only tool runs before any contract
 - Fix tasks looping on mutation_contract_required rejections when every retried command differs, by pausing the task after three consecutive contract rejections
