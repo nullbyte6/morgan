@@ -116,7 +116,8 @@ def model_check() -> Check:
     if entry.get("context_length"):
         details.insert(1, tr("health.model.context", context=entry["context_length"]))
     status = OK if share >= 99 else WARNING
-    return Check("model", status, tr("health.model.loaded", model=model, share=share), details)
+    return Check("model", status, tr("health.model.loaded", model=model, share=share), details,
+                 "start_ollama" if status == WARNING else None)
 
 
 def _torch_build() -> tuple[str, str]:

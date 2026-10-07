@@ -237,9 +237,10 @@ class Assistant:
             return True
 
         def align_ollama_context():
-            from src.init.ollama_service import ollama_ready, restart_ollama, server_context_length
+            from src.init.ollama_service import (missing_gpu_groups, ollama_ready, restart_ollama,
+                                                 server_context_length)
             configured = load_config()["context_length"]
-            if ollama_ready() and server_context_length() != configured:
+            if ollama_ready() and (server_context_length() != configured or missing_gpu_groups()):
                 restart_ollama(configured)
 
         try:

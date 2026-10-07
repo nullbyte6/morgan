@@ -36,6 +36,7 @@ APP_NAMES = {"ollama app.exe"}
 PROCESS_NAMES = SERVER_NAMES | APP_NAMES
 RUNNER_NAMES = {"llama-server.exe", "llama-server"}
 SERVICE_DROPIN = "/etc/systemd/system/ollama.service.d/zz-context-length.conf"
+GPU_GROUPS = ("render", "video")
 SERVICE_TIMEOUT = 120
 STOP_SECONDS = 10
 START_SECONDS = 30
@@ -109,6 +110,38 @@ def server_context_length() -> int | None:
     return _service_context_length()
 
 
+def missing_gpu_groups() -> list[str]:
+    """GPU device groups the systemd service user belongs to neither by membership nor by SupplementaryGroups."""
+    systemctl = shutil.which("systemctl")
+    if systemctl is None or not (Path("/dev/kfd").exists() or Path("/dev/dri").exists()):
+        return []
+    try:
+        shown = subprocess.run([systemctl, "show", "ollama", "--property=User,SupplementaryGroups"],
+                               capture_output=True, text=True, timeout=5).stdout
+        import grp
+        import pwd
+    except (OSError, subprocess.SubprocessError, ImportError):
+        return []
+    values = dict(line.split("=", 1) for line in shown.splitlines() if "=" in line)
+    user = values.get("User", "").strip()
+    if not user or user == "root":
+        return []
+    granted = values.get("SupplementaryGroups", "").split()
+    try:
+        primary = pwd.getpwnam(user).pw_gid
+    except KeyError:
+        return []
+    missing = []
+    for name in GPU_GROUPS:
+        try:
+            group = grp.getgrnam(name)
+        except KeyError:
+            continue
+        if name not in granted and user not in group.gr_mem and group.gr_gid != primary:
+            missing.append(name)
+    return missing
+
+
 def _restart_service(context_length: int) -> bool:
     """Persist OLLAMA_CONTEXT_LENGTH in the systemd service of another user and restart it, asking for authorization."""
     systemctl = shutil.which("systemctl")
@@ -118,8 +151,10 @@ def _restart_service(context_length: int) -> bool:
     try:
         if subprocess.run([systemctl, "is-active", "--quiet", "ollama"], timeout=5).returncode != 0:
             return False
+        groups = missing_gpu_groups()
+        extra = f"SupplementaryGroups={' '.join(groups)}\\n" if groups else ""
         script = (f'mkdir -p "$(dirname {SERVICE_DROPIN})" && '
-                  f"printf '[Service]\\nEnvironment=OLLAMA_CONTEXT_LENGTH={context_length}\\n' > {SERVICE_DROPIN} && "
+                  f"printf '[Service]\\nEnvironment=OLLAMA_CONTEXT_LENGTH={context_length}\\n{extra}' > {SERVICE_DROPIN} && "
                   f"{systemctl} daemon-reload && {systemctl} restart ollama")
         return subprocess.run([pkexec, "sh", "-c", script], timeout=SERVICE_TIMEOUT).returncode == 0
     except (OSError, subprocess.SubprocessError):
