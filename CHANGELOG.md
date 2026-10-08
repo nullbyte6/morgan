@@ -9,6 +9,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add prompt suggestions that write out the rest of what you type as faded placeholder-colored text, guessed on-device by scoring your earlier prompts and word sequences, accepted with Tab or Right and toggled in Settings
 - Fix build scripts and README after removing the PNG icon and the icon export script by using the ICO icon directly and converting it to PNG for the Linux launcher
 - Fix chat view bubbles appearing suddenly by starting their fade and rise once the orb has finished moving, and animating every bubble that is visible instead of only the newest eight
+- Fix chat view bubbles not following the theme by repainting them from one theme connection owned by the view instead of one leaked connection per bubble
 - Fix cut-off taglines on the Nova section pages and the Health page by wrapping them onto several lines
 - Fix Ollama reset button icon by replacing the drawn power icon with the Nerd Font power glyph, enlarged to match the new save button
 - Update app icon to the flat four-point star glyph from the Nerd Font used in the Nova pages, inside a rounded square like iOS and macOS icons, replacing the orb icon

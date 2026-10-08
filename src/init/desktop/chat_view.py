@@ -29,7 +29,7 @@ from PySide6.QtWidgets import QFrame, QGraphicsOpacityEffect, QScrollArea, QWidg
 
 from src.init.lang import tr
 from src.init.nova.messages import parse_log
-from src.init.theme import current_theme, on_theme_changed
+from src.init.theme import current_theme, theme_notifier
 
 @dataclass(frozen=True)
 class ChatMessage:
@@ -85,7 +85,6 @@ class ChatBubble(QWidget):
         self.delay = QTimer(self)
         self.delay.setSingleShot(True)
         self.delay.timeout.connect(self.animation.start)
-        on_theme_changed(lambda theme: self.update())
 
     @Property(float)
     def rise(self):
@@ -224,6 +223,13 @@ class ChatView(QScrollArea):
         self.surface.setAutoFillBackground(False)
         self.bubbles: list[ChatBubble] = []
         self.setProperty("fillSlot", True)
+        theme_notifier().theme_changed.connect(self.apply_theme)
+
+    def apply_theme(self, theme) -> None:
+        """Repaint every bubble with the new theme's colors."""
+        for bubble in self.bubbles:
+            bubble.update()
+        self.viewport().update()
 
     def set_messages(self, messages: list[ChatMessage], day_label: str = "") -> None:
         for bubble in self.bubbles:
