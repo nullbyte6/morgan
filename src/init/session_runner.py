@@ -105,7 +105,6 @@ class SessionRunner:
                 self.assistant.voice.set_muted(self.muted)
             greeting = self.assistant.generate_greeting() if self.greet else ""
             if greeting:
-                self.voiced(0, greeting)
                 voice = self.assistant.voice
                 voice.audio_callback = lambda samples, rate: self.report_audio(
                     0, samples, rate)
