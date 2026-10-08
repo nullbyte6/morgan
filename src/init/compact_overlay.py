@@ -31,7 +31,6 @@ from src.init.chat import ChatInput
 
 WIDTH = 248
 MARGIN = 0
-OUTPUT_HEIGHT = 36
 EDGE_GAP = 16
 DURATION = 260
 
@@ -56,6 +55,12 @@ class CompactOverlay(QWidget):
         self.meter.setMinimumWidth(0)
         self.meter.setFixedHeight(36)
         self.meter.hide()
+        self.output = AudioVisualizer(color_role="text")
+        self.output.setMinimumWidth(0)
+        self.output.setFixedHeight(36)
+        self.output.hide()
+        self._recording = False
+        self._responding = False
         self.send = QPushButton("")
         self.send.setObjectName("send")
         self.send.setFixedSize(32, 32)
@@ -69,6 +74,7 @@ class CompactOverlay(QWidget):
         row.setSpacing(0)
         row.addWidget(self.input, 1, Qt.AlignVCenter)
         row.addWidget(self.meter)
+        row.addWidget(self.output)
         row.addWidget(self.send, 0, Qt.AlignVCenter)
 
         card = QFrame()
@@ -79,11 +85,6 @@ class CompactOverlay(QWidget):
 
         self.card = card
 
-        self.output = AudioVisualizer()
-        self.output.setMinimumWidth(0)
-        self.output.setFixedSize(WIDTH, OUTPUT_HEIGHT)
-        self.output.hide()
-
         self._subtitle_slot = QWidget()
         self._subtitle_slot.setFixedHeight(0)
 
@@ -92,7 +93,6 @@ class CompactOverlay(QWidget):
         outer.setSpacing(0)
         outer.setSizeConstraint(QLayout.SetFixedSize)
         outer.addWidget(self._subtitle_slot)
-        outer.addWidget(self.output, 0, Qt.AlignHCenter)
         outer.addWidget(card)
         card.setFixedWidth(WIDTH)
 
@@ -103,26 +103,33 @@ class CompactOverlay(QWidget):
         self._animation.finished.connect(self._finish_animation)
 
     def subtitle_anchor(self):
-        return QRect(self.output.mapToGlobal(QPoint(0, 0)), self.output.size())
+        return QRect(self.card.mapToGlobal(QPoint(0, 0)), self.card.size())
 
     def set_subtitle_space(self, height: int):
         if self._subtitle_slot.height() != height:
             self._subtitle_slot.setFixedHeight(height)
 
     def set_recording(self, recording: bool):
-        self.input.setVisible(not recording)
-        self.meter.setVisible(recording)
-        if not recording:
+        self._recording = recording
+        self._refresh_mode()
+
+    def set_responding(self, responding: bool):
+        self._responding = responding
+        self._refresh_mode()
+
+    def _refresh_mode(self):
+        listening = self._recording
+        answering = self._responding and not listening
+        self.input.setVisible(not listening and not answering)
+        self.meter.setVisible(listening)
+        self.output.setVisible(answering)
+        if not listening:
             self.meter.clear()
+        if not answering:
+            self.output.clear()
 
     def set_levels(self, levels):
         self.meter.set_levels(levels)
-
-    def set_speaking(self, speaking: bool):
-        if self.output.isVisible() != speaking:
-            self.output.setVisible(speaking)
-        if not speaking:
-            self.output.clear()
 
     def set_output_levels(self, levels):
         self.output.set_levels(levels)

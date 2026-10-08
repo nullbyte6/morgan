@@ -974,10 +974,11 @@ class AssistantWindow(DesktopWindow):
             return
         overlay = self.overlay
         view = self.session.presentation.view
-        overlay.set_speaking(self.session.speaking)
         self.sync_overlay_subtitle()
         overlay.sync_text(ui.input.toPlainText())
-        overlay.set_recording(not ui.input_meter.isHidden())
+        recording = not ui.input_meter.isHidden()
+        overlay.set_recording(recording)
+        overlay.set_responding(not recording and (self.session.busy or self.session.speaking))
         overlay.send.setText(ui.send.text())
         overlay.send.setIcon(ui.send.icon())
         overlay.send.setIconSize(ui.send.iconSize())
@@ -1759,7 +1760,7 @@ class AssistantWindow(DesktopWindow):
                 self.on_speaking(session, session.turn_id, False)
             for session in self._views():
                 session.ui.orb.clear()
-            self.overlay.set_speaking(False)
+            self.overlay.set_responding(False)
         self.refresh_settings_workspaces()
 
     def toggle_orb_speech_pulse(self, enabled: bool):
@@ -2330,9 +2331,6 @@ class AssistantWindow(DesktopWindow):
             session.presentation.speaking(turn_id, session.speaking)
 
         self.set_orbs_speaking(session.speaking, session)
-        if session is self.session:
-            self.overlay.set_speaking(session.speaking)
-
         self.update_send_button()
 
     def on_finished(self, session, reply):

@@ -22,7 +22,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix startup greeting appearing twice in the chat view by showing it only phrase by phrase as it is spoken
 - Fix voice messages showing Voice message in the subtitles and chat instead of what you said by sending the transcript to the interface as soon as it is ready, the same text that is saved to the log and the Diary
 - Update app icon to the flat four-point star glyph from the Nerd Font used in the Nova pages, inside a rounded square like iOS and macOS icons, replacing the orb icon
-- Update compact overlay to drop the orb and show Morgan's voice with the audio visualizer above the composer only while she speaks
+- Update compact overlay to drop the orb and draw the audio visualizer inside its input box: your voice while recording and, in the text color, Morgan's voice from the moment you send until she finishes
 - Update composition layout to blend the orb between its centered position and a small one at the top, giving the freed space to a fill slot
 - Update long replies to be spoken as a summary that fits the spoken limit while the full answer stays in the chat, opening the response workspace only for very long answers, code or lists
 

@@ -25,8 +25,9 @@ from PySide6.QtWidgets import *
 from .theme import current_theme, on_theme_changed
 
 class AudioVisualizer(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, color_role="accent"):
         super().__init__(parent)
+        self.color_role = color_role
         self.setFixedHeight(100)
         self.setMinimumWidth(300)
         on_theme_changed(self.apply_theme)
@@ -83,7 +84,7 @@ class AudioVisualizer(QWidget):
         min_half = bar / 2
 
         painter.setPen(Qt.NoPen)
-        painter.setBrush(current_theme().color("accent"))
+        painter.setBrush(current_theme().color(self.color_role))
 
         for i in range(count):
             t = i / max(1, count - 1)
