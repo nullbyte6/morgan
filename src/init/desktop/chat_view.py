@@ -241,6 +241,7 @@ class ChatView(QScrollArea):
         self.setObjectName("chatView")
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setWidgetResizable(False)
         self.viewport().setAutoFillBackground(False)
         self.surface = QWidget()
