@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "Öffnet das Panel „Wiedergabe“ automatisch, wenn ein Titel startet",
   "ui.orb_enabled": "Kugel von {assistant_name} ein- oder ausschalten",
   "ui.orb_enabled_hint": "Zeigt die schwebende Kugel von {assistant_name}, wenn das Fenster geschlossen ist. Ist sie aus, wird {assistant_name} beim Schließen des Fensters im Infobereich abgelegt",
+  "ui.prompt_prediction": "Beim Tippen vorschlagen",
+  "ui.prompt_prediction_hint": "Zeigt beim Tippen einen abgeblendeten Vorschlag für den Rest deiner Nachricht, auf deinem Gerät aus deinen früheren Nachrichten errechnet. Drücke Tab oder die Pfeiltaste nach rechts, um ihn zu übernehmen. Private Sitzungen werden nie ausgewertet.",
   "ui.language": "Oberflächensprache",
   "ui.voice": "Stimme",
   "voice.selection_restart": "Der Sprachdienst unterstützt keine dynamische Auswahl oder antwortet nicht. Starten Sie den Sprachdienst von {assistant_name} neu, nicht nur das Fenster.",

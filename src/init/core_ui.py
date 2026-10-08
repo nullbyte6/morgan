@@ -197,6 +197,7 @@ class AssistantWindow(DesktopWindow):
         self.setWindowIcon(QIcon(str(icon_path)))
 
         self.overlay = CompactOverlay()
+        self.overlay.input.set_prediction_enabled(self.prompt_prediction_enabled)
         self.overlay.orb.set_speech_pulse_enabled(orb_speech_pulse)
         self.overlay_subtitles = MascotSubtitleBubble(
             self.overlay, above=True, anchor=self.overlay.subtitle_anchor)
@@ -411,6 +412,7 @@ class AssistantWindow(DesktopWindow):
         ui.subtitles = SlidingSubtitleLabel()
         ui.command_output = QPlainTextEdit()
         ui.input = ChatInput(directory=lambda: session.worker.session.context.working_directory)
+        ui.input.set_prediction_enabled(self.prompt_prediction_enabled)
         ui.composer_widget = QWidget()
         ui.input_meter = AudioVisualizer()
         ui.input_meter.setMinimumWidth(0)
@@ -1013,7 +1015,8 @@ class AssistantWindow(DesktopWindow):
                 ephemeral_steps_enabled=self.settings.value("ephemeral_steps", True, type=bool),
                 song_panel_enabled=self.settings.value("song_panel", True, type=bool),
                 orb_enabled=self.orb_enabled,
-                overlay_subtitles_enabled=self.overlay_subtitles_enabled)
+                overlay_subtitles_enabled=self.overlay_subtitles_enabled,
+                prompt_prediction_enabled=self.prompt_prediction_enabled)
             view.mute_changed.connect(self.toggle_mute)
             view.subtitles_changed.connect(self.toggle_subtitles)
             view.overlay_subtitles_changed.connect(self.toggle_overlay_subtitles)
@@ -1021,6 +1024,7 @@ class AssistantWindow(DesktopWindow):
             view.ephemeral_steps_changed.connect(self.toggle_ephemeral_steps)
             view.song_panel_changed.connect(self.toggle_song_panel)
             view.orb_enabled_changed.connect(self.toggle_orb_enabled)
+            view.prompt_prediction_changed.connect(self.toggle_prompt_prediction)
             view.language_changed.connect(self.change_language)
             view.name_changed.connect(self.change_assistant_name)
             view.update_requested.connect(self.check_for_updates)
@@ -1581,6 +1585,8 @@ class AssistantWindow(DesktopWindow):
                     self.settings.value("song_panel", True, type=bool))
             with QSignalBlocker(view.orb_enabled_switch):
                 view.orb_enabled_switch.setChecked(self.orb_enabled)
+            with QSignalBlocker(view.prompt_prediction_switch):
+                view.prompt_prediction_switch.setChecked(self.prompt_prediction_enabled)
             view.refresh_language()
 
     def _refresh_view_language(self, session):
@@ -1732,6 +1738,13 @@ class AssistantWindow(DesktopWindow):
             self.overlay.close_animated()
         self.refresh_settings_workspaces()
 
+    @Slot(bool)
+    def toggle_prompt_prediction(self, enabled: bool):
+        self.settings.setValue("prompt_prediction", enabled)
+        for field in (self.overlay.input, *(session.ui.input for session in self._views())):
+            field.set_prediction_enabled(enabled)
+        self.refresh_settings_workspaces()
+
     def set_orbs_speaking(self, speaking: bool, session=None):
         for orb in self._orbs(session):
             orb.set_speaking(speaking)
@@ -1840,7 +1853,7 @@ class AssistantWindow(DesktopWindow):
         if turn_id != session.turn_id or session.submitting is None:
             return
 
-        session.ui.input.remember()
+        session.ui.input.remember(learn=not session.worker.session.private)
         session.ui.input.clear()
         session.ui.attachment_tray.clear()
         session.submitting = None
@@ -1861,6 +1874,10 @@ class AssistantWindow(DesktopWindow):
             self.voice_thread.stop_event.set()
         self.update_send_button()
         ChoiceDialog.of(self).notify(tr("ui.attach_files"), error)
+
+    @property
+    def prompt_prediction_enabled(self) -> bool:
+        return self.settings.value("prompt_prediction", True, type=bool)
 
     @property
     def orb_enabled(self) -> bool:

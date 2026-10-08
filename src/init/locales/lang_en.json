@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "Open the Now playing panel by itself when a song starts",
   "ui.orb_enabled": "Toggle {assistant_name} orb",
   "ui.orb_enabled_hint": "Show the floating {assistant_name} orb when the window is closed. When off, closing the window sends {assistant_name} to the system tray",
+  "ui.prompt_prediction": "Suggest as you type",
+  "ui.prompt_prediction_hint": "Shows a faded suggestion for the rest of your prompt while you type, guessed on your device from your earlier prompts. Press Tab or the right arrow to accept it. Private sessions are never learned.",
   "ui.language": "Interface language",
   "ui.voice": "Voice",
   "voice.selection_restart": "The voice service does not support dynamic selection or is not responding. Restart {assistant_name}'s voice service, not just the window.",

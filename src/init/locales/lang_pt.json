@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "Abre sozinho o painel Tocando agora quando uma música começa",
   "ui.orb_enabled": "Ativar ou desativar o orbe de {assistant_name}",
   "ui.orb_enabled_hint": "Mostra o orbe flutuante de {assistant_name} quando a janela está fechada. Desativado, fechar a janela envia {assistant_name} para a bandeja do sistema",
+  "ui.prompt_prediction": "Sugerir enquanto digita",
+  "ui.prompt_prediction_hint": "Mostra em tom claro uma sugestão para o resto da sua mensagem enquanto você digita, calculada no seu dispositivo a partir das suas mensagens anteriores. Pressione Tab ou a seta para a direita para aceitá-la. Sessões privadas nunca são aprendidas.",
   "ui.language": "Idioma da interface",
   "ui.voice": "Voz",
   "voice.selection_restart": "O serviço de voz não oferece suporte à seleção dinâmica ou não está respondendo. Reinicie o serviço de voz de {assistant_name}, não apenas a janela.",

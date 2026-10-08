@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "Ouvre automatiquement le panneau En cours de lecture quand un morceau démarre",
   "ui.orb_enabled": "Activer ou désactiver l’orbe {assistant_name}",
   "ui.orb_enabled_hint": "Affiche l’orbe flottant {assistant_name} quand la fenêtre est fermée. Désactivé, la fermeture de la fenêtre place {assistant_name} dans la zone de notification",
+  "ui.prompt_prediction": "Suggérer pendant la saisie",
+  "ui.prompt_prediction_hint": "Affiche en grisé une suggestion pour la suite de votre message pendant que vous écrivez, calculée sur votre appareil à partir de vos messages précédents. Appuyez sur Tab ou sur la flèche droite pour l'accepter. Les sessions privées ne sont jamais mémorisées.",
   "ui.language": "Langue de l’interface",
   "ui.voice": "Voix",
   "voice.selection_restart": "Le service vocal ne prend pas en charge la sélection dynamique ou ne répond pas. Redémarrez le service vocal de {assistant_name}, pas seulement la fenêtre.",

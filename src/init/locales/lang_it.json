@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "Apre da solo il pannello In riproduzione quando inizia un brano",
   "ui.orb_enabled": "Attiva o disattiva la sfera di {assistant_name}",
   "ui.orb_enabled_hint": "Mostra la sfera mobile di {assistant_name} quando la finestra è chiusa. Se è disattivata, chiudendo la finestra {assistant_name} passa nell’area di notifica",
+  "ui.prompt_prediction": "Suggerisci mentre scrivi",
+  "ui.prompt_prediction_hint": "Mostra in grigio chiaro un suggerimento per il resto del messaggio mentre scrivi, calcolato sul tuo dispositivo dai messaggi precedenti. Premi Tab o la freccia destra per accettarlo. Le sessioni private non vengono mai apprese.",
   "ui.language": "Lingua dell’interfaccia",
   "ui.voice": "Voce",
   "voice.selection_restart": "Il servizio vocale non supporta la selezione dinamica oppure non risponde. Riavvia il servizio vocale di {assistant_name}, non solo la finestra.",

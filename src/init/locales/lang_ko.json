@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "곡이 시작되면 지금 재생 중 패널을 자동으로 엽니다",
   "ui.orb_enabled": "{assistant_name} 오브 전환",
   "ui.orb_enabled_hint": "창이 닫혀 있을 때 떠 있는 {assistant_name} 오브를 표시합니다. 끄면 창을 닫을 때 {assistant_name}이(가) 시스템 트레이로 이동합니다",
+  "ui.prompt_prediction": "입력 중 제안",
+  "ui.prompt_prediction_hint": "입력하는 동안 이전 메시지를 바탕으로 기기에서 추측한 나머지 내용을 흐린 글씨로 보여 줍니다. Tab 키나 오른쪽 화살표 키로 수락합니다. 비공개 세션은 학습하지 않습니다.",
   "ui.language": "인터페이스 언어",
   "ui.voice": "음성",
   "voice.selection_restart": "음성 서비스가 동적 선택을 지원하지 않거나 응답하지 않습니다. 창만이 아니라 {assistant_name}의 음성 서비스를 다시 시작하세요.",

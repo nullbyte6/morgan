@@ -173,6 +173,7 @@ class SettingsView(QWidget):
     ephemeral_steps_changed = Signal(bool)
     song_panel_changed = Signal(bool)
     orb_enabled_changed = Signal(bool)
+    prompt_prediction_changed = Signal(bool)
     mute_changed = Signal(bool)
     language_changed = Signal(str)
     name_changed = Signal(str)
@@ -184,7 +185,7 @@ class SettingsView(QWidget):
     def __init__(self, subtitles_enabled: bool,
                  orb_pulse_enabled: bool, parent=None, *, muted=False, ephemeral_steps_enabled=True,
                  song_panel_enabled=True, orb_enabled=True,
-                 overlay_subtitles_enabled=False):
+                 overlay_subtitles_enabled=False, prompt_prediction_enabled=True):
         super().__init__(parent)
         self.setObjectName("settingsPage")
         content = QWidget()
@@ -309,6 +310,17 @@ class SettingsView(QWidget):
         orb_enabled_row.addWidget(self.orb_enabled_switch)
         layout.addLayout(orb_enabled_row)
 
+        self.prompt_prediction_label = QLabel()
+        self.prompt_prediction_label.setObjectName("muted")
+        self.prompt_prediction_switch = ToggleSwitch()
+        self.prompt_prediction_switch.setChecked(prompt_prediction_enabled)
+        self.prompt_prediction_label.setBuddy(self.prompt_prediction_switch)
+        prompt_prediction_row = QHBoxLayout()
+        prompt_prediction_row.addWidget(self.prompt_prediction_label)
+        prompt_prediction_row.addStretch()
+        prompt_prediction_row.addWidget(self.prompt_prediction_switch)
+        layout.addLayout(prompt_prediction_row)
+
         self.language_label = QLabel()
         self.language_label.setObjectName("muted")
         self.language_dropdown = QComboBox()
@@ -391,6 +403,7 @@ class SettingsView(QWidget):
         self.ephemeral_steps_switch.toggled.connect(self.ephemeral_steps_changed.emit)
         self.song_panel_switch.toggled.connect(self.song_panel_changed.emit)
         self.orb_enabled_switch.toggled.connect(self.orb_enabled_changed.emit)
+        self.prompt_prediction_switch.toggled.connect(self.prompt_prediction_changed.emit)
         self.language_dropdown.currentIndexChanged.connect(
             lambda: self.language_changed.emit(self.language_dropdown.currentData()))
 
@@ -762,6 +775,9 @@ class SettingsView(QWidget):
         self.orb_enabled_label.setText(tr("ui.orb_enabled"))
         self.orb_enabled_switch.setAccessibleName(tr("ui.orb_enabled"))
         self.orb_enabled_switch.setToolTip(tr("ui.orb_enabled_hint"))
+        self.prompt_prediction_label.setText(tr("ui.prompt_prediction"))
+        self.prompt_prediction_switch.setAccessibleName(tr("ui.prompt_prediction"))
+        self.prompt_prediction_switch.setToolTip(tr("ui.prompt_prediction_hint"))
         self.language_label.setText(tr("ui.language"))
         self.language_dropdown.setAccessibleName(tr("ui.language"))
         self.language_dropdown.setToolTip(tr("ui.language_hint"))

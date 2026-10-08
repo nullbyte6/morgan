@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "歌曲开始播放时自动打开正在播放面板",
   "ui.orb_enabled": "切换 {assistant_name} 球体",
   "ui.orb_enabled_hint": "关闭窗口时显示悬浮的 {assistant_name} 球体。关闭此选项后，关闭窗口会将 {assistant_name} 收到系统托盘",
+  "ui.prompt_prediction": "输入时提示",
+  "ui.prompt_prediction_hint": "输入时以淡色显示对其余内容的建议，根据您之前的消息在本机推测得出。按 Tab 键或右方向键接受。私密会话不会被学习。",
   "ui.language": "界面语言",
   "ui.voice": "语音",
   "voice.selection_restart": "语音服务不支持动态选择或没有响应。请重启 {assistant_name} 的语音服务，而不仅仅是窗口。",

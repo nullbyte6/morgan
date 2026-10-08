@@ -5,6 +5,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.8-beta (2026-10-08)
 
 - Add assistant name setting to Settings, saved to config.json with the save button or Enter and applied instantly across the window title, tooltips, tray, labels and prompts without a restart
+- Add prompt suggestions that write out the rest of what you type as faded placeholder-colored text, guessed on-device by scoring your earlier prompts and word sequences, accepted with Tab or Right and toggled in Settings
 - Fix cut-off taglines on the Nova section pages and the Health page by wrapping them onto several lines
 - Fix Ollama reset button icon by replacing the drawn power icon with the Nerd Font power glyph, enlarged to match the new save button
 

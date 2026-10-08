@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "Abrir el panel de reproducción por sí solo cuando empieza una canción",
   "ui.orb_enabled": "Activar el orbe de {assistant_name}",
   "ui.orb_enabled_hint": "Mostrar el orbe flotante de {assistant_name} al cerrar la ventana. Si está desactivado, cerrar la ventana envía a {assistant_name} a la bandeja del sistema",
+  "ui.prompt_prediction": "Sugerir mientras escribes",
+  "ui.prompt_prediction_hint": "Muestra en tenue una sugerencia para completar tu mensaje mientras escribes, calculada en tu equipo a partir de tus mensajes anteriores. Pulsa Tab o la flecha derecha para aceptarla. Las sesiones privadas nunca se aprenden.",
   "ui.language": "Idioma de la interfaz",
   "ui.voice": "Voz",
   "voice.selection_restart": "El servicio de voz no admite la selección dinámica o no responde. Reinicia el servicio de voz de {assistant_name}, no solo la ventana.",

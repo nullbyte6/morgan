@@ -32,6 +32,8 @@
   "ui.song_panel_hint": "曲が始まると、再生中パネルを自動的に開きます",
   "ui.orb_enabled": "{assistant_name}のオーブを切り替え",
   "ui.orb_enabled_hint": "ウィンドウを閉じたときに、浮かぶ{assistant_name}のオーブを表示します。オフの場合、ウィンドウを閉じると{assistant_name}はシステムトレイに移ります",
+  "ui.prompt_prediction": "入力中に候補を表示",
+  "ui.prompt_prediction_hint": "入力中に、以前のメッセージからお使いのデバイス上で推測した続きの候補を薄い色で表示します。Tab キーまたは右矢印キーで確定します。プライベートセッションは学習されません。",
   "ui.language": "表示言語",
   "ui.voice": "音声",
   "voice.selection_restart": "音声サービスが動的な選択に対応していないか、応答していません。ウィンドウだけでなく、{assistant_name}の音声サービスを再起動してください。",
