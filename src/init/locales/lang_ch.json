@@ -847,6 +847,8 @@
   "hotkeys.action.command_palette": "打开命令面板",
   "hotkeys.action.record": "开始或停止语音录制",
   "hotkeys.action.mic_mute": "静音或取消静音麦克风",
+  "hotkeys.action.chat_view": "打开或关闭经典聊天视图",
+  "chat.today": "今天",
   "hotkeys.action.new_session": "打开新会话",
   "hotkeys.action.close_session": "关闭当前会话",
   "hotkeys.action.zoom_in": "放大",

@@ -847,6 +847,8 @@
   "hotkeys.action.command_palette": "Открыть палитру команд",
   "hotkeys.action.record": "Начать или остановить запись голоса",
   "hotkeys.action.mic_mute": "Выключить или включить микрофон",
+  "hotkeys.action.chat_view": "Открыть или закрыть классический чат",
+  "chat.today": "Сегодня",
   "hotkeys.action.new_session": "Открыть новый сеанс",
   "hotkeys.action.close_session": "Закрыть текущий сеанс",
   "hotkeys.action.zoom_in": "Увеличить",

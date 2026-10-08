@@ -847,6 +847,8 @@
   "hotkeys.action.command_palette": "명령 팔레트 열기",
   "hotkeys.action.record": "음성 녹음 시작 또는 중지",
   "hotkeys.action.mic_mute": "마이크 음소거 또는 해제",
+  "hotkeys.action.chat_view": "클래식 채팅 보기 열기 또는 닫기",
+  "chat.today": "오늘",
   "hotkeys.action.new_session": "새 세션 열기",
   "hotkeys.action.close_session": "현재 세션 닫기",
   "hotkeys.action.zoom_in": "확대",

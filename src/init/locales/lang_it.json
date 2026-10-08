@@ -847,6 +847,8 @@
   "hotkeys.action.command_palette": "Apri la palette dei comandi",
   "hotkeys.action.record": "Avvia o interrompi la registrazione vocale",
   "hotkeys.action.mic_mute": "Disattiva o attiva il microfono",
+  "hotkeys.action.chat_view": "Apri o chiudi la vista chat classica",
+  "chat.today": "Oggi",
   "hotkeys.action.new_session": "Apri una nuova sessione",
   "hotkeys.action.close_session": "Chiudi la sessione corrente",
   "hotkeys.action.zoom_in": "Ingrandisci",
