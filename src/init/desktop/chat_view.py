@@ -19,6 +19,8 @@
 """Classic vertical chat view: the day's messages as speech bubbles that rise into place."""
 
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtCore import (Property, QEasingCurve, QPropertyAnimation, QRect, QRectF, QSize,
                             Qt, QTimer)
@@ -26,21 +28,8 @@ from PySide6.QtGui import QFontMetrics, QPainter, QPainterPath
 from PySide6.QtWidgets import QFrame, QGraphicsOpacityEffect, QScrollArea, QWidget
 
 from src.init.lang import tr
+from src.init.nova.messages import parse_log
 from src.init.theme import current_theme, on_theme_changed
-
-DEMO_MESSAGES = (
-    ("user", "09:12", "Good morning Morgan. What's on my plate today?"),
-    ("assistant", "09:12", "Good morning! You have a dentist appointment at 11:30 and your weekly review "
-                           "is due this evening. The rest of the day is clear."),
-    ("user", "09:13", "Remind me to leave early, parking there is awful."),
-    ("assistant", "09:13", "Done. I'll remind you at 11:00, which gives you a little extra room."),
-    ("user", "12:48", "Can you find that PDF about the router setup I downloaded yesterday?"),
-    ("assistant", "12:48", "Found it: router-setup-guide.pdf in Downloads. Want me to open it in a "
-                           "panel next to the chat?"),
-    ("user", "12:49", "Yes please"),
-    ("assistant", "12:49", "Opened. The port forwarding section you were after starts on page 4."),
-)
-
 
 @dataclass(frozen=True)
 class ChatMessage:
@@ -236,7 +225,7 @@ class ChatView(QScrollArea):
         for bubble in self.bubbles:
             bubble.deleteLater()
         self.bubbles = []
-        if day_label:
+        if day_label and messages:
             self.bubbles.append(ChatBubble("day", "", day_label, self.surface))
         for message in messages:
             self.bubbles.append(ChatBubble(message.role, message.time, message.text, self.surface))
@@ -290,8 +279,16 @@ class ChatView(QScrollArea):
         self.relayout()
 
 
-def demo_messages() -> list[ChatMessage]:
-    return [ChatMessage(*item) for item in DEMO_MESSAGES]
+def day_messages(directory: Path, private: bool = False) -> list[ChatMessage]:
+    """Today's user and assistant messages from the daily Markdown log; nothing for a private session."""
+    if private:
+        return []
+    try:
+        content = (Path(directory) / f"{datetime.now():%Y-%m-%d}.md").read_text(encoding="utf-8")
+    except OSError:
+        return []
+    return [ChatMessage(message.role, message.timestamp[:5], message.content)
+            for message in parse_log(content) if message.role in ("user", "assistant") and message.content.strip()]
 
 
 def day_label() -> str:

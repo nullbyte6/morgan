@@ -112,7 +112,7 @@ def parse_log(content: str) -> list[LogMessage]:
 
                     current_time = header.group("time")
                     current_author = author_match.group("author").strip()
-                    current_content = [author_match.group("content")]
+                    current_content = [author_match.group("content") + lines[author_index][len(author_line):]]
 
                     fence_char = None
                     fence_length = 0

@@ -112,7 +112,7 @@ from src.init.desktop.clipboard import (
     unregister_clipboard_handler,
 )
 from src.init.desktop.task_progress import TaskProgressPill
-from src.init.desktop.chat_view import ChatView, day_label, demo_messages
+from src.init.desktop.chat_view import ChatView, day_label, day_messages
 from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
 from src.init.desktop.activity_trail import ActivityTrail
@@ -1270,8 +1270,9 @@ class AssistantWindow(DesktopWindow):
         if isinstance(focus, TerminalDisplay):
             focus.copy()
             return
-        ui = self.session.ui
-        if ui is None or not self.session.ready:
+        session = self.session
+        ui = session.ui
+        if ui is None or not session.ready:
             return
         opened = not ui.chat_open
         ui.chat_open = opened
@@ -1280,7 +1281,8 @@ class AssistantWindow(DesktopWindow):
         ui.chat_animation.setStartValue(ui.chat_layout.chat)
         ui.chat_animation.setEndValue(1.0 if opened else 0.0)
         if opened:
-            ui.chat_view.set_messages(demo_messages(), day_label())
+            log = session.worker.session
+            ui.chat_view.set_messages(day_messages(log.directory, log.private), day_label())
             ui.chat_view.show()
             ui.chat_delay.start()
         else:
