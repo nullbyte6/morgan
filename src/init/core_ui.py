@@ -479,7 +479,8 @@ class AssistantWindow(DesktopWindow):
         ui.chat_animation = QVariantAnimation(ui.chat_view)
         ui.chat_animation.setDuration(CHAT_VIEW_MS)
         ui.chat_animation.setEasingCurve(QEasingCurve.InOutCubic)
-        ui.chat_animation.valueChanged.connect(lambda value: setattr(main, "chat", value))
+        ui.chat_animation.valueChanged.connect(
+            lambda value: (setattr(main, "chat", value), ui.chat_view.reveal(value)))
         ui.chat_animation.finished.connect(lambda: self._chat_view_settled(ui))
 
         composer_area = QVBoxLayout()
@@ -1282,6 +1283,7 @@ class AssistantWindow(DesktopWindow):
             ui.chat_view.set_messages(day_messages(log.directory, log.private), day_label())
             if ui.chat_live is not None:
                 ui.chat_view.set_live(ui.chat_live_role, ui.chat_live.text, animate=False)
+            ui.chat_view.begin()
             ui.chat_view.show()
         else:
             ui.chat_view.dismiss()
@@ -1308,9 +1310,7 @@ class AssistantWindow(DesktopWindow):
             ui.chat_view.end_live()
 
     def _chat_view_settled(self, ui) -> None:
-        if ui.chat_open:
-            ui.chat_view.present()
-        elif ui.chat_layout.chat <= 0.0:
+        if not ui.chat_open and ui.chat_layout.chat <= 0.0:
             ui.chat_view.hide()
 
     def toggle_nova_dock(self) -> None:

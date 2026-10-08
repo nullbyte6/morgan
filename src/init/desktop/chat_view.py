@@ -115,8 +115,13 @@ class ChatBubble(QWidget):
     def rise(self, value):
         self._rise = float(value)
         self.move(self.x(), self._home + round((1.0 - self._rise) * self._travel))
+        if self._rise < 1.0 and self.effect is None:
+            self.effect = QGraphicsOpacityEffect(self)
+            self.setGraphicsEffect(self.effect)
         if self.effect is not None:
             self.effect.setOpacity(min(1.0, self._rise * 1.4))
+        if self._rise >= 1.0 and self.animation.state() != QPropertyAnimation.State.Running:
+            self._settled()
 
     def place(self, x: int, y: int, size: QSize, travel: int) -> None:
         self._home = y
@@ -126,9 +131,6 @@ class ChatBubble(QWidget):
     def rise_in(self, delay_ms: int) -> None:
         self.animation.stop()
         self.delay.stop()
-        self.effect = QGraphicsOpacityEffect(self)
-        self.effect.setOpacity(0.0)
-        self.setGraphicsEffect(self.effect)
         self.rise = 0.0
         self.show()
         self.animation.setStartValue(0.0)
@@ -233,8 +235,7 @@ class ChatView(QScrollArea):
     GROUP_GAP = 20
     MAX_BUBBLE = 620
     BUBBLE_RATIO = 0.74
-    STAGGER_MS = 70
-    STAGGERED = 12
+    SPREAD = 0.45
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -250,6 +251,9 @@ class ChatView(QScrollArea):
         self.bubbles: list[ChatBubble] = []
         self.live: ChatBubble | None = None
         self.day_label = ""
+        self.entering: list[ChatBubble] = []
+        self.pending = False
+        self.curve = QEasingCurve(QEasingCurve.Type.OutCubic)
         self.setProperty("fillSlot", True)
         theme_notifier().theme_changed.connect(self.apply_theme)
 
@@ -321,23 +325,44 @@ class ChatView(QScrollArea):
         bar = self.verticalScrollBar()
         bar.setValue(bar.maximum())
 
-    def present(self) -> None:
-        """Scroll to the newest message, then let the visible bubbles rise one after another."""
+    def begin(self) -> None:
+        """Hold every bubble back until the first frame of the orb animation has laid the view out."""
+        self.pending = True
+
+    def prepare(self) -> None:
+        """Scroll to the newest message and pick the bubbles on screen that follow the orb animation."""
         self.relayout()
         self.to_bottom()
         self.relayout()
+        self.collect()
+
+    def collect(self) -> None:
         top = self.verticalScrollBar().value()
-        visible = [bubble for bubble in self.bubbles if bubble.home + bubble.height() > top]
-        animated = visible[-self.STAGGERED:]
+        self.entering = [bubble for bubble in self.bubbles if bubble.home + bubble.height() > top]
         for bubble in self.bubbles:
-            if bubble in animated:
-                bubble.rise_in(animated.index(bubble) * self.STAGGER_MS)
+            if bubble in self.entering:
+                bubble.show()
             else:
                 bubble.settle()
 
+    def reveal(self, progress: float) -> None:
+        """Fade and raise the visible bubbles with the orb animation, the oldest first and the newest last."""
+        if self.pending:
+            self.pending = False
+            self.prepare()
+        count = len(self.entering)
+        span = 1.0 - self.SPREAD
+        for index, bubble in enumerate(self.entering):
+            start = self.SPREAD * index / max(1, count - 1)
+            bubble.rise = self.curve.valueForProgress(min(1.0, max(0.0, (progress - start) / span)))
+
     def dismiss(self) -> None:
-        for bubble in self.bubbles:
-            bubble.settle()
+        """Take over the bubbles on screen, new ones included, so they leave with the orb coming back."""
+        if self.pending:
+            self.pending = False
+            self.prepare()
+        else:
+            self.collect()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
