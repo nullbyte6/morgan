@@ -319,23 +319,36 @@ class SpeechBuffer:
         return [phrase]
 
 
+SPOKEN_CHARACTERS = 1200
+WORKSPACE_CHARACTERS = 3600
+
+
 def prefers_response_workspace(text):
-    """Return whether a final answer is long enough to read in a response workspace."""
-    return (len(text) >= 1200
+    """Return whether a final answer is too long to summarise aloud and is best read in a response workspace."""
+    return (len(text) >= WORKSPACE_CHARACTERS
             or text.count("\n") >= 25
             or len(re.findall(r"^\s*```", text, re.MULTILINE)) >= 4)
+
+
+def needs_spoken_summary(text):
+    """Return whether a final answer is too long to be spoken in full but short enough to stay in the chat."""
+    return len(text) >= SPOKEN_CHARACTERS and not prefers_response_workspace(text)
 
 
 class ResponseDelivery:
     """Deliver visible text and speech to the selected response surface."""
 
-    def __init__(self, emit_chunk, enqueue_speech, *, speech_enabled=True, on_surface=None):
+    def __init__(self, emit_chunk, enqueue_speech, *, speech_enabled=True, on_surface=None,
+                 summarize=None, restart_speech=None):
         self.emit_chunk = emit_chunk
         self.enqueue_speech = enqueue_speech
         self.speech_enabled = speech_enabled
         self.on_surface = on_surface
+        self.summarize = summarize
+        self.restart_speech = restart_speech
         self.buffer = SpeechBuffer(fast_first=True)
         self.delivered_output = None
+        self.speaking = False
 
     def emit(self, chunk):
         if not chunk:
@@ -343,25 +356,52 @@ class ResponseDelivery:
         self.emit_chunk(chunk)
         if self.speech_enabled:
             for phrase in self.buffer.feed(chunk):
+                self.speaking = True
                 self.enqueue_speech(phrase)
 
     def flush_speech(self, cancel_event=None):
         if self.speech_enabled:
             for phrase in self.buffer.finish():
                 if cancel_event is None or not cancel_event.is_set():
+                    self.speaking = True
                     self.enqueue_speech(phrase)
+
+    def show(self, text):
+        speech, self.speech_enabled = self.speech_enabled, False
+        self.emit(text)
+        self.speech_enabled = speech
+
+    def speak_summary(self, summary):
+        if self.speaking and self.restart_speech is not None:
+            self.restart_speech()
+        self.buffer = SpeechBuffer(fast_first=True)
+        for phrase in (*self.buffer.feed(summary), *self.buffer.finish()):
+            self.speaking = True
+            self.enqueue_speech(phrase)
 
     def deliver(self, output, *, streamed="", surface="auto", title="", searched=""):
         if self.delivered_output == output:
             return
+        summary = ""
         if surface == "auto":
-            surface = ("response_view" if searched or prefers_response_workspace(output)
-                       else "chat")
+            if searched or prefers_response_workspace(output):
+                surface = "response_view"
+            elif needs_spoken_summary(output):
+                if self.speech_enabled and self.summarize is not None:
+                    summary = self.summarize(output)
+                surface = "chat" if summary else "response_view"
+            else:
+                surface = "chat"
         if surface == "response_view":
             title = title or searched
         if self.on_surface is not None:
             allow_speech = self.on_surface(surface, title)
             self.speech_enabled = self.speech_enabled and allow_speech
-        self.emit(output[len(streamed):] if output.startswith(streamed) else output)
-        self.flush_speech()
+        remaining = output[len(streamed):] if output.startswith(streamed) else output
+        if summary and self.speech_enabled:
+            self.show(remaining)
+            self.speak_summary(summary)
+        else:
+            self.emit(remaining)
+            self.flush_speech()
         self.delivered_output = output

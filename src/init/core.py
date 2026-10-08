@@ -214,6 +214,39 @@ class Assistant:
         lines = (line.strip().strip("\"'“”«»*").strip() for line in str(text).splitlines())
         return next((line for line in lines if line), "")[:300]
 
+    def summarize_for_speech(self, text: str) -> str:
+        """Condense a long answer into a spoken summary in its own language, or return an empty string if the model is unavailable."""
+        import urllib.request
+        from src.init.brain import OLLAMA_KEEP_ALIVE
+        from src.init.health import record_model_load
+        from src.init.streaming import SPOKEN_CHARACTERS
+
+        prompt = (f"Summarise the following answer so that it can be read aloud to the user in at most "
+                  f"{SPOKEN_CHARACTERS * 3 // 4} characters. Write in the same language as the answer, in plain "
+                  "spoken sentences without Markdown, lists, code, links or emojis, keeping its key points. "
+                  f"Reply with the summary only.\n\nAnswer:\n{text}")
+        payload = json.dumps({
+            "model": self.MODEL_NAME, "prompt": prompt, "stream": False, "think": False,
+            "keep_alive": OLLAMA_KEEP_ALIVE,
+            "options": {"temperature": 0.3, "num_predict": SPOKEN_CHARACTERS // 2},
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            "http://127.0.0.1:11434/api/generate", data=payload,
+            headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                reply = json.loads(response.read())
+            record_model_load(self.MODEL_NAME, reply)
+            summary = re.sub(r"\s+", " ", str(reply["response"])).strip()
+        except (OSError, ValueError, KeyError, TypeError):
+            logging.getLogger("assistant.model").exception("Spoken summary could not be generated")
+            return ""
+        if len(summary) > SPOKEN_CHARACTERS:
+            cut = summary[:SPOKEN_CHARACTERS]
+            end = max(cut.rfind(mark) for mark in ".!?")
+            summary = cut[:end + 1] if end > SPOKEN_CHARACTERS // 2 else cut.rsplit(" ", 1)[0]
+        return summary
+
 
     def _ensure_services(self):
         platform = current_platform()
@@ -760,8 +793,10 @@ class Assistant:
                 latency.mark("first_tts_phrase")
                 self.voice.enqueue(phrase)
 
-            delivery = ResponseDelivery(emit_visible, speak_phrase,
-                                        speech_enabled=speech_enabled, on_surface=on_surface)
+            delivery = ResponseDelivery(
+                emit_visible, speak_phrase, speech_enabled=speech_enabled,
+                on_surface=on_surface, summarize=self.summarize_for_speech,
+                restart_speech=lambda: self.voice.begin_turn(language_context=prompt))
             direct_stream = None
             direct_text = ""
             direct_cut = False
