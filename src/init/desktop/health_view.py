@@ -96,6 +96,7 @@ class HealthView(QWidget):
         for label in (self.title, self.tagline):
             label.setMinimumWidth(0)
             label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.tagline.setWordWrap(True)
         heading = QVBoxLayout()
         heading.setSpacing(3)
         heading.addWidget(self.title)

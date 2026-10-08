@@ -128,6 +128,7 @@ class NovaView(QWidget):
         for label in (self.title, self.tagline):
             label.setMinimumWidth(0)
             label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.tagline.setWordWrap(True)
         self.back = QPushButton()
         self.back.setObjectName("novaBack")
         self.back.setCursor(Qt.CursorShape.PointingHandCursor)
