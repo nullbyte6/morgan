@@ -21,8 +21,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QIcon, QIntValidator, QPainter, QPen, QPixmap
+from PySide6.QtCore import QEvent, Qt, Signal, Property, QPropertyAnimation, QTimer, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QIntValidator, QPainter
 from PySide6.QtWidgets import (
     QAbstractButton, QApplication, QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListView, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
@@ -146,20 +146,13 @@ class ToggleSwitch(QAbstractButton):
         painter.end()
 
 
-def power_icon(color: QColor) -> QIcon:
-    """A simple power button glyph drawn in the given color."""
-    size = 128
-    pixmap = QPixmap(size, size)
-    pixmap.fill(Qt.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing)
-    pen = QPen(color, 10)
-    pen.setCapStyle(Qt.RoundCap)
-    painter.setPen(pen)
-    painter.drawArc(QRectF(22, 24, 84, 84), 120 * 16, -300 * 16)
-    painter.drawLine(QPointF(64, 14), QPointF(64, 62))
-    painter.end()
-    return QIcon(pixmap)
+POWER_GLYPH = ""
+
+
+def nerd_font() -> QFont:
+    """The bundled Nerd Font, which carries the icon glyphs."""
+    family = QApplication.instance().property("codeFontFamily") or "JetBrainsMono Nerd Font Mono"
+    return QFont(family)
 
 
 class ThemeDropdown(QComboBox):
@@ -447,7 +440,8 @@ class SettingsView(QWidget):
         self.context_input.ensurePolished()
         height = max(self.context_input.sizeHint().height(), self.context_input.minimumSizeHint().height())
         self.ollama_button.setFixedSize(height, height)
-        self.ollama_button.setIconSize(QSize(height - 12, height - 12))
+        self.ollama_button.setFont(nerd_font())
+        self.ollama_button.setText(POWER_GLYPH)
         context_row = QHBoxLayout()
         context_row.setSpacing(8)
         context_row.addWidget(self.context_label)
@@ -458,7 +452,6 @@ class SettingsView(QWidget):
         self.context_input.editingFinished.connect(self.change_context_length)
         self.ollama_button.clicked.connect(self.restart_ollama)
         self.ollama_restarted.connect(self.finish_restart_ollama)
-        self.refresh_ollama_icon()
 
         layout.addStretch()
 
@@ -539,10 +532,6 @@ class SettingsView(QWidget):
 
     def apply_theme(self, theme):
         self.refresh_themes()
-        self.refresh_ollama_icon()
-
-    def refresh_ollama_icon(self):
-        self.ollama_button.setIcon(power_icon(current_theme().color("text")))
 
     def change_context_length(self):
         minimum, maximum = CONTEXT_LENGTH_RANGE
