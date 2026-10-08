@@ -106,7 +106,7 @@ class DesktopVoiceMessage:
 
     @property
     def display_text(self):
-        return "Voice message"
+        return self.transcript.strip() or "Voice message"
 
     @property
     def attachments(self):

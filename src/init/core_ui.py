@@ -26,6 +26,7 @@ import re
 import sys
 import threading
 import tempfile
+from dataclasses import replace
 from datetime import datetime, timedelta
 from getpass import getuser
 from types import SimpleNamespace
@@ -2012,7 +2013,8 @@ class AssistantWindow(DesktopWindow):
         self._start_response_timer(session)
         self.update_subtitles(prompt.display_text, session)
         self.chat_live_end(session)
-        self.chat_live(session, "user", prompt.display_text)
+        if not isinstance(prompt, DesktopVoiceMessage) or prompt.transcript:
+            self.chat_live(session, "user", prompt.display_text)
 
         session.busy = True
         self.set_enabled(True)
@@ -2086,9 +2088,9 @@ class AssistantWindow(DesktopWindow):
             return
         self.voice_thread = VoiceInputWorker(self, automatic=True, live=True)
         self.voice_thread.set_mic_muted(self.mic_muted)
+        self.voice_thread.echo_reference = session.worker.echo_reference
         self.voice_session = session
         session.worker.live_capture = self.voice_thread
-        self.voice_thread.echo_reference = session.worker.echo_reference
         self.voice_thread.levels.connect(self.on_voice_levels)
         self.voice_thread.processing.connect(self.on_voice_processing)
         self.voice_thread.speech_started.connect(self.on_voice_started)
@@ -2302,6 +2304,14 @@ class AssistantWindow(DesktopWindow):
         if turn_id == session.turn_id and not session.stopping:
             self.update_subtitles(text, session)
             self.chat_live(session, "assistant", text)
+
+    def on_transcribed(self, session, turn_id, text):
+        if turn_id != session.turn_id:
+            return
+        session.active_prompt = replace(session.active_prompt, transcript=text)
+        self.update_subtitles(text, session)
+        self.chat_live_end(session)
+        self.chat_live(session, "user", text)
 
     def on_audio(self, session, turn_id, levels):
         if self.muted:

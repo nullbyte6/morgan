@@ -57,6 +57,7 @@ class SessionRunner:
     directory = Event()
     speaking = Event()
     subtitle = Event()
+    transcribed = Event()
     phase = Event()
     activity = Event()
     task_title = Event()
@@ -92,8 +93,8 @@ class SessionRunner:
         self.cancel_event = threading.Event()
         self.command_reply = False
         self.live_capture = None
-        self._last_audio_update = 0.0
         self.spoken = SpokenReference()
+        self._last_audio_update = 0.0
         self.event_loop = None
 
     def initialize(self):
@@ -129,7 +130,6 @@ class SessionRunner:
         except Exception as error:
             self.failed.emit(str(error))
 
-    def set_muted(self, muted: bool):
     def voiced(self, turn_id, text):
         self.spoken.add(text)
         self.subtitle.emit(turn_id, text)
@@ -137,6 +137,7 @@ class SessionRunner:
     def echo_reference(self):
         return " ".join(filter(None, (self.spoken.text(), last_reply_text(self.history))))
 
+    def set_muted(self, muted: bool):
         """Apply immediately even while the worker is generating a response."""
         with self._voice_settings_lock:
             self.muted = bool(muted)
@@ -236,6 +237,7 @@ class SessionRunner:
                     return
                 latency.mark("transcript_ready")
                 message = replace(message, transcript=prompt)
+                self.transcribed.emit(turn_id, prompt)
             local_command = (not voice_input and not message.attachments
                              and is_local_command(prompt))
             if not local_command:

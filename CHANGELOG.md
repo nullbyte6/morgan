@@ -15,6 +15,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix cut-off taglines on the Nova section pages and the Health page by wrapping them onto several lines
 - Fix Morgan answering her own voice by checking what the microphone heard against the phrases she is saying right now, aligning words in order so garbled echo is dropped, and holding a speech interruption until its words are not hers
 - Fix Ollama reset button icon by replacing the drawn power icon with the Nerd Font power glyph, enlarged to match the new save button
+- Fix voice messages showing Voice message in the subtitles and chat instead of what you said by sending the transcript to the interface as soon as it is ready, the same text that is saved to the log and the Diary
 - Update app icon to the flat four-point star glyph from the Nerd Font used in the Nova pages, inside a rounded square like iOS and macOS icons, replacing the orb icon
 - Update composition layout to blend the orb between its centered position and a small one at the top, giving the freed space to a fill slot
 

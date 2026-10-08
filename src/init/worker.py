@@ -45,6 +45,7 @@ class AssistantWorker(SessionRunner, QObject):
     directory = Signal(str)
     speaking = Signal(int, bool)
     subtitle = Signal(int, str)
+    transcribed = Signal(int, str)
     phase = Signal(int, str)
     activity = Signal(int, object)
     task_title = Signal(int, str)

@@ -77,6 +77,7 @@ class DesktopSession(QObject):
         worker.audio.connect(self.on_audio)
         worker.speaking.connect(self.on_speaking)
         worker.subtitle.connect(self.on_subtitle)
+        worker.transcribed.connect(self.on_transcribed)
         worker.activity.connect(self.presentation.on_activity)
         worker.phase.connect(self.presentation.on_phase)
         worker.task_title.connect(self.presentation.set_task_title)
@@ -127,6 +128,11 @@ class DesktopSession(QObject):
     def on_subtitle(self, turn_id, text):
         if not self.closing:
             self.window.on_subtitle(self, turn_id, text)
+
+    @Slot(int, str)
+    def on_transcribed(self, turn_id, text):
+        if not self.closing:
+            self.window.on_transcribed(self, turn_id, text)
 
     @Slot(int)
     def on_permission_denied(self, turn_id):
