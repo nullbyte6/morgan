@@ -113,7 +113,7 @@ from src.init.desktop.clipboard import (
     unregister_clipboard_handler,
 )
 from src.init.desktop.task_progress import TaskProgressPill
-from src.init.desktop.chat_view import ChatView, LiveText, day_label, day_messages
+from src.init.desktop.chat_view import ChatView, LiveText, ViewToggle, day_label, day_messages
 from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
 from src.init.desktop.activity_trail import ActivityTrail
@@ -425,6 +425,8 @@ class AssistantWindow(DesktopWindow):
         ui.input_meter.hide()
         ui.attachment_tray = AttachmentTray(load_config()["attachments"])
         ui.attach = QPushButton("")
+        ui.view_toggle = ViewToggle()
+        ui.view_toggle.clicked.connect(self.toggle_chat_view)
         ui.send = QPushButton("")
         ui.response_timer_display = QLabel()
         ui.directory_indicator = WorkingDirectory(self)
@@ -503,6 +505,8 @@ class AssistantWindow(DesktopWindow):
         ui.input.submitted.connect(lambda: self.send_message(session))
         input_layout.addWidget(ui.input, 1, Qt.AlignVCenter)
         input_layout.addWidget(ui.input_meter)
+        input_layout.addWidget(ui.view_toggle, 0, Qt.AlignVCenter)
+        input_layout.addSpacing(6)
         input_layout.addWidget(ui.attach, 0, Qt.AlignVCenter)
         input_layout.addWidget(ui.send, 0, Qt.AlignVCenter)
 
@@ -1271,10 +1275,11 @@ class AssistantWindow(DesktopWindow):
             return
         session = self.session
         ui = session.ui
-        if ui is None or not session.ready:
+        if ui is None:
             return
         opened = not ui.chat_open
         ui.chat_open = opened
+        ui.view_toggle.set_chat(opened)
         ui.chat_animation.stop()
         ui.chat_animation.setStartValue(ui.chat_layout.chat)
         ui.chat_animation.setEndValue(1.0 if opened else 0.0)

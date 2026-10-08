@@ -22,9 +22,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import (Property, QEasingCurve, QPropertyAnimation, QRect, QRectF, QSize,
-                            Qt, QTimer)
-from PySide6.QtGui import QFontMetrics, QPainter, QPainterPath
+from PySide6.QtCore import (Property, QEasingCurve, QPointF, QPropertyAnimation, QRect, QRectF, QSize,
+                            Qt, QTimer, Signal)
+from PySide6.QtGui import QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QFrame, QGraphicsOpacityEffect, QScrollArea, QWidget
 
 from src.init.lang import tr
@@ -383,3 +383,89 @@ def day_messages(directory: Path, private: bool = False) -> list[ChatMessage]:
 
 def day_label() -> str:
     return tr("chat.today")
+
+
+class ViewToggle(QWidget):
+    """Horizontal pill switching between the classic chat view (scroll) and the default orb view (star)."""
+
+    clicked = Signal()
+    WIDTH = 64
+    HEIGHT = 30
+    INSET = 3
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("viewToggle")
+        self.setFixedSize(self.WIDTH, self.HEIGHT)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._chat = 0.0
+        self.animation = QPropertyAnimation(self, b"chat", self)
+        self.animation.setDuration(220)
+        self.animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        theme_notifier().theme_changed.connect(lambda *_: self.update())
+
+    def get_chat(self) -> float:
+        return self._chat
+
+    def set_chat_value(self, value: float) -> None:
+        self._chat = value
+        self.update()
+
+    chat = Property(float, get_chat, set_chat_value)
+
+    def set_chat(self, opened: bool) -> None:
+        self.animation.stop()
+        self.animation.setStartValue(self._chat)
+        self.animation.setEndValue(1.0 if opened else 0.0)
+        self.animation.start()
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.clicked.emit()
+
+    def paintEvent(self, event) -> None:
+        theme = current_theme()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        radius = self.HEIGHT / 2
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color("surface_selected"))
+        painter.drawRoundedRect(QRectF(self.rect()), radius, radius)
+        half = (self.WIDTH - 2 * self.INSET) / 2
+        thumb = QRectF(self.INSET + (1.0 - self._chat) * half, self.INSET, half, self.HEIGHT - 2 * self.INSET)
+        painter.setBrush(theme.color("accent"))
+        painter.drawRoundedRect(thumb, thumb.height() / 2, thumb.height() / 2)
+        for index, draw in enumerate((self.draw_scroll, self.draw_star)):
+            weight = self._chat if index == 0 else 1.0 - self._chat
+            role = "on_accent" if weight > 0.5 else "text_muted"
+            side = 16
+            cell = QRectF(self.INSET + index * half, self.INSET, half, self.HEIGHT - 2 * self.INSET)
+            painter.save()
+            painter.translate(cell.center().x() - side / 2, cell.center().y() - side / 2)
+            painter.scale(side / 24, side / 24)
+            pen = QPen(theme.color(role), 2.2)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            painter.setBrush(theme.color(role) if draw == self.draw_star else Qt.BrushStyle.NoBrush)
+            draw(painter)
+            painter.restore()
+        painter.end()
+
+    @staticmethod
+    def draw_scroll(painter) -> None:
+        painter.drawRoundedRect(QRectF(6, 3, 12, 13), 2, 2)
+        painter.drawRoundedRect(QRectF(3, 15, 16, 6), 3, 3)
+        painter.drawLine(QPointF(9.5, 8), QPointF(14.5, 8))
+        painter.drawLine(QPointF(9.5, 11.5), QPointF(14.5, 11.5))
+
+    @staticmethod
+    def draw_star(painter) -> None:
+        star = QPainterPath()
+        star.moveTo(12, 2.5)
+        star.quadTo(13.2, 10.8, 21.5, 12)
+        star.quadTo(13.2, 13.2, 12, 21.5)
+        star.quadTo(10.8, 13.2, 2.5, 12)
+        star.quadTo(10.8, 10.8, 12, 2.5)
+        painter.drawPath(star)
