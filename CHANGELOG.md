@@ -9,7 +9,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Fix build scripts and README after removing the PNG icon and the icon export script by using the ICO icon directly and converting it to PNG for the Linux launcher
 - Fix cut-off taglines on the Nova section pages and the Health page by wrapping them onto several lines
 - Fix Ollama reset button icon by replacing the drawn power icon with the Nerd Font power glyph, enlarged to match the new save button
-- Update app icon to the four-point star glyph from the Nerd Font used in the Nova pages, inside a rounded square like iOS and macOS icons, replacing the orb icon
+- Update app icon to the flat four-point star glyph from the Nerd Font used in the Nova pages, inside a rounded square like iOS and macOS icons, replacing the orb icon
 
 ## 26.10.7-beta (2026-10-07)
 
