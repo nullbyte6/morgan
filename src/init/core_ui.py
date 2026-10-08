@@ -134,7 +134,6 @@ SONG_SUMMARY_PANEL_HEIGHT = 320
 SETTINGS_PANEL_WIDTH = 440
 WORKSPACE_CHORD_MS = 500
 CHAT_VIEW_MS = 560
-CHAT_BUBBLES_DELAY_MS = 300
 
 # noinspection PyBroadException
 def waveform_icon(size: int = 28) -> QIcon:
@@ -479,10 +478,6 @@ class AssistantWindow(DesktopWindow):
         ui.chat_animation.setEasingCurve(QEasingCurve.InOutCubic)
         ui.chat_animation.valueChanged.connect(lambda value: setattr(main, "chat", value))
         ui.chat_animation.finished.connect(lambda: self._chat_view_settled(ui))
-        ui.chat_delay = QTimer(ui.chat_view)
-        ui.chat_delay.setSingleShot(True)
-        ui.chat_delay.setInterval(CHAT_BUBBLES_DELAY_MS)
-        ui.chat_delay.timeout.connect(ui.chat_view.present)
 
         composer_area = QVBoxLayout()
         composer_area.setSpacing(8)
@@ -1277,20 +1272,20 @@ class AssistantWindow(DesktopWindow):
         opened = not ui.chat_open
         ui.chat_open = opened
         ui.chat_animation.stop()
-        ui.chat_delay.stop()
         ui.chat_animation.setStartValue(ui.chat_layout.chat)
         ui.chat_animation.setEndValue(1.0 if opened else 0.0)
         if opened:
             log = session.worker.session
             ui.chat_view.set_messages(day_messages(log.directory, log.private), day_label())
             ui.chat_view.show()
-            ui.chat_delay.start()
         else:
             ui.chat_view.dismiss()
         ui.chat_animation.start()
 
     def _chat_view_settled(self, ui) -> None:
-        if not ui.chat_open and ui.chat_layout.chat <= 0.0:
+        if ui.chat_open:
+            ui.chat_view.present()
+        elif ui.chat_layout.chat <= 0.0:
             ui.chat_view.hide()
 
     def toggle_nova_dock(self) -> None:

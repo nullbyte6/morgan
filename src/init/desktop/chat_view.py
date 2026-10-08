@@ -128,6 +128,10 @@ class ChatBubble(QWidget):
             self.setGraphicsEffect(None)
 
     @property
+    def home(self) -> int:
+        return self._home
+
+    @property
     def is_day(self) -> bool:
         return self.role == "day"
 
@@ -205,8 +209,8 @@ class ChatView(QScrollArea):
     GROUP_GAP = 20
     MAX_BUBBLE = 620
     BUBBLE_RATIO = 0.74
-    STAGGER_MS = 85
-    STAGGERED = 8
+    STAGGER_MS = 70
+    STAGGERED = 12
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -259,16 +263,18 @@ class ChatView(QScrollArea):
         bar.setValue(bar.maximum())
 
     def present(self) -> None:
-        """Scroll to the newest message, then let the bubbles rise one after another."""
+        """Scroll to the newest message, then let the visible bubbles rise one after another."""
         self.relayout()
         self.to_bottom()
         self.relayout()
-        count = len(self.bubbles)
-        for index, bubble in enumerate(self.bubbles):
-            if index < count - self.STAGGERED:
-                bubble.settle()
+        top = self.verticalScrollBar().value()
+        visible = [bubble for bubble in self.bubbles if bubble.home + bubble.height() > top]
+        animated = visible[-self.STAGGERED:]
+        for bubble in self.bubbles:
+            if bubble in animated:
+                bubble.rise_in(animated.index(bubble) * self.STAGGER_MS)
             else:
-                bubble.rise_in((index - (count - self.STAGGERED)) * self.STAGGER_MS)
+                bubble.settle()
 
     def dismiss(self) -> None:
         for bubble in self.bubbles:
