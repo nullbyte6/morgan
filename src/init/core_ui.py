@@ -112,6 +112,7 @@ from src.init.desktop.clipboard import (
     unregister_clipboard_handler,
 )
 from src.init.desktop.task_progress import TaskProgressPill
+from src.init.desktop.chat_view import ChatView, day_label, demo_messages
 from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
 from src.init.desktop.activity_trail import ActivityTrail
@@ -125,13 +126,15 @@ from src.init.desktop.window import DesktopWindow
 from src.init.desktop.zoom import ZoomView
 from src.init.desktop.file_drop import FileDropRouter
 from src.init.visuals.bridge import FlowchartBridge
-from src.init.terminal import TerminalBridge
+from src.init.terminal import TerminalBridge, TerminalDisplay
 
 HEALTH_CHECK_DELAY_MS = 45_000
 SONG_PANEL_WIDTH = 440
 SONG_SUMMARY_PANEL_HEIGHT = 320
 SETTINGS_PANEL_WIDTH = 440
 WORKSPACE_CHORD_MS = 500
+CHAT_VIEW_MS = 560
+CHAT_BUBBLES_DELAY_MS = 300
 
 # noinspection PyBroadException
 def waveform_icon(size: int = 28) -> QIcon:
@@ -283,7 +286,8 @@ class AssistantWindow(DesktopWindow):
         for name, action in (("new_session", self.new_session),
                              ("close_session", lambda: self.close_session()),
                              ("record", self.toggle_recording_shortcut),
-                             ("mic_mute", self.toggle_mic_mute_shortcut)):
+                             ("mic_mute", self.toggle_mic_mute_shortcut),
+                             ("chat_view", self.toggle_chat_view)):
             self.session_shortcuts += hotkeys.bind(name, self, action)
 
         self.build_worker(self.session)
@@ -410,6 +414,7 @@ class AssistantWindow(DesktopWindow):
             session.presentation, steps_enabled=self.settings.value("ephemeral_steps", True, type=bool))
         ui.status = QLabel()
         ui.subtitles = SlidingSubtitleLabel()
+        ui.chat_view = ChatView()
         ui.command_output = QPlainTextEdit()
         ui.input = ChatInput(directory=lambda: session.worker.session.context.working_directory)
         ui.input.set_prediction_enabled(self.prompt_prediction_enabled)
@@ -448,6 +453,7 @@ class AssistantWindow(DesktopWindow):
 
         ui.subtitles.setObjectName("subtitles")
         ui.subtitles.setProperty("staticSlot", True)
+        ui.subtitles.setProperty("chatCollapse", True)
         ui.subtitles.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         ui.subtitles.setWordWrap(True)
         ui.subtitles.setTextFormat(Qt.RichText)
@@ -463,6 +469,20 @@ class AssistantWindow(DesktopWindow):
         ui.command_output.setMaximumHeight(220)
         ui.command_output.hide()
         main.addWidget(ui.command_output)
+
+        ui.chat_view.hide()
+        main.addWidget(ui.chat_view)
+        ui.chat_open = False
+        ui.chat_layout = main
+        ui.chat_animation = QVariantAnimation(ui.chat_view)
+        ui.chat_animation.setDuration(CHAT_VIEW_MS)
+        ui.chat_animation.setEasingCurve(QEasingCurve.InOutCubic)
+        ui.chat_animation.valueChanged.connect(lambda value: setattr(main, "chat", value))
+        ui.chat_animation.finished.connect(lambda: self._chat_view_settled(ui))
+        ui.chat_delay = QTimer(ui.chat_view)
+        ui.chat_delay.setSingleShot(True)
+        ui.chat_delay.setInterval(CHAT_BUBBLES_DELAY_MS)
+        ui.chat_delay.timeout.connect(ui.chat_view.present)
 
         composer_area = QVBoxLayout()
         composer_area.setSpacing(8)
@@ -1243,6 +1263,33 @@ class AssistantWindow(DesktopWindow):
     def open_nova_hub(self, hub: Hub) -> None:
         if self.nova_dock is not None:
             self.nova_dock.open_hub(hub)
+
+    def toggle_chat_view(self) -> None:
+        """Swap the orb and subtitles for the classic chat view, or back, in the current session."""
+        focus = QApplication.focusWidget()
+        if isinstance(focus, TerminalDisplay):
+            focus.copy()
+            return
+        ui = self.session.ui
+        if ui is None or not self.session.ready:
+            return
+        opened = not ui.chat_open
+        ui.chat_open = opened
+        ui.chat_animation.stop()
+        ui.chat_delay.stop()
+        ui.chat_animation.setStartValue(ui.chat_layout.chat)
+        ui.chat_animation.setEndValue(1.0 if opened else 0.0)
+        if opened:
+            ui.chat_view.set_messages(demo_messages(), day_label())
+            ui.chat_view.show()
+            ui.chat_delay.start()
+        else:
+            ui.chat_view.dismiss()
+        ui.chat_animation.start()
+
+    def _chat_view_settled(self, ui) -> None:
+        if not ui.chat_open and ui.chat_layout.chat <= 0.0:
+            ui.chat_view.hide()
 
     def toggle_nova_dock(self) -> None:
         if self.nova_dock is not None:

@@ -43,6 +43,7 @@ HOTKEYS = {
     "command_palette": Hotkey("general", ("Ctrl+K",)),
     "record": Hotkey("general", ("Ctrl+R",)),
     "mic_mute": Hotkey("general", ("Ctrl+Shift+M",)),
+    "chat_view": Hotkey("general", ("Ctrl+Shift+C",)),
     "new_session": Hotkey("general", ("Ctrl+Shift+N",)),
     "close_session": Hotkey("general", ("Ctrl+Shift+W",)),
     "zoom_in": Hotkey("general", ("Ctrl++", "Ctrl+=", "Ctrl+Shift+=")),
