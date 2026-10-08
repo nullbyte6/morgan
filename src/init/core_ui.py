@@ -2088,6 +2088,7 @@ class AssistantWindow(DesktopWindow):
         self.voice_thread.set_mic_muted(self.mic_muted)
         self.voice_session = session
         session.worker.live_capture = self.voice_thread
+        self.voice_thread.echo_reference = session.worker.echo_reference
         self.voice_thread.levels.connect(self.on_voice_levels)
         self.voice_thread.processing.connect(self.on_voice_processing)
         self.voice_thread.speech_started.connect(self.on_voice_started)

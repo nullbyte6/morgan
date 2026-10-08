@@ -40,6 +40,7 @@ from src.init.lang import tr
 from src.init.session_log import SessionLog, is_local_command
 from src.init.voice_ipc import desktop_audio
 from src.init.utils import spectrum_levels
+from src.init.voice import SpokenReference, last_reply_text, strip_echo
 
 
 # noinspection PyBroadException
@@ -92,6 +93,7 @@ class SessionRunner:
         self.command_reply = False
         self.live_capture = None
         self._last_audio_update = 0.0
+        self.spoken = SpokenReference()
         self.event_loop = None
 
     def initialize(self):
@@ -102,14 +104,13 @@ class SessionRunner:
                 self.assistant.voice.set_muted(self.muted)
             greeting = self.assistant.generate_greeting() if self.greet else ""
             if greeting:
-                self.subtitle.emit(0, greeting)
+                self.voiced(0, greeting)
                 voice = self.assistant.voice
                 voice.audio_callback = lambda samples, rate: self.report_audio(
                     0, samples, rate)
                 voice.speaking_callback = lambda speaking: self.speaking.emit(
                     0, speaking)
-                voice.subtitle_callback = lambda text: self.subtitle.emit(0,
-                                                                          text)
+                voice.subtitle_callback = lambda text: self.voiced(0, text)
                 try:
                     with desktop_audio():
                         voice.begin_turn()
@@ -129,6 +130,13 @@ class SessionRunner:
             self.failed.emit(str(error))
 
     def set_muted(self, muted: bool):
+    def voiced(self, turn_id, text):
+        self.spoken.add(text)
+        self.subtitle.emit(turn_id, text)
+
+    def echo_reference(self):
+        return " ".join(filter(None, (self.spoken.text(), last_reply_text(self.history))))
+
         """Apply immediately even while the worker is generating a response."""
         with self._voice_settings_lock:
             self.muted = bool(muted)
@@ -222,8 +230,7 @@ class SessionRunner:
                     return
                 if not prompt:
                     raise RuntimeError(tr("voice.not_transcribed"))
-                from src.init.voice import last_reply_text, strip_echo
-                prompt = strip_echo(prompt, last_reply_text(self.history))
+                prompt = strip_echo(prompt, self.echo_reference())
                 if not prompt:
                     self.finished.emit("")
                     return
@@ -271,7 +278,7 @@ class SessionRunner:
                 on_audio=lambda samples, rate: self.report_audio(
                     turn_id, samples, rate),
                 on_speaking=speaking_changed,
-                on_subtitle=lambda text: self.subtitle.emit(turn_id, text),
+                on_subtitle=lambda text: self.voiced(turn_id, text),
                 on_phase=lambda phase: self.phase.emit(turn_id, phase),
                 on_activity=lambda activity: self.activity.emit(turn_id, activity),
                 cancel_event=cancel_event,

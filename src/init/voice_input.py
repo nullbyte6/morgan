@@ -38,6 +38,8 @@ class VoiceInputRunner:
         self.live = live
         self.capture = None
         self.partial = None
+        self.barge_check = None
+        self.echo_reference = None
         self.waiting_response = threading.Event()
         self.stop_event = threading.Event()
         self.mic_muted = threading.Event()
@@ -98,6 +100,7 @@ class VoiceInputRunner:
                 if self.mic_muted.is_set():
                     self.capture.discard()
                     self.partial = None
+                    self.barge_check = None
                     self.report_audio(b"\x00" * len(data), sample_rate)
                     continue
                 pcm = bytes(data)
@@ -108,12 +111,15 @@ class VoiceInputRunner:
                 if self.capture.event == "timeout":
                     return
                 if self.capture.event == "started":
-                    self.speech_started.emit()
+                    self.begin_barge(sample_rate)
                 elif self.capture.event == "pause":
                     self.partial = PartialTranscript(
                         self.capture.snapshot(), sample_rate)
                 elif self.capture.event == "resumed":
                     self.partial = None
+                if self.barge_check is not None and not self.settle_barge(
+                        final=recording is not None):
+                    continue
                 if recording is not None:
                     partial, self.partial = self.partial, None
                     latency.begin()
@@ -122,6 +128,29 @@ class VoiceInputRunner:
                     self.utterance.emit(DesktopVoiceMessage(
                         recording_to_wav(recording, sample_rate), live=True,
                         partial=partial))
+
+    def begin_barge(self, sample_rate):
+        from src.init.voice import PartialTranscript
+
+        if self.capture.barge and self.echo_reference is not None:
+            self.barge_check = PartialTranscript(self.capture.snapshot(), sample_rate)
+        else:
+            self.speech_started.emit()
+
+    def settle_barge(self, final):
+        from src.init.voice import strip_echo
+
+        check = self.barge_check
+        if not final and not check.done.is_set():
+            return True
+        text = check.wait(self.stop_event)
+        self.barge_check = None
+        if text and strip_echo(text, self.echo_reference(), minimum=2):
+            self.speech_started.emit()
+            return True
+        self.capture.discard()
+        self.partial = None
+        return False
 
     def playback(self, samples, sample_rate):
         capture = self.capture

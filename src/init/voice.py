@@ -27,6 +27,7 @@ import time
 import wave
 from array import array
 from collections import deque
+from difflib import SequenceMatcher
 from math import gcd
 
 from .colors import RESET_COLOR, USER_COLOR
@@ -72,6 +73,7 @@ class LiveVoiceCapture:
         self.echo_levels = deque(maxlen=ECHO_FLOOR_BLOCKS)
         self.frames = []
         self.started = False
+        self.barge = False
         self.speech_seconds = 0.0
         self.silent_seconds = 0.0
         self.idle = 0.0
@@ -177,6 +179,7 @@ class LiveVoiceCapture:
         if not self.started and self.speech_seconds >= (
                 BARGE_IN_SECONDS if playback else 0.15):
             self.started = True
+            self.barge = playback
             self.event = "started"
         if self.started and self.event is None:
             if speech and self.paused:
@@ -290,25 +293,50 @@ def get_voice_model():
         return _VOICE_MODEL
 
 
+class SpokenReference:
+    """Phrases the assistant voiced recently, shared between the speech and capture threads."""
+
+    def __init__(self, max_age: float = 120.0):
+        self.max_age = max_age
+        self.phrases = deque()
+        self.lock = threading.Lock()
+
+    def add(self, text: str) -> None:
+        with self.lock:
+            self.phrases.append((time.monotonic(), text))
+
+    def text(self) -> str:
+        horizon = time.monotonic() - self.max_age
+        with self.lock:
+            while self.phrases and self.phrases[0][0] < horizon:
+                self.phrases.popleft()
+            return " ".join(text for _, text in self.phrases)
+
+
 def strip_echo(transcript: str, spoken: str, minimum: int = 3) -> str:
-    """Remove the run of words in a transcript that repeats the assistant's last spoken reply."""
+    """Remove the stretch of a transcript that repeats what the assistant said, however garbled."""
+    def reach(key, candidates):
+        return next((index for index, word in enumerate(candidates)
+                     if SequenceMatcher(None, key, word).ratio() >= 0.6), None)
+
     reference = [word.casefold()[:5] for word in re.findall(r"\w+", spoken)]
     while len(reference) >= minimum:
         spans = [match.span() for match in re.finditer(r"\w+", transcript)]
         keys = [transcript[start:end].casefold()[:5] for start, end in spans]
-        runs = [[0] * (len(reference) + 1) for _ in range(len(keys) + 1)]
-        best, end_index = 0, 0
-        for i, key in enumerate(keys, 1):
-            for j, target in enumerate(reference, 1):
-                if key == target:
-                    runs[i][j] = runs[i - 1][j - 1] + 1
-                    if runs[i][j] > best:
-                        best, end_index = runs[i][j], i
-        if best < minimum:
+        blocks = [block for block in SequenceMatcher(
+            None, keys, reference, autojunk=False).get_matching_blocks()
+            if block.size >= min(2, minimum)]
+        if sum(block.size for block in blocks) < minimum:
             break
-        first = spans[end_index - best][0]
-        last = spans[end_index - 1][1]
-        transcript = transcript[:first] + " " + transcript[last:]
+        first, last = blocks[0].a, blocks[-1].a + blocks[-1].size
+        before, after = blocks[0].b, blocks[-1].b + blocks[-1].size
+        while first and (hit := reach(keys[first - 1],
+                                      reference[max(before - 2, 0):before][::-1])) is not None:
+            first, before = first - 1, before - hit - 1
+        while last < len(keys) and (hit := reach(
+                keys[last], reference[after:after + 2])) is not None:
+            last, after = last + 1, after + hit + 1
+        transcript = transcript[:spans[first][0]] + " " + transcript[spans[last - 1][1]:]
     return re.sub(r"\s+", " ", transcript).strip(" .,;:!?¡¿…-—")
 
 
