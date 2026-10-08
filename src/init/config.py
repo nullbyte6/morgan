@@ -213,6 +213,11 @@ def ensure_storage():
                 source.rename(target)
 
 
+def is_valid_assistant_name(name) -> bool:
+    return (isinstance(name, str) and bool(name.strip()) and len(name.strip()) <= 80
+            and any(char.isalnum() for char in name) and name.isprintable())
+
+
 def validate_config(config):
     if not isinstance(config, dict):
         raise ValueError(tr('config.config_json_must_contain_a_json_object'))
@@ -221,9 +226,7 @@ def validate_config(config):
     assistant = config.get("assistant", {})
     assistant = assistant if isinstance(assistant, dict) else {}
     name = assistant.get("name")
-    if (not isinstance(name, str) or not name.strip() or len(name.strip()) > 80
-            or not any(char.isalnum() for char in name)
-            or not name.isprintable()):
+    if not is_valid_assistant_name(name):
         name = DEFAULTS["assistant"]["name"]
     gender = assistant.get("gender")
     gender = gender.strip().casefold() if isinstance(gender, str) else ""
