@@ -194,14 +194,12 @@ class AssistantWindow(DesktopWindow):
         self.muted = self.settings.value("muted", False, type=bool)
         self.mic_muted = False
         subtitles_enabled = self.settings.value("subtitles", True, type=bool)
-        orb_speech_pulse = self.settings.value("orb_speech_pulse", True, type=bool)
         self.setWindowTitle(f"{get_assistant_name()} {load_dev_file()["version"]}")
         icon_path = (Path(__file__).resolve().parent.parent.parent / "assets" / "morgan.ico")
         self.setWindowIcon(QIcon(str(icon_path)))
 
         self.overlay = CompactOverlay()
         self.overlay.input.set_prediction_enabled(self.prompt_prediction_enabled)
-        self.overlay.orb.set_speech_pulse_enabled(orb_speech_pulse)
         self.overlay_subtitles = MascotSubtitleBubble(
             self.overlay, above=True, anchor=self.overlay.subtitle_anchor)
         self.overlay.input.textChanged.connect(self.on_overlay_text_changed)
@@ -831,10 +829,7 @@ class AssistantWindow(DesktopWindow):
 
     def _orbs(self, session=None):
         session = session or self.session
-        orbs = [session.ui.orb] if session.ui is not None else []
-        if session is self.session:
-            orbs.append(self.overlay.orb)
-        return orbs
+        return [session.ui.orb] if session.ui is not None else []
 
     def clear_orbs(self, session=None):
         for orb in self._orbs(session):
@@ -979,11 +974,7 @@ class AssistantWindow(DesktopWindow):
             return
         overlay = self.overlay
         view = self.session.presentation.view
-        overlay.orb.set_thinking(view.active and view.orb_state == Orb.State.PROCESSING)
-        if self.session.ready:
-            overlay.orb.set_visual_state(view.orb_state)
-        overlay.orb.set_speaking(self.session.speaking)
-        overlay.orb.set_listening(self.recording and self.voice_session is self.session)
+        overlay.set_speaking(self.session.speaking)
         self.sync_overlay_subtitle()
         overlay.sync_text(ui.input.toPlainText())
         overlay.set_recording(not ui.input_meter.isHidden())
@@ -1623,8 +1614,8 @@ class AssistantWindow(DesktopWindow):
             actions = tray.contextMenu().actions()
             actions[0].setText(tr("tray.open"))
             actions[1].setText(tr("tray.quit"))
-        for orb in (self.overlay.orb, *(session.ui.orb for session in self._views())):
-            orb.setToolTip(name)
+        for session in self._views():
+            session.ui.orb.setToolTip(name)
         if hasattr(self, "command_palette"):
             self.command_palette.refresh_language()
         for panel in self.workspace.findChildren(WorkspacePanel):
@@ -1768,12 +1759,12 @@ class AssistantWindow(DesktopWindow):
                 self.on_speaking(session, session.turn_id, False)
             for session in self._views():
                 session.ui.orb.clear()
-            self.overlay.orb.clear()
+            self.overlay.set_speaking(False)
         self.refresh_settings_workspaces()
 
     def toggle_orb_speech_pulse(self, enabled: bool):
-        for orb in (self.overlay.orb, *(session.ui.orb for session in self._views())):
-            orb.set_speech_pulse_enabled(enabled)
+        for session in self._views():
+            session.ui.orb.set_speech_pulse_enabled(enabled)
         self.settings.setValue("orb_speech_pulse", enabled)
         self.refresh_settings_workspaces()
 
@@ -2325,6 +2316,8 @@ class AssistantWindow(DesktopWindow):
                 and not session.stopping):
             for orb in self._orbs(session):
                 orb.set_levels(levels)
+            if session is self.session:
+                self.overlay.set_output_levels(levels)
 
     def on_speaking(self, session, turn_id, speaking):
         if turn_id != session.turn_id:
@@ -2337,6 +2330,8 @@ class AssistantWindow(DesktopWindow):
             session.presentation.speaking(turn_id, session.speaking)
 
         self.set_orbs_speaking(session.speaking, session)
+        if session is self.session:
+            self.overlay.set_speaking(session.speaking)
 
         self.update_send_button()
 

@@ -28,14 +28,10 @@ from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLayout, QPushButton, QSizeP
 
 from src.init.audio_visualizer import AudioVisualizer
 from src.init.chat import ChatInput
-from src.init.orb import Orb
 
 WIDTH = 248
 MARGIN = 0
-ORB_SIZE = 128
-ORB_FILL = 0.54
-ORB_LOWER = 6
-ORB_PADDING = round(ORB_SIZE * (1 - ORB_FILL) / 2)
+OUTPUT_HEIGHT = 36
 EDGE_GAP = 16
 DURATION = 260
 
@@ -83,9 +79,10 @@ class CompactOverlay(QWidget):
 
         self.card = card
 
-        self.orb = Orb(self, fill_ratio=ORB_FILL)
-        self.orb.set_size(ORB_SIZE)
-        self.orb.setFixedSize(ORB_SIZE, ORB_SIZE)
+        self.output = AudioVisualizer()
+        self.output.setMinimumWidth(0)
+        self.output.setFixedSize(WIDTH, OUTPUT_HEIGHT)
+        self.output.hide()
 
         self._subtitle_slot = QWidget()
         self._subtitle_slot.setFixedHeight(0)
@@ -95,8 +92,7 @@ class CompactOverlay(QWidget):
         outer.setSpacing(0)
         outer.setSizeConstraint(QLayout.SetFixedSize)
         outer.addWidget(self._subtitle_slot)
-        outer.addWidget(self.orb, 0, Qt.AlignHCenter)
-        outer.addSpacing(-ORB_LOWER)
+        outer.addWidget(self.output, 0, Qt.AlignHCenter)
         outer.addWidget(card)
         card.setFixedWidth(WIDTH)
 
@@ -107,11 +103,9 @@ class CompactOverlay(QWidget):
         self._animation.finished.connect(self._finish_animation)
 
     def subtitle_anchor(self):
-        return QRect(self.orb.mapToGlobal(QPoint(0, ORB_PADDING)),
-                     self.orb.size())
+        return QRect(self.output.mapToGlobal(QPoint(0, 0)), self.output.size())
 
     def set_subtitle_space(self, height: int):
-        height = max(0, height - ORB_PADDING) if height else 0
         if self._subtitle_slot.height() != height:
             self._subtitle_slot.setFixedHeight(height)
 
@@ -123,6 +117,15 @@ class CompactOverlay(QWidget):
 
     def set_levels(self, levels):
         self.meter.set_levels(levels)
+
+    def set_speaking(self, speaking: bool):
+        if self.output.isVisible() != speaking:
+            self.output.setVisible(speaking)
+        if not speaking:
+            self.output.clear()
+
+    def set_output_levels(self, levels):
+        self.output.set_levels(levels)
 
     def sync_text(self, text: str):
         if self.input.toPlainText() != text:
