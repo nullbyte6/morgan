@@ -25,6 +25,7 @@ from PySide6.QtWidgets import *
 
 from .file_tags import (FILE_TAG_LIMIT, FILE_TAG_QUERY, expand_file_tags,
                         find_file_tags)
+from .prompt_prediction import PREDICTOR
 from .theme import current_theme, on_theme_changed
 
 
@@ -76,13 +77,76 @@ class ChatInput(QTextEdit):
         self.history = []
         self.history_index = None
         self.history_draft = ""
+        self.prediction_enabled = False
+        self.prediction = ""
+        self.composing = False
 
         self.textChanged.connect(self.adjust_height)
         self.document().documentLayout().documentSizeChanged.connect(
             self.adjust_height)
         self.textChanged.connect(self.update_file_tags)
         self.cursorPositionChanged.connect(self.update_file_tags)
+        self.textChanged.connect(self.update_prediction)
+        self.cursorPositionChanged.connect(self.update_prediction)
         self.adjust_height()
+
+    def set_prediction_enabled(self, enabled):
+        self.prediction_enabled = enabled
+        self.update_prediction()
+
+    def update_prediction(self, *_):
+        guess = ""
+        cursor = self.textCursor()
+        if (self.prediction_enabled and not self.composing and self.history_index is None
+                and not cursor.hasSelection() and cursor.atEnd()
+                and not self.file_tag_popup.isVisible()):
+            guess = self.fit_prediction(PREDICTOR.predict(self.toPlainText()))
+        if guess != self.prediction:
+            self.prediction = guess
+            self.viewport().update()
+
+    def fit_prediction(self, completion):
+        if not completion.strip():
+            return ""
+        metrics = self.fontMetrics()
+        available = self.viewport().width() - self.cursorRect().right() - 2
+        if metrics.horizontalAdvance(completion) <= available:
+            return completion
+        fitted = ""
+        for part in re.findall(r"\s*\S+\s*", completion):
+            if metrics.horizontalAdvance(fitted + part.rstrip()) > available:
+                break
+            fitted += part
+        return fitted
+
+    def accept_prediction(self):
+        completion = self.prediction
+        self.prediction = ""
+        cursor = self.textCursor()
+        cursor.insertText(completion)
+        self.setTextCursor(cursor)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self.prediction:
+            return
+        metrics = self.fontMetrics()
+        rect = self.cursorRect()
+        baseline = rect.top() + (rect.height() - metrics.height()) // 2 + metrics.ascent()
+        painter = QPainter(self.viewport())
+        painter.setPen(self.palette().color(QPalette.PlaceholderText))
+        painter.setFont(self.font())
+        painter.drawText(rect.right() + 1, baseline, self.prediction)
+        painter.end()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_prediction()
+
+    def inputMethodEvent(self, event):
+        self.composing = bool(event.preeditString())
+        super().inputMethodEvent(event)
+        self.update_prediction()
 
     def adjust_height(self, *_):
         line_height = self.fontMetrics().lineSpacing()
@@ -173,11 +237,13 @@ class ChatInput(QTextEdit):
         self.setTextCursor(cursor)
         self.setFocus()
 
-    def remember(self):
+    def remember(self, learn=True):
         text = self.toPlainText().strip()
         self.history_index = None
         if text and (not self.history or self.history[-1] != text):
             self.history.append(text)
+        if text and learn and self.prediction_enabled:
+            PREDICTOR.learn(text)
 
     def browse_history(self, step):
         if not self.history:
@@ -210,6 +276,13 @@ class ChatInput(QTextEdit):
                 and not event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier)):
             event.accept()
             self.browse_history(-1 if event.key() == Qt.Key_Up else 1)
+            return
+
+        if (self.prediction and event.key() in (Qt.Key_Tab, Qt.Key_Right)
+                and not event.modifiers() & (Qt.ControlModifier | Qt.AltModifier
+                                             | Qt.ShiftModifier | Qt.MetaModifier)):
+            event.accept()
+            self.accept_prediction()
             return
 
         popup = self.file_tag_popup
