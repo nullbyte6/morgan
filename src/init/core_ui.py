@@ -1022,6 +1022,7 @@ class AssistantWindow(DesktopWindow):
             view.song_panel_changed.connect(self.toggle_song_panel)
             view.orb_enabled_changed.connect(self.toggle_orb_enabled)
             view.language_changed.connect(self.change_language)
+            view.name_changed.connect(self.change_assistant_name)
             view.update_requested.connect(self.check_for_updates)
             return view
         raise ValueError(f"Unknown workspace view: {view_key}")
@@ -1523,6 +1524,10 @@ class AssistantWindow(DesktopWindow):
             self.refresh_settings_workspaces()
             ChoiceDialog.of(self).notify(tr("ui.settings"), tr("ui.error", error=error))
             return
+        self.refresh_language()
+
+    @Slot(str)
+    def change_assistant_name(self, name):
         self.refresh_language()
 
     def refresh_language(self):

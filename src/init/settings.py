@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QListView, QPushButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from .choice_dialog import ChoiceDialog
-from .config import CONTEXT_LENGTH_RANGE, load_config, save_config
+from .config import CONTEXT_LENGTH_RANGE, is_valid_assistant_name, load_config, save_config
 from .identity import get_assistant_name
 from .indicators import PopupCorners
 from .lang import get_language, tr
@@ -147,6 +147,7 @@ class ToggleSwitch(QAbstractButton):
 
 
 POWER_GLYPH = ""
+SAVE_GLYPH = ""
 
 
 def nerd_font() -> QFont:
@@ -174,6 +175,7 @@ class SettingsView(QWidget):
     orb_enabled_changed = Signal(bool)
     mute_changed = Signal(bool)
     language_changed = Signal(str)
+    name_changed = Signal(str)
     model_changed = Signal(str)
     update_requested = Signal()
     ollama_restarted = Signal(str, int)
@@ -200,6 +202,33 @@ class SettingsView(QWidget):
         layout = QVBoxLayout(content)
         layout.setContentsMargins(32, 12, 32, 20)
         layout.setSpacing(24)
+
+        self.name_label = QLabel()
+        self.name_label.setObjectName("muted")
+        self.name_input = QLineEdit()
+        self.name_input.setObjectName("nameInput")
+        self.name_input.setMaxLength(80)
+        self.name_input.setAlignment(Qt.AlignRight)
+        self.name_input.setFixedWidth(180)
+        self.name_input.setText(get_assistant_name())
+        self.name_label.setBuddy(self.name_input)
+        self.name_button = QPushButton()
+        self.name_button.setObjectName("nameSaveButton")
+        self.name_button.setCursor(Qt.PointingHandCursor)
+        self.name_button.setFont(nerd_font())
+        self.name_button.setText(SAVE_GLYPH)
+        self.name_input.ensurePolished()
+        name_height = max(self.name_input.sizeHint().height(), self.name_input.minimumSizeHint().height())
+        self.name_button.setFixedSize(name_height, name_height)
+        name_row = QHBoxLayout()
+        name_row.setSpacing(8)
+        name_row.addWidget(self.name_label)
+        name_row.addStretch()
+        name_row.addWidget(self.name_button)
+        name_row.addWidget(self.name_input)
+        layout.addLayout(name_row)
+        self.name_input.returnPressed.connect(self.change_assistant_name)
+        self.name_button.clicked.connect(self.change_assistant_name)
 
         self.mute_label = QLabel()
         self.mute_label.setObjectName("muted")
@@ -552,6 +581,26 @@ class SettingsView(QWidget):
                 tr("ui.context_length_hint", minimum=minimum, maximum=maximum, name=get_assistant_name()))
         self.context_input.setText(str(value))
 
+    def change_assistant_name(self):
+        config = load_config()
+        current = config["assistant"]["name"]
+        name = self.name_input.text().strip()
+        if name == current:
+            self.name_input.setText(current)
+            return
+        if not is_valid_assistant_name(name):
+            self.name_input.setText(current)
+            self.dialog.notify(tr("ui.assistant_name"), tr("ui.assistant_name_invalid"))
+            return
+        try:
+            save_config({**config, "assistant": {**config["assistant"], "name": name}})
+        except (OSError, ValueError) as error:
+            self.name_input.setText(current)
+            self.dialog.notify(tr("ui.assistant_name"), tr("ui.error", error=error))
+            return
+        self.name_input.setText(name)
+        self.name_changed.emit(name)
+
     def change_terminal_shell(self, index):
         shell = self.shell_dropdown.itemData(index)
         config = load_config()
@@ -682,6 +731,13 @@ class SettingsView(QWidget):
         self.model_changed.emit(name)
 
     def refresh_language(self):
+        self.name_label.setText(tr("ui.assistant_name"))
+        self.name_input.setAccessibleName(tr("ui.assistant_name"))
+        self.name_input.setToolTip(tr("ui.assistant_name_hint"))
+        self.name_button.setAccessibleName(tr("ui.assistant_name_save"))
+        self.name_button.setToolTip(tr("ui.assistant_name_save"))
+        if not self.name_input.hasFocus():
+            self.name_input.setText(get_assistant_name())
         self.mute_label.setText(tr("ui.mute"))
         self.mute_switch.setAccessibleName(tr("ui.mute"))
         self.mute_switch.setToolTip(tr("ui.mute_hint"))

@@ -4,7 +4,8 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.8-beta (2026-10-08)
 
-- Fix Ollama reset button icon by replacing the drawn power icon with the Nerd Font power glyph
+- Add assistant name setting to Settings, saved to config.json with the save button or Enter and applied instantly across the window title, tooltips, tray, labels and prompts without a restart
+- Fix Ollama reset button icon by replacing the drawn power icon with the Nerd Font power glyph, enlarged to match the new save button
 
 ## 26.10.7-beta (2026-10-07)
 

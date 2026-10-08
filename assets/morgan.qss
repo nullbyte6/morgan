@@ -364,7 +364,8 @@ QComboBox#themeDropdown:focus {
     border-color: @accent;
 }
 
-QLineEdit#contextLengthInput {
+QLineEdit#contextLengthInput,
+QLineEdit#nameInput {
     background-color: @surface;
     color: @text;
     border: 2px solid @border;
@@ -374,29 +375,36 @@ QLineEdit#contextLengthInput {
 }
 
 QLineEdit#contextLengthInput:hover,
-QLineEdit#contextLengthInput:focus {
+QLineEdit#contextLengthInput:focus,
+QLineEdit#nameInput:hover,
+QLineEdit#nameInput:focus {
     border-color: @accent;
 }
 
-QPushButton#ollamaButton {
+QPushButton#ollamaButton,
+QPushButton#nameSaveButton {
     background-color: @surface;
     color: @text;
     border: 2px solid @border;
     border-radius: 8px;
     padding: 0;
-    font-size: 20px;
+    font-size: 28px;
 }
 
 QPushButton#ollamaButton:hover,
-QPushButton#ollamaButton:focus {
+QPushButton#ollamaButton:focus,
+QPushButton#nameSaveButton:hover,
+QPushButton#nameSaveButton:focus {
     border-color: @accent;
 }
 
-QPushButton#ollamaButton:pressed {
+QPushButton#ollamaButton:pressed,
+QPushButton#nameSaveButton:pressed {
     background-color: @surface_selected;
 }
 
-QPushButton#ollamaButton:disabled {
+QPushButton#ollamaButton:disabled,
+QPushButton#nameSaveButton:disabled {
     border-color: @border;
     background-color: @surface_sunken;
 }
