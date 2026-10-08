@@ -420,6 +420,9 @@ class ViewToggle(QWidget):
         self.animation.setEndValue(1.0 if opened else 0.0)
         self.animation.start()
 
+    def mousePressEvent(self, event) -> None:
+        event.accept()
+
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
             self.clicked.emit()

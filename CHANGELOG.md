@@ -10,19 +10,20 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 - Add live rendering to the chat view, where your message and Morgan's reply appear as a last bubble that grows phrase by phrase in step with the subtitles and keeps the view scrolled to the bottom
 - Add prompt suggestions that write out the rest of what you type as faded placeholder-colored text, guessed on-device by scoring your earlier prompts and word sequences, accepted with Tab or Right and toggled in Settings
 - Fix build scripts and README after removing the PNG icon and the icon export script by using the ICO icon directly and converting it to PNG for the Linux launcher
-- Fix chat view bubbles appearing suddenly by starting their fade and rise once the orb has finished moving, and animating every bubble that is visible instead of only the newest eight
-- Fix Ctrl+Shift+C waiting until Morgan finished starting up, so the chat view can now be opened and closed at any time, including while she boots and speaks
-- Fix chat view bubbles not following the theme by repainting them from one theme connection owned by the view instead of one leaked connection per bubble
-- Fix chat view showing a scrollbar by hiding it, keeping scrolling with the mouse wheel like the rest of the app
-- Fix cut-off taglines on the Nova section pages and the Health page by wrapping them onto several lines
 - Fix chat view bubbles appearing suddenly after the orb moved by tying their fade and rise to the orb animation, so they come in as it goes up and leave as it comes back down
-- Fix startup greeting appearing twice in the chat view by showing it only phrase by phrase as it is spoken
+- Fix chat view bubbles appearing suddenly by starting their fade and rise once the orb has finished moving, and animating every bubble that is visible instead of only the newest eight
+- Fix chat view bubbles not following the theme by repainting them from one theme connection owned by the view instead of one leaked connection per bubble
+- Fix chat view pill toggle ignoring clicks by accepting the press so the composer no longer takes the mouse event
+- Fix chat view showing a scrollbar by hiding it, keeping scrolling with the mouse wheel like the rest of the app
+- Fix Ctrl+Shift+C waiting until Morgan finished starting up, so the chat view can now be opened and closed at any time, including while she boots and speaks
+- Fix cut-off taglines on the Nova section pages and the Health page by wrapping them onto several lines
 - Fix Morgan answering her own voice by checking what the microphone heard against the phrases she is saying right now, aligning words in order so garbled echo is dropped, and holding a speech interruption until its words are not hers
-- Update long replies to be spoken as a summary that fits the spoken limit while the full answer stays in the chat, opening the response workspace only for very long answers, code or lists
 - Fix Ollama reset button icon by replacing the drawn power icon with the Nerd Font power glyph, enlarged to match the new save button
+- Fix startup greeting appearing twice in the chat view by showing it only phrase by phrase as it is spoken
 - Fix voice messages showing Voice message in the subtitles and chat instead of what you said by sending the transcript to the interface as soon as it is ready, the same text that is saved to the log and the Diary
 - Update app icon to the flat four-point star glyph from the Nerd Font used in the Nova pages, inside a rounded square like iOS and macOS icons, replacing the orb icon
 - Update composition layout to blend the orb between its centered position and a small one at the top, giving the freed space to a fill slot
+- Update long replies to be spoken as a summary that fits the spoken limit while the full answer stays in the chat, opening the response workspace only for very long answers, code or lists
 
 ## 26.10.7-beta (2026-10-07)
 
