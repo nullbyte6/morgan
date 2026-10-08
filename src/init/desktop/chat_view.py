@@ -38,6 +38,27 @@ class ChatMessage:
     text: str
 
 
+class LiveText:
+    """Subtitle phrases of one message joined as they arrive: a growing phrase is replaced in place."""
+
+    def __init__(self):
+        self.committed = ""
+        self.current = ""
+
+    @property
+    def text(self) -> str:
+        return " ".join(part for part in (self.committed, self.current) if part)
+
+    def push(self, phrase: str) -> str:
+        phrase = " ".join(str(phrase or "").split())
+        if not phrase or phrase == self.current:
+            return self.text
+        if not self.current or not phrase.startswith(self.current):
+            self.committed = self.text
+        self.current = phrase
+        return self.text
+
+
 def rounded_path(rect: QRectF, top_left: float, top_right: float,
                  bottom_right: float, bottom_left: float) -> QPainterPath:
     """Rounded rectangle whose four corners can have different radii."""
@@ -125,6 +146,10 @@ class ChatBubble(QWidget):
         if self._rise >= 1.0 and self.effect is not None:
             self.effect = None
             self.setGraphicsEffect(None)
+
+    def set_text(self, text: str) -> None:
+        self.text = text
+        self.update()
 
     @property
     def home(self) -> int:
@@ -222,6 +247,8 @@ class ChatView(QScrollArea):
         self.setWidget(self.surface)
         self.surface.setAutoFillBackground(False)
         self.bubbles: list[ChatBubble] = []
+        self.live: ChatBubble | None = None
+        self.day_label = ""
         self.setProperty("fillSlot", True)
         theme_notifier().theme_changed.connect(self.apply_theme)
 
@@ -235,6 +262,8 @@ class ChatView(QScrollArea):
         for bubble in self.bubbles:
             bubble.deleteLater()
         self.bubbles = []
+        self.live = None
+        self.day_label = day_label
         if day_label and messages:
             self.bubbles.append(ChatBubble("day", "", day_label, self.surface))
         for message in messages:
@@ -263,6 +292,29 @@ class ChatView(QScrollArea):
             y += size.height()
             previous = bubble
         self.surface.resize(width, y + self.MARGIN_Y)
+
+    def set_live(self, role: str, text: str, animate: bool = True) -> None:
+        """Show the message being spoken or written right now as the last bubble, growing as text arrives."""
+        bar = self.verticalScrollBar()
+        stick = bar.value() >= bar.maximum() - 8
+        created = self.live is None or self.live.role != role
+        if created:
+            if not self.bubbles and self.day_label:
+                self.bubbles.append(ChatBubble("day", "", self.day_label, self.surface))
+                self.bubbles[-1].settle()
+            self.live = ChatBubble(role, f"{datetime.now():%H:%M}", text, self.surface)
+            self.bubbles.append(self.live)
+        else:
+            self.live.set_text(text)
+        self.relayout()
+        if stick:
+            self.to_bottom()
+            self.relayout()
+        if created and animate:
+            self.live.rise_in(0)
+
+    def end_live(self) -> None:
+        self.live = None
 
     def to_bottom(self) -> None:
         bar = self.verticalScrollBar()

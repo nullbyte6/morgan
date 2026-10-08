@@ -6,6 +6,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 - Add assistant name setting to Settings, saved to config.json with the save button or Enter and applied instantly across the window title, tooltips, tray, labels and prompts without a restart
 - Add classic chat view, opened and closed with Ctrl+Shift+C, that shows the messages of the day from the conversation log as speech bubbles, assistant on the left and you on the right, and nothing when there are none or the session is private, while the orb slides up and shrinks and the bubbles fade in and rise, without replacing the subtitles of the normal view
+- Add live rendering to the chat view, where your message and Morgan's reply appear as a last bubble that grows phrase by phrase in step with the subtitles and keeps the view scrolled to the bottom
 - Add prompt suggestions that write out the rest of what you type as faded placeholder-colored text, guessed on-device by scoring your earlier prompts and word sequences, accepted with Tab or Right and toggled in Settings
 - Fix build scripts and README after removing the PNG icon and the icon export script by using the ICO icon directly and converting it to PNG for the Linux launcher
 - Fix chat view bubbles appearing suddenly by starting their fade and rise once the orb has finished moving, and animating every bubble that is visible instead of only the newest eight

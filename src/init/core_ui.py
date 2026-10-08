@@ -112,7 +112,7 @@ from src.init.desktop.clipboard import (
     unregister_clipboard_handler,
 )
 from src.init.desktop.task_progress import TaskProgressPill
-from src.init.desktop.chat_view import ChatView, day_label, day_messages
+from src.init.desktop.chat_view import ChatView, LiveText, day_label, day_messages
 from src.init.desktop.composition import CompositionLayout, CompositionSurface
 from src.init.desktop.command_palette import Command, CommandPalette, CommandRegistry
 from src.init.desktop.activity_trail import ActivityTrail
@@ -472,6 +472,8 @@ class AssistantWindow(DesktopWindow):
         ui.chat_view.hide()
         main.addWidget(ui.chat_view)
         ui.chat_open = False
+        ui.chat_live = None
+        ui.chat_live_role = ""
         ui.chat_layout = main
         ui.chat_animation = QVariantAnimation(ui.chat_view)
         ui.chat_animation.setDuration(CHAT_VIEW_MS)
@@ -1277,10 +1279,32 @@ class AssistantWindow(DesktopWindow):
         if opened:
             log = session.worker.session
             ui.chat_view.set_messages(day_messages(log.directory, log.private), day_label())
+            if ui.chat_live is not None:
+                ui.chat_view.set_live(ui.chat_live_role, ui.chat_live.text, animate=False)
             ui.chat_view.show()
         else:
             ui.chat_view.dismiss()
         ui.chat_animation.start()
+
+    def chat_live(self, session, role: str, text: str) -> None:
+        """Feed the live bubble of the chat view with the text being typed, spoken or written now."""
+        ui = session.ui
+        if ui is None or session.worker.session.private:
+            return
+        if ui.chat_live is None or ui.chat_live_role != role:
+            ui.chat_live = LiveText()
+            ui.chat_live_role = role
+        ui.chat_live.push(text)
+        if ui.chat_open:
+            ui.chat_view.set_live(role, ui.chat_live.text)
+
+    @staticmethod
+    def chat_live_end(session) -> None:
+        ui = session.ui
+        if ui is not None:
+            ui.chat_live = None
+            ui.chat_live_role = ""
+            ui.chat_view.end_live()
 
     def _chat_view_settled(self, ui) -> None:
         if ui.chat_open:
@@ -1987,6 +2011,8 @@ class AssistantWindow(DesktopWindow):
         session.current_response_view = None
         self._start_response_timer(session)
         self.update_subtitles(prompt.display_text, session)
+        self.chat_live_end(session)
+        self.chat_live(session, "user", prompt.display_text)
 
         session.busy = True
         self.set_enabled(True)
@@ -2274,6 +2300,7 @@ class AssistantWindow(DesktopWindow):
     def on_subtitle(self, session, turn_id, text):
         if turn_id == session.turn_id and not session.stopping:
             self.update_subtitles(text, session)
+            self.chat_live(session, "assistant", text)
 
     def on_audio(self, session, turn_id, levels):
         if self.muted:
@@ -2299,6 +2326,7 @@ class AssistantWindow(DesktopWindow):
 
     def on_finished(self, session, reply):
         self._stop_response_timer(session)
+        self.chat_live_end(session)
         interrupted = session.stopping
         if session.current_response_view is not None:
             session.current_response_view.finish(reply)
