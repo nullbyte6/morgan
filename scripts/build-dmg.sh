@@ -45,7 +45,7 @@ PY
 
 "$python" -B -m PyInstaller.utils.cliutils.makespec \
     --onedir --windowed --noupx --name Morgan \
-    --icon "$root/assets/morgan.png" \
+    --icon "$root/assets/morgan.ico" \
     --osx-bundle-identifier com.xdg.morgan \
     --paths "$root" \
     --specpath "$build" \

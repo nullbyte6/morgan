@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/morgan.png" alt="Morgan" width="200">
+  <img src="assets/morgan.ico" alt="Morgan" width="200">
 </p>
 
 <h1 align="center">MORGAN</h1>
@@ -137,8 +137,7 @@ output in the folder named by the `MORGAN` environment variable, which the
 installer sets to the installation folder, or `C:\Morgan` when it is not set, so
 a build replaces the installed copy), then compile `MorganSetup.iss` with Inno Setup.
 `scripts\rebuild.bat` builds the desktop and compiles the installer. The installer is written to
-`build\installer\MorganSetup.exe`. `dev\export_orb_icon.py` regenerates
-`assets\morgan.ico` and `assets\morgan.png` from the orb widget.
+`build\installer\MorganSetup.exe`.
 
 ---
 

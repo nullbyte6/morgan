@@ -40,7 +40,7 @@ PY
 
 "$python" -B -m PyInstaller.utils.cliutils.makespec \
     --onedir --windowed --noupx --name Morgan \
-    --icon "$root/assets/morgan.png" \
+    --icon "$root/assets/morgan.ico" \
     --paths "$root" \
     --specpath "$build" \
     --add-data "$root/assets:assets" \
@@ -112,7 +112,7 @@ rm -rf -- "$payload"
 mkdir -p -- "$payload"
 cp -R -- "$dist/Morgan" "$payload/Morgan"
 mkdir -p -- "$payload/Morgan/scripts"
-cp -- "$root/assets/morgan.png" "$payload/morgan.png"
+"$python" -B -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2], "PNG")' "$root/assets/morgan.ico" "$payload/morgan.png"
 cp -- "$root/LICENSE" "$payload/LICENSE"
 cp -R -- "$root/licenses" "$payload/licenses"
 cp -- "$root/scripts/morgan-services.sh" "$payload/Morgan/scripts/morgan-services.sh"
