@@ -145,14 +145,16 @@ applications="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 command_link="$HOME/.local/bin/morgan"
 uninstall=0
 runtime=1
+yes_flag=
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --prefix) prefix="${2:?--prefix needs a folder}"; shift 2 ;;
         --uninstall) uninstall=1; shift ;;
         --no-runtime) runtime=0; shift ;;
+        --yes) yes_flag=--yes; shift ;;
         -h|--help)
-            printf 'Usage: %s [--prefix FOLDER] [--no-runtime] [--uninstall]\n' "$0"
+            printf 'Usage: %s [--prefix FOLDER] [--no-runtime] [--yes] [--uninstall]\n' "$0"
             exit 0 ;;
         *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
@@ -198,7 +200,7 @@ ln -sf -- "$prefix/Morgan/Morgan" "$command_link"
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$applications" || true
 printf 'Morgan installed. Start it from the application menu or with the morgan command.\nTo remove it, run: %s --uninstall\n' "$0"
 if [ "$runtime" = 1 ]; then
-    "$prefix/Morgan/scripts/setup-runtime.sh" || {
+    "$prefix/Morgan/scripts/setup-runtime.sh" $yes_flag || {
         printf '\nThe Morgan runtime could not be prepared. Run %s/Morgan/scripts/setup-runtime.sh to retry.\n' "$prefix" >&2
         exit 1
     }

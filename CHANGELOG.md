@@ -5,6 +5,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.9-beta (2026-10-09)
 
 - Fix chat view speech bubbles lingering when switching back to the default view by fading them out within the first half of the closing animation
+- Add --yes option to MorganSetup.run that is forwarded to the runtime setup so it can run without a terminal
 - Fix Linux runtime setup reporting PortAudio as missing even when installed, caused by ldconfig being killed by SIGPIPE under pipefail
 - Fix update script failing with git exit status 128 on repositories with different ownership by trusting the repository directory for its own git calls
 - Update Linux runtime setup to install the AMD device-specific ROCm PyTorch wheels for Radeon RX 9000 cards, like the Windows setup, shrinking the voice environment from about 14 GB to about 6 GB, and to install the CPU TorchCodec build that ROCm torchaudio needs

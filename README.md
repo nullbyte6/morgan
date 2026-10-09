@@ -190,7 +190,7 @@ platform layer in `src/platforms`:
   with confirmation), pulls the models, creates `Morgan/.venv` with Python 3.12
   through `uv`, installs PyTorch for the detected GPU (ROCm, CUDA or CPU) and
   the voice dependencies, and downloads the CosyVoice model and timezone data.
-  `--no-runtime` skips that step, `--prefix FOLDER` changes the folder and
+  `--no-runtime` skips that step, `--yes` answers the setup prompts automatically, `--prefix FOLDER` changes the folder and
   `--uninstall` removes everything. The voice dependencies need a C++ compiler
   and PortAudio, and FFmpeg is recommended. `scripts/rebuild.sh` runs the build for the current system.
 - `current_platform()` in `src/platforms/__init__.py` selects the package from
