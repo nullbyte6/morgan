@@ -2,6 +2,10 @@
 
 All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.9-beta (2026-10-09)
+
+- Fix update script failing with git exit status 128 on repositories with different ownership by trusting the repository directory for its own git calls
+
 ## 26.10.8-beta (2026-10-08)
 
 - Add assistant name setting to Settings, saved to config.json with the save button or Enter and applied instantly across the window title, tooltips, tray, labels and prompts without a restart
