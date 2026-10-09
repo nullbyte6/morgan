@@ -29,6 +29,11 @@ timezone_dir="$models_dir/timezonefinder-data"
 venv="$install_dir/.venv"
 venv_python="$venv/bin/python"
 torch_version="2.8.0"
+torch_rocm_version="2.12.0+rocm7.14.1"
+torchaudio_rocm_version="2.11.0+rocm7.14.1"
+torch_rocm_index="https://repo.amd.com/rocm/whl-multi-arch/"
+torchcodec_rocm_version="0.16.0"
+torchcodec_probe="import io, wave; b = io.BytesIO(); w = wave.open(b, 'wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(bytes(3200)); w.close(); from torchcodec.decoders import AudioDecoder; AudioDecoder(b.getvalue()).get_all_samples()"
 cosyvoice_required=(
     cosyvoice3.yaml campplus.onnx speech_tokenizer_v3.onnx flow.pt flow.decoder.estimator.fp32.onnx
     hift.pt llm.pt CosyVoice-BlankEN/config.json CosyVoice-BlankEN/merges.txt
@@ -173,12 +178,44 @@ test_torch_backend() {
     esac
 }
 
+rocm_target() {
+    local adapters
+    adapters="$(lspci 2>/dev/null | grep -Ei 'vga|3d|display' || true)"
+    if grep -Eqi 'radeon.*rx *907[0-9]|rx 907[0-9]' <<< "$adapters"; then
+        printf 'gfx1201'
+    elif grep -Eqi 'radeon.*rx *906[0-9]|rx 906[0-9]' <<< "$adapters"; then
+        printf 'gfx1200'
+    fi
+}
+
+test_torchcodec() {
+    "$venv_python" -c "$torchcodec_probe" >/dev/null 2>&1
+}
+
+ensure_torchcodec() {
+    [[ "$1" == rocm && -n "$(rocm_target)" ]] || return 0
+    test_torchcodec && return 0
+    printf 'Installing TorchCodec for the ROCm torchaudio...\n'
+    uv pip install --python "$venv_python" --no-deps --index-url "$(torch_index cpu)" \
+        "torchcodec==$torchcodec_rocm_version" || die "Failed to install TorchCodec."
+    test_torchcodec || die "TorchCodec was installed but could not load the shared FFmpeg libraries. Install them with: $(package_hint ffmpeg)"
+}
+
 install_torch() {
-    local backend="$1"
-    printf 'Installing PyTorch (%s)...\n' "$backend"
-    uv pip install --python "$venv_python" --index-strategy unsafe-best-match \
-        --index-url "$(torch_index "$backend")" --extra-index-url https://pypi.org/simple \
-        "torch==$torch_version" "torchaudio==$torch_version" || die "Failed to install PyTorch."
+    local backend="$1" target
+    target="$(rocm_target)"
+    if [[ "$backend" == rocm && -n "$target" ]]; then
+        printf 'Installing PyTorch (ROCm, %s)...\n' "$target"
+        uv pip install --python "$venv_python" --index-strategy unsafe-best-match \
+            --index-url "$torch_rocm_index" --extra-index-url https://pypi.org/simple \
+            "torch[device-$target]==$torch_rocm_version" "torchaudio==$torchaudio_rocm_version" \
+            || die "Failed to install PyTorch."
+    else
+        printf 'Installing PyTorch (%s)...\n' "$backend"
+        uv pip install --python "$venv_python" --index-strategy unsafe-best-match \
+            --index-url "$(torch_index "$backend")" --extra-index-url https://pypi.org/simple \
+            "torch==$torch_version" "torchaudio==$torch_version" || die "Failed to install PyTorch."
+    fi
     test_torch_backend "$backend" || die "PyTorch was installed but does not support the GPU."
 }
 
@@ -227,11 +264,13 @@ ensure_voice_runtime() {
     ensure_portaudio
     if test_voice_runtime; then
         if test_torch_backend "$backend"; then
+            ensure_torchcodec "$backend"
             printf 'Voice runtime found: %s\n' "$venv"
             return
         fi
         printf 'Voice runtime found, but PyTorch does not match the GPU. Reinstalling PyTorch...\n'
         install_torch "$backend"
+        ensure_torchcodec "$backend"
         return
     fi
     command -v g++ >/dev/null 2>&1 || die "A C++ compiler is required to build pyworld. Install it with: $(package_hint base-devel build-essential)"
@@ -244,6 +283,7 @@ ensure_voice_runtime() {
     printf 'Installing voice dependencies...\n'
     uv pip install --python "$venv_python" --index-strategy unsafe-best-match "${voice_packages[@]}" \
         || die "Failed to install the voice dependencies."
+    ensure_torchcodec "$backend"
     test_voice_runtime || die "The voice runtime was installed but could not be verified: $("$venv_python" -c "$voice_probe" 2>&1 | tail -1)"
     printf 'Voice runtime installed successfully.\n'
 }
