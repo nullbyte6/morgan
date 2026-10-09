@@ -229,7 +229,9 @@ ensure_ffmpeg() {
 }
 
 portaudio_present() {
-    { ldconfig -p || /sbin/ldconfig -p; } 2>/dev/null | grep -q 'libportaudio\.so'
+    local libs
+    libs="$({ ldconfig -p || /sbin/ldconfig -p; } 2>/dev/null)"
+    grep -q 'libportaudio\.so' <<< "$libs"
 }
 
 ensure_portaudio() {
