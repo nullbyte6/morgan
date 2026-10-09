@@ -4,6 +4,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.9-beta (2026-10-09)
 
+- Fix chat view speech bubbles lingering when switching back to the default view by fading them out within the first half of the closing animation
 - Fix update script failing with git exit status 128 on repositories with different ownership by trusting the repository directory for its own git calls
 
 ## 26.10.8-beta (2026-10-08)

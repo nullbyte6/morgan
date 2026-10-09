@@ -236,6 +236,7 @@ class ChatView(QScrollArea):
     MAX_BUBBLE = 620
     BUBBLE_RATIO = 0.74
     SPREAD = 0.45
+    LEAVE = 0.5
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -253,6 +254,7 @@ class ChatView(QScrollArea):
         self.day_label = ""
         self.entering: list[ChatBubble] = []
         self.pending = False
+        self.leaving = False
         self.curve = QEasingCurve(QEasingCurve.Type.OutCubic)
         self.setProperty("fillSlot", True)
         theme_notifier().theme_changed.connect(self.apply_theme)
@@ -328,6 +330,7 @@ class ChatView(QScrollArea):
     def begin(self) -> None:
         """Hold every bubble back until the first frame of the orb animation has laid the view out."""
         self.pending = True
+        self.leaving = False
 
     def prepare(self) -> None:
         """Scroll to the newest message and pick the bubbles on screen that follow the orb animation."""
@@ -350,6 +353,10 @@ class ChatView(QScrollArea):
         if self.pending:
             self.pending = False
             self.prepare()
+        if self.leaving:
+            for bubble in self.entering:
+                bubble.rise = self.curve.valueForProgress(min(1.0, progress / self.LEAVE))
+            return
         count = len(self.entering)
         span = 1.0 - self.SPREAD
         for index, bubble in enumerate(self.entering):
@@ -358,6 +365,7 @@ class ChatView(QScrollArea):
 
     def dismiss(self) -> None:
         """Take over the bubbles on screen, new ones included, so they leave with the orb coming back."""
+        self.leaving = True
         if self.pending:
             self.pending = False
             self.prepare()
