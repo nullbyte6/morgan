@@ -1,5 +1,5 @@
 {
-  "version": "26.10.9-beta",
+  "version": "26.10.10-beta",
   "base_model_name": "qwen3.5:4b",
   "coding_model": "qwen3.5:9b"
 }
