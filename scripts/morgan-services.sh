@@ -129,7 +129,7 @@ keep_alive="${KEEP_ALIVE:-24h}"
 tts_pid=""
 if (( ! no_voice )); then
     printf '[2/3] Checking CosyVoice...\n'
-    "$python" -B - "$root" "$python" "$tts_module" <<'PY'
+    "$python" -B - "$root" "$python" "$tts_module" <<'PY' || printf 'Voice service reload check failed; continuing.\n'
 import os
 import sys
 from pathlib import Path
@@ -208,17 +208,20 @@ if [[ -n "$tts_pid" ]]; then
         fi
         if ! kill -0 "$tts_pid" 2>/dev/null; then
             log_tail "$tts_log"
-            printf 'TTS process exited. Check %s\n' "$tts_log" >&2
-            exit 1
+            printf 'TTS process exited. Check %s\n' "$tts_log"
+            break
         fi
         sleep 0.5
     done
-    if (( ! ready )); then
-        log_tail "$tts_log"
-        printf 'CosyVoice startup timed out. Check %s\n' "$tts_log" >&2
-        exit 1
+    if (( ready )); then
+        printf 'CosyVoice ready.\n'
+    else
+        if kill -0 "$tts_pid" 2>/dev/null; then
+            log_tail "$tts_log"
+            printf 'CosyVoice startup timed out. Check %s\n' "$tts_log"
+        fi
+        printf 'Continuing without voice.\n'
     fi
-    printf 'CosyVoice ready.\n'
 fi
 
 printf '[3/3] Preparing debug console...\n'
