@@ -56,7 +56,9 @@ Source: "src\init\subtitle_timing.py"; DestDir: "{app}\src\init"; Flags: ignorev
 Source: "src\init\tts_server.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
 Source: "src\init\voice_client.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
 Source: "src\init\voice_ipc.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\voice_naturalness.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
 Source: "src\init\voice_profiles.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
+Source: "src\init\voice_prosody.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
 Source: "src\init\voice_service.py"; DestDir: "{app}\src\init"; Flags: ignoreversion
 Source: "src\init\locales\*"; DestDir: "{app}\src\init\locales"; Flags: ignoreversion
 Source: "src\platforms\__init__.py"; DestDir: "{app}\src\platforms"; Flags: ignoreversion
