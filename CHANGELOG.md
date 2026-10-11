@@ -2,9 +2,13 @@
 
 All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
-## 26.10.11-beta (2026-10-11)
+## 26.10.12-beta (2026-10-12)
 
 - Fix voice service never starting when Ollama was already running because the service script was skipped
+
+
+## 26.10.11-beta (2026-10-11)
+
 - Fix misleading context length error when a system Ollama service runs with a smaller context than configured by naming both values and the command to raise it
 - Fix chat view and subtitle streaming and reply logging depending on the voice service by driving them from the written reply when speech is unavailable
 - Fix installer missing voice_naturalness and voice_prosody, which made the voice service crash with ModuleNotFoundError
