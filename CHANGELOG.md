@@ -5,11 +5,10 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.11-beta (2026-10-11)
 
 - Update README description to mention that Morgan runs on Windows and Linux
-- Update version to 26.10.11-beta
 
 ## 26.10.10-beta (2026-10-10)
 
-- Update version to 26.10.10-beta
+- No notable changes, except the release of the version, more to fix soon
 
 ## 26.10.9-beta (2026-10-09)
 
