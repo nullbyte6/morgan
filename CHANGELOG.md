@@ -2,6 +2,15 @@
 
 All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.11-beta (2026-10-11)
+
+- Update README description to mention that Morgan runs on Windows and Linux
+- Update version to 26.10.11-beta
+
+## 26.10.10-beta (2026-10-10)
+
+- Update version to 26.10.10-beta
+
 ## 26.10.9-beta (2026-10-09)
 
 - Add --yes option to MorganSetup.run that is forwarded to the runtime setup so it can run without a terminal
