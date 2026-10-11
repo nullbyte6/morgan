@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import socket
 import threading
 import time
@@ -289,6 +290,7 @@ class SilentVoice:
     supports_interruptions = True
     supports_voice_selection = True
     supports_playback_reference = True
+    silent = True
 
     def __init__(self, audio_callback=None):
         self.audio_callback = audio_callback
@@ -308,7 +310,10 @@ class SilentVoice:
         pass
 
     def enqueue(self, text: str) -> None:
-        if text and text.strip() and self.subtitle_callback is not None:
+        if not text or not text.strip():
+            return
+        logging.getLogger("assistant.voice").info("Reply: %s", text.strip())
+        if self.subtitle_callback is not None:
             self.subtitle_callback(text)
 
     def request_done(self) -> None:

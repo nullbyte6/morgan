@@ -2291,6 +2291,9 @@ class AssistantWindow(DesktopWindow):
         if session.current_response_view is not None:
             session.current_response_view.append_chunk(chunk)
         session.presentation.writing(turn_id)
+        if getattr(self.assistant.voice, "silent", False) and not session.stopping:
+            self.update_subtitles(session.current_reply, session)
+            self.chat_live(session, "assistant", session.current_reply)
 
     def _forget_response_view(self, response_view):
         for session in self.sessions:
@@ -2298,6 +2301,8 @@ class AssistantWindow(DesktopWindow):
                 session.current_response_view = None
 
     def on_subtitle(self, session, turn_id, text):
+        if getattr(self.assistant.voice, "silent", False) and turn_id:
+            return
         if turn_id == session.turn_id and not session.stopping:
             self.update_subtitles(text, session)
             self.chat_live(session, "assistant", text)

@@ -4,6 +4,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.11-beta (2026-10-11)
 
+- Fix chat view and subtitle streaming and reply logging depending on the voice service by driving them from the written reply when speech is unavailable
 - Fix installer missing voice_naturalness and voice_prosody, which made the voice service crash with ModuleNotFoundError
 - Fix startup failing when CosyVoice cannot start by continuing without voice in the Windows and Linux service scripts
 - Update assistant to fall back to subtitles-only speech when the voice service is unavailable
