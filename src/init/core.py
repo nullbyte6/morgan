@@ -20,6 +20,7 @@ import logging
 import json
 import os
 import re
+import socket
 import subprocess
 import sys
 import threading
@@ -33,7 +34,7 @@ from pydantic_ai import Agent, Tool
 from src.init import latency
 from src.init.config import load_config
 from src.init.identity import get_assistant_gender_instruction, get_assistant_name
-from src.init.voice_client import VoiceClient
+from src.init.voice_client import SilentVoice, VoiceClient
 from src.platforms import current_platform
 
 VOICE_STREAMING = os.environ.get("MORGAN_VOICE_STREAMING", "1") != "0"
@@ -254,20 +255,17 @@ class Assistant:
         launchers = platform.service_launchers(name)
         if not launchers:
             return
-        import socket
         import sys
         from pathlib import Path
         from src.init.lang import tr
         from src.init.paths import PROJECT_ROOT
 
         def services_ready():
-            for port in (11434, 18765) if self.voice_service_required else (11434,):
-                try:
-                    with socket.create_connection(("127.0.0.1", port), timeout=1):
-                        pass
-                except OSError:
-                    return False
-            return True
+            try:
+                with socket.create_connection(("127.0.0.1", 11434), timeout=1):
+                    return True
+            except OSError:
+                return False
 
         def align_ollama_context():
             from src.init.ollama_service import (missing_gpu_groups, ollama_ready, restart_ollama,
@@ -363,7 +361,14 @@ class Assistant:
         from src.init.tools import TOOLS
 
         if self.voice is None:
-            self.voice = VoiceClient()
+            try:
+                with socket.create_connection(("127.0.0.1", 18765), timeout=1):
+                    pass
+                self.voice = VoiceClient()
+            except Exception:
+                logging.getLogger("assistant.services").exception(
+                    "Voice service unavailable; continuing without speech")
+                self.voice = SilentVoice()
 
         self.selected_model = get_selected_model()
         self.MODEL_NAME = self.selected_model

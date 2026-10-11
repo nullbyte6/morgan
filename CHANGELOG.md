@@ -4,6 +4,8 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.11-beta (2026-10-11)
 
+- Fix startup failing when CosyVoice cannot start by continuing without voice in the Windows and Linux service scripts
+- Update assistant to fall back to subtitles-only speech when the voice service is unavailable
 - Update README description to mention that Morgan runs on Windows and Linux
 
 ## 26.10.10-beta (2026-10-10)
