@@ -260,12 +260,14 @@ class Assistant:
         from src.init.lang import tr
         from src.init.paths import PROJECT_ROOT
 
-        def services_ready():
-            try:
-                with socket.create_connection(("127.0.0.1", 11434), timeout=1):
-                    return True
-            except OSError:
-                return False
+        def services_ready(voice=False):
+            for port in (11434, 18765) if voice and self.voice_service_required else (11434,):
+                try:
+                    with socket.create_connection(("127.0.0.1", port), timeout=1):
+                        pass
+                except OSError:
+                    return False
+            return True
 
         def align_ollama_context():
             from src.init.ollama_service import (missing_gpu_groups, ollama_ready, restart_ollama,
@@ -279,7 +281,7 @@ class Assistant:
         except Exception:
             logging.getLogger("assistant.services").exception(
                 "Ollama could not be restarted with the configured context length")
-        if services_ready():
+        if services_ready(voice=True):
             return
         directories = [PROJECT_ROOT / "scripts"]
         if getattr(sys, "frozen", False):
