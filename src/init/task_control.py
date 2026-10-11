@@ -1681,7 +1681,10 @@ Handle unrelated requests independently. task_read_state(field='pending_task') r
                             "reserved_completion_tokens": completion, "safety_margin_tokens": margin,
                             "input_limit": input_limit, "estimated_input_before": before["estimated_input_tokens"]}
         if measured["estimated_input_tokens"] > input_limit:
-            self.notice = tr("task_control.context_budget_impossible")
+            provider = self.request_configuration.get("provider_context_tokens", context)
+            configured = self.request_configuration.get("operational_context_tokens", context)
+            self.notice = (tr("task_control.context_ollama_limited", provider=provider, configured=configured)
+                           if provider < configured else tr("task_control.context_budget_impossible"))
             raise TaskStopped(self.notice)
         request_context.messages = history
         request_context.model_settings = {**(request_context.model_settings or {}), "max_tokens": completion}

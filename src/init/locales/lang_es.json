@@ -583,6 +583,7 @@
   "task_control.output_recovery_exhausted": "No se pudo completar correctamente la salida tras varios intentos de recuperación.",
   "task_control.output_recovery_resume": "Reanuda la tarea conservada para repararla y entregar su resultado.",
   "task_control.context_budget_impossible": "No hay espacio de contexto suficiente para esta petición y una respuesta. Aumenta la Longitud de contexto en los ajustes o reduce el contenido del mensaje o de los archivos adjuntos.",
+  "task_control.context_ollama_limited": "Ollama se está ejecutando con un contexto de solo {provider} tokens, pero hay {configured} configurados, así que no queda espacio para responder. Ollama es un servicio del sistema que Morgan no pudo reconfigurar: ejecuta `sudo systemctl edit ollama`, añade `Environment=\"OLLAMA_CONTEXT_LENGTH={configured}\"` bajo [Service] y luego `sudo systemctl restart ollama`.",
   "task_control.context_budget_exceeded": "La petición es demasiado grande para dejar espacio de contexto suficiente para una respuesta. Aumenta la Longitud de contexto en los ajustes o reduce el contenido del mensaje o de los archivos adjuntos.",
   "task_control.mandatory_context_budget_impossible": "No hay espacio de contexto suficiente para la información necesaria de la tarea y una respuesta. Aumenta la Longitud de contexto en los ajustes o reduce el contenido del mensaje o de los archivos adjuntos. La tarea y sus evidencias se conservan.",
   "nova.today": "Hoy",

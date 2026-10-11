@@ -583,6 +583,7 @@
   "task_control.output_recovery_exhausted": "Model output recovery exhausted three safe retries.",
   "task_control.output_recovery_resume": "Resume the preserved task to repair and submit its output.",
   "task_control.context_budget_impossible": "There is not enough context space for this request and a response. Increase Context length in settings, or shorten your message or attachments.",
+  "task_control.context_ollama_limited": "Ollama is running with a context of only {provider} tokens, but {configured} are configured, so there is no room for a reply. Ollama is a system service that Morgan could not reconfigure: run `sudo systemctl edit ollama`, add `Environment=\"OLLAMA_CONTEXT_LENGTH={configured}\"` under [Service], then `sudo systemctl restart ollama`.",
   "task_control.context_budget_exceeded": "The request is too large to leave enough context space for a response. Increase Context length in settings, or shorten your message or attachments.",
   "task_control.mandatory_context_budget_impossible": "There is not enough context space for the required task information and a response. Increase Context length in settings, or shorten your message or attachments. The task and its evidence are preserved.",
   "nova.today": "Today",
