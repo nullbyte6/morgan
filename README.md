@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  A local desktop assistant that uses Ollama to run tools and automate tasks on Windows.
+  A local desktop assistant that uses Ollama to run tools and automate tasks on Windows and Linux.
 </p>
 
 <p align="center">
