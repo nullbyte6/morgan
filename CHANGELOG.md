@@ -5,8 +5,10 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.12-beta (2026-10-12)
 
 - Fix boot CPU saturation by starting CosyVoice after the Ollama model preload and at lower priority in the Linux and macOS service script
+- Fix voice reference loading failing with newer FFmpeg by reading the audio with soundfile instead of torchaudio
 - Fix voice service never starting when Ollama was already running because the service script was skipped
 - Update orb and audio visualizer to stop their 60 Hz animation while hidden
+- Update Linux runtime setup to install the stable PyTorch 2.9.1 ROCm 6.4 build, which avoids a ROCm 7.14 runtime thread that kept one CPU core at 100%
 - Update speech recognition to use half of the CPU cores and the wake listener a quarter, and the wake inbox poll to read before it writes
 
 
