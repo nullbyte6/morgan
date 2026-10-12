@@ -40,7 +40,14 @@ class AudioVisualizer(QWidget):
         self.timer = QTimer(self)
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.animate)
+
+    def showEvent(self, event):
         self.timer.start()
+        super().showEvent(event)
+
+    def hideEvent(self, event):
+        self.timer.stop()
+        super().hideEvent(event)
 
     def set_levels(self, levels):
         self.levels = [max(0.0, min(1.0, float(level))) for level in

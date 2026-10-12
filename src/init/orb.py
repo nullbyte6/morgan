@@ -136,7 +136,6 @@ class Orb(QWidget):
         self.timer = QTimer(self)
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.animate)
-        self.timer.start()
 
     @Property(float)
     def pop_scale(self):
@@ -582,7 +581,12 @@ class Orb(QWidget):
 
         super().mouseDoubleClickEvent(event)
 
+    def showEvent(self, event):
+        self.timer.start()
+        super().showEvent(event)
+
     def hideEvent(self, event):
+        self.timer.stop()
         self._pop_animation.stop()
         self.pop_scale = 1.0
         self.click_timer.stop()
