@@ -158,13 +158,6 @@ for process in psutil.process_iter(["cmdline", "create_time"]):
                 pass
         psutil.wait_procs((*children, process), timeout=10)
 PY
-    if port_open "$tts_host" "$tts_port"; then
-        printf 'TTS port already in use.\nReusing the existing service.\n'
-    else
-        printf 'Starting CosyVoice...\n'
-        nohup "$python" -u -m "$tts_module" >> "$tts_log" 2>&1 &
-        tts_pid=$!
-    fi
 fi
 
 model_ready=0
@@ -195,6 +188,14 @@ fi
 if (( no_voice )); then
     printf 'Voice service skipped.\n'
     exit 0
+fi
+
+if port_open "$tts_host" "$tts_port"; then
+    printf 'TTS port already in use.\nReusing the existing service.\n'
+else
+    printf 'Starting CosyVoice...\n'
+    nohup nice -n 10 "$python" -u -m "$tts_module" >> "$tts_log" 2>&1 &
+    tts_pid=$!
 fi
 
 if [[ -n "$tts_pid" ]]; then
