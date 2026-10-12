@@ -316,7 +316,7 @@ class AssistantWindow(DesktopWindow):
         try:
             if self.wake_inbox is None:
                 self.wake_inbox = WakeInbox()
-            command = self.wake_inbox.claim()
+            command = self.wake_inbox.claim() if self.wake_inbox.has_pending() else None
         except Exception:
             logging.getLogger("assistant.wake").exception(
                 "Wake inbox unavailable; will retry")

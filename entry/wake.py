@@ -232,6 +232,7 @@ def run_listener(microphone):
         get_assistant_environment("WAKE_MODEL", "tiny"),
         device="cpu",
         compute_type="int8",
+        cpu_threads=max(2, (os.cpu_count() or 4) // 4),
     )
     recognizer = Recognizer(model)
     log.info(tr("wake.listening", phrase=f"Hola {get_assistant_name()}"))

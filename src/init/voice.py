@@ -289,7 +289,7 @@ def get_voice_model():
                 ) from error
             _VOICE_MODEL = WhisperModel(
                 VOICE_MODEL_NAME, device="cpu", compute_type="int8",
-                cpu_threads=os.cpu_count() or 4)
+                cpu_threads=max(2, (os.cpu_count() or 4) // 2))
         return _VOICE_MODEL
 
 

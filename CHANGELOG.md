@@ -4,7 +4,10 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 
 ## 26.10.12-beta (2026-10-12)
 
+- Fix boot CPU saturation by starting CosyVoice after the Ollama model preload and at lower priority in the Linux and macOS service script
 - Fix voice service never starting when Ollama was already running because the service script was skipped
+- Update orb and audio visualizer to stop their 60 Hz animation while hidden
+- Update speech recognition to use half of the CPU cores and the wake listener a quarter, and the wake inbox poll to read before it writes
 
 
 ## 26.10.11-beta (2026-10-11)
