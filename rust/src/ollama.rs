@@ -14,6 +14,15 @@ pub struct ModelInfo {
     pub size: u64,
 }
 
+#[derive(Clone, Debug)]
+pub struct LibModel {
+    pub name: String,
+    pub description: String,
+    pub sizes: Vec<String>,
+    pub tags: Vec<String>,
+    pub downloads: String,
+}
+
 #[derive(Deserialize)]
 struct Tags {
     models: Vec<ModelInfo>,
@@ -43,6 +52,96 @@ fn normalize_host(raw: &str) -> String {
     let rest = rest.replace("0.0.0.0", "127.0.0.1");
     let rest = if rest.contains(':') { rest } else { format!("{rest}:11434") };
     format!("{scheme}://{rest}")
+}
+
+fn encode(text: &str) -> String {
+    let mut out = String::new();
+    for b in text.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+fn decode(text: &str) -> String {
+    text.replace("&#39;", "'")
+        .replace("&quot;", "\"")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
+
+fn compact(downloads: &str) -> String {
+    let digits: String = downloads.chars().filter(char::is_ascii_digit).collect();
+    let Ok(n) = digits.parse::<f64>() else { return String::new() };
+    if n >= 1e9 {
+        format!("{:.1}B", n / 1e9)
+    } else if n >= 1e6 {
+        format!("{:.1}M", n / 1e6)
+    } else if n >= 1e3 {
+        format!("{:.0}K", n / 1e3)
+    } else {
+        format!("{n:.0}")
+    }
+}
+
+fn parse_library(html: &str) -> Vec<LibModel> {
+    const OPEN: &str = "<a href=\"/library/";
+    let mut out = Vec::new();
+    let mut rest = html;
+    while let Some(i) = rest.find(OPEN) {
+        rest = &rest[i + OPEN.len()..];
+        let Some(q) = rest.find('"') else { break };
+        let name = rest[..q].to_string();
+        let end = rest.find("</a>").unwrap_or(rest.len());
+        let block = &rest[..end];
+        rest = &rest[end..];
+        if name.is_empty() || name.contains(':') {
+            continue;
+        }
+        let description = block
+            .find("<p ")
+            .and_then(|p| {
+                let body = &block[p..];
+                let start = body.find('>')? + 1;
+                let stop = body.find("</p>")?;
+                Some(decode(body[start..stop].trim()))
+            })
+            .unwrap_or_default();
+        let mut sizes = Vec::new();
+        let mut tags = Vec::new();
+        let mut cursor = block;
+        while let Some(s) = cursor.find("<span ") {
+            cursor = &cursor[s + 6..];
+            let Some(close) = cursor.find('>') else { break };
+            let attrs = &cursor[..close];
+            let text_end = cursor[close + 1..].find('<').map(|t| close + 1 + t).unwrap_or(cursor.len());
+            let text = cursor[close + 1..text_end].trim().to_string();
+            if text.is_empty() {
+                continue;
+            }
+            if attrs.contains("ddf4ff") {
+                sizes.push(text);
+            } else if attrs.contains("indigo-50") {
+                tags.push(text);
+            }
+        }
+        let downloads = block
+            .find(" downloads\"")
+            .and_then(|end| {
+                let head = &block[..end];
+                let start = head.rfind("title=\"")? + 7;
+                Some(compact(&head[start..]))
+            })
+            .unwrap_or_default();
+        if !out.iter().any(|m: &LibModel| m.name == name) {
+            out.push(LibModel { name, description, sizes, tags, downloads });
+        }
+    }
+    out
 }
 
 async fn error_text(resp: reqwest::Response) -> String {
@@ -102,6 +201,31 @@ impl Client {
         }
         let tags: Tags = resp.json().await.map_err(|e| e.to_string())?;
         Ok(tags.models)
+    }
+
+    pub async fn library(&self, query: &str, page: usize) -> Result<Vec<LibModel>, String> {
+        let mut params = Vec::new();
+        if !query.trim().is_empty() {
+            params.push(format!("q={}", encode(query.trim())));
+        }
+        if page > 1 {
+            params.push(format!("p={page}"));
+        }
+        params.push("c=local".to_string());
+        let url = format!("https://ollama.com/search?{}", params.join("&"));
+        let resp = self
+            .http
+            .get(url)
+            .header("User-Agent", "morgan-tui")
+            .timeout(Duration::from_secs(10))
+            .send()
+            .await
+            .map_err(|_| "cannot reach ollama.com".to_string())?;
+        if !resp.status().is_success() {
+            return Err(format!("ollama.com returned HTTP {}", resp.status()));
+        }
+        let html = resp.text().await.map_err(|e| e.to_string())?;
+        Ok(parse_library(&html))
     }
 
     pub async fn chat(

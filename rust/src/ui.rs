@@ -5,7 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Gauge, List, ListItem, ListState, Paragraph};
 use unicode_width::UnicodeWidthChar;
 
-use crate::app::{App, Conn, Mode, PULL_CHOICES, Role};
+use crate::app::{App, Conn, Mode, Role};
 
 const ACCENT: Color = Color::Rgb(186, 134, 252);
 const USER: Color = Color::Rgb(100, 210, 255);
@@ -258,7 +258,10 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let keys: &[(&str, &str)] = match app.mode {
         Mode::Chat => &[("Enter", "send"), ("Ctrl+O", "models"), ("Ctrl+P", "pull"), ("Ctrl+T", "thinking"), ("Ctrl+L", "clear"), ("PgUp/PgDn", "scroll"), ("Ctrl+C", "stop/quit")],
         Mode::Models => &[("↑/↓", "select"), ("Enter", "use"), ("p", "pull"), ("Esc", "close")],
-        Mode::Pull => &[("↑/↓", "select"), ("Enter", "pull"), ("Esc", "close/cancel")],
+        Mode::Pull if app.pulling.is_some() => &[("Esc", "cancel download")],
+        Mode::Pull if app.pull.searching => &[("Enter", "apply"), ("Ctrl+U", "clear"), ("Esc", "stop searching")],
+        Mode::Pull if app.pull.variants.is_some() => &[("↑/↓", "select"), ("Enter", "pull"), ("Esc", "back")],
+        Mode::Pull => &[("/", "search"), ("↑/↓", "select"), ("Enter", "choose"), ("Esc", "clear/close")],
     };
     let mut spans = Vec::new();
     for (key, label) in keys {
@@ -295,37 +298,98 @@ fn draw_models(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_stateful_widget(list, rect, &mut state);
 }
 
+fn clip(text: &str, width: usize) -> String {
+    if text.chars().count() <= width {
+        return text.to_string();
+    }
+    let mut out: String = text.chars().take(width.saturating_sub(1)).collect();
+    out.push('…');
+    out
+}
+
 fn draw_pull(frame: &mut Frame, app: &App, area: Rect) {
-    let rect = centered(area, 64, 16);
+    let rect = centered(area, 88, area.height.saturating_sub(4).min(28));
     frame.render_widget(Clear, rect);
+    let ui = &app.pull;
     let title = if app.models.is_empty() { "No models installed · pull one" } else { "Pull a model" };
     let block = panel(title).border_style(Style::default().fg(ACCENT));
     let inner = block.inner(rect);
     frame.render_widget(block, rect);
 
-    let parts = Layout::vertical([Constraint::Length(2), Constraint::Min(3), Constraint::Length(3)]).split(inner);
-    let intro = match &app.conn {
-        Conn::Offline(e) => Line::from(Span::styled(format!("{e}. Start `ollama serve`, then Ctrl+R."), Style::default().fg(BAD))),
-        _ => Line::from(Span::styled("Pick a model to download from the Ollama library.", Style::default().fg(DIM))),
-    };
-    frame.render_widget(Paragraph::new(intro), parts[0]);
+    let parts = Layout::vertical([Constraint::Length(3), Constraint::Min(3), Constraint::Length(3)]).split(inner);
 
-    let items: Vec<ListItem> = PULL_CHOICES
-        .iter()
-        .map(|(name, note)| {
-            let have = app.models.iter().any(|m| m.name == *name);
-            let mut spans = vec![Span::raw(format!("{name:<14}")), Span::styled(note.to_string(), Style::default().fg(DIM))];
-            if have {
-                spans.push(Span::styled("  installed", Style::default().fg(OK)));
-            }
-            ListItem::new(Line::from(spans))
-        })
-        .collect();
-    let list = List::new(items)
-        .highlight_style(Style::default().fg(Color::Black).bg(ACCENT))
-        .highlight_symbol("▸ ");
-    let mut state = ListState::default().with_selected(Some(app.pull_choice));
-    frame.render_stateful_widget(list, parts[1], &mut state);
+    let search_border = if ui.searching { ACCENT } else { DIM };
+    let search_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(search_border));
+    let search_inner = search_block.inner(parts[0]);
+    let search_line = if ui.query.is_empty() && !ui.searching {
+        Line::from(Span::styled("/ to search the Ollama library · or type name:tag to pull any model", Style::default().fg(DIM)))
+    } else {
+        Line::from(vec![Span::styled("/ ", Style::default().fg(ACCENT)), Span::raw(ui.query.clone())])
+    };
+    frame.render_widget(Paragraph::new(search_line).block(search_block), parts[0]);
+    if ui.searching {
+        let col = 2 + ui.query.chars().map(|c| c.width().unwrap_or(0)).sum::<usize>();
+        frame.set_cursor_position((search_inner.x + (col as u16).min(search_inner.width.saturating_sub(1)), search_inner.y));
+    }
+
+    let width = parts[1].width as usize;
+    if let Some(v) = &ui.variants {
+        let items: Vec<ListItem> = v
+            .options
+            .iter()
+            .map(|o| {
+                let note = if o == "latest" { "  default tag" } else { "" };
+                ListItem::new(Line::from(vec![
+                    Span::raw(format!("{}:{}", v.name, o)),
+                    Span::styled(note, Style::default().fg(DIM)),
+                ]))
+            })
+            .collect();
+        let list = List::new(items)
+            .block(Block::default().title(Span::styled(format!(" {} · choose a size ", v.name), Style::default().fg(WARN))))
+            .highlight_style(Style::default().fg(Color::Black).bg(ACCENT))
+            .highlight_symbol("▸ ");
+        let mut state = ListState::default().with_selected(Some(v.selected));
+        frame.render_stateful_widget(list, parts[1], &mut state);
+    } else if ui.items.is_empty() {
+        let text = if ui.is_direct() {
+            format!("Press Enter to pull {}", ui.query.trim())
+        } else if ui.loading || ui.dirty_at.is_some() {
+            format!("{} searching…", SPINNER[app.tick / 2 % SPINNER.len()])
+        } else {
+            ui.notice.clone().unwrap_or_default()
+        };
+        frame.render_widget(Paragraph::new(Span::styled(text, Style::default().fg(DIM))), parts[1]);
+    } else {
+        let name_w = 22usize;
+        let size_w = 24usize.min(width / 4);
+        let items: Vec<ListItem> = ui
+            .items
+            .iter()
+            .map(|m| {
+                let sizes = if m.sizes.is_empty() { m.tags.join(" ") } else { m.sizes.join(" ") };
+                let used = 2 + name_w + 1 + size_w + 1 + 7 + 1;
+                let desc = clip(&m.description, width.saturating_sub(used));
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!("{:<name_w$}", clip(&m.name, name_w)), Style::default().fg(USER)),
+                    Span::raw(" "),
+                    Span::styled(format!("{:<size_w$}", clip(&sizes, size_w)), Style::default().fg(WARN)),
+                    Span::raw(" "),
+                    Span::styled(format!("{:>7}", m.downloads), Style::default().fg(DIM)),
+                    Span::raw(" "),
+                    Span::styled(desc, Style::default().fg(DIM)),
+                ]))
+            })
+            .collect();
+        let list = List::new(items)
+            .highlight_style(Style::default().bg(Color::Rgb(50, 40, 70)).add_modifier(Modifier::BOLD))
+            .highlight_symbol("▸ ");
+        let mut state = ListState::default().with_selected(Some(ui.selected));
+        frame.render_stateful_widget(list, parts[1], &mut state);
+    }
 
     if let Some(p) = &app.pulling {
         let ratio = if p.total > 0 { (p.completed as f64 / p.total as f64).clamp(0.0, 1.0) } else { 0.0 };
@@ -335,7 +399,26 @@ fn draw_pull(frame: &mut Frame, app: &App, area: Rect) {
             .ratio(ratio)
             .label(if p.total > 0 { format!("{} / {}", human(p.completed), human(p.total)) } else { "…".into() });
         frame.render_widget(gauge, parts[2]);
-    } else if let Some(e) = &app.pull_error {
-        frame.render_widget(Paragraph::new(Span::styled(format!("pull failed: {e}"), Style::default().fg(BAD))), parts[2]);
+        return;
     }
+    let mut lines: Vec<Line> = Vec::new();
+    if let Some(e) = &app.pull_error {
+        lines.push(Line::from(Span::styled(format!("pull failed: {e}"), Style::default().fg(BAD))));
+    } else if let Conn::Offline(e) = &app.conn {
+        lines.push(Line::from(Span::styled(format!("{e}. Start `ollama serve`, then Ctrl+R."), Style::default().fg(BAD))));
+    }
+    if let Some(n) = &ui.notice {
+        if !ui.items.is_empty() {
+            lines.push(Line::from(Span::styled(n.clone(), Style::default().fg(WARN))));
+        }
+    }
+    if lines.is_empty() && ui.variants.is_none() {
+        if let Some(m) = ui.items.get(ui.selected) {
+            let tags = if m.tags.is_empty() { String::new() } else { format!("[{}] ", m.tags.join(", ")) };
+            lines.push(Line::from(vec![Span::styled(tags, Style::default().fg(OK)), Span::raw(m.description.clone())]));
+        }
+    }
+    let status = if ui.loading && !ui.items.is_empty() { " loading more…" } else { "" };
+    lines.push(Line::from(Span::styled(format!("{} models{}", ui.items.len(), status), Style::default().fg(DIM))));
+    frame.render_widget(Paragraph::new(lines).wrap(ratatui::widgets::Wrap { trim: true }), parts[2]);
 }

@@ -4,16 +4,15 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
 
-use crate::ollama::{ChatMessage, Client, ModelInfo};
+use crate::ollama::{ChatMessage, Client, LibModel, ModelInfo};
 
-pub const PULL_CHOICES: &[(&str, &str)] = &[
-    ("qwen3.5:0.8b", "tiny, runs anywhere"),
-    ("qwen3.5:2b", "small and fast"),
-    ("qwen3.5:4b", "light, good all-rounder"),
-    ("qwen3.5:9b", "balanced"),
-    ("qwen3.5:27b", "strong, needs a big GPU"),
-    ("qwen3.8:27b", "newest family, needs a big GPU"),
+pub const FALLBACK_MODELS: &[(&str, &str, &[&str])] = &[
+    ("qwen3.5", "Qwen 3.5 family of open multimodal models.", &["0.8b", "2b", "4b", "9b", "27b", "35b", "122b"]),
+    ("qwen3.8", "Qwen 3.8 family of open models.", &["27b"]),
 ];
+
+const SEARCH_DELAY_TICKS: usize = 4;
+const PAGE_LOOKAHEAD: usize = 4;
 
 const SYSTEM_PROMPT: &str = "You are Morgan, a capable local AI agent running in a terminal. Be concise and direct.";
 
@@ -29,6 +28,7 @@ pub enum AppEvent {
     PullProgress { status: String, completed: u64, total: u64 },
     PullDone(String),
     PullError(String),
+    Library { seq: u64, result: Result<Vec<LibModel>, String> },
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -65,6 +65,35 @@ pub struct PullState {
     pub total: u64,
 }
 
+pub struct Variants {
+    pub name: String,
+    pub options: Vec<String>,
+    pub selected: usize,
+}
+
+#[derive(Default)]
+pub struct PullUi {
+    pub query: String,
+    pub searching: bool,
+    pub items: Vec<LibModel>,
+    pub selected: usize,
+    pub loading: bool,
+    pub page: usize,
+    pub done: bool,
+    pub loaded: bool,
+    pub notice: Option<String>,
+    pub variants: Option<Variants>,
+    pub seq: u64,
+    pub dirty_at: Option<usize>,
+}
+
+impl PullUi {
+    pub fn is_direct(&self) -> bool {
+        let q = self.query.trim();
+        q.contains(':') || q.contains('/')
+    }
+}
+
 pub struct App {
     pub client: Client,
     pub tx: UnboundedSender<AppEvent>,
@@ -82,7 +111,7 @@ pub struct App {
     pub tps: Option<f64>,
     pub activity: Vec<(u64, String)>,
     pub picker: usize,
-    pub pull_choice: usize,
+    pub pull: PullUi,
     pub pulling: Option<PullState>,
     pub pull_error: Option<String>,
     pub tick: usize,
@@ -111,7 +140,7 @@ impl App {
             tps: None,
             activity: Vec::new(),
             picker: 0,
-            pull_choice: 0,
+            pull: PullUi::default(),
             pulling: None,
             pull_error: None,
             tick: 0,
@@ -147,7 +176,18 @@ impl App {
         match event {
             AppEvent::Key(key) => self.on_key(key),
             AppEvent::Resize => {}
-            AppEvent::Tick => self.tick = self.tick.wrapping_add(1),
+            AppEvent::Tick => {
+                self.tick = self.tick.wrapping_add(1);
+                if self.mode == Mode::Pull {
+                    if let Some(at) = self.pull.dirty_at {
+                        if self.tick.wrapping_sub(at) >= SEARCH_DELAY_TICKS {
+                            self.pull.dirty_at = None;
+                            self.restart_library();
+                        }
+                    }
+                }
+            }
+            AppEvent::Library { seq, result } => self.on_library(seq, result),
             AppEvent::Models(result) => self.on_models(result),
             AppEvent::Token(text) => {
                 if self.streaming {
@@ -225,8 +265,7 @@ impl App {
                 }
                 if self.models.is_empty() {
                     self.log("no local models installed");
-                    self.pull_error = None;
-                    self.mode = Mode::Pull;
+                    self.open_pull();
                 } else {
                     let count = self.models.len();
                     let active = self.model.clone().unwrap_or_default();
@@ -266,10 +305,7 @@ impl App {
                 }
             }
             (true, KeyCode::Char('o')) => self.open_models(),
-            (true, KeyCode::Char('p')) => {
-                self.pull_error = None;
-                self.mode = Mode::Pull;
-            }
+            (true, KeyCode::Char('p')) => self.open_pull(),
             (true, KeyCode::Char('r')) => self.refresh_models(),
             (true, KeyCode::Char('l')) => {
                 if !self.streaming {
@@ -341,10 +377,7 @@ impl App {
                     self.picker += 1;
                 }
             }
-            KeyCode::Char('p') => {
-                self.pull_error = None;
-                self.mode = Mode::Pull;
-            }
+            KeyCode::Char('p') => self.open_pull(),
             KeyCode::Enter => {
                 if let Some(m) = self.models.get(self.picker) {
                     let name = m.name.clone();
@@ -355,6 +388,103 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    fn open_pull(&mut self) {
+        self.pull_error = None;
+        self.mode = Mode::Pull;
+        if !self.pull.loaded {
+            self.pull.loaded = true;
+            self.restart_library();
+        }
+    }
+
+    fn restart_library(&mut self) {
+        self.pull.seq += 1;
+        self.pull.items.clear();
+        self.pull.selected = 0;
+        self.pull.page = 0;
+        self.pull.done = false;
+        self.pull.notice = None;
+        self.pull.loading = false;
+        if self.pull.is_direct() {
+            self.pull.done = true;
+            return;
+        }
+        self.fetch_library();
+    }
+
+    fn fetch_library(&mut self) {
+        if self.pull.loading || self.pull.done {
+            return;
+        }
+        self.pull.loading = true;
+        let seq = self.pull.seq;
+        let page = self.pull.page + 1;
+        let query = self.pull.query.clone();
+        let client = self.client.clone();
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            let _ = tx.send(AppEvent::Library { seq, result: client.library(&query, page).await });
+        });
+    }
+
+    fn on_library(&mut self, seq: u64, result: Result<Vec<LibModel>, String>) {
+        if seq != self.pull.seq {
+            return;
+        }
+        self.pull.loading = false;
+        match result {
+            Ok(items) => {
+                self.pull.page += 1;
+                if items.is_empty() {
+                    self.pull.done = true;
+                    if self.pull.items.is_empty() {
+                        self.pull.notice = Some("No models match that search".into());
+                    }
+                }
+                for item in items {
+                    if !self.pull.items.iter().any(|m| m.name == item.name) {
+                        self.pull.items.push(item);
+                    }
+                }
+            }
+            Err(error) => {
+                self.pull.done = true;
+                self.log(format!("library: {error}"));
+                if self.pull.items.is_empty() && self.pull.query.trim().is_empty() {
+                    self.pull.items = FALLBACK_MODELS
+                        .iter()
+                        .map(|(name, desc, sizes)| LibModel {
+                            name: name.to_string(),
+                            description: desc.to_string(),
+                            sizes: sizes.iter().map(|s| s.to_string()).collect(),
+                            tags: Vec::new(),
+                            downloads: String::new(),
+                        })
+                        .collect();
+                }
+                self.pull.notice = Some(format!("{error} · type name:tag and press / then Enter to pull anyway"));
+            }
+        }
+    }
+
+    fn move_pull_selection(&mut self, delta: isize) {
+        let len = self.pull.items.len();
+        if len == 0 {
+            return;
+        }
+        let next = (self.pull.selected as isize + delta).clamp(0, len as isize - 1) as usize;
+        self.pull.selected = next;
+        if next + PAGE_LOOKAHEAD >= len {
+            self.fetch_library();
+        }
+    }
+
+    fn clear_query(&mut self) {
+        self.pull.query.clear();
+        self.pull.dirty_at = None;
+        self.restart_library();
     }
 
     fn on_pull_key(&mut self, key: KeyEvent) {
@@ -368,15 +498,86 @@ impl App {
             }
             return;
         }
+        if let Some(v) = self.pull.variants.as_mut() {
+            match key.code {
+                KeyCode::Esc => self.pull.variants = None,
+                KeyCode::Up | KeyCode::Char('k') => v.selected = v.selected.saturating_sub(1),
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if v.selected + 1 < v.options.len() {
+                        v.selected += 1;
+                    }
+                }
+                KeyCode::Enter => {
+                    let tag = &v.options[v.selected];
+                    let target = if tag == "latest" { v.name.clone() } else { format!("{}:{}", v.name, tag) };
+                    self.pull.variants = None;
+                    self.start_pull(target);
+                }
+                _ => {}
+            }
+            return;
+        }
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        if self.pull.searching {
+            match key.code {
+                KeyCode::Esc => {
+                    self.pull.searching = false;
+                    if !self.pull.query.is_empty() {
+                        self.clear_query();
+                    }
+                }
+                KeyCode::Enter => {
+                    if self.pull.is_direct() {
+                        let target = self.pull.query.trim().to_string();
+                        self.start_pull(target);
+                    } else {
+                        self.pull.searching = false;
+                        if self.pull.dirty_at.take().is_some() {
+                            self.restart_library();
+                        }
+                    }
+                }
+                KeyCode::Up | KeyCode::Down => self.pull.searching = false,
+                KeyCode::Char('u') if ctrl => self.clear_query(),
+                KeyCode::Char(c) if !ctrl => {
+                    self.pull.query.push(c);
+                    self.pull.dirty_at = Some(self.tick);
+                }
+                KeyCode::Backspace => {
+                    self.pull.query.pop();
+                    self.pull.dirty_at = Some(self.tick);
+                }
+                _ => {}
+            }
+            return;
+        }
         match key.code {
-            KeyCode::Esc => self.mode = Mode::Chat,
-            KeyCode::Up | KeyCode::Char('k') => self.pull_choice = self.pull_choice.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('j') => {
-                if self.pull_choice + 1 < PULL_CHOICES.len() {
-                    self.pull_choice += 1;
+            KeyCode::Char('/') => self.pull.searching = true,
+            KeyCode::Esc => {
+                if self.pull.query.is_empty() {
+                    self.mode = Mode::Chat;
+                } else {
+                    self.clear_query();
                 }
             }
-            KeyCode::Enter => self.start_pull(PULL_CHOICES[self.pull_choice].0.to_string()),
+            KeyCode::Up | KeyCode::Char('k') => self.move_pull_selection(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_pull_selection(1),
+            KeyCode::PageUp => self.move_pull_selection(-10),
+            KeyCode::PageDown => self.move_pull_selection(10),
+            KeyCode::Home => self.move_pull_selection(isize::MIN / 2),
+            KeyCode::End => self.move_pull_selection(isize::MAX / 2),
+            KeyCode::Enter => {
+                if let Some(item) = self.pull.items.get(self.pull.selected) {
+                    if item.sizes.is_empty() {
+                        let name = item.name.clone();
+                        self.start_pull(name);
+                    } else {
+                        let mut options = vec!["latest".to_string()];
+                        options.extend(item.sizes.iter().cloned());
+                        self.pull.variants = Some(Variants { name: item.name.clone(), options, selected: 0 });
+                    }
+                }
+            }
             _ => {}
         }
     }

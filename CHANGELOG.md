@@ -5,7 +5,7 @@ All notable changes to Morgan, grouped by version with the most recent first. En
 ## 26.10.14-beta (2026-10-14)
 
 - Add Rust ratatui terminal console with a conversation view, agent status, model list and activity sidebar
-- Add Ollama streaming chat, local model listing and model pull menu with qwen3.5 and qwen3.8 choices to the Rust console
+- Add Ollama streaming chat, local model listing and a searchable, paginated pull menu for the whole Ollama library to the Rust console
 
 ## 26.10.12-beta (2026-10-12)
 
