@@ -2,6 +2,11 @@
 
 All notable changes to Morgan, grouped by version with the most recent first. Entries inside each version are sorted alphabetically. Commits made before version 1.4.10-beta are grouped under Pre-1.4.10.
 
+## 26.10.14-beta (2026-10-14)
+
+- Add Rust ratatui terminal console with a conversation view, agent status, model list and activity sidebar
+- Add Ollama streaming chat, local model listing and model pull menu with qwen3.5 and qwen3.8 choices to the Rust console
+
 ## 26.10.12-beta (2026-10-12)
 
 - Fix boot CPU saturation by starting CosyVoice after the Ollama model preload and at lower priority in the Linux and macOS service script
